@@ -837,7 +837,7 @@ async function saveToDrive() {
     if(GD.online&&GD.accessToken&&!GD._retrying){
       GD._retrying=true;
       setTimeout(async function(){GD._retrying=false;if(GD.online&&GD.accessToken)await saveToDrive();},10000);
-      toast('Error Drive — reintentando en 10s...','var(--orange)',4000);
+      toast('Error Drive ('+((e&&e.message)||'?')+') — reintentando en 10s...','var(--orange)',8000);
     } else{GD._retrying=false;showDriveReconnectBanner();}
   }
 }
