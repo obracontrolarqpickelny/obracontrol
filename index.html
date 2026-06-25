@@ -2659,6 +2659,7 @@ async function setupDrive(){
     }
     // Primero cargar Drive (para no pisar datos de otro dispositivo)
     await loadFromDriveAndMerge();
+    SYNC.method='oauth';saveSyncConfig();
     updateSyncIndicator('ok');render();
     toast('Drive sincronizado ✓ — sync automático activo','var(--green)',4000);
   }catch(e){toast('Error al configurar Drive: '+e.message,'var(--red)');console.error(e);}
