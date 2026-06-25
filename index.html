@@ -773,7 +773,7 @@ async function saveToDrive() {
         if(_merged){
           // Data changed after merge — save locally and update UI (if no modal open)
           await saveToIDB();
-          localStorage.setItem(SK,JSON.stringify(D));
+          _lsSave();
           if(!document.querySelector('.mo.open')&&!_isUserTyping())render();
         }
       }
@@ -821,7 +821,7 @@ async function saveToDrive() {
 
     D.lastSync = nw();
     await saveToIDB(); // keep IDB in sync too
-    localStorage.setItem(SK, JSON.stringify(D)); // fallback
+    _lsSave();
     GD.pendingSync = false;
     updateSyncIndicator('ok');
     // Guardar log .txt en Drive (máx una vez cada 2 min)
@@ -1186,7 +1186,7 @@ function scheduleSync(delay = 3000) {
   if (GD.syncTimer) clearTimeout(GD.syncTimer);
   GD.syncTimer = setTimeout(async () => {
     await saveToIDB(); // Always save locally first
-    localStorage.setItem(SK, JSON.stringify(D)); // localStorage fallback
+    _lsSave();
     if (GD.online && GD.accessToken) {
       await saveToDrive();
     } else if (GD.online && !GD.accessToken) {
@@ -1199,7 +1199,7 @@ function scheduleSync(delay = 3000) {
 // ─── ONLINE/OFFLINE HANDLING ─────────────────────────────────────────
 document.addEventListener('visibilitychange',function(){
   if(document.visibilityState==='hidden'){
-    try{localStorage.setItem(SK,JSON.stringify(D));}catch(e){}
+    _lsSave();
     if(GD.idbReady)saveToIDB().catch(function(){});
   }
 });
@@ -1225,7 +1225,7 @@ window.addEventListener('offline', () => {
 // Session end: create version backup
 window.addEventListener('beforeunload', () => {
   // Synchronous localStorage save (can't await async here)
-  localStorage.setItem(SK, JSON.stringify(D));
+  _lsSave();
   // Queue async backup (best-effort)
   if (GD.online && GD.accessToken) {
     navigator.sendBeacon && navigator.sendBeacon('/ping'); // keep alive hint
@@ -1578,7 +1578,7 @@ async function loadFromDriveAndMerge(silent){
     _silentMerge(driveData);
     D.lastSync=nw();
     await saveToIDB();
-    localStorage.setItem(SK,JSON.stringify(D));
+    _lsSave();
     updateSyncIndicator('ok');
     // No re-renderizar si hay un modal abierto — evita destruir formularios en uso
     if(!document.querySelector('.mo.open')&&!_isUserTyping())render();
@@ -1597,6 +1597,7 @@ async function loadFromDriveAndMerge(silent){
 
 
 /* ===== MÓDULO: UTILIDADES COMPARTIDAS (sv, uid, td, pf, toast, audit) ===== */
+function _lsSave(){try{localStorage.setItem(SK,JSON.stringify(D));}catch(_){try{localStorage.setItem(SK,JSON.stringify(buildCleanData()));}catch(_2){}}}
 function sv(){
   // 1. Always save to localStorage (instant, synchronous fallback)
   try{localStorage.setItem(SK,JSON.stringify(D));}
