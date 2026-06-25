@@ -1601,9 +1601,12 @@ function sv(){
   // 1. Always save to localStorage (instant, synchronous fallback)
   try{localStorage.setItem(SK,JSON.stringify(D));}
   catch(e){
-    if(!GD._lsFullWarned){GD._lsFullWarned=true;
-      var _approxKB=Math.round(JSON.stringify(D).length*2/1024);
-      toast('Almacenamiento lleno (~'+_approxKB+'KB) — conectá Drive o eliminá fotos antiguas.','var(--red)',7000);}
+    try{localStorage.setItem(SK,JSON.stringify(buildCleanData()));}
+    catch(_){
+      if(!GD._lsFullWarned){GD._lsFullWarned=true;
+        var _approxKB=Math.round(JSON.stringify(D).length*2/1024);
+        toast('Almacenamiento lleno (~'+_approxKB+'KB) — conectá Drive o eliminá fotos antiguas.','var(--red)',7000);}
+    }
   }
   if(GD.idbReady) saveToIDB().catch(function(e){console.warn('IDB sv:',e);});
   scheduleSync(2000);
