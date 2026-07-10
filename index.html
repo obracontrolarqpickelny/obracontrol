@@ -6553,7 +6553,7 @@ function rColaboradores(mc,p){
     <div class="alrt alrt-g mt-8">${I.checkc}<div class="flex-1 txxs"><strong>Flujo para 2 personas:</strong><br>A trabaja → exporta backup → B restaura → B trabaja → B exporta → A restaura. Los datos se suman sin duplicar.</div></div>
   </div>
   ${colabs.length?`<div class="ts fw7 mb-8">Colaboradores (${colabs.length})</div>${colabs.map(co=>{const stCol=co.estado==='aceptado'?'var(--green)':'var(--orange)';return `<div class="card" style="padding:12px"><div class="flex justify-between items-start"><div class="flex-1"><div class="ts fw6">${co.name||co.email||'Sin nombre'}</div><div class="txxs tc3 mt-4">${co.email?co.email+' | ':''}<strong>${co.role||'Colaborador'}</strong> | ${fmts(co.date)}</div><div class="mt-4">${colBadge(co.estado||'pendiente',stCol,true)}</div></div><div class="flex gap-4"><button class="btn btn-sec btn-s" onclick="editColab('${co.id}')">${I.edit}</button><button class="btn btn-sec btn-s" onclick="inviteColab('${co.id}',p)" title="Reenviar invitación">📨</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delI('colaboradores','${co.id}')">${I.trash}</button></div></div></div>`;}).join('')}`:''}
-  <div class="card mt-12">${(()=>{const _ay=(D.colaboradores||[]).filter(a=>a.tipo==='ayudante'&&a.projectId===S.proj);const _ep=SYNC.formulariosEndpoint||'';const _baseF=window.location.href.replace(/\/[^/]*(\?.*)?$/,'/form.html');return `<div class="flex justify-between items-center mb-8"><div class="ts fw7" style="color:#0d9488">&#x1F477; Ayudantes</div><button class="btn btn-s" style="background:#0d9488;color:#fff" onclick="openM('newAyudM')">${I.plus} Agregar</button></div><div class="txxs tc3 mb-8">Los ayudantes reciben un link de formulario sin login para cargar datos de campo.</div>${_ep?'':\'<div class="txxs mb-8" style="color:var(--orange)">&#x26A0; Configurá el Apps Script en Config para activar los formularios.</div>\'}${_ay.length?_ay.map(ay=>{const _link=_ep?_baseF+\'?endpoint=\'+encodeURIComponent(_ep)+\'&obra=\'+encodeURIComponent(S.proj)+\'&obraName=\'+encodeURIComponent(p.name)+\'&ayudante=\'+encodeURIComponent(ay.name):\'\';return \'<div style="padding:10px 0;border-bottom:1px solid var(--gray-ll)"><div class="flex justify-between items-center"><div class="ts fw6">\'+ay.name+\'</div><div class="flex gap-4"><button class="btn btn-sec btn-s" onclick="navigator.clipboard?.writeText(\\\'\'+(\''+_link+\'').replace(/\\\'/g,\\\'\\\\\\\'\\\')+\\\'\').then(()=>toast(\\\'Link copiado\\\',\\\'var(--green)\\\'))">&#x1F4CB;</button>\'+(ay.phone?\'<a href="https://wa.me/\'+ay.phone.replace(/[^0-9]/g,\\\'\\\')+\'?text=\'+encodeURIComponent(\\\'Formulario de obra \'+p.name+\':\\n\'+_link)+\'" target="_blank" class="btn btn-sec btn-s">&#x1F4AC;</a>\\\':\\\'\\\')+\'<button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delAyudante(\\\'\'+(ay.id)+\'\\\')">${I.trash}</button></div></div></div>\';}).join(\'\'):\\\'<div class="txxs tc3">Sin ayudantes cargados</div>\'}\`;})()}</div>
+  <div class="card mt-12">${_rAyudantes(p)}</div>
   <div class="mo" id="newAyudM"><div class="mo-c"><div class="mo-h"><h3 style="color:#0d9488">Nuevo Ayudante</h3><button class="tbtn" onclick="closeM('newAyudM')">${I.x}</button></div><div class="fg"><label class="fl">Nombre *</label><input class="fi" id="na_name" placeholder="Nombre del ayudante"></div><div class="fg"><label class="fl">Teléfono WhatsApp (opcional)</label><input class="fi" id="na_phone" type="tel" placeholder="+54911..."></div><button class="btn btn-w mt-8" style="background:#0d9488;color:#fff" onclick="saveAyudante()">Guardar</button></div></div>
   <div class="mo" id="newColabM"><div class="mo-c"><div class="mo-h"><h3 style="color:${c}">Invitar Colaborador</h3><button class="tbtn" onclick="closeM('newColabM')">${I.x}</button></div>
   <div class="fg"><label class="fl">Nombre</label><input class="fi" id="nc_name" placeholder="Nombre del colaborador"></div>
@@ -6974,6 +6974,25 @@ async function initGoogleAuth() {
   });
 }
 
+function _rAyudantes(p){
+  var ay=(D.colaboradores||[]).filter(function(a){return a.tipo==='ayudante'&&a.projectId===S.proj;});
+  var ep=SYNC.formulariosEndpoint||'';
+  var baseF=window.location.href.replace(/\/[^/]*(\?.*)?$/,'/form.html');
+  var h='<div class="flex justify-between items-center mb-8"><div class="ts fw7" style="color:#0d9488">&#x1F477; Ayudantes</div><button class="btn btn-s" style="background:#0d9488;color:#fff" onclick="openM(\'newAyudM\')">'+I.plus+' Agregar</button></div>';
+  h+='<div class="txxs tc3 mb-8">Los ayudantes reciben un link de formulario sin login para cargar datos de campo.</div>';
+  if(!ep)h+='<div class="txxs mb-8" style="color:var(--orange)">&#x26A0; Configurá el Apps Script en Config para activar los formularios.</div>';
+  if(!ay.length){h+='<div class="txxs tc3">Sin ayudantes cargados aún.</div>';return h;}
+  ay.forEach(function(a){
+    var link=ep?baseF+'?endpoint='+encodeURIComponent(ep)+'&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p.name)+'&ayudante='+encodeURIComponent(a.name):'';
+    h+='<div style="padding:10px 0;border-bottom:1px solid var(--gray-ll)"><div class="flex justify-between items-center"><div class="ts fw6">'+a.name+'</div><div class="flex gap-4">';
+    if(link)h+='<button class="btn btn-sec btn-s" onclick="copyAyudLink(\''+encodeURIComponent(link)+'\')">&#x1F4CB;</button>';
+    if(a.phone&&link)h+='<a href="https://wa.me/'+a.phone.replace(/[^0-9]/g,'')+'?text='+encodeURIComponent('Formulario de obra '+p.name+':\n'+link)+'" target="_blank" class="btn btn-sec btn-s">&#x1F4AC;</a>';
+    h+='<button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delAyudante(\''+a.id+'\')">'+I.trash+'</button>';
+    h+='</div></div></div>';
+  });
+  return h;
+}
+
 // ═══════════════════════════════════════════════════════════
 // MÓDULO: BANDEJA DE FORMULARIOS
 // ═══════════════════════════════════════════════════════════
@@ -7088,6 +7107,10 @@ function saveFormulariosEndpoint(val){
   toast('Endpoint guardado','var(--green)');
 }
 
+function copyAyudLink(encoded){
+  var url=decodeURIComponent(encoded);
+  navigator.clipboard?.writeText(url).then(function(){toast('Link copiado','var(--green)');}).catch(function(){});
+}
 function saveAyudante(){
   const n=$('na_name')?.value.trim();
   if(!n){toast('Nombre obligatorio','var(--red)');return;}
