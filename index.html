@@ -1321,6 +1321,7 @@ img:`<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width=
 truck:`<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2M15 18h2M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>`,
 msg:`<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>`,
 folder:`<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>`,
+inbox:`<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>`,
 };
 
 // ─── DATA ───
@@ -1343,10 +1344,10 @@ const UNI=['u','kg','m','m2','m3','l','bolsa 20kg','bolsa 25kg','bolsa 40kg','bo
 const DCT=['Planos','Pliegos','Presupuestos','Computos','Certificados','Ordenes','Legales','Informes','Fotos','Otro'];
 const MEDIOS=['Efectivo','Transferencia','Mercado Pago','Cheque','Tarjeta débito','Tarjeta crédito','Cuenta DNI','Naranja X','Otro'];
 const SC={'En curso':'#f59e0b',Pausada:'#94a3b8',Finalizada:'#22c55e','Por iniciar':'#3b82f6'};
-const MC={dashboard:'#D97706',visitas:'#3b82f6',tareas:'#0891b2',materiales:'#7c3aed',alertas:'#dc2626',checklist:'#db2777',documentos:'#475569',comentarios:'#ea580c',colaboradores:'#16a34a',economia:'#0891b2',informes:'#D97706',config:'#64748b'};
-const MCBG={dashboard:'#FFFBEB',visitas:'#EFF6FF',tareas:'#ECFEFF',materiales:'#F5F3FF',alertas:'#FEF2F2',checklist:'#FDF2F8',documentos:'#F8FAFC',comentarios:'#FFF7ED',colaboradores:'#F0FDF4',economia:'#ECFEFF',informes:'#FFFBEB',config:'#F8FAFC'};
+const MC={dashboard:'#D97706',visitas:'#3b82f6',tareas:'#0891b2',materiales:'#7c3aed',alertas:'#dc2626',checklist:'#db2777',documentos:'#475569',comentarios:'#ea580c',colaboradores:'#16a34a',economia:'#0891b2',informes:'#D97706',config:'#64748b',bandeja:'#0d9488'};
+const MCBG={dashboard:'#FFFBEB',visitas:'#EFF6FF',tareas:'#ECFEFF',materiales:'#F5F3FF',alertas:'#FEF2F2',checklist:'#FDF2F8',documentos:'#F8FAFC',comentarios:'#FFF7ED',colaboradores:'#F0FDF4',economia:'#ECFEFF',informes:'#FFFBEB',config:'#F8FAFC',bandeja:'#f0fdfa'};
 
-let D={user:null,projects:[],visitas:[],tareas:[],materiales:[],matIngresos:[],alertas:[],documentos:[],enlaces:[],checklists:[],comentarios:[],colaboradores:[],economia:[],auditLog:[],driveConfig:{},lastSync:null};
+let D={user:null,projects:[],visitas:[],tareas:[],materiales:[],matIngresos:[],alertas:[],documentos:[],enlaces:[],checklists:[],comentarios:[],colaboradores:[],economia:[],auditLog:[],formulariosPendientes:[],driveConfig:{},lastSync:null};
 let S={proj:null,mod:'dashboard',menu:false,searchOpen:false,searchQ:'',taskFilter:'',taskEncFilter:'',taskSort:'',chkSort:'',chkCollapsed:{},taskCollapsed:{},visitaDetail:null,matDetail:null,matNoteEditing:null,matIngSort:'rec',cmtFilter:'',cmtSearch:'',cmtTipoFilter:'',ecoFilter:'',ecoTipoFilter:'',ecoSort:'',docSort:'',matFilter:'',matCatFilter:'',matSinCompMin:false,matExistMin:false,ecoMetrosOpen:false};
 try{S.chkCollapsed=JSON.parse(localStorage.getItem('_cc')||'{}')}catch(e){}
 try{S.taskCollapsed=JSON.parse(localStorage.getItem('_tc')||'{}')}catch(e){}
@@ -1426,7 +1427,7 @@ function mergeLocalData(){
   try{
     const ls=localStorage.getItem(SK);if(!ls)return;
     const ld=JSON.parse(ls);
-    const arrKeys=['visitas','tareas','materiales','matIngresos','alertas','checklists','documentos','enlaces','comentarios','colaboradores','economia','auditLog','projects'];
+    const arrKeys=['visitas','tareas','materiales','matIngresos','alertas','checklists','documentos','enlaces','comentarios','colaboradores','economia','auditLog','formulariosPendientes','projects'];
     arrKeys.forEach(k=>{
       if(ld[k]&&Array.isArray(ld[k])){
         const existing=new Set((D[k]||[]).map(x=>x.id));
@@ -1441,7 +1442,7 @@ function _isUserTyping(){var ae=document.activeElement;if(!ae)return false;var t
 // Returns true if any data actually changed (items added/removed/updated).
 function _silentMerge(driveData){
   if(!driveData)return false;
-  var arrKeys=['visitas','tareas','materiales','matIngresos','alertas','checklists','documentos','enlaces','comentarios','colaboradores','economia','auditLog','projects'];
+  var arrKeys=['visitas','tareas','materiales','matIngresos','alertas','checklists','documentos','enlaces','comentarios','colaboradores','economia','auditLog','formulariosPendientes','projects'];
   // Unir tombstones de Drive + local
   var driveTombs=(driveData.tombstones&&Array.isArray(driveData.tombstones))?driveData.tombstones:[];
   var localTombs=D.tombstones||[];
@@ -1583,6 +1584,7 @@ async function loadFromDriveAndMerge(silent){
     // No re-renderizar si hay un modal abierto — evita destruir formularios en uso
     if(!document.querySelector('.mo.open')&&!_isUserTyping())render();
     if(!silent)toast('Datos sincronizados con Drive','var(--green)',2500);
+    fetchFormulariosPending();
   }catch(e){
     console.warn('Drive load failed:',e);
     if(!silent)updateSyncIndicator('error');
@@ -2217,10 +2219,10 @@ function createProj(){const n=$('pN').value.trim();if(!n){toast('Nombre obligato
 // ═══════ SHELL ═══════
 function renderShell(){
   const p=D.projects.find(x=>x.id===S.proj);if(!p){S.proj=null;render();return;}
-  const pT=pf('tareas');const pA=pf('alertas');const pendT=pT.filter(t=>t.status==='pendiente'||t.status==='en curso').length;const actAl=pA.filter(a=>!a.resolved).length;
+  const pT=pf('tareas');const pA=pf('alertas');const pendT=pT.filter(t=>t.status==='pendiente'||t.status==='en curso').length;const actAl=pA.filter(a=>!a.resolved).length;const pendForms=(D.formulariosPendientes||[]).filter(x=>x.projectId===S.proj&&x.estado==='pendiente').length;
   const drv=D.driveConfig?.[S.proj];const cloudCol=drv?'var(--green)':'var(--pri)';
   const _pendAlerts=pA.filter(a=>!a.resolved).length; // mantener badge en tareas si hay alertas legacy
-  const mods=[{id:'dashboard',label:'Panel',ic:'dash'},{id:'visitas',label:'Visitas',ic:'clip'},{id:'tareas',label:'Tareas',ic:'list',badge:pendT+_pendAlerts},{id:'materiales',label:'Materiales',ic:'pkg'},{id:'checklist',label:'Checklist',ic:'chklist'},{id:'documentos',label:'Documentos',ic:'file'},{id:'comentarios',label:'Comentarios',ic:'msg'},{id:'colaboradores',label:'Colaboradores',ic:'share'},{id:'economia',label:'Economía',ic:'eco'},{id:'informes',label:'Informes',ic:'dl'},{id:'config',label:'Config',ic:'gear'}];
+  const mods=[{id:'dashboard',label:'Panel',ic:'dash'},{id:'visitas',label:'Visitas',ic:'clip'},{id:'tareas',label:'Tareas',ic:'list',badge:pendT+_pendAlerts},{id:'materiales',label:'Materiales',ic:'pkg'},{id:'checklist',label:'Checklist',ic:'chklist'},{id:'documentos',label:'Documentos',ic:'file'},{id:'comentarios',label:'Comentarios',ic:'msg'},{id:'colaboradores',label:'Colaboradores',ic:'share'},{id:'bandeja',label:'Bandeja',ic:'inbox',badge:pendForms},{id:'economia',label:'Economía',ic:'eco'},{id:'informes',label:'Informes',ic:'dl'},{id:'config',label:'Config',ic:'gear'}];
   const mi=mods.map(m=>{const c=MC[m.id];const act=S.mod===m.id;return `<button class="smi${act?' act':''}" style="${act?'background:'+c+'08;color:'+c+';border-left-color:'+c:''}" onclick="S.mod='${m.id}';S.menu=false;S.visitaDetail=null;S.matDetail=null;render();"><span style="color:${act?c:'var(--text3)'}">${I[m.ic]||''}</span><span style="flex:1;text-align:left">${m.label}</span>${m.badge>0?`<span class="sbadge">${m.badge}</span>`:''}</button>`;}).join('');
   const allBnav=[
     {id:'dashboard',ic:'dash',l:'Panel'},
@@ -2231,6 +2233,7 @@ function renderShell(){
     {id:'documentos',ic:'file',l:'Docs'},
     {id:'checklist',ic:'chklist',l:'Checks'},
     {id:'comentarios',ic:'msg',l:'Coment.'},
+    {id:'bandeja',ic:'inbox',l:'Bandeja'},
     {id:'informes',ic:'dl',l:'Informes'}
   ];
   const _allNavIds=allBnav.map(function(t){return t.id;});
@@ -2251,10 +2254,10 @@ function renderShell(){
   ${S.menu?`<div class="ov open" onclick="S.menu=false;render();"><div class="smenu" onclick="event.stopPropagation()"><div class="smenu-hdr"><div class="flex items-center gap-10 mb-4"><span style="color:var(--pri)">${I.building}</span><span style="font-size:15px;font-weight:800">${p.name}</span></div><div class="txxs tc3">${p.client||''} ${p.location?'| '+p.location:''}</div></div><div style="flex:1;overflow-y:auto;padding:4px 0">${mi}</div><div style="padding:12px 16px;border-top:1px solid var(--gray-ll)"><button class="btn btn-g btn-s btn-w" style="color:var(--red)" onclick="D.user=null;sv();render();">${I.out} Cerrar sesion</button></div></div></div>`:''}
   ${S.searchOpen?renderSearchModal():''}
   <div class="content" id="mc"></div>
-  <div class="bottomnav" ontouchstart="window._bnTX=event.changedTouches[0].clientX" ontouchend="var _dx=event.changedTouches[0].clientX-(window._bnTX||0);if(Math.abs(_dx)>40){navStep(_dx<0?1:-1)}"><button class="bnav" style="max-width:32px;min-width:32px;font-size:16px;opacity:${_bnavIdx<=0?'0.3':'1'}" onclick="navStep(-1)" title="Anterior">&#x276E;</button>${bnav.map(t=>{const act=S.mod===t.id;const c=act?MC[t.id]:'var(--gray-l)';return `<button class="bnav${act?' active':''}" style="color:${c}" onclick="S.mod='${t.id}';S.visitaDetail=null;S.matDetail=null;render();">${I[t.ic]}<span>${t.l}</span>${t.id==='alertas'&&actAl>0?'<span class="ndot"></span>':''}</button>`;}).join('')}<button class="bnav" style="max-width:32px;min-width:32px;font-size:16px;opacity:${_bnavIdx>=_allNavIds.length-1?'0.3':'1'}" onclick="navStep(1)" title="Siguiente">&#x276F;</button></div>`;
+  <div class="bottomnav" ontouchstart="window._bnTX=event.changedTouches[0].clientX" ontouchend="var _dx=event.changedTouches[0].clientX-(window._bnTX||0);if(Math.abs(_dx)>40){navStep(_dx<0?1:-1)}"><button class="bnav" style="max-width:32px;min-width:32px;font-size:16px;opacity:${_bnavIdx<=0?'0.3':'1'}" onclick="navStep(-1)" title="Anterior">&#x276E;</button>${bnav.map(t=>{const act=S.mod===t.id;const c=act?MC[t.id]:'var(--gray-l)';return `<button class="bnav${act?' active':''}" style="color:${c}" onclick="S.mod='${t.id}';S.visitaDetail=null;S.matDetail=null;render();">${I[t.ic]}<span>${t.l}</span>${(t.id==='alertas'&&actAl>0)||(t.id==='bandeja'&&pendForms>0)?'<span class="ndot"></span>':''}</button>`;}).join('')}<button class="bnav" style="max-width:32px;min-width:32px;font-size:16px;opacity:${_bnavIdx>=_allNavIds.length-1?'0.3':'1'}" onclick="navStep(1)" title="Siguiente">&#x276F;</button></div>`;
   renderModule(S.mod,p);
 }
-function renderModule(mod,p){const mc=$('mc');if(!mc)return;if(S.visitaDetail){var _vck=(D.visitas||[]).find(function(x){return x.id===S.visitaDetail;});if(!_vck||_vck.projectId!==S.proj){S.visitaDetail=null;}else{rVisitaDetail(mc,S.visitaDetail);return;}}if(S.matDetail){rMatDetail(mc,S.matDetail);return;}switch(mod){case 'dashboard':rDash(mc,p);break;case 'visitas':rVisitas(mc);break;case 'tareas':rTareas(mc);break;case 'materiales':rMat(mc);break;case 'alertas':rAlertas(mc);break;case 'checklist':rChecklist(mc);break;case 'documentos':rDocs(mc);break;case 'comentarios':rComentarios(mc);break;case 'informes':rInformes(mc,p);break;case 'colaboradores':rColaboradores(mc,p);break;case 'economia':rEconomia(mc,p);break;case 'config':rConfig(mc,p);break;}if(S.searchOpen)setTimeout(()=>{const si=$('searchInput');if(si)si.focus();},100);}
+function renderModule(mod,p){const mc=$('mc');if(!mc)return;if(S.visitaDetail){var _vck=(D.visitas||[]).find(function(x){return x.id===S.visitaDetail;});if(!_vck||_vck.projectId!==S.proj){S.visitaDetail=null;}else{rVisitaDetail(mc,S.visitaDetail);return;}}if(S.matDetail){rMatDetail(mc,S.matDetail);return;}switch(mod){case 'dashboard':rDash(mc,p);break;case 'visitas':rVisitas(mc);break;case 'tareas':rTareas(mc);break;case 'materiales':rMat(mc);break;case 'alertas':rAlertas(mc);break;case 'checklist':rChecklist(mc);break;case 'documentos':rDocs(mc);break;case 'comentarios':rComentarios(mc);break;case 'informes':rInformes(mc,p);break;case 'colaboradores':rColaboradores(mc,p);break;case 'bandeja':rBandeja(mc,p);break;case 'economia':rEconomia(mc,p);break;case 'config':rConfig(mc,p);break;}if(S.searchOpen)setTimeout(()=>{const si=$('searchInput');if(si)si.focus();},100);}
 
 function navStep(dir){
   const ids=['dashboard','visitas','tareas','materiales','economia','documentos','checklist','comentarios','informes'];
@@ -2277,6 +2280,7 @@ const SYNC = {
   appsScriptUrl: null,
   dropboxToken: null,
   netlifyConfigured: false,
+  formulariosEndpoint: null,
 };
 
 function loadSyncConfig() {
@@ -2286,6 +2290,7 @@ function loadSyncConfig() {
     if (cfg.appsScriptUrl)  SYNC.appsScriptUrl = cfg.appsScriptUrl;
     if (cfg.dropboxToken)   SYNC.dropboxToken = cfg.dropboxToken;
     if (cfg.netlifyConfigured) SYNC.netlifyConfigured = cfg.netlifyConfigured;
+    if (cfg.formulariosEndpoint) SYNC.formulariosEndpoint = cfg.formulariosEndpoint;
   } catch(e) {}
 }
 
@@ -2295,6 +2300,7 @@ function saveSyncConfig() {
     appsScriptUrl: SYNC.appsScriptUrl,
     dropboxToken: SYNC.dropboxToken,
     netlifyConfigured: SYNC.netlifyConfigured,
+    formulariosEndpoint: SYNC.formulariosEndpoint,
   }));
 }
 
@@ -5362,7 +5368,7 @@ async function importHistorial(input) {
     setProgress(10, 'Validando estructura...');
     const TABLAS = ['visitas','tareas','materiales','matIngresos','alertas',
                     'checklists','documentos','enlaces','comentarios',
-                    'colaboradores','economia','auditLog'];
+                    'colaboradores','economia','auditLog','formulariosPendientes'];
 
     // Detectar si es backup propio o exportación de otra herramienta
     const hasProject = bk.project || bk.obra || bk.proyecto;
@@ -5551,7 +5557,7 @@ function rConfig(mc,p){
   [].concat(pf('visitas'),pf('tareas'),pf('materiales'),pf('matIngresos')).forEach(function(it){
     (it.photos||[]).forEach(function(p){var u=typeof p==='string'?p:(p.url||'');if(u.startsWith('data:'))_b64n++;});
   });
-mc.innerHTML=`${modHeader('config','Configuracion')}<div class="card mb-12"><div class="flex justify-between items-center mb-8"><div class="ts fw7">Datos de la obra</div><button class="btn btn-sec btn-s" onclick="openM('editProjM')">${I.edit} Editar</button></div><div class="ts tc3 lh18"><strong>Nombre:</strong> ${p.name}<br><strong>Cliente:</strong> ${p.client||'-'}<br><strong>Ubicacion:</strong> ${p.location||'-'}<br><strong>Director:</strong> ${p.director||'-'}<br><strong>Capataz:</strong> ${p.capataz||'-'}<br><strong>Inicio:</strong> ${fmts(p.startDate)||'-'}<br><strong>Fin:</strong> ${fmts(p.endDate)||'-'}<br><strong>Estado:</strong> ${p.status}</div></div><div class="card mb-12"><div class="ts fw7 mb-8">Estadisticas</div><div class="ts tc3 lh18">Visitas: ${pf('visitas').length} | Tareas: ${pf('tareas').length} | Materiales: ${pf('materiales').length} | Ingresos: ${pf('matIngresos').length} | Alertas: ${pf('alertas').length} | Comentarios: ${pf('comentarios').length} | Docs: ${pf('documentos').length} | Enlaces: ${pf('enlaces').length}</div></div><div class="card mb-12" style="background:var(--red-bg);border:1px solid var(--red-mid)"><div class="ts fw7 mb-8" style="color:var(--red)">Zona peligrosa</div><button class="btn btn-x btn-s btn-w" onclick="deleteProj()">Eliminar obra</button></div><div class="card mb-12" style="border-left:4px solid var(--cyan);padding:12px"><div class="ts fw7 mb-6">&#x1F4BE; Almacenamiento local</div><div style="background:var(--gray-ll);border-radius:6px;height:8px;margin-bottom:6px"><div style="background:${_lsColor};border-radius:6px;height:8px;width:${_lsPct}%"></div></div><div class="txxs tc3">${_lsUsed} KB usados de ~5120 KB disponibles</div>${_lsPct>80?'<div class="txxs mt-4" style="color:var(--orange)">&#x26A0; Almacenamiento casi lleno. Conectá Drive para liberar espacio.</div>':''}</div><div class="tac mt-20 txxs tc3"><div class="fw7">ObraControl Pro v9.0</div><div class="mt-4">Visita-centric | PDF | Materiales+Ingresos | Comentarios vinculados</div></div><div class="mo" id="editProjM"><div class="mo-c"><div class="mo-h"><h3>Editar Obra</h3><button class="tbtn" onclick="closeM('editProjM')">${I.x}</button></div><div class="fg"><label class="fl">Nombre *</label><input class="fi" id="ep_n" value="${p.name||''}"></div><div class="fg"><label class="fl">Cliente</label><input class="fi" id="ep_cl" value="${p.client||''}"></div><div class="fg"><label class="fl">Ubicacion</label><input class="fi" id="ep_loc" value="${p.location||''}"></div><div class="fr"><div class="fg"><label class="fl">Director</label><input class="fi" id="ep_dir" value="${p.director||''}"></div><div class="fg"><label class="fl">Capataz</label><input class="fi" id="ep_cap" value="${p.capataz||''}"></div></div><div class="fr"><div class="fg"><label class="fl">Inicio</label><input class="fi" id="ep_st" type="date" value="${p.startDate||''}"></div><div class="fg"><label class="fl">Fin</label><input class="fi" id="ep_en" type="date" value="${p.endDate||''}"></div></div><div class="fg"><label class="fl">Estado</label><select class="fs" id="ep_sta">${['En curso','Pausada','Finalizada','Por iniciar'].map(s=>`<option${s===p.status?' selected':''}>${s}</option>`).join('')}</select></div><button class="btn btn-p btn-w mt-8" onclick="saveEP()">Guardar</button></div></div>`;
+mc.innerHTML=`${modHeader('config','Configuracion')}<div class="card mb-12"><div class="flex justify-between items-center mb-8"><div class="ts fw7">Datos de la obra</div><button class="btn btn-sec btn-s" onclick="openM('editProjM')">${I.edit} Editar</button></div><div class="ts tc3 lh18"><strong>Nombre:</strong> ${p.name}<br><strong>Cliente:</strong> ${p.client||'-'}<br><strong>Ubicacion:</strong> ${p.location||'-'}<br><strong>Director:</strong> ${p.director||'-'}<br><strong>Capataz:</strong> ${p.capataz||'-'}<br><strong>Inicio:</strong> ${fmts(p.startDate)||'-'}<br><strong>Fin:</strong> ${fmts(p.endDate)||'-'}<br><strong>Estado:</strong> ${p.status}</div></div><div class="card mb-12"><div class="ts fw7 mb-8">Estadisticas</div><div class="ts tc3 lh18">Visitas: ${pf('visitas').length} | Tareas: ${pf('tareas').length} | Materiales: ${pf('materiales').length} | Ingresos: ${pf('matIngresos').length} | Alertas: ${pf('alertas').length} | Comentarios: ${pf('comentarios').length} | Docs: ${pf('documentos').length} | Enlaces: ${pf('enlaces').length}</div></div><div class="card mb-12" style="border-left:4px solid #0d9488"><div class="ts fw7 mb-8" style="color:#0d9488">&#x1F4F1; Formularios de ayudantes</div><div class="txxs tc3 mb-8">Pegá la URL del Apps Script para recibir formularios de tus ayudantes sin login.</div><div class="fg"><label class="fl">URL del Apps Script</label><input class="fi" id="cfg_form_ep" value="${SYNC.formulariosEndpoint||''}" placeholder="https://script.google.com/macros/s/..." onblur="saveFormulariosEndpoint(this.value)"></div>${GD.rootId?`<div class="txxs tc3 mb-8" style="word-break:break-all">ID carpeta raíz Drive: <strong style="user-select:all">${GD.rootId}</strong> <button class="btn btn-sec btn-s" style="padding:2px 8px;display:inline-flex" onclick="navigator.clipboard?.writeText('${GD.rootId}').then(()=>toast('ID copiado','var(--green)'))">&#x1F4CB;</button></div>`:'<div class="txxs mb-8" style="color:var(--orange)">&#x26A0; Conectá Drive para ver el ID de carpeta requerido en el setup.</div>'}<button class="btn btn-sec btn-s" onclick="showAppsScriptCode()">&#x1F4CB; Ver código Apps Script (setup &uacute;nico)</button></div><div class="card mb-12" style="background:var(--red-bg);border:1px solid var(--red-mid)"><div class="ts fw7 mb-8" style="color:var(--red)">Zona peligrosa</div><button class="btn btn-x btn-s btn-w" onclick="deleteProj()">Eliminar obra</button></div><div class="card mb-12" style="border-left:4px solid var(--cyan);padding:12px"><div class="ts fw7 mb-6">&#x1F4BE; Almacenamiento local</div><div style="background:var(--gray-ll);border-radius:6px;height:8px;margin-bottom:6px"><div style="background:${_lsColor};border-radius:6px;height:8px;width:${_lsPct}%"></div></div><div class="txxs tc3">${_lsUsed} KB usados de ~5120 KB disponibles</div>${_lsPct>80?'<div class="txxs mt-4" style="color:var(--orange)">&#x26A0; Almacenamiento casi lleno. Conectá Drive para liberar espacio.</div>':''}</div><div class="tac mt-20 txxs tc3"><div class="fw7">ObraControl Pro v9.0</div><div class="mt-4">Visita-centric | PDF | Materiales+Ingresos | Comentarios vinculados</div></div><div class="mo" id="editProjM"><div class="mo-c"><div class="mo-h"><h3>Editar Obra</h3><button class="tbtn" onclick="closeM('editProjM')">${I.x}</button></div><div class="fg"><label class="fl">Nombre *</label><input class="fi" id="ep_n" value="${p.name||''}"></div><div class="fg"><label class="fl">Cliente</label><input class="fi" id="ep_cl" value="${p.client||''}"></div><div class="fg"><label class="fl">Ubicacion</label><input class="fi" id="ep_loc" value="${p.location||''}"></div><div class="fr"><div class="fg"><label class="fl">Director</label><input class="fi" id="ep_dir" value="${p.director||''}"></div><div class="fg"><label class="fl">Capataz</label><input class="fi" id="ep_cap" value="${p.capataz||''}"></div></div><div class="fr"><div class="fg"><label class="fl">Inicio</label><input class="fi" id="ep_st" type="date" value="${p.startDate||''}"></div><div class="fg"><label class="fl">Fin</label><input class="fi" id="ep_en" type="date" value="${p.endDate||''}"></div></div><div class="fg"><label class="fl">Estado</label><select class="fs" id="ep_sta">${['En curso','Pausada','Finalizada','Por iniciar'].map(s=>`<option${s===p.status?' selected':''}>${s}</option>`).join('')}</select></div><button class="btn btn-p btn-w mt-8" onclick="saveEP()">Guardar</button></div></div>`;
 }
 
 function renderConfigSize(){
@@ -5583,7 +5589,7 @@ function deleteProj(){
   // Tombstone the project so Drive merge never restores it
   addTombstone('projects',id);
   // Tombstone every related record so they don't come back either
-  ['visitas','tareas','materiales','matIngresos','alertas','documentos','enlaces','checklists','comentarios','colaboradores','economia'].forEach(function(tbl){
+  ['visitas','tareas','materiales','matIngresos','alertas','documentos','enlaces','checklists','comentarios','colaboradores','economia','formulariosPendientes'].forEach(function(tbl){
     (D[tbl]||[]).filter(function(x){return x.projectId===id;}).forEach(function(x){addTombstone(tbl,x.id);});
     D[tbl]=(D[tbl]||[]).filter(function(x){return x.projectId!==id;});
   });
@@ -6547,6 +6553,8 @@ function rColaboradores(mc,p){
     <div class="alrt alrt-g mt-8">${I.checkc}<div class="flex-1 txxs"><strong>Flujo para 2 personas:</strong><br>A trabaja → exporta backup → B restaura → B trabaja → B exporta → A restaura. Los datos se suman sin duplicar.</div></div>
   </div>
   ${colabs.length?`<div class="ts fw7 mb-8">Colaboradores (${colabs.length})</div>${colabs.map(co=>{const stCol=co.estado==='aceptado'?'var(--green)':'var(--orange)';return `<div class="card" style="padding:12px"><div class="flex justify-between items-start"><div class="flex-1"><div class="ts fw6">${co.name||co.email||'Sin nombre'}</div><div class="txxs tc3 mt-4">${co.email?co.email+' | ':''}<strong>${co.role||'Colaborador'}</strong> | ${fmts(co.date)}</div><div class="mt-4">${colBadge(co.estado||'pendiente',stCol,true)}</div></div><div class="flex gap-4"><button class="btn btn-sec btn-s" onclick="editColab('${co.id}')">${I.edit}</button><button class="btn btn-sec btn-s" onclick="inviteColab('${co.id}',p)" title="Reenviar invitación">📨</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delI('colaboradores','${co.id}')">${I.trash}</button></div></div></div>`;}).join('')}`:''}
+  <div class="card mt-12">${(()=>{const _ay=(D.colaboradores||[]).filter(a=>a.tipo==='ayudante'&&a.projectId===S.proj);const _ep=SYNC.formulariosEndpoint||'';const _baseF=window.location.href.replace(/\/[^/]*(\?.*)?$/,'/form.html');return `<div class="flex justify-between items-center mb-8"><div class="ts fw7" style="color:#0d9488">&#x1F477; Ayudantes</div><button class="btn btn-s" style="background:#0d9488;color:#fff" onclick="openM('newAyudM')">${I.plus} Agregar</button></div><div class="txxs tc3 mb-8">Los ayudantes reciben un link de formulario sin login para cargar datos de campo.</div>${_ep?'':\'<div class="txxs mb-8" style="color:var(--orange)">&#x26A0; Configurá el Apps Script en Config para activar los formularios.</div>\'}${_ay.length?_ay.map(ay=>{const _link=_ep?_baseF+\'?endpoint=\'+encodeURIComponent(_ep)+\'&obra=\'+encodeURIComponent(S.proj)+\'&obraName=\'+encodeURIComponent(p.name)+\'&ayudante=\'+encodeURIComponent(ay.name):\'\';return \'<div style="padding:10px 0;border-bottom:1px solid var(--gray-ll)"><div class="flex justify-between items-center"><div class="ts fw6">\'+ay.name+\'</div><div class="flex gap-4"><button class="btn btn-sec btn-s" onclick="navigator.clipboard?.writeText(\\\'\'+(\''+_link+\'').replace(/\\\'/g,\\\'\\\\\\\'\\\')+\\\'\').then(()=>toast(\\\'Link copiado\\\',\\\'var(--green)\\\'))">&#x1F4CB;</button>\'+(ay.phone?\'<a href="https://wa.me/\'+ay.phone.replace(/[^0-9]/g,\\\'\\\')+\'?text=\'+encodeURIComponent(\\\'Formulario de obra \'+p.name+\':\\n\'+_link)+\'" target="_blank" class="btn btn-sec btn-s">&#x1F4AC;</a>\\\':\\\'\\\')+\'<button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delAyudante(\\\'\'+(ay.id)+\'\\\')">${I.trash}</button></div></div></div>\';}).join(\'\'):\\\'<div class="txxs tc3">Sin ayudantes cargados</div>\'}\`;})()}</div>
+  <div class="mo" id="newAyudM"><div class="mo-c"><div class="mo-h"><h3 style="color:#0d9488">Nuevo Ayudante</h3><button class="tbtn" onclick="closeM('newAyudM')">${I.x}</button></div><div class="fg"><label class="fl">Nombre *</label><input class="fi" id="na_name" placeholder="Nombre del ayudante"></div><div class="fg"><label class="fl">Teléfono WhatsApp (opcional)</label><input class="fi" id="na_phone" type="tel" placeholder="+54911..."></div><button class="btn btn-w mt-8" style="background:#0d9488;color:#fff" onclick="saveAyudante()">Guardar</button></div></div>
   <div class="mo" id="newColabM"><div class="mo-c"><div class="mo-h"><h3 style="color:${c}">Invitar Colaborador</h3><button class="tbtn" onclick="closeM('newColabM')">${I.x}</button></div>
   <div class="fg"><label class="fl">Nombre</label><input class="fi" id="nc_name" placeholder="Nombre del colaborador"></div>
   <div class="fg"><label class="fl">Email *</label><input class="fi" id="nc_email" type="email" placeholder="email@ejemplo.com"></div>
@@ -6964,6 +6972,180 @@ async function initGoogleAuth() {
 
     document.head.appendChild(script);
   });
+}
+
+// ═══════════════════════════════════════════════════════════
+// MÓDULO: BANDEJA DE FORMULARIOS
+// ═══════════════════════════════════════════════════════════
+function rBandeja(mc,p){
+  const c='#0d9488';
+  if(!S.bandejaTab)S.bandejaTab='pendientes';
+  const tab=S.bandejaTab;
+  const all=(D.formulariosPendientes||[]).filter(x=>x.projectId===S.proj).sort((a,b)=>new Date(b.fecha||0)-new Date(a.fecha||0));
+  const pendientes=all.filter(x=>x.estado==='pendiente');
+  const procesados=all.filter(x=>x.estado!=='pendiente');
+  const catL={movimiento:'💰 Movimiento',tarea:'📋 Tarea',checklist:'✅ Checklist',material_existente:'📦 Material existente',material_pedido:'🔔 Material pedido'};
+  function fmtSub(sub){
+    switch(sub.categoria){
+      case 'movimiento': return `<strong>${sub.tipo||''}</strong> · $${sub.monto||0} · ${sub.concepto||''}`;
+      case 'tarea': return `<strong>${sub.titulo||'Sin título'}</strong>${sub.descripcion?' — '+String(sub.descripcion).slice(0,60):''}`;
+      case 'checklist': return `<strong>${sub.titulo||'Sin título'}</strong>${sub.items?' ('+sub.items.split('\n').filter(Boolean).length+' ítems)':''}`;
+      case 'material_existente': return `<strong>${sub.materialNombre||''}</strong> · ${sub.cantidad||0} ${sub.unidad||'u'}`;
+      case 'material_pedido': return `<strong>${sub.materialNombre||''}</strong> · ${sub.cantidad||0} ${sub.unidad||'u'}${sub.urgencia==='urgente'?' <span style="color:#e02020;font-weight:700">⚡URGENTE</span>':''}`;
+      default: return '';
+    }
+  }
+  function renderCard(sub){
+    const isPend=sub.estado==='pendiente';
+    const borderCol=isPend?c:sub.estado==='incorporado'?'var(--green)':'var(--gray-l)';
+    const stLabel=isPend?`<span style="color:${c};font-weight:600">⏳ Pendiente</span>`
+      :sub.estado==='incorporado'?`<span style="color:var(--green);font-weight:600">✓ Incorporado${sub.fechaIncorporado?' · '+fmts(sub.fechaIncorporado):''}</span>`
+      :`<span style="color:var(--gray-l)">✕ Descartado</span>`;
+    return `<div class="card" style="border-left:3px solid ${borderCol};padding:12px;margin-bottom:8px">
+      <div class="flex justify-between items-start mb-6">
+        <div><div class="ts fw6">${catL[sub.categoria]||sub.categoria}</div><div class="txxs tc3 mt-2">👤 ${sub.ayudante||'?'} · 📅 ${fmts(sub.fecha||sub.date||'')}</div></div>
+        ${isPend?`<div class="flex gap-4"><button class="btn btn-s" style="background:${c};color:#fff;white-space:nowrap" onclick="incorporarFormulario('${sub.id}')">✓ Incorporar</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="descartarFormulario('${sub.id}')">✕</button></div>`:`<div class="txxs mt-4">${stLabel}</div>`}
+      </div>
+      <div class="txxs tc3">${fmtSub(sub)}</div>
+      ${sub.foto?`<img src="${sub.foto}" style="width:60px;height:60px;object-fit:cover;border-radius:6px;margin-top:8px">`:''}</div>`;
+  }
+  const ep=SYNC.formulariosEndpoint||'';
+  const baseF=window.location.href.replace(/\/[^/]*(\?.*)?$/,'/form.html');
+  const formLink=ep?baseF+'?endpoint='+encodeURIComponent(ep)+'&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p.name):'';
+  mc.innerHTML=`${modHeader('bandeja','Bandeja',`<button class="btn btn-sec btn-s" onclick="fetchFormulariosPending().then(()=>render())">🔄 Verificar</button>`)}
+  ${!ep?`<div class="alrt alrt-y mb-12">${I.warn}<div class="flex-1 txxs"><strong>Apps Script no configurado.</strong> Andá a Config → Formularios para pegar la URL del script.</div></div>`:''}
+  ${formLink?`<div class="card mb-12"><div class="ts fw7 mb-6" style="color:${c}">🔗 Link del formulario (esta obra)</div><div style="background:var(--gray-ll);padding:8px 10px;border-radius:8px;font-size:10px;word-break:break-all;color:var(--text3);margin-bottom:8px">${formLink}</div><div class="flex gap-4 wrap"><button class="btn btn-sec btn-s" onclick="navigator.clipboard?.writeText(decodeURIComponent('${encodeURIComponent(formLink)}')).then(()=>toast('Link copiado','var(--green)'))">📋 Copiar</button><a href="https://wa.me/?text=${encodeURIComponent('Formulario de obra '+p.name+': '+formLink)}" target="_blank" class="btn btn-sec btn-s">💬 WhatsApp</a></div></div>`:''}
+  <div class="flex gap-6 mb-12">
+    <button class="btn btn-s" style="${tab==='pendientes'?'background:'+c+';color:#fff':'background:var(--gray-ll);color:var(--text2)'}" onclick="S.bandejaTab='pendientes';render()">${I.bell} Pendientes${pendientes.length?` <span style="background:${tab==='pendientes'?'rgba(255,255,255,.3)':'#0d9488'};color:#fff;border-radius:10px;padding:0 6px;font-size:10px;font-weight:700;margin-left:4px">${pendientes.length}</span>`:''}</button>
+    <button class="btn btn-s" style="${tab==='log'?'background:'+c+';color:#fff':'background:var(--gray-ll);color:var(--text2)'}" onclick="S.bandejaTab='log';render()">📋 Log (${procesados.length})</button>
+  </div>
+  ${tab==='pendientes'?(pendientes.length?pendientes.map(renderCard).join(''):`<div class="empty">${I.checkc}<div class="ts mt-8">No hay formularios pendientes</div><div class="txxs tc3 mt-4">Cuando un ayudante envíe un formulario aparecerá aquí.</div></div>`):
+   (procesados.length?procesados.map(renderCard).join(''):`<div class="empty"><div class="ts mt-8">Sin formularios procesados aún</div></div>`)}`;
+}
+
+function incorporarFormulario(id){
+  const sub=(D.formulariosPendientes||[]).find(x=>x.id===id);
+  if(!sub)return;
+  const pid=sub.projectId||S.proj;
+  switch(sub.categoria){
+    case 'movimiento':
+      D.economia.push({id:uid(),projectId:pid,tipo:sub.tipo||'gasto',fecha:(sub.fecha||nw()).slice(0,10),concepto:sub.concepto||'',monto:parseFloat(sub.monto)||0,proveedor:sub.ayudante||'',medioPago:'',date:nw(),updatedAt:nw()});
+      break;
+    case 'tarea':
+      D.tareas.push({id:uid(),projectId:pid,title:sub.titulo||'Tarea sin título',description:sub.descripcion||'',priority:sub.prioridad||'media',status:'pendiente',rubro:'',date:nw(),updatedAt:nw()});
+      break;
+    case 'checklist':{
+      const its=(sub.items||'').split('\n').filter(l=>l.trim());
+      D.checklists.push({id:uid(),projectId:pid,title:sub.titulo||'Checklist',priority:'media',date:td(),updatedAt:nw(),items:its.map(l=>({id:uid(),text:l.trim(),done:false}))});
+      break;}
+    case 'material_existente':
+      D.materiales.push({id:uid(),projectId:pid,name:sub.materialNombre||'',qty:parseFloat(sub.cantidad)||0,unit:sub.unidad||'u',notes:sub.notas||'',category:'General',computado:0,date:td(),updatedAt:nw()});
+      break;
+    case 'material_pedido':
+      (D.matIngresos=D.matIngresos||[]).push({id:uid(),projectId:pid,matNombre:sub.materialNombre||'',qty:parseFloat(sub.cantidad)||0,unit:sub.unidad||'u',estado:'a_pedir',urgencia:sub.urgencia||'normal',observations:sub.notas||'',date:nw(),updatedAt:nw()});
+      break;
+  }
+  sub.estado='incorporado';sub.fechaIncorporado=nw();sub.updatedAt=nw();
+  audit('formularios','incorporar',sub.categoria);
+  sv();render();toast('Incorporado a '+( {movimiento:'Economía',tarea:'Tareas',checklist:'Checklist',material_existente:'Materiales',material_pedido:'Materiales pedidos'}[sub.categoria]||sub.categoria)+' ✓','var(--green)');
+}
+
+function descartarFormulario(id){
+  const sub=(D.formulariosPendientes||[]).find(x=>x.id===id);
+  if(!sub||!confirmDel('¿Descartar este formulario? No se puede deshacer.'))return;
+  sub.estado='descartado';sub.updatedAt=nw();
+  sv();render();toast('Formulario descartado','var(--orange)');
+}
+
+async function fetchFormulariosPending(){
+  if(!GD.accessToken||!GD.rootId)return;
+  try{
+    const q=encodeURIComponent(`name='formularios_pending.json' and '${GD.rootId}' in parents and trashed=false`);
+    const res=await fetchWithTimeout(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`,{headers:{Authorization:'Bearer '+GD.accessToken}},10000);
+    if(!res.ok)return;
+    const data=await res.json();
+    if(!data.files||!data.files.length)return;
+    const fileId=data.files[0].id;
+    const dlRes=await fetchWithTimeout(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,{headers:{Authorization:'Bearer '+GD.accessToken}},15000);
+    if(!dlRes.ok)return;
+    const pending=await dlRes.json();
+    if(!Array.isArray(pending))return;
+    if(!D.formulariosPendientes)D.formulariosPendientes=[];
+    const existingIds=new Set(D.formulariosPendientes.map(x=>x.id));
+    let added=0;
+    pending.forEach(function(item){
+      if(!item.id||existingIds.has(item.id))return;
+      item.estado=item.estado||'pendiente';
+      D.formulariosPendientes.push(item);added++;
+    });
+    if(added>0){sv();if(S.mod==='bandeja')render();else toast(added+' formulario'+(added>1?'s':'')+' nuevo'+(added>1?'s':'')+' en Bandeja','#0d9488',4000);}
+  }catch(e){console.warn('fetchFormulariosPending:',e);}
+}
+
+function saveFormulariosEndpoint(val){
+  SYNC.formulariosEndpoint=val.trim()||null;
+  saveSyncConfig();
+  toast('Endpoint guardado','var(--green)');
+}
+
+function saveAyudante(){
+  const n=$('na_name')?.value.trim();
+  if(!n){toast('Nombre obligatorio','var(--red)');return;}
+  if(!D.colaboradores)D.colaboradores=[];
+  D.colaboradores.push({id:uid(),projectId:S.proj,name:n,phone:$('na_phone')?.value.trim()||'',tipo:'ayudante',date:td(),updatedAt:nw()});
+  sv();closeM('newAyudM');render();toast('Ayudante guardado');
+}
+
+function delAyudante(id){
+  if(!confirmDel('¿Eliminar este ayudante?'))return;
+  D.colaboradores=(D.colaboradores||[]).filter(x=>x.id!==id);
+  addTombstone('colaboradores',id);sv();render();toast('Ayudante eliminado');
+}
+
+function showAppsScriptCode(){
+  const code=`// ObraControl Pro — Apps Script para formularios de ayudantes
+// Setup:
+// 1. Ir a script.google.com → Nuevo proyecto
+// 2. Pegar este código completo
+// 3. Engranaje (⚙) → Propiedades del script → Agregar propiedad:
+//    Nombre: OBRACONTROL_ROOT_ID
+//    Valor: [pegar el ID de carpeta raíz que se ve en ObraControl Config]
+// 4. Implementar → Nueva implementación → Aplicación web
+//    Ejecutar como: Yo  |  Quién tiene acceso: Cualquier persona
+// 5. Copiar la URL de implementación → pegar en ObraControl Config → Formularios
+
+function doPost(e) {
+  try {
+    var rootId = PropertiesService.getScriptProperties().getProperty('OBRACONTROL_ROOT_ID');
+    var payload = JSON.parse(e.parameter.payload || '{}');
+    var folder = DriveApp.getFolderById(rootId);
+    var files = folder.getFilesByName('formularios_pending.json');
+    var list = [], file;
+    if (files.hasNext()) {
+      file = files.next();
+      list = JSON.parse(file.getBlob().getDataAsString());
+    }
+    payload.id = payload.id || Utilities.getUuid();
+    payload.receivedAt = new Date().toISOString();
+    list.push(payload);
+    var content = JSON.stringify(list);
+    if (file) { file.setContent(content); }
+    else { folder.createFile('formularios_pending.json', content, 'application/json'); }
+    return ContentService.createTextOutput('ok').setMimeType(ContentService.MimeType.TEXT);
+  } catch(err) {
+    return ContentService.createTextOutput('error:' + err).setMimeType(ContentService.MimeType.TEXT);
+  }
+}
+
+function doGet(e) {
+  return ContentService.createTextOutput('ObraControl Formularios OK').setMimeType(ContentService.MimeType.TEXT);
+}`;
+  const d=document.createElement('div');d.className='mo open';d.id='appsScriptM';
+  d.innerHTML=`<div class="mo-c"><div class="mo-h"><h3 style="color:#0d9488">&#x1F4CB; Código Apps Script</h3><button class="tbtn" onclick="this.closest('.mo').remove()">${I.x}</button></div>
+  <div class="txxs tc3 mb-8">Copiá este código, seguí los pasos del comentario inicial y pegá la URL en Config → Formularios.</div>
+  <textarea style="width:100%;height:260px;font-size:11px;font-family:monospace;padding:8px;border:1px solid var(--brd);border-radius:8px;resize:vertical;background:var(--gray-ll)" readonly>${code.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+  <button class="btn btn-w mt-8" style="background:#0d9488;color:#fff" onclick="navigator.clipboard?.writeText(document.querySelector('#appsScriptM textarea').value).then(()=>toast('Código copiado ✓','var(--green)'))">&#x1F4CB; Copiar código</button></div>`;
+  document.body.appendChild(d);
 }
 </script>
 </body>

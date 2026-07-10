@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>ObraControl — Formulario</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--pri:#D97706;--bg:#F8FAFC;--white:#fff;--text:#1e293b;--text2:#475569;--text3:#94a3b8;--brd:#e2e8f0;--green:#16a34a;--red:#dc2626;--orange:#f59e0b;--teal:#0d9488;--gray-ll:#f1f5f9;--gray-l:#94a3b8;--rs:10px}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);font-size:14px;min-height:100vh;padding:16px 16px 56px}
+.card{background:var(--white);border-radius:12px;padding:16px;box-shadow:0 1px 3px #0001;margin-bottom:12px}
+.fl{display:block;font-size:11px;font-weight:600;color:var(--text2);margin-bottom:4px;text-transform:uppercase;letter-spacing:.3px}
+.fi{width:100%;padding:10px 12px;border:1.5px solid var(--brd);border-radius:8px;font-size:14px;font-family:inherit;background:var(--white);color:var(--text);outline:none}
+.fi:focus{border-color:var(--teal)}
+.fs{width:100%;padding:10px 12px;border:1.5px solid var(--brd);border-radius:8px;font-size:14px;font-family:inherit;background:var(--white);color:var(--text);outline:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24'%3E%3Cpath fill='%2394a3b8' d='m7 10 5 5 5-5z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center}
+.fs:focus{border-color:var(--teal);outline:none}
+.ft{width:100%;padding:10px 12px;border:1.5px solid var(--brd);border-radius:8px;font-size:13px;font-family:inherit;min-height:80px;resize:vertical;color:var(--text)}
+.ft:focus{outline:none;border-color:var(--teal)}
+.fg{margin-bottom:12px}
+.fr{display:flex;gap:8px}
+.fr>.fg{flex:1}
+.btn{display:block;width:100%;padding:13px;border-radius:10px;font-size:15px;font-weight:700;font-family:inherit;border:none;cursor:pointer;text-align:center;transition:opacity .15s}
+.btn:active{opacity:.8}
+.btn-pri{background:var(--teal);color:#fff}
+.btn-sec{background:var(--gray-ll);color:var(--text2)}
+.hdr{display:flex;align-items:center;gap:10px;margin-bottom:20px;padding-top:8px}
+.logo{width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#0d9488,#14b8a6);display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0}
+.lock{display:inline-flex;align-items:center;gap:4px;background:var(--gray-ll);color:var(--text3);font-size:11px;padding:2px 8px;border-radius:20px;margin-left:6px}
+.locked-field{padding:10px 12px;background:var(--gray-ll);border-radius:8px;font-weight:600;font-size:14px;display:flex;align-items:center}
+#photoPreview{width:100%;border-radius:8px;max-height:180px;object-fit:cover;margin-top:8px;display:none}
+#errorMsg{display:none;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:10px 12px;color:var(--red);font-size:13px;margin-bottom:12px}
+#successScreen{display:none;text-align:center;padding:40px 16px}
+.warn-box{background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px;margin-bottom:12px;font-size:12px;color:#92400e}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="logo">
+    <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect width="16" height="20" x="4" y="2" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M16 6h.01M12 6h.01"/></svg>
+  </div>
+  <div>
+    <div style="font-size:17px;font-weight:800">ObraControl</div>
+    <div style="font-size:11px;color:var(--text3)">Formulario de carga de campo</div>
+  </div>
+</div>
+
+<div id="mainForm">
+  <div class="card">
+    <div class="fg">
+      <label class="fl">Obra</label>
+      <div id="obraDisplay"></div>
+    </div>
+    <div class="fg">
+      <label class="fl">Tu nombre</label>
+      <div id="ayudanteDisplay"></div>
+    </div>
+    <div class="fg">
+      <label class="fl">Categoría *</label>
+      <select class="fs" id="categoriaSelect" onchange="onCatChange()">
+        <option value="">— Elegí una categoría —</option>
+        <option value="movimiento">💰 Movimiento (gasto / pago / ingreso)</option>
+        <option value="tarea">📋 Tarea</option>
+        <option value="checklist">✅ Checklist</option>
+        <option value="material_existente">📦 Material existente (stock en obra)</option>
+        <option value="material_pedido">🔔 Material pedido (requisición)</option>
+      </select>
+    </div>
+  </div>
+
+  <div id="dynFields"></div>
+
+  <div id="commonFields" style="display:none">
+    <div class="card">
+      <div class="fg">
+        <label class="fl">Foto (opcional)</label>
+        <input type="file" id="photoInput" accept="image/*" capture="environment" style="font-size:13px;width:100%" onchange="previewPhoto()">
+        <img id="photoPreview" alt="preview">
+      </div>
+    </div>
+    <div id="errorMsg"></div>
+    <button class="btn btn-pri" id="submitBtn" onclick="submitForm()">Enviar formulario</button>
+  </div>
+</div>
+
+<div id="successScreen">
+  <div style="font-size:56px;margin-bottom:16px">✅</div>
+  <div style="font-size:18px;font-weight:800;margin-bottom:8px">¡Formulario enviado!</div>
+  <div style="color:var(--text2);margin-bottom:24px;font-size:13px;line-height:1.5">El arquitecto lo recibirá la próxima vez<br>que sincronice con Drive.</div>
+  <button class="btn btn-pri" onclick="resetForm()">Cargar otro formulario</button>
+</div>
+
+<script>
+const params   = new URLSearchParams(window.location.search);
+const ENDPOINT = params.get('endpoint') || '';
+const OBRA_ID  = params.get('obra')     || '';
+const OBRA_NAME= params.get('obraName') || params.get('obra') || '';
+const AYUDANTE = params.get('ayudante') || '';
+const CAT_LOCK = params.get('categoria')|| '';
+
+let photoDataUrl = null;
+
+const UNITS = ['u','kg','m','m2','m3','l','bolsa 20kg','bolsa 25kg','bolsa 40kg','bolsa 50kg','balde','rollo','caja','barra','paq','gl'];
+const unitOpts = UNITS.map(u=>`<option value="${u}">${u}</option>`).join('');
+
+function init(){
+  // Obra
+  const obraDiv = document.getElementById('obraDisplay');
+  if(OBRA_NAME){
+    obraDiv.innerHTML = `<div class="locked-field">${esc(OBRA_NAME)}<span class="lock">🔒 fijo</span></div>`;
+  } else {
+    obraDiv.innerHTML = `<input class="fi" id="obraInput" placeholder="Nombre de la obra">`;
+  }
+  // Ayudante
+  const ayDiv = document.getElementById('ayudanteDisplay');
+  if(AYUDANTE){
+    ayDiv.innerHTML = `<div class="locked-field">${esc(AYUDANTE)}<span class="lock">🔒 fijo</span></div>`;
+  } else {
+    ayDiv.innerHTML = `<input class="fi" id="ayudanteInput" placeholder="Tu nombre completo">`;
+  }
+  // Categoria bloqueada
+  if(CAT_LOCK){
+    const sel = document.getElementById('categoriaSelect');
+    sel.value = CAT_LOCK;
+    sel.disabled = true;
+    onCatChange();
+  }
+  // Sin endpoint
+  if(!ENDPOINT){
+    document.getElementById('mainForm').insertAdjacentHTML('afterbegin',
+      `<div class="warn-box">⚠️ Este formulario no está vinculado a ningún proyecto. Pedile al arquitecto el link correcto.</div>`);
+  }
+}
+
+function onCatChange(){
+  const cat = document.getElementById('categoriaSelect').value;
+  const dyn = document.getElementById('dynFields');
+  const common = document.getElementById('commonFields');
+  if(!cat){ dyn.innerHTML=''; common.style.display='none'; return; }
+  common.style.display = 'block';
+
+  const fields = {
+    movimiento:`<div class="card">
+      <div class="fg"><label class="fl">Tipo *</label>
+        <select class="fs" id="f_tipo"><option value="gasto">💸 Gasto</option><option value="pago">💳 Pago</option><option value="ingreso">💵 Ingreso</option></select></div>
+      <div class="fg"><label class="fl">Monto *</label><input class="fi" id="f_monto" type="number" step="0.01" min="0" placeholder="0.00"></div>
+      <div class="fg"><label class="fl">Concepto *</label><input class="fi" id="f_concepto" placeholder="Ej: Cemento Portland, mano de obra..."></div>
+    </div>`,
+
+    tarea:`<div class="card">
+      <div class="fg"><label class="fl">Título *</label><input class="fi" id="f_titulo" placeholder="Nombre de la tarea"></div>
+      <div class="fg"><label class="fl">Descripción / detalle</label><textarea class="ft" id="f_descripcion" placeholder="Describí qué hay que hacer..."></textarea></div>
+      <div class="fg"><label class="fl">Prioridad</label>
+        <select class="fs" id="f_prioridad"><option value="alta">🔴 Alta</option><option value="media" selected>🟡 Media</option><option value="baja">🟢 Baja</option></select></div>
+    </div>`,
+
+    checklist:`<div class="card">
+      <div class="fg"><label class="fl">Título del checklist *</label><input class="fi" id="f_titulo" placeholder="Ej: Control de armadura, Inspección de losa..."></div>
+      <div class="fg"><label class="fl">Ítems a controlar (uno por línea)</label>
+        <textarea class="ft" id="f_items" rows="6" placeholder="Verificar estribos&#10;Revisar recubrimiento&#10;Controlar separación entre barras&#10;Limpiar fondos"></textarea></div>
+    </div>`,
+
+    material_existente:`<div class="card">
+      <div class="fg"><label class="fl">Nombre del material *</label><input class="fi" id="f_matNombre" placeholder="Ej: Cemento Portland, Hierro 10mm..."></div>
+      <div class="fr">
+        <div class="fg"><label class="fl">Cantidad *</label><input class="fi" id="f_cantidad" type="number" step="0.01" min="0" placeholder="0"></div>
+        <div class="fg"><label class="fl">Unidad</label><select class="fs" id="f_unidad">${unitOpts}</select></div>
+      </div>
+      <div class="fg"><label class="fl">Notas (ubicación, estado...)</label><textarea class="ft" id="f_notas" rows="2" placeholder="Ej: Apilado en depósito, estado regular..."></textarea></div>
+    </div>`,
+
+    material_pedido:`<div class="card">
+      <div class="fg"><label class="fl">Nombre del material *</label><input class="fi" id="f_matNombre" placeholder="Ej: Hierro 8mm, arena gruesa..."></div>
+      <div class="fr">
+        <div class="fg"><label class="fl">Cantidad *</label><input class="fi" id="f_cantidad" type="number" step="0.01" min="0" placeholder="0"></div>
+        <div class="fg"><label class="fl">Unidad</label><select class="fs" id="f_unidad">${unitOpts}</select></div>
+      </div>
+      <div class="fg"><label class="fl">Urgencia</label>
+        <select class="fs" id="f_urgencia"><option value="normal">🟡 Normal</option><option value="urgente">🔴 Urgente</option></select></div>
+      <div class="fg"><label class="fl">Notas (para qué tarea, cuándo se necesita...)</label><textarea class="ft" id="f_notas" rows="2"></textarea></div>
+    </div>`,
+  };
+  dyn.innerHTML = fields[cat] || '';
+}
+
+function v(id){ const el=document.getElementById(id); return el?el.value.trim():''; }
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+async function previewPhoto(){
+  const input = document.getElementById('photoInput');
+  if(!input.files||!input.files[0]){ photoDataUrl=null; return; }
+  photoDataUrl = await compressImage(input.files[0], 800, 0.72);
+  const prev = document.getElementById('photoPreview');
+  if(photoDataUrl){ prev.src=photoDataUrl; prev.style.display='block'; }
+  else { prev.style.display='none'; }
+}
+
+function compressImage(file, maxPx, quality){
+  return new Promise(resolve=>{
+    const reader = new FileReader();
+    reader.onload = e=>{
+      const img = new Image();
+      img.onload = ()=>{
+        let w=img.width, h=img.height;
+        if(w>maxPx||h>maxPx){ const r=Math.min(maxPx/w,maxPx/h); w=Math.round(w*r); h=Math.round(h*r); }
+        const canvas=document.createElement('canvas');
+        canvas.width=w; canvas.height=h;
+        canvas.getContext('2d').drawImage(img,0,0,w,h);
+        const data=canvas.toDataURL('image/jpeg',quality);
+        resolve(data.length>1400000?null:data);
+      };
+      img.onerror=()=>resolve(null);
+      img.src=e.target.result;
+    };
+    reader.onerror=()=>resolve(null);
+    reader.readAsDataURL(file);
+  });
+}
+
+async function submitForm(){
+  const errEl=document.getElementById('errorMsg');
+  errEl.style.display='none';
+
+  const cat   = document.getElementById('categoriaSelect').value;
+  const obra  = OBRA_NAME || v('obraInput');
+  const obraId= OBRA_ID   || '';
+  const ayud  = AYUDANTE  || v('ayudanteInput');
+
+  if(!obra){ showErr('Ingresá el nombre de la obra'); return; }
+  if(!ayud){ showErr('Ingresá tu nombre'); return; }
+  if(!cat) { showErr('Elegí una categoría'); return; }
+  if(!ENDPOINT){ showErr('Este formulario no tiene endpoint configurado. Pedile al arquitecto el link correcto.'); return; }
+
+  const sub = {
+    id: Math.random().toString(36).slice(2,10)+Date.now().toString(36),
+    projectId: obraId,
+    obraName: obra,
+    ayudante: ayud,
+    categoria: cat,
+    fecha: new Date().toISOString(),
+    estado: 'pendiente',
+    foto: photoDataUrl||null,
+  };
+
+  if(cat==='movimiento'){
+    if(!v('f_monto')){ showErr('Ingresá el monto'); return; }
+    if(!v('f_concepto')){ showErr('Ingresá el concepto'); return; }
+    sub.tipo=v('f_tipo'); sub.monto=parseFloat(v('f_monto'))||0; sub.concepto=v('f_concepto');
+  } else if(cat==='tarea'){
+    if(!v('f_titulo')){ showErr('Ingresá el título de la tarea'); return; }
+    sub.titulo=v('f_titulo'); sub.descripcion=v('f_descripcion'); sub.prioridad=v('f_prioridad');
+  } else if(cat==='checklist'){
+    if(!v('f_titulo')){ showErr('Ingresá el título del checklist'); return; }
+    sub.titulo=v('f_titulo'); sub.items=document.getElementById('f_items')?.value||'';
+  } else if(cat==='material_existente'||cat==='material_pedido'){
+    if(!v('f_matNombre')){ showErr('Ingresá el nombre del material'); return; }
+    if(!v('f_cantidad')){ showErr('Ingresá la cantidad'); return; }
+    sub.materialNombre=v('f_matNombre'); sub.cantidad=parseFloat(v('f_cantidad'))||0;
+    sub.unidad=v('f_unidad')||'u'; sub.notas=v('f_notas');
+    if(cat==='material_pedido') sub.urgencia=v('f_urgencia')||'normal';
+  }
+
+  const btn=document.getElementById('submitBtn');
+  btn.disabled=true; btn.textContent='Enviando...';
+
+  try{
+    const payload=new URLSearchParams();
+    payload.append('payload',JSON.stringify(sub));
+    await fetch(ENDPOINT,{method:'POST',mode:'no-cors',body:payload});
+    document.getElementById('mainForm').style.display='none';
+    document.getElementById('successScreen').style.display='block';
+    window.scrollTo(0,0);
+  }catch(err){
+    showErr('Error de red al enviar. Verificá tu conexión e intentá de nuevo.');
+    btn.disabled=false; btn.textContent='Enviar formulario';
+  }
+}
+
+function showErr(msg){
+  const el=document.getElementById('errorMsg');
+  el.textContent=msg; el.style.display='block';
+  el.scrollIntoView({behavior:'smooth',block:'center'});
+}
+
+function resetForm(){
+  document.getElementById('mainForm').style.display='block';
+  document.getElementById('successScreen').style.display='none';
+  document.getElementById('dynFields').innerHTML='';
+  document.getElementById('commonFields').style.display='none';
+  document.getElementById('errorMsg').style.display='none';
+  if(!CAT_LOCK){ const s=document.getElementById('categoriaSelect'); if(s)s.value=''; }
+  photoDataUrl=null;
+  document.getElementById('photoPreview').style.display='none';
+  const pi=document.getElementById('photoInput'); if(pi)pi.value='';
+  if(!AYUDANTE){ const a=document.getElementById('ayudanteInput'); if(a)a.value=''; }
+  const btn=document.getElementById('submitBtn');
+  if(btn){ btn.disabled=false; btn.textContent='Enviar formulario'; }
+  window.scrollTo(0,0);
+}
+
+init();
+</script>
+</body>
+</html>
