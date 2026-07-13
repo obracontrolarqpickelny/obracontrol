@@ -2281,6 +2281,10 @@ const SYNC = {
   dropboxToken: null,
   netlifyConfigured: false,
   formulariosEndpoint: null,
+  archTel: null,
+  archEmail: null,
+  sendWA: true,
+  sendEmail: false,
 };
 
 function loadSyncConfig() {
@@ -2291,6 +2295,10 @@ function loadSyncConfig() {
     if (cfg.dropboxToken)   SYNC.dropboxToken = cfg.dropboxToken;
     if (cfg.netlifyConfigured) SYNC.netlifyConfigured = cfg.netlifyConfigured;
     if (cfg.formulariosEndpoint) SYNC.formulariosEndpoint = cfg.formulariosEndpoint;
+    if (cfg.archTel)   SYNC.archTel   = cfg.archTel;
+    if (cfg.archEmail) SYNC.archEmail = cfg.archEmail;
+    if (cfg.sendWA   !== undefined) SYNC.sendWA   = cfg.sendWA;
+    if (cfg.sendEmail !== undefined) SYNC.sendEmail = cfg.sendEmail;
   } catch(e) {}
 }
 
@@ -2301,6 +2309,10 @@ function saveSyncConfig() {
     dropboxToken: SYNC.dropboxToken,
     netlifyConfigured: SYNC.netlifyConfigured,
     formulariosEndpoint: SYNC.formulariosEndpoint,
+    archTel:   SYNC.archTel,
+    archEmail: SYNC.archEmail,
+    sendWA:    SYNC.sendWA,
+    sendEmail: SYNC.sendEmail,
   }));
 }
 
@@ -5557,7 +5569,7 @@ function rConfig(mc,p){
   [].concat(pf('visitas'),pf('tareas'),pf('materiales'),pf('matIngresos')).forEach(function(it){
     (it.photos||[]).forEach(function(p){var u=typeof p==='string'?p:(p.url||'');if(u.startsWith('data:'))_b64n++;});
   });
-mc.innerHTML=`${modHeader('config','Configuracion')}<div class="card mb-12"><div class="flex justify-between items-center mb-8"><div class="ts fw7">Datos de la obra</div><button class="btn btn-sec btn-s" onclick="openM('editProjM')">${I.edit} Editar</button></div><div class="ts tc3 lh18"><strong>Nombre:</strong> ${p.name}<br><strong>Cliente:</strong> ${p.client||'-'}<br><strong>Ubicacion:</strong> ${p.location||'-'}<br><strong>Director:</strong> ${p.director||'-'}<br><strong>Capataz:</strong> ${p.capataz||'-'}<br><strong>Inicio:</strong> ${fmts(p.startDate)||'-'}<br><strong>Fin:</strong> ${fmts(p.endDate)||'-'}<br><strong>Estado:</strong> ${p.status}</div></div><div class="card mb-12"><div class="ts fw7 mb-8">Estadisticas</div><div class="ts tc3 lh18">Visitas: ${pf('visitas').length} | Tareas: ${pf('tareas').length} | Materiales: ${pf('materiales').length} | Ingresos: ${pf('matIngresos').length} | Alertas: ${pf('alertas').length} | Comentarios: ${pf('comentarios').length} | Docs: ${pf('documentos').length} | Enlaces: ${pf('enlaces').length}</div></div><div class="card mb-12" style="border-left:4px solid #0d9488"><div class="ts fw7 mb-8" style="color:#0d9488">&#x1F4F1; Formularios de ayudantes</div><div class="txxs tc3 mb-8">Pegá la URL del Apps Script para recibir formularios de tus ayudantes sin login.</div><div class="fg"><label class="fl">URL del Apps Script</label><input class="fi" id="cfg_form_ep" value="${SYNC.formulariosEndpoint||''}" placeholder="https://script.google.com/macros/s/..." onblur="saveFormulariosEndpoint(this.value)"></div>${GD.rootId?`<div class="txxs tc3 mb-8" style="word-break:break-all">ID carpeta raíz Drive: <strong style="user-select:all">${GD.rootId}</strong> <button class="btn btn-sec btn-s" style="padding:2px 8px;display:inline-flex" onclick="navigator.clipboard?.writeText('${GD.rootId}').then(()=>toast('ID copiado','var(--green)'))">&#x1F4CB;</button></div>`:'<div class="txxs mb-8" style="color:var(--orange)">&#x26A0; Conectá Drive para ver el ID de carpeta requerido en el setup.</div>'}<button class="btn btn-sec btn-s" onclick="showAppsScriptCode()">&#x1F4CB; Ver código Apps Script (setup &uacute;nico)</button></div><div class="card mb-12" style="background:var(--red-bg);border:1px solid var(--red-mid)"><div class="ts fw7 mb-8" style="color:var(--red)">Zona peligrosa</div><button class="btn btn-x btn-s btn-w" onclick="deleteProj()">Eliminar obra</button></div><div class="card mb-12" style="border-left:4px solid var(--cyan);padding:12px"><div class="ts fw7 mb-6">&#x1F4BE; Almacenamiento local</div><div style="background:var(--gray-ll);border-radius:6px;height:8px;margin-bottom:6px"><div style="background:${_lsColor};border-radius:6px;height:8px;width:${_lsPct}%"></div></div><div class="txxs tc3">${_lsUsed} KB usados de ~5120 KB disponibles</div>${_lsPct>80?'<div class="txxs mt-4" style="color:var(--orange)">&#x26A0; Almacenamiento casi lleno. Conectá Drive para liberar espacio.</div>':''}</div><div class="tac mt-20 txxs tc3"><div class="fw7">ObraControl Pro v9.0</div><div class="mt-4">Visita-centric | PDF | Materiales+Ingresos | Comentarios vinculados</div></div><div class="mo" id="editProjM"><div class="mo-c"><div class="mo-h"><h3>Editar Obra</h3><button class="tbtn" onclick="closeM('editProjM')">${I.x}</button></div><div class="fg"><label class="fl">Nombre *</label><input class="fi" id="ep_n" value="${p.name||''}"></div><div class="fg"><label class="fl">Cliente</label><input class="fi" id="ep_cl" value="${p.client||''}"></div><div class="fg"><label class="fl">Ubicacion</label><input class="fi" id="ep_loc" value="${p.location||''}"></div><div class="fr"><div class="fg"><label class="fl">Director</label><input class="fi" id="ep_dir" value="${p.director||''}"></div><div class="fg"><label class="fl">Capataz</label><input class="fi" id="ep_cap" value="${p.capataz||''}"></div></div><div class="fr"><div class="fg"><label class="fl">Inicio</label><input class="fi" id="ep_st" type="date" value="${p.startDate||''}"></div><div class="fg"><label class="fl">Fin</label><input class="fi" id="ep_en" type="date" value="${p.endDate||''}"></div></div><div class="fg"><label class="fl">Estado</label><select class="fs" id="ep_sta">${['En curso','Pausada','Finalizada','Por iniciar'].map(s=>`<option${s===p.status?' selected':''}>${s}</option>`).join('')}</select></div><button class="btn btn-p btn-w mt-8" onclick="saveEP()">Guardar</button></div></div>`;
+mc.innerHTML=`${modHeader('config','Configuracion')}<div class="card mb-12"><div class="flex justify-between items-center mb-8"><div class="ts fw7">Datos de la obra</div><button class="btn btn-sec btn-s" onclick="openM('editProjM')">${I.edit} Editar</button></div><div class="ts tc3 lh18"><strong>Nombre:</strong> ${p.name}<br><strong>Cliente:</strong> ${p.client||'-'}<br><strong>Ubicacion:</strong> ${p.location||'-'}<br><strong>Director:</strong> ${p.director||'-'}<br><strong>Capataz:</strong> ${p.capataz||'-'}<br><strong>Inicio:</strong> ${fmts(p.startDate)||'-'}<br><strong>Fin:</strong> ${fmts(p.endDate)||'-'}<br><strong>Estado:</strong> ${p.status}</div></div><div class="card mb-12"><div class="ts fw7 mb-8">Estadisticas</div><div class="ts tc3 lh18">Visitas: ${pf('visitas').length} | Tareas: ${pf('tareas').length} | Materiales: ${pf('materiales').length} | Ingresos: ${pf('matIngresos').length} | Alertas: ${pf('alertas').length} | Comentarios: ${pf('comentarios').length} | Docs: ${pf('documentos').length} | Enlaces: ${pf('enlaces').length}</div></div><div class="card mb-12" style="border-left:4px solid #0d9488"><div class="ts fw7 mb-8" style="color:#0d9488">&#x1F4F1; Formularios de campo</div><div class="txxs tc3 mb-12">Cuando compartís el formulario con un colaborador, los envíos te llegan por los canales que tengas activos.</div><div class="flex items-center gap-8 mb-10"><div class="flex-1"><label class="fl">Tu WhatsApp</label><input class="fi" id="cfg_arch_tel" type="tel" value="${SYNC.archTel||''}" placeholder="+549..." onblur="saveArchContact('tel',this.value)"></div><button class="btn btn-s" style="margin-top:18px;min-width:80px;font-size:11px;background:${SYNC.sendWA?'var(--green)':'var(--gray-ll)'};color:${SYNC.sendWA?'#fff':'var(--text2)'}" onclick="toggleSendChannel('wa')">${SYNC.sendWA?'&#x2713; Activo':'Inactivo'}</button></div><div class="flex items-center gap-8 mb-12"><div class="flex-1"><label class="fl">Tu email</label><input class="fi" id="cfg_arch_mail" type="email" value="${SYNC.archEmail||''}" placeholder="tu@email.com" onblur="saveArchContact('mail',this.value)"></div><button class="btn btn-s" style="margin-top:18px;min-width:80px;font-size:11px;background:${SYNC.sendEmail?'var(--green)':'var(--gray-ll)'};color:${SYNC.sendEmail?'#fff':'var(--text2)'}" onclick="toggleSendChannel('email')">${SYNC.sendEmail?'&#x2713; Activo':'Inactivo'}</button></div><div class="txxs tc3">Los envíos llegan como un link. Al tocarlo la app muestra los datos en la Bandeja de entrada.</div></div>v><div class="card mb-12" style="background:var(--red-bg);border:1px solid var(--red-mid)"><div class="ts fw7 mb-8" style="color:var(--red)">Zona peligrosa</div><button class="btn btn-x btn-s btn-w" onclick="deleteProj()">Eliminar obra</button></div><div class="card mb-12" style="border-left:4px solid var(--cyan);padding:12px"><div class="ts fw7 mb-6">&#x1F4BE; Almacenamiento local</div><div style="background:var(--gray-ll);border-radius:6px;height:8px;margin-bottom:6px"><div style="background:${_lsColor};border-radius:6px;height:8px;width:${_lsPct}%"></div></div><div class="txxs tc3">${_lsUsed} KB usados de ~5120 KB disponibles</div>${_lsPct>80?'<div class="txxs mt-4" style="color:var(--orange)">&#x26A0; Almacenamiento casi lleno. Conectá Drive para liberar espacio.</div>':''}</div><div class="tac mt-20 txxs tc3"><div class="fw7">ObraControl Pro v9.0</div><div class="mt-4">Visita-centric | PDF | Materiales+Ingresos | Comentarios vinculados</div></div><div class="mo" id="editProjM"><div class="mo-c"><div class="mo-h"><h3>Editar Obra</h3><button class="tbtn" onclick="closeM('editProjM')">${I.x}</button></div><div class="fg"><label class="fl">Nombre *</label><input class="fi" id="ep_n" value="${p.name||''}"></div><div class="fg"><label class="fl">Cliente</label><input class="fi" id="ep_cl" value="${p.client||''}"></div><div class="fg"><label class="fl">Ubicacion</label><input class="fi" id="ep_loc" value="${p.location||''}"></div><div class="fr"><div class="fg"><label class="fl">Director</label><input class="fi" id="ep_dir" value="${p.director||''}"></div><div class="fg"><label class="fl">Capataz</label><input class="fi" id="ep_cap" value="${p.capataz||''}"></div></div><div class="fr"><div class="fg"><label class="fl">Inicio</label><input class="fi" id="ep_st" type="date" value="${p.startDate||''}"></div><div class="fg"><label class="fl">Fin</label><input class="fi" id="ep_en" type="date" value="${p.endDate||''}"></div></div><div class="fg"><label class="fl">Estado</label><select class="fs" id="ep_sta">${['En curso','Pausada','Finalizada','Por iniciar'].map(s=>`<option${s===p.status?' selected':''}>${s}</option>`).join('')}</select></div><button class="btn btn-p btn-w mt-8" onclick="saveEP()">Guardar</button></div></div>`;
 }
 
 function renderConfigSize(){
@@ -6552,7 +6564,7 @@ function rColaboradores(mc,p){
     </div>
     <div class="alrt alrt-g mt-8">${I.checkc}<div class="flex-1 txxs"><strong>Flujo para 2 personas:</strong><br>A trabaja → exporta backup → B restaura → B trabaja → B exporta → A restaura. Los datos se suman sin duplicar.</div></div>
   </div>
-  ${colabs.length?`<div class="ts fw7 mb-8">Colaboradores (${colabs.length})</div>${colabs.map(co=>{const stCol=co.estado==='aceptado'?'var(--green)':'var(--orange)';return `<div class="card" style="padding:12px"><div class="flex justify-between items-start"><div class="flex-1"><div class="ts fw6">${co.name||co.email||'Sin nombre'}</div><div class="txxs tc3 mt-4">${co.email?co.email+' | ':''}<strong>${co.role||'Colaborador'}</strong> | ${fmts(co.date)}</div><div class="mt-4">${colBadge(co.estado||'pendiente',stCol,true)}</div></div><div class="flex gap-4"><button class="btn btn-sec btn-s" onclick="editColab('${co.id}')">${I.edit}</button><button class="btn btn-sec btn-s" onclick="shareFormColaborador('${co.id}')" title="Compartir formulario por WhatsApp">💬</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delI('colaboradores','${co.id}')">${I.trash}</button></div></div></div>`;}).join('')}`:''}
+  ${colabs.length?`<div class="ts fw7 mb-8">Colaboradores (${colabs.length})</div>${colabs.map(co=>{const _rev=co.estado==='revocado';const stCol=co.estado==='aceptado'?'var(--green)':_rev?'var(--red)':'var(--orange)';return `<div class="card" style="padding:12px${_rev?';opacity:.6':''}"><div class="flex justify-between items-start"><div class="flex-1"><div class="ts fw6">${co.name||co.email||'Sin nombre'}</div><div class="txxs tc3 mt-4">${co.phone?'📱 '+co.phone+' | ':''}${co.email?co.email+' | ':''}<strong>${co.role||'Colaborador'}</strong> | ${fmts(co.date)}</div><div class="mt-4">${colBadge(_rev?'Dado de baja':(co.estado||'pendiente'),stCol,true)}</div></div><div class="flex gap-4 flex-wrap">${_rev?'':`<button class="btn btn-sec btn-s" onclick="shareFormColaborador('${co.id}')" title="Compartir formulario">💬</button>`}<button class="btn btn-sec btn-s" onclick="editColab('${co.id}')">${I.edit}</button><button class="btn btn-s" style="font-size:10px;${_rev?'background:var(--green);color:#fff':'background:var(--gray-ll);color:var(--red)'}" onclick="_rev?reactivateColab('${co.id}'):revokeColab('${co.id}')">${_rev?'Reactivar':'Dar de baja'}</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delI('colaboradores','${co.id}')">${I.trash}</button></div></div></div>`;}).join('')}`:''}
   <div class="card mt-12">${_rAyudantes(p)}</div>
   <div class="mo" id="newAyudM"><div class="mo-c"><div class="mo-h"><h3 style="color:#0d9488">Nuevo Ayudante</h3><button class="tbtn" onclick="closeM('newAyudM')">${I.x}</button></div><div class="fg"><label class="fl">Nombre *</label><input class="fi" id="na_name" placeholder="Nombre del ayudante"></div><div class="fg"><label class="fl">Teléfono WhatsApp (opcional)</label><input class="fi" id="na_phone" type="tel" placeholder="+54911..."></div><button class="btn btn-w mt-8" style="background:#0d9488;color:#fff" onclick="saveAyudante()">Guardar</button></div></div>
   <div class="mo" id="newColabM"><div class="mo-c"><div class="mo-h"><h3 style="color:${c}">Invitar Colaborador</h3><button class="tbtn" onclick="closeM('newColabM')">${I.x}</button></div>
@@ -6638,6 +6650,14 @@ function editColab(id){
   <div class="fg"><label class="fl">Estado</label><select class="fs" id="ecb_st"><option value="pendiente"${(co.estado||'pendiente')==='pendiente'?' selected':''}>Pendiente</option><option value="aceptado"${co.estado==='aceptado'?' selected':''}>Aceptado</option></select></div>
   <button class="btn btn-w mt-8" style="background:var(--green);color:#fff" onclick="saveECb('${id}')">Guardar</button></div>`;
   document.body.appendChild(d);
+}
+function revokeColab(id){
+  var co=(D.colaboradores||[]).find(function(x){return x.id===id;});if(!co)return;
+  co.estado='revocado';co.updatedAt=nw();sv();render();toast('Colaborador dado de baja — su link ya no aceptará envíos','var(--orange)');
+}
+function reactivateColab(id){
+  var co=(D.colaboradores||[]).find(function(x){return x.id===id;});if(!co)return;
+  co.estado='aceptado';co.updatedAt=nw();sv();render();toast('Colaborador reactivado','var(--green)');
 }
 function saveECb(id){
   const co=D.colaboradores.find(x=>x.id===id);if(!co)return;
@@ -6866,6 +6886,36 @@ function exportEcoCSV(){
 // ═══════ INIT ═══════
 // 1. Sync bootstrap from localStorage (immediate render)
 load();render();
+// 2b. Deep-link incoming report (#r=BASE64)
+(function(){
+  try{
+    var h=window.location.hash;
+    if(!h.startsWith('#r='))return;
+    var enc=h.slice(3);
+    var sub=JSON.parse(decodeURIComponent(atob(enc)));
+    history.replaceState(null,'',window.location.pathname+window.location.search);
+    if(!sub||!sub.ayudante)return;
+    // Check if token is revoked
+    var co=(D.colaboradores||[]).find(function(c){return c.id===sub.token;});
+    if(co&&co.estado==='revocado'){toast('Envío de '+sub.ayudante+' descartado (colaborador dado de baja)','var(--orange)',5000);return;}
+    // Check project match
+    if(sub.obraId&&D.projects&&!D.projects.find(function(p){return p.id===sub.obraId;})){toast('El reporte es de una obra no encontrada en esta app','var(--orange)',5000);return;}
+    sub.receivedAt=new Date().toISOString();
+    sub.estado='pendiente';
+    if(!sub.id)sub.id=Date.now().toString(36);
+    D.formulariosPendientes=D.formulariosPendientes||[];
+    // Avoid duplicates (same id)
+    if(!D.formulariosPendientes.find(function(x){return x.id===sub.id;})){
+      D.formulariosPendientes.push(sub);
+      sv();
+    }
+    // Navigate to Bandeja
+    if(sub.obraId)S.proj=sub.obraId;
+    S.mod='bandeja';
+    render();
+    toast('Nuevo reporte de '+sub.ayudante+' recibido','#0d9488',4000);
+  }catch(e){}
+})();
 // 2. Async: init IDB + attempt Drive load in background
 (async()=>{
   await initIDB();
@@ -6997,81 +7047,142 @@ function _rAyudantes(p){
 // MÓDULO: BANDEJA DE FORMULARIOS
 // ═══════════════════════════════════════════════════════════
 function rBandeja(mc,p){
-  const c='#0d9488';
+  var c2='#0d9488';
   if(!S.bandejaTab)S.bandejaTab='pendientes';
-  const tab=S.bandejaTab;
-  const all=(D.formulariosPendientes||[]).filter(x=>x.projectId===S.proj).sort((a,b)=>new Date(b.fecha||0)-new Date(a.fecha||0));
-  const pendientes=all.filter(x=>x.estado==='pendiente');
-  const procesados=all.filter(x=>x.estado!=='pendiente');
-  const catL={movimiento:'💰 Movimiento',tarea:'📋 Tarea',checklist:'✅ Checklist',material_existente:'📦 Material existente',material_pedido:'🔔 Material pedido'};
-  function fmtSub(sub){
-    switch(sub.categoria){
-      case 'movimiento': return `<strong>${sub.tipo||''}</strong> · $${sub.monto||0} · ${sub.concepto||''}`;
-      case 'tarea': return `<strong>${sub.titulo||'Sin título'}</strong>${sub.descripcion?' — '+String(sub.descripcion).slice(0,60):''}`;
-      case 'checklist': return `<strong>${sub.titulo||'Sin título'}</strong>${sub.items?' ('+sub.items.split('\n').filter(Boolean).length+' ítems)':''}`;
-      case 'material_existente': return `<strong>${sub.materialNombre||''}</strong> · ${sub.cantidad||0} ${sub.unidad||'u'}`;
-      case 'material_pedido': return `<strong>${sub.materialNombre||''}</strong> · ${sub.cantidad||0} ${sub.unidad||'u'}${sub.urgencia==='urgente'?' <span style="color:#e02020;font-weight:700">⚡URGENTE</span>':''}`;
-      default: return '';
+  var tab=S.bandejaTab;
+  var all=(D.formulariosPendientes||[]).filter(function(x){return (x.obraId||x.projectId)===S.proj;}).sort(function(a,b){return new Date(b.receivedAt||b.fecha||0)-new Date(a.receivedAt||a.fecha||0);});
+  var pendientes=all.filter(function(x){return x.estado==='pendiente';});
+  var procesados=all.filter(function(x){return x.estado!=='pendiente';});
+  function subSummary(sub){
+    if(sub.tareas!==undefined){
+      var pts=[];
+      if(sub.movimientos&&sub.movimientos.length)pts.push('💰 '+sub.movimientos.length+' movimiento'+(sub.movimientos.length>1?'s':''));
+      if(sub.tareas&&sub.tareas.length)pts.push('📋 '+sub.tareas.length+' tarea'+(sub.tareas.length>1?'s':''));
+      if(sub.materialesExistentes&&sub.materialesExistentes.length)pts.push('📦 '+sub.materialesExistentes.length);
+      if(sub.materialesPedidos&&sub.materialesPedidos.length)pts.push('🔔 '+sub.materialesPedidos.length+' pedido'+(sub.materialesPedidos.length>1?'s':''));
+      if(sub.checklist&&sub.checklist.titulo)pts.push('✅ '+sub.checklist.titulo);
+      return pts.length?pts.join(' · '):'Sin datos';
     }
+    var catL={movimiento:'💰',tarea:'📋',checklist:'✅',material_existente:'📦',material_pedido:'🔔'};
+    return (catL[sub.categoria]||'')+(sub.titulo||sub.materialNombre||sub.concepto||'');
   }
   function renderCard(sub){
-    const isPend=sub.estado==='pendiente';
-    const borderCol=isPend?c:sub.estado==='incorporado'?'var(--green)':'var(--gray-l)';
-    const stLabel=isPend?`<span style="color:${c};font-weight:600">⏳ Pendiente</span>`
-      :sub.estado==='incorporado'?`<span style="color:var(--green);font-weight:600">✓ Incorporado${sub.fechaIncorporado?' · '+fmts(sub.fechaIncorporado):''}</span>`
-      :`<span style="color:var(--gray-l)">✕ Descartado</span>`;
-    return `<div class="card" style="border-left:3px solid ${borderCol};padding:12px;margin-bottom:8px">
-      <div class="flex justify-between items-start mb-6">
-        <div><div class="ts fw6">${catL[sub.categoria]||sub.categoria}</div><div class="txxs tc3 mt-2">👤 ${sub.ayudante||'?'} · 📅 ${fmts(sub.fecha||sub.date||'')}</div></div>
-        ${isPend?`<div class="flex gap-4"><button class="btn btn-s" style="background:${c};color:#fff;white-space:nowrap" onclick="incorporarFormulario('${sub.id}')">✓ Incorporar</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="descartarFormulario('${sub.id}')">✕</button></div>`:`<div class="txxs mt-4">${stLabel}</div>`}
-      </div>
-      <div class="txxs tc3">${fmtSub(sub)}</div>
-      ${sub.foto?`<img src="${sub.foto}" style="width:60px;height:60px;object-fit:cover;border-radius:6px;margin-top:8px">`:''}</div>`;
+    var isPend=sub.estado==='pendiente';
+    var bc=isPend?c2:sub.estado==='incorporado'?'var(--green)':'var(--gray-l)';
+    var stLbl=isPend?'':'<span style="color:'+(sub.estado==='incorporado'?'var(--green)':'var(--gray-l)')+';font-weight:600">'+(sub.estado==='incorporado'?'✓ Cargado'+(sub.fechaIncorporado?' · '+fmts(sub.fechaIncorporado):''):'✕ Descartado')+'</span>';
+    var vBdg=sub.version>1?'<span style="background:var(--gray-ll);color:var(--text3);font-size:9px;padding:1px 6px;border-radius:10px;margin-left:6px">v'+sub.version+'</span>':'';
+    var btns=isPend?('<div class="flex gap-4" style="flex-shrink:0"><button class="btn btn-s" style="background:'+c2+';color:#fff;white-space:nowrap" onclick="incorporarFormularioModal(\''+sub.id+'\')">📥 Revisar</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="descartarFormulario(\''+sub.id+'\')">✕</button></div>'):('<div class="txxs" style="flex-shrink:0;text-align:right">'+stLbl+'</div>');
+    return '<div class="card" style="border-left:3px solid '+bc+';padding:12px;margin-bottom:8px"><div class="flex justify-between items-start gap-8"><div style="flex:1;min-width:0"><div class="ts fw7">👤 '+esc(sub.ayudante||'?')+vBdg+'</div><div class="txxs tc3 mt-2">📅 '+fmts(sub.receivedAt||sub.fecha||'')+'</div><div class="txxs mt-6" style="color:var(--text2);line-height:1.6">'+subSummary(sub)+'</div></div>'+btns+'</div></div>';
   }
-  const ep=SYNC.formulariosEndpoint||'';
-  const baseF=window.location.href.replace(/\/[^/]*(\?.*)?$/,'/form.html');
-  const formLink=ep?baseF+'?endpoint='+encodeURIComponent(ep)+'&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p.name):'';
-  mc.innerHTML=`${modHeader('bandeja','Bandeja',`<button class="btn btn-sec btn-s" onclick="fetchFormulariosPending().then(()=>render())">🔄 Verificar</button>`)}
-  ${!ep?`<div class="alrt alrt-y mb-12">${I.warn}<div class="flex-1 txxs"><strong>Apps Script no configurado.</strong> Andá a Config → Formularios para pegar la URL del script.</div></div>`:''}
-  ${formLink?`<div class="card mb-12"><div class="ts fw7 mb-6" style="color:${c}">🔗 Link del formulario (esta obra)</div><div style="background:var(--gray-ll);padding:8px 10px;border-radius:8px;font-size:10px;word-break:break-all;color:var(--text3);margin-bottom:8px">${formLink}</div><div class="flex gap-4 wrap"><button class="btn btn-sec btn-s" onclick="navigator.clipboard?.writeText(decodeURIComponent('${encodeURIComponent(formLink)}')).then(()=>toast('Link copiado','var(--green)'))">📋 Copiar</button><a href="https://wa.me/?text=${encodeURIComponent('Formulario de obra '+p.name+': '+formLink)}" target="_blank" class="btn btn-sec btn-s">💬 WhatsApp</a></div></div>`:''}
-  <div class="flex gap-6 mb-12">
-    <button class="btn btn-s" style="${tab==='pendientes'?'background:'+c+';color:#fff':'background:var(--gray-ll);color:var(--text2)'}" onclick="S.bandejaTab='pendientes';render()">${I.bell} Pendientes${pendientes.length?` <span style="background:${tab==='pendientes'?'rgba(255,255,255,.3)':'#0d9488'};color:#fff;border-radius:10px;padding:0 6px;font-size:10px;font-weight:700;margin-left:4px">${pendientes.length}</span>`:''}</button>
-    <button class="btn btn-s" style="${tab==='log'?'background:'+c+';color:#fff':'background:var(--gray-ll);color:var(--text2)'}" onclick="S.bandejaTab='log';render()">📋 Log (${procesados.length})</button>
-  </div>
-  ${tab==='pendientes'?(pendientes.length?pendientes.map(renderCard).join(''):`<div class="empty">${I.checkc}<div class="ts mt-8">No hay formularios pendientes</div><div class="txxs tc3 mt-4">Cuando un ayudante envíe un formulario aparecerá aquí.</div></div>`):
-   (procesados.length?procesados.map(renderCard).join(''):`<div class="empty"><div class="ts mt-8">Sin formularios procesados aún</div></div>`)}`;
+  var pendBdg=pendientes.length?(' <span style="background:'+(tab==='pendientes'?'rgba(255,255,255,.3)':'#0d9488')+';color:#fff;border-radius:10px;padding:0 6px;font-size:10px;font-weight:700;margin-left:4px">'+pendientes.length+'</span>'):'';
+  mc.innerHTML=modHeader('bandeja','Bandeja')
+    +'<div class="flex gap-6 mb-12">'
+    +'<button class="btn btn-s" style="'+(tab==='pendientes'?'background:'+c2+';color:#fff':'background:var(--gray-ll);color:var(--text2)')+'" onclick="S.bandejaTab=\'pendientes\';render()">'+I.bell+' Pendientes'+pendBdg+'</button>'
+    +'<button class="btn btn-s" style="'+(tab==='log'?'background:'+c2+';color:#fff':'background:var(--gray-ll);color:var(--text2)')+'" onclick="S.bandejaTab=\'log\';render()">📋 Log ('+procesados.length+')</button>'
+    +'</div>'
+    +(tab==='pendientes'
+      ?(pendientes.length?pendientes.map(renderCard).join(''):'<div class="empty">'+I.checkc+'<div class="ts mt-8">Bandeja vacía</div><div class="txxs tc3 mt-4">Cuando un colaborador envíe su formulario, aparecerá aquí.</div></div>')
+      :(procesados.length?procesados.map(renderCard).join(''):'<div class="empty"><div class="ts mt-8">Sin formularios procesados aún</div></div>'));
+}
+
+function incorporarFormularioModal(id){
+  var sub=(D.formulariosPendientes||[]).find(function(x){return x.id===id;});
+  if(!sub)return;
+  var d=document.createElement('div');d.className='mo open';d.id='ifmM';
+  var h='<div class="mo-c"><div class="mo-h"><h3 style="color:#0d9488">📥 Reporte de '+esc(sub.ayudante||'?')+'</h3><button class="tbtn" onclick="document.getElementById(\'ifmM\').remove()">'+I.x+'</button></div>';
+  h+='<div class="txxs tc3 mb-12">📅 '+fmts(sub.receivedAt||sub.fecha||'')+(sub.version>1?' &nbsp;·&nbsp; <strong>v'+sub.version+'</strong>':'')+'</div>';
+  if(sub.tareas!==undefined){
+    if(sub.movimientos&&sub.movimientos.length){
+      h+='<div class="ts fw7 mb-6" style="color:#0d9488">💰 Movimientos</div>';
+      sub.movimientos.forEach(function(m){
+        h+='<div style="padding:6px 0;border-bottom:1px solid var(--gray-ll)"><div class="txxs fw7">'+(m.tipo==='ingreso'?'💵 Ingreso':'💸 Egreso')+'</div><div class="ts">$'+(m.monto||0)+' — '+(m.concepto||'')+'</div>'+(m.foto?'<img src="'+m.foto+'" style="width:56px;height:56px;object-fit:cover;border-radius:6px;margin-top:4px">':'')+'</div>';
+      });
+      h+='<div class="mb-10"></div>';
+    }
+    if(sub.tareas&&sub.tareas.length){
+      h+='<div class="ts fw7 mb-6" style="color:var(--purple)">📋 Tareas</div>';
+      sub.tareas.forEach(function(t){
+        h+='<div style="padding:6px 0;border-bottom:1px solid var(--gray-ll)"><div class="ts fw6">'+esc(t.titulo||'Sin título')+'</div>'+(t.descripcion?'<div class="txxs tc3 mt-2">'+esc(t.descripcion)+'</div>':'')+'<div class="txxs tc3 mt-2">'+(t.prioridad||'media')+'</div>'+(t.foto?'<img src="'+t.foto+'" style="width:56px;height:56px;object-fit:cover;border-radius:6px;margin-top:4px">'+(t.fotoNota?'<div class="txxs tc3 mt-2">'+esc(t.fotoNota)+'</div>':''):'')+'</div>';
+      });
+      h+='<div class="mb-10"></div>';
+    }
+    if(sub.materialesExistentes&&sub.materialesExistentes.length){
+      h+='<div class="ts fw7 mb-6" style="color:var(--green)">📦 Materiales existentes</div>';
+      sub.materialesExistentes.forEach(function(m){
+        h+='<div style="padding:4px 0;border-bottom:1px solid var(--gray-ll)"><div class="ts fw6">'+esc(m.nombre||'')+'</div><div class="txxs tc3">'+(m.cantidad||0)+' '+(m.unidad||'u')+(m.notas?' · '+esc(m.notas):'')+'</div></div>';
+      });
+      h+='<div class="mb-10"></div>';
+    }
+    if(sub.materialesPedidos&&sub.materialesPedidos.length){
+      h+='<div class="ts fw7 mb-6" style="color:var(--orange)">🔔 Pedidos</div>';
+      sub.materialesPedidos.forEach(function(m){
+        h+='<div style="padding:4px 0;border-bottom:1px solid var(--gray-ll)"><div class="ts fw6">'+esc(m.nombre||'')+'</div><div class="txxs tc3">'+(m.cantidad||0)+' '+(m.unidad||'u')+(m.urgencia==='urgente'?' ⚡URGENTE':'')+(m.notas?' · '+esc(m.notas):'')+'</div></div>';
+      });
+      h+='<div class="mb-10"></div>';
+    }
+    if(sub.checklist&&sub.checklist.titulo){
+      h+='<div class="ts fw7 mb-6" style="color:var(--pink)">✅ Checklist: '+esc(sub.checklist.titulo)+'</div>';
+      if(sub.checklist.items){
+        (sub.checklist.items||'').split('\n').filter(function(l){return l.trim();}).forEach(function(it){h+='<div class="txxs tc3">☐ '+esc(it.trim())+'</div>';});
+      }
+      h+='<div class="mb-10"></div>';
+    }
+  } else {
+    var catL={movimiento:'💰 Movimiento',tarea:'📋 Tarea',checklist:'✅ Checklist',material_existente:'📦 Material existente',material_pedido:'🔔 Material pedido'};
+    h+='<div class="ts fw6 mb-6">'+(catL[sub.categoria]||sub.categoria)+'</div><div class="txxs tc3 mb-12">'+(sub.titulo||sub.materialNombre||sub.concepto||'')+(sub.monto?' · $'+sub.monto:'')+'</div>';
+  }
+  h+='<button class="btn mt-8" style="background:#0d9488;color:#fff;width:100%;padding:13px" onclick="incorporarFormulario(\''+id+'\');document.getElementById(\'ifmM\')?.remove()">✓ Cargar todo en la obra</button>';
+  h+='</div>';
+  d.innerHTML=h;
+  document.body.appendChild(d);
 }
 
 function incorporarFormulario(id){
-  const sub=(D.formulariosPendientes||[]).find(x=>x.id===id);
+  var sub=(D.formulariosPendientes||[]).find(function(x){return x.id===id;});
   if(!sub)return;
-  const pid=sub.projectId||S.proj;
-  switch(sub.categoria){
-    case 'movimiento':
-      D.economia.push({id:uid(),projectId:pid,tipo:sub.tipo||'gasto',fecha:(sub.fecha||nw()).slice(0,10),concepto:sub.concepto||'',monto:parseFloat(sub.monto)||0,proveedor:sub.ayudante||'',medioPago:'',date:nw(),updatedAt:nw()});
-      break;
-    case 'tarea':
-      D.tareas.push({id:uid(),projectId:pid,title:sub.titulo||'Tarea sin título',description:sub.descripcion||'',priority:sub.prioridad||'media',status:'pendiente',rubro:'',date:nw(),updatedAt:nw()});
-      break;
-    case 'checklist':{
-      const its=(sub.items||'').split('\n').filter(l=>l.trim());
-      D.checklists.push({id:uid(),projectId:pid,title:sub.titulo||'Checklist',priority:'media',date:td(),updatedAt:nw(),items:its.map(l=>({id:uid(),text:l.trim(),done:false}))});
-      break;}
-    case 'material_existente':
-      D.materiales.push({id:uid(),projectId:pid,name:sub.materialNombre||'',qty:parseFloat(sub.cantidad)||0,unit:sub.unidad||'u',notes:sub.notas||'',category:'General',computado:0,date:td(),updatedAt:nw()});
-      break;
-    case 'material_pedido':
-      (D.matIngresos=D.matIngresos||[]).push({id:uid(),projectId:pid,matNombre:sub.materialNombre||'',qty:parseFloat(sub.cantidad)||0,unit:sub.unidad||'u',estado:'a_pedir',urgencia:sub.urgencia||'normal',observations:sub.notas||'',date:nw(),updatedAt:nw()});
-      break;
+  var pid=sub.obraId||sub.projectId||S.proj;
+  var by=sub.ayudante||'';
+  var loaded=[];
+  if(sub.tareas!==undefined){
+    (sub.movimientos||[]).forEach(function(m){
+      D.economia.push({id:uid(),projectId:pid,tipo:m.tipo==='ingreso'?'ingreso':'egreso',fecha:(sub.fecha||nw()).slice(0,10),concepto:m.concepto||'',monto:parseFloat(m.monto)||0,proveedor:by,medioPago:'',cargadoPor:by,date:nw(),updatedAt:nw()});
+      loaded.push('economía');
+    });
+    (sub.tareas||[]).forEach(function(t){
+      var fotos=t.foto?[{url:t.foto,caption:t.fotoNota||''}]:[];
+      D.tareas.push({id:uid(),projectId:pid,title:t.titulo||'Tarea',description:t.descripcion||'',priority:t.prioridad||'media',status:'pendiente',cargadoPor:by,encargado:by,photos:fotos,date:nw(),updatedAt:nw()});
+      loaded.push('tareas');
+    });
+    (sub.materialesExistentes||[]).forEach(function(m){
+      D.materiales.push({id:uid(),projectId:pid,name:m.nombre||'',qty:parseFloat(m.cantidad)||0,unit:m.unidad||'u',notes:m.notas||'',category:'General',computado:0,cargadoPor:by,date:td(),updatedAt:nw()});
+      loaded.push('materiales');
+    });
+    (sub.materialesPedidos||[]).forEach(function(m){
+      (D.matIngresos=D.matIngresos||[]).push({id:uid(),projectId:pid,matNombre:m.nombre||'',qty:parseFloat(m.cantidad)||0,unit:m.unidad||'u',estado:'a_pedir',urgencia:m.urgencia||'normal',observations:m.notas||'',cargadoPor:by,date:nw(),updatedAt:nw()});
+      loaded.push('pedidos');
+    });
+    if(sub.checklist&&sub.checklist.titulo){
+      var its=(sub.checklist.items||'').split('\n').filter(function(l){return l.trim();});
+      D.checklists.push({id:uid(),projectId:pid,title:sub.checklist.titulo,priority:'media',date:td(),updatedAt:nw(),cargadoPor:by,items:its.map(function(l){return {id:uid(),text:l.trim(),done:false};})});
+      loaded.push('checklist');
+    }
+  } else {
+    switch(sub.categoria){
+      case 'movimiento': D.economia.push({id:uid(),projectId:pid,tipo:sub.tipo||'egreso',fecha:(sub.fecha||nw()).slice(0,10),concepto:sub.concepto||'',monto:parseFloat(sub.monto)||0,proveedor:by,medioPago:'',cargadoPor:by,date:nw(),updatedAt:nw()});loaded.push('economía');break;
+      case 'tarea': D.tareas.push({id:uid(),projectId:pid,title:sub.titulo||'Tarea',description:sub.descripcion||'',priority:sub.prioridad||'media',status:'pendiente',cargadoPor:by,encargado:by,date:nw(),updatedAt:nw()});loaded.push('tareas');break;
+      case 'checklist':{var its2=(sub.items||'').split('\n').filter(function(l){return l.trim();});D.checklists.push({id:uid(),projectId:pid,title:sub.titulo||'Checklist',priority:'media',date:td(),updatedAt:nw(),cargadoPor:by,items:its2.map(function(l){return {id:uid(),text:l.trim(),done:false};})});loaded.push('checklist');break;}
+      case 'material_existente': D.materiales.push({id:uid(),projectId:pid,name:sub.materialNombre||'',qty:parseFloat(m.cantidad)||0,unit:sub.unidad||'u',notes:sub.notas||'',category:'General',computado:0,cargadoPor:by,date:td(),updatedAt:nw()});loaded.push('materiales');break;
+      case 'material_pedido': (D.matIngresos=D.matIngresos||[]).push({id:uid(),projectId:pid,matNombre:sub.materialNombre||'',qty:parseFloat(sub.cantidad)||0,unit:sub.unidad||'u',estado:'a_pedir',urgencia:sub.urgencia||'normal',observations:sub.notas||'',cargadoPor:by,date:nw(),updatedAt:nw()});loaded.push('pedidos');break;
+    }
   }
   sub.estado='incorporado';sub.fechaIncorporado=nw();sub.updatedAt=nw();
-  audit('formularios','incorporar',sub.categoria);
-  sv();render();toast('Incorporado a '+( {movimiento:'Economía',tarea:'Tareas',checklist:'Checklist',material_existente:'Materiales',material_pedido:'Materiales pedidos'}[sub.categoria]||sub.categoria)+' ✓','var(--green)');
+  audit('formularios','incorporar',by);
+  sv();render();toast('✓ Cargado: '+[...new Set(loaded)].join(', ')+(by?' — 👤 '+by:''),'var(--green)',4000);
 }
 
 function descartarFormulario(id){
-  const sub=(D.formulariosPendientes||[]).find(x=>x.id===id);
-  if(!sub||!confirmDel('¿Descartar este formulario? No se puede deshacer.'))return;
+  var sub=(D.formulariosPendientes||[]).find(function(x){return x.id===id;});
+  if(!sub||!confirmDel('¿Descartar este formulario?'))return;
   sub.estado='descartado';sub.updatedAt=nw();
   sv();render();toast('Formulario descartado','var(--orange)');
 }
@@ -7105,6 +7216,18 @@ function saveFormulariosEndpoint(val){
   SYNC.formulariosEndpoint=val.trim()||null;
   saveSyncConfig();
   toast('Endpoint guardado','var(--green)');
+}
+function saveArchContact(field,val){
+  if(field==='tel') SYNC.archTel=val.trim()||null;
+  else SYNC.archEmail=val.trim()||null;
+  saveSyncConfig();
+  toast(field==='tel'?'WhatsApp guardado':'Email guardado','var(--green)');
+}
+function toggleSendChannel(ch){
+  if(ch==='wa') SYNC.sendWA=!SYNC.sendWA;
+  else SYNC.sendEmail=!SYNC.sendEmail;
+  saveSyncConfig();
+  render();
 }
 
 function copyAyudLink(encoded){
@@ -7173,23 +7296,24 @@ function doGet(e) {
 function shareFormColaborador(colId){
   var co=(D.colaboradores||[]).find(function(c){return c.id===colId;});
   if(!co)return;
+  if(co.estado==='revocado'){toast('Este colaborador fue dado de baja. Reactivalo antes de compartir.','var(--orange)');return;}
   if(!co.phone){toast('Agregá un teléfono al colaborador primero','var(--orange)');return;}
-  if(!SYNC.formulariosEndpoint){toast('Configurá el endpoint de formularios en Configuración','var(--orange)');return;}
+  if(!SYNC.archTel&&!SYNC.archEmail){toast('Configurá tu WhatsApp o email en Configuración → Formularios de campo','var(--orange)');return;}
   var p=D.projects.find(function(x){return x.id===S.proj;});
   var baseUrl=window.location.href.replace(/\/[^/]*(\?.*)?$/,'/form.html');
-  var formUrl=baseUrl+'?endpoint='+encodeURIComponent(SYNC.formulariosEndpoint)+'&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p&&p.name||'')+'&ayudante='+encodeURIComponent(co.name||co.email||'');
-  var msg=encodeURIComponent('Hola '+(co.name||'')+', completá este formulario para la obra '+((p&&p.name)||'')+':\n'+formUrl);
+  var formUrl=baseUrl+'?token='+encodeURIComponent(co.id)+'&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p&&p.name||'')+(SYNC.archTel?'&tel='+encodeURIComponent(SYNC.archTel):'')+(SYNC.archEmail?'&mail='+encodeURIComponent(SYNC.archEmail):'')+'&sw='+(SYNC.sendWA?'1':'0')+'&se='+(SYNC.sendEmail?'1':'0');
+  var msg=encodeURIComponent('Hola '+(co.name||'')+', te mando el formulario para la obra '+((p&&p.name)||'')+'. Con este link podés enviarme reportes de campo:\n'+formUrl);
   window.open('https://wa.me/'+co.phone.replace(/[^0-9]/g,'')+'?text='+msg,'_blank');
 }
 function shareFormContextual(categoria,entidadId,titulo){
-  if(!SYNC.formulariosEndpoint){toast('Configurá el endpoint de formularios en Configuración','var(--orange)');return;}
-  var colabs=(D.colaboradores||[]).filter(function(c){return c.projectId===S.proj&&c.phone;});
-  if(!colabs.length){toast('No hay colaboradores con teléfono cargado','var(--orange)');return;}
+  if(!SYNC.archTel&&!SYNC.archEmail){toast('Configurá tu WhatsApp o email en Configuración → Formularios de campo','var(--orange)');return;}
+  var colabs=(D.colaboradores||[]).filter(function(c){return c.projectId===S.proj&&c.phone&&c.estado!=='revocado';});
+  if(!colabs.length){toast('No hay colaboradores activos con teléfono cargado','var(--orange)');return;}
   var p=D.projects.find(function(x){return x.id===S.proj;});
   var baseUrl=window.location.href.replace(/\/[^/]*(\?.*)?$/,'/form.html');
   window._sfcUrls=[];
   colabs.forEach(function(co){
-    var formUrl=baseUrl+'?endpoint='+encodeURIComponent(SYNC.formulariosEndpoint)+'&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p&&p.name||'')+'&ayudante='+encodeURIComponent(co.name||co.email||'')+'&categoria='+encodeURIComponent(categoria);
+    var formUrl=baseUrl+'?token='+encodeURIComponent(co.id)+'&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p&&p.name||'')+(SYNC.archTel?'&tel='+encodeURIComponent(SYNC.archTel):'')+(SYNC.archEmail?'&mail='+encodeURIComponent(SYNC.archEmail):'')+'&sw='+(SYNC.sendWA?'1':'0')+'&se='+(SYNC.sendEmail?'1':'0');
     var msg='Hola '+(co.name||'')+', necesito que completes el formulario de '+categoria+(titulo?' — '+titulo:'')+' en la obra '+((p&&p.name)||'')+':\n'+formUrl;
     window._sfcUrls.push('https://wa.me/'+co.phone.replace(/[^0-9]/g,'')+'?text='+encodeURIComponent(msg));
   });

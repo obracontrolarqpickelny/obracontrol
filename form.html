@@ -3,301 +3,624 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>ObraControl — Formulario</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<title>ObraControl — Formulario de campo</title>
 <style>
-:root{--pri:#D97706;--bg:#F8FAFC;--white:#fff;--text:#1e293b;--text2:#475569;--text3:#94a3b8;--brd:#e2e8f0;--green:#16a34a;--red:#dc2626;--orange:#f59e0b;--teal:#0d9488;--gray-ll:#f1f5f9;--gray-l:#94a3b8;--rs:10px}
+:root{--pri:#D97706;--bg:#F8FAFC;--white:#fff;--text:#1e293b;--text2:#475569;--text3:#94a3b8;--brd:#e2e8f0;--green:#16a34a;--red:#dc2626;--orange:#f59e0b;--teal:#0d9488;--gray-ll:#f1f5f9;--gray-l:#94a3b8;--rs:10px;--wa:#25d366}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);font-size:14px;min-height:100vh;padding:16px 16px 56px}
-.card{background:var(--white);border-radius:12px;padding:16px;box-shadow:0 1px 3px #0001;margin-bottom:12px}
-.fl{display:block;font-size:11px;font-weight:600;color:var(--text2);margin-bottom:4px;text-transform:uppercase;letter-spacing:.3px}
-.fi{width:100%;padding:10px 12px;border:1.5px solid var(--brd);border-radius:8px;font-size:14px;font-family:inherit;background:var(--white);color:var(--text);outline:none}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);font-size:14px;min-height:100vh}
+.screen{display:none;flex-direction:column;min-height:100vh}
+.screen.active{display:flex}
+
+/* header */
+.hdr{background:var(--white);border-bottom:1px solid var(--brd);padding:12px 16px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:20}
+.logo{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#0d9488,#14b8a6);display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0}
+.hdr-info{flex:1;min-width:0}
+.hdr-obra{font-size:15px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hdr-sub{font-size:11px;color:var(--text3)}
+.btn-nuevo{background:var(--teal);color:#fff;border:none;border-radius:20px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0;display:none}
+
+/* name screen */
+.name-wrap{flex:1;display:flex;align-items:center;justify-content:center;padding:24px 16px}
+.name-card{background:var(--white);border-radius:16px;padding:24px;box-shadow:0 2px 12px #0001;width:100%;max-width:360px;text-align:center}
+.name-emoji{font-size:48px;margin-bottom:12px}
+.name-title{font-size:20px;font-weight:800;margin-bottom:6px}
+.name-sub{font-size:13px;color:var(--text2);margin-bottom:20px;line-height:1.5}
+
+/* tabs */
+.tabs-wrap{background:var(--white);border-bottom:1px solid var(--brd);padding:0 8px;overflow-x:auto;-webkit-overflow-scrolling:touch;display:flex;gap:2px;position:sticky;top:57px;z-index:19}
+.tab{flex-shrink:0;padding:10px 14px;border:none;background:none;font-size:12px;font-weight:600;color:var(--text3);cursor:pointer;border-bottom:3px solid transparent;display:flex;align-items:center;gap:5px;white-space:nowrap;transition:color .15s}
+.tab.active{color:var(--teal);border-bottom-color:var(--teal)}
+.tab-badge{display:inline-flex;align-items:center;justify-content:center;background:var(--green);color:#fff;border-radius:10px;font-size:9px;font-weight:800;min-width:16px;height:16px;padding:0 4px}
+.tab-count{display:inline-flex;align-items:center;justify-content:center;background:var(--teal);color:#fff;border-radius:10px;font-size:9px;font-weight:800;min-width:16px;height:16px;padding:0 4px}
+
+/* scroll body */
+.form-body{flex:1;overflow-y:auto;padding:12px 16px 100px}
+.tab-pane{display:none}
+.tab-pane.active{display:block}
+
+/* cards */
+.card{background:var(--white);border-radius:12px;padding:14px;box-shadow:0 1px 3px #0001;margin-bottom:10px}
+.item-card{background:var(--white);border-radius:12px;padding:14px;box-shadow:0 1px 3px #0001;margin-bottom:10px;border-left:3px solid var(--teal)}
+.item-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.item-label{font-size:13px;font-weight:700;color:var(--teal)}
+.btn-del{background:none;border:none;color:var(--gray-l);font-size:18px;cursor:pointer;padding:0 4px;line-height:1}
+
+/* form elements */
+.fl{display:block;font-size:11px;font-weight:700;color:var(--text2);margin-bottom:4px;text-transform:uppercase;letter-spacing:.3px}
+.fi{width:100%;padding:9px 12px;border:1.5px solid var(--brd);border-radius:8px;font-size:14px;font-family:inherit;background:var(--white);color:var(--text);outline:none}
 .fi:focus{border-color:var(--teal)}
-.fs{width:100%;padding:10px 12px;border:1.5px solid var(--brd);border-radius:8px;font-size:14px;font-family:inherit;background:var(--white);color:var(--text);outline:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24'%3E%3Cpath fill='%2394a3b8' d='m7 10 5 5 5-5z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center}
-.fs:focus{border-color:var(--teal);outline:none}
-.ft{width:100%;padding:10px 12px;border:1.5px solid var(--brd);border-radius:8px;font-size:13px;font-family:inherit;min-height:80px;resize:vertical;color:var(--text)}
+.fs{width:100%;padding:9px 12px;border:1.5px solid var(--brd);border-radius:8px;font-size:14px;font-family:inherit;background:var(--white);color:var(--text);outline:none;-webkit-appearance:none}
+.fs:focus{border-color:var(--teal)}
+.ft{width:100%;padding:9px 12px;border:1.5px solid var(--brd);border-radius:8px;font-size:13px;font-family:inherit;min-height:72px;resize:vertical;color:var(--text)}
 .ft:focus{outline:none;border-color:var(--teal)}
-.fg{margin-bottom:12px}
+.fg{margin-bottom:11px}
 .fr{display:flex;gap:8px}
-.fr>.fg{flex:1}
-.btn{display:block;width:100%;padding:13px;border-radius:10px;font-size:15px;font-weight:700;font-family:inherit;border:none;cursor:pointer;text-align:center;transition:opacity .15s}
+.fr>.fg{flex:1;min-width:0}
+.photo-prev{width:100%;border-radius:8px;max-height:160px;object-fit:cover;margin-top:8px;display:none}
+
+/* buttons */
+.btn{display:block;width:100%;padding:12px;border-radius:10px;font-size:15px;font-weight:700;font-family:inherit;border:none;cursor:pointer;text-align:center;transition:opacity .15s}
 .btn:active{opacity:.8}
 .btn-pri{background:var(--teal);color:#fff}
 .btn-sec{background:var(--gray-ll);color:var(--text2)}
-.hdr{display:flex;align-items:center;gap:10px;margin-bottom:20px;padding-top:8px}
-.logo{width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#0d9488,#14b8a6);display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0}
-.lock{display:inline-flex;align-items:center;gap:4px;background:var(--gray-ll);color:var(--text3);font-size:11px;padding:2px 8px;border-radius:20px;margin-left:6px}
-.locked-field{padding:10px 12px;background:var(--gray-ll);border-radius:8px;font-weight:600;font-size:14px;display:flex;align-items:center}
-#photoPreview{width:100%;border-radius:8px;max-height:180px;object-fit:cover;margin-top:8px;display:none}
-#errorMsg{display:none;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:10px 12px;color:var(--red);font-size:13px;margin-bottom:12px}
-#successScreen{display:none;text-align:center;padding:40px 16px}
-.warn-box{background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px;margin-bottom:12px;font-size:12px;color:#92400e}
+.btn-add{background:none;border:1.5px dashed var(--brd);border-radius:10px;color:var(--teal);font-size:13px;font-weight:700;width:100%;padding:11px;cursor:pointer;font-family:inherit;margin-top:4px}
+.btn-add:active{background:var(--gray-ll)}
+.btn-wa{background:var(--wa);color:#fff}
+.btn-sm{padding:7px 14px;border-radius:8px;font-size:12px;font-weight:700;border:none;cursor:pointer;font-family:inherit}
+
+/* mark-done toggle */
+.mark-done{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--gray-ll);border-radius:8px;cursor:pointer;margin-bottom:8px;user-select:none}
+.mark-chk{width:20px;height:20px;border:2px solid var(--brd);border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s}
+.mark-chk.on{background:var(--green);border-color:var(--green);color:#fff}
+.mark-txt{font-size:12px;font-weight:700;color:var(--text2)}
+
+/* bottom send bar */
+.send-bar{position:fixed;bottom:0;left:0;right:0;background:var(--white);border-top:1px solid var(--brd);padding:10px 16px;z-index:30;display:none}
+.send-bar.show{display:flex;gap:8px}
+.send-bar .btn{flex:1;padding:13px}
+
+/* success screen */
+.success-wrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 16px;text-align:center}
+.success-icon{font-size:56px;margin-bottom:12px}
+.success-title{font-size:20px;font-weight:800;margin-bottom:6px}
+.success-sub{font-size:13px;color:var(--text2);margin-bottom:4px;line-height:1.5}
+.version-badge{display:inline-block;background:var(--gray-ll);color:var(--text3);font-size:11px;font-weight:700;border-radius:20px;padding:3px 10px;margin-bottom:20px}
+.photos-to-share{background:var(--white);border-radius:12px;padding:14px;box-shadow:0 1px 3px #0001;margin-bottom:16px;width:100%;text-align:left}
+.photos-grid{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.photos-grid img{width:72px;height:72px;object-fit:cover;border-radius:8px}
+.success-btns{display:flex;flex-direction:column;gap:8px;width:100%;max-width:360px}
+
+/* empty-tab hint */
+.empty-tab{text-align:center;padding:32px 16px;color:var(--text3)}
+.empty-tab .e-icon{font-size:36px;margin-bottom:10px}
+.empty-tab .e-txt{font-size:13px}
+
+/* check indicator in form */
+.tab-done-bar{display:flex;align-items:center;justify-content:flex-end;margin-bottom:12px}
+.done-toggle{display:flex;align-items:center;gap:6px;background:none;border:1.5px solid var(--brd);border-radius:20px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text3);font-family:inherit}
+.done-toggle.on{background:var(--green);border-color:var(--green);color:#fff}
 </style>
 </head>
 <body>
 
-<div class="hdr">
-  <div class="logo">
-    <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect width="16" height="20" x="4" y="2" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M16 6h.01M12 6h.01"/></svg>
-  </div>
-  <div>
-    <div style="font-size:17px;font-weight:800">ObraControl</div>
-    <div style="font-size:11px;color:var(--text3)">Formulario de carga de campo</div>
+<!-- ── SCREEN 0: Nombre ─────────────────────────── -->
+<div class="screen active" id="screenName">
+  <div class="name-wrap">
+    <div class="name-card">
+      <div class="name-emoji">👷</div>
+      <div class="name-title">¡Hola!</div>
+      <div class="name-sub">Para empezar, decinos tu nombre.<br>No te lo vamos a volver a pedir.</div>
+      <div class="fg">
+        <input class="fi" id="nameInput" placeholder="Tu nombre completo" style="font-size:16px;text-align:center">
+      </div>
+      <button class="btn btn-pri" onclick="saveName()" style="margin-top:4px">Continuar →</button>
+    </div>
   </div>
 </div>
 
-<div id="mainForm">
-  <div class="card">
-    <div class="fg">
-      <label class="fl">Obra</label>
-      <div id="obraDisplay"></div>
+<!-- ── SCREEN 1: Formulario ────────────────────── -->
+<div class="screen" id="screenForm">
+
+  <!-- Header -->
+  <div class="hdr">
+    <div class="logo">
+      <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect width="16" height="20" x="4" y="2" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M16 6h.01M12 6h.01"/></svg>
     </div>
-    <div class="fg">
-      <label class="fl">Tu nombre</label>
-      <div id="ayudanteDisplay"></div>
+    <div class="hdr-info">
+      <div class="hdr-obra" id="hdrObra">—</div>
+      <div class="hdr-sub" id="hdrCollab">—</div>
     </div>
-    <div class="fg">
-      <label class="fl">Categoría *</label>
-      <select class="fs" id="categoriaSelect" onchange="onCatChange()">
-        <option value="">— Elegí una categoría —</option>
-        <option value="movimiento">💰 Movimiento (gasto / pago / ingreso)</option>
-        <option value="tarea">📋 Tarea</option>
-        <option value="checklist">✅ Checklist</option>
-        <option value="material_existente">📦 Material existente (stock en obra)</option>
-        <option value="material_pedido">🔔 Material pedido (requisición)</option>
-      </select>
-    </div>
+    <button class="btn-nuevo" id="btnNuevo" onclick="nuevoFormulario()">+ Nuevo</button>
   </div>
 
-  <div id="dynFields"></div>
+  <!-- Tabs -->
+  <div class="tabs-wrap">
+    <button class="tab active" id="tab-mov" onclick="showTab('mov')">💰 Movimientos<span class="tab-badge" id="badge-mov" style="display:none">✓</span><span class="tab-count" id="count-mov" style="display:none"></span></button>
+    <button class="tab" id="tab-tar" onclick="showTab('tar')">📋 Tareas<span class="tab-badge" id="badge-tar" style="display:none">✓</span><span class="tab-count" id="count-tar" style="display:none"></span></button>
+    <button class="tab" id="tab-mex" onclick="showTab('mex')">📦 Existentes<span class="tab-badge" id="badge-mex" style="display:none">✓</span><span class="tab-count" id="count-mex" style="display:none"></span></button>
+    <button class="tab" id="tab-mpe" onclick="showTab('mpe')">🔔 Pedidos<span class="tab-badge" id="badge-mpe" style="display:none">✓</span><span class="tab-count" id="count-mpe" style="display:none"></span></button>
+    <button class="tab" id="tab-chk" onclick="showTab('chk')">✅ Checklist<span class="tab-badge" id="badge-chk" style="display:none">✓</span></button>
+  </div>
 
-  <div id="commonFields" style="display:none">
-    <div class="card">
-      <div class="fg">
-        <label class="fl">Foto (opcional)</label>
-        <input type="file" id="photoInput" accept="image/*" capture="environment" style="font-size:13px;width:100%" onchange="previewPhoto()">
-        <img id="photoPreview" alt="preview">
+  <!-- Scrollable form area -->
+  <div class="form-body">
+
+    <!-- Tab: Movimientos -->
+    <div class="tab-pane active" id="pane-mov">
+      <div class="tab-done-bar">
+        <button class="done-toggle" id="done-mov" onclick="toggleDone('mov')">✓ Marcar pestaña lista</button>
+      </div>
+      <div id="list-mov"></div>
+      <button class="btn-add" onclick="addItem('mov')">+ Agregar movimiento</button>
+    </div>
+
+    <!-- Tab: Tareas -->
+    <div class="tab-pane" id="pane-tar">
+      <div class="tab-done-bar">
+        <button class="done-toggle" id="done-tar" onclick="toggleDone('tar')">✓ Marcar pestaña lista</button>
+      </div>
+      <div id="list-tar"></div>
+      <button class="btn-add" onclick="addItem('tar')">+ Agregar tarea</button>
+    </div>
+
+    <!-- Tab: Materiales existentes -->
+    <div class="tab-pane" id="pane-mex">
+      <div class="tab-done-bar">
+        <button class="done-toggle" id="done-mex" onclick="toggleDone('mex')">✓ Marcar pestaña lista</button>
+      </div>
+      <div id="list-mex"></div>
+      <button class="btn-add" onclick="addItem('mex')">+ Agregar material existente</button>
+    </div>
+
+    <!-- Tab: Materiales pedidos -->
+    <div class="tab-pane" id="pane-mpe">
+      <div class="tab-done-bar">
+        <button class="done-toggle" id="done-mpe" onclick="toggleDone('mpe')">✓ Marcar pestaña lista</button>
+      </div>
+      <div id="list-mpe"></div>
+      <button class="btn-add" onclick="addItem('mpe')">+ Agregar pedido</button>
+    </div>
+
+    <!-- Tab: Checklist -->
+    <div class="tab-pane" id="pane-chk">
+      <div class="tab-done-bar">
+        <button class="done-toggle" id="done-chk" onclick="toggleDone('chk')">✓ Marcar pestaña lista</button>
+      </div>
+      <div class="card">
+        <div class="fg"><label class="fl">Título del checklist</label><input class="fi" id="chk_titulo" placeholder="Ej: Inspección de armadura, Control de losa..."></div>
+        <div class="fg"><label class="fl">Ítems (uno por línea)</label><textarea class="ft" id="chk_items" rows="7" placeholder="Verificar estribos&#10;Revisar recubrimiento&#10;Controlar separación entre barras&#10;Limpiar fondos&#10;Verificar pasatubos"></textarea></div>
+        <div class="fg"><label class="fl">Foto general (opcional)</label>
+          <input type="file" accept="image/*" capture="environment" id="chk_foto" onchange="prevFoto('chk_foto','chk_prev')" style="font-size:13px;width:100%">
+          <img id="chk_prev" class="photo-prev">
+        </div>
       </div>
     </div>
-    <div id="errorMsg"></div>
-    <button class="btn btn-pri" id="submitBtn" onclick="submitForm()">Enviar formulario</button>
+
   </div>
+
+  <!-- Send bar -->
+  <div class="send-bar show" id="sendBar">
+    <div id="errBanner" style="display:none;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:8px 12px;color:var(--red);font-size:12px;width:100%;margin-bottom:8px"></div>
+    <button class="btn btn-pri" id="sendBtn" onclick="enviarTodo()" style="flex:1;padding:13px;font-size:15px">📤 Enviar todo</button>
+  </div>
+
 </div>
 
-<div id="successScreen">
-  <div style="font-size:56px;margin-bottom:16px">✅</div>
-  <div style="font-size:18px;font-weight:800;margin-bottom:8px">¡Formulario enviado!</div>
-  <div style="color:var(--text2);margin-bottom:24px;font-size:13px;line-height:1.5">El arquitecto lo recibirá la próxima vez<br>que sincronice con Drive.</div>
-  <button class="btn btn-pri" onclick="resetForm()">Cargar otro formulario</button>
+<!-- ── SCREEN 2: Enviado ────────────────────────── -->
+<div class="screen" id="screenSuccess">
+  <div class="hdr">
+    <div class="logo">
+      <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect width="16" height="20" x="4" y="2" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M16 6h.01M12 6h.01"/></svg>
+    </div>
+    <div class="hdr-info">
+      <div class="hdr-obra" id="hdrObra2">—</div>
+      <div class="hdr-sub" id="hdrCollab2">—</div>
+    </div>
+  </div>
+  <div class="success-wrap">
+    <div class="success-icon">✅</div>
+    <div class="success-title">¡Enviado!</div>
+    <div class="success-sub" id="successSub">El arquitecto ya lo recibió.</div>
+    <div class="version-badge" id="versionBadge">Versión 1</div>
+    <div class="photos-to-share" id="photosSection" style="display:none">
+      <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:4px">📸 Fotos del informe — enviá también estas por WhatsApp</div>
+      <div class="photos-grid" id="photosGrid"></div>
+    </div>
+    <div class="success-btns">
+      <button class="btn btn-sec" onclick="editarYReenviar()">✏️ Editar y reenviar</button>
+      <button class="btn btn-pri" onclick="nuevoFormulario()">+ Nuevo formulario</button>
+    </div>
+  </div>
 </div>
 
 <script>
-const params   = new URLSearchParams(window.location.search);
-const ENDPOINT = params.get('endpoint') || '';
-const OBRA_ID  = params.get('obra')     || '';
-const OBRA_NAME= params.get('obraName') || params.get('obra') || '';
-const AYUDANTE = params.get('ayudante') || '';
-const CAT_LOCK = params.get('categoria')|| '';
+var P=new URLSearchParams(window.location.search);
+var TOKEN   =P.get('token')||'';
+var OBRA_ID =P.get('obra')||'';
+var OBRA_NAME=P.get('obraName')||P.get('obra')||'';
+var ARCH_TEL=P.get('tel')||'';
+var ARCH_MAIL=P.get('mail')||'';
+var SEND_WA =(P.get('sw')||'1')==='1';
+var SEND_EMAIL=(P.get('se')||'0')==='1';
+var APP_URL =window.location.href.replace(/\/form\.html.*/,'/index.html');
 
-let photoDataUrl = null;
+var UNITS=['u','kg','m','m2','m3','l','bolsa 20kg','bolsa 25kg','bolsa 40kg','bolsa 50kg','balde','rollo','caja','barra','paq','gl'];
+var unitOpts=UNITS.map(function(u){return '<option value="'+u+'">'+u+'</option>';}).join('');
 
-const UNITS = ['u','kg','m','m2','m3','l','bolsa 20kg','bolsa 25kg','bolsa 40kg','bolsa 50kg','balde','rollo','caja','barra','paq','gl'];
-const unitOpts = UNITS.map(u=>`<option value="${u}">${u}</option>`).join('');
+var colabName='';
+var sessionId=_uid();
+var sendCount=0;
+var doneTabMap={mov:false,tar:false,mex:false,mpe:false,chk:false};
+var counters={mov:0,tar:0,mex:0,mpe:0};
+var photoMap={};  // key → dataUrl
+var allPhotos=[];
 
+function _uid(){return Math.random().toString(36).slice(2,10)+Date.now().toString(36);}
+function $(id){return document.getElementById(id);}
+function v(id){var el=$(id);return el?el.value.trim():'';}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+// ── Init ────────────────────────────────
 function init(){
-  // Obra
-  const obraDiv = document.getElementById('obraDisplay');
-  if(OBRA_NAME){
-    obraDiv.innerHTML = `<div class="locked-field">${esc(OBRA_NAME)}<span class="lock">🔒 fijo</span></div>`;
+  var storedName=TOKEN?localStorage.getItem('oc_n_'+TOKEN):'';
+  if(storedName){
+    colabName=storedName;
+    showFormScreen();
   } else {
-    obraDiv.innerHTML = `<input class="fi" id="obraInput" placeholder="Nombre de la obra">`;
+    $('screenName').classList.add('active');
   }
-  // Ayudante
-  const ayDiv = document.getElementById('ayudanteDisplay');
-  if(AYUDANTE){
-    ayDiv.innerHTML = `<div class="locked-field">${esc(AYUDANTE)}<span class="lock">🔒 fijo</span></div>`;
+}
+
+function saveName(){
+  var n=$('nameInput').value.trim();
+  if(!n){$('nameInput').focus();return;}
+  colabName=n;
+  if(TOKEN) localStorage.setItem('oc_n_'+TOKEN,n);
+  showFormScreen();
+}
+
+function showFormScreen(){
+  $('screenName').classList.remove('active');
+  $('screenForm').classList.add('active');
+  $('hdrObra').textContent=OBRA_NAME||'Obra';
+  $('hdrCollab').textContent='Hola, '+colabName+' 👋';
+  sendCount=parseInt(TOKEN?localStorage.getItem('oc_v_'+TOKEN)||'0':'0');
+}
+
+// ── Tabs ────────────────────────────────
+var currentTab='mov';
+function showTab(t){
+  var tabs=['mov','tar','mex','mpe','chk'];
+  tabs.forEach(function(id){
+    $('pane-'+id).classList.remove('active');
+    $('tab-'+id).classList.remove('active');
+  });
+  $('pane-'+t).classList.add('active');
+  $('tab-'+t).classList.add('active');
+  currentTab=t;
+}
+
+function toggleDone(t){
+  doneTabMap[t]=!doneTabMap[t];
+  var btn=$('done-'+t);
+  var badge=$('badge-'+t);
+  if(doneTabMap[t]){
+    btn.classList.add('on');btn.textContent='✓ Pestaña lista';
+    if(badge) badge.style.display='inline-flex';
   } else {
-    ayDiv.innerHTML = `<input class="fi" id="ayudanteInput" placeholder="Tu nombre completo">`;
-  }
-  // Categoria bloqueada
-  if(CAT_LOCK){
-    const sel = document.getElementById('categoriaSelect');
-    sel.value = CAT_LOCK;
-    sel.disabled = true;
-    onCatChange();
-  }
-  // Sin endpoint
-  if(!ENDPOINT){
-    document.getElementById('mainForm').insertAdjacentHTML('afterbegin',
-      `<div class="warn-box">⚠️ Este formulario no está vinculado a ningún proyecto. Pedile al arquitecto el link correcto.</div>`);
+    btn.classList.remove('on');btn.textContent='✓ Marcar pestaña lista';
+    if(badge) badge.style.display='none';
   }
 }
 
-function onCatChange(){
-  const cat = document.getElementById('categoriaSelect').value;
-  const dyn = document.getElementById('dynFields');
-  const common = document.getElementById('commonFields');
-  if(!cat){ dyn.innerHTML=''; common.style.display='none'; return; }
-  common.style.display = 'block';
-
-  const fields = {
-    movimiento:`<div class="card">
-      <div class="fg"><label class="fl">Tipo *</label>
-        <select class="fs" id="f_tipo"><option value="gasto">💸 Gasto</option><option value="pago">💳 Pago</option><option value="ingreso">💵 Ingreso</option></select></div>
-      <div class="fg"><label class="fl">Monto *</label><input class="fi" id="f_monto" type="number" step="0.01" min="0" placeholder="0.00"></div>
-      <div class="fg"><label class="fl">Concepto *</label><input class="fi" id="f_concepto" placeholder="Ej: Cemento Portland, mano de obra..."></div>
-    </div>`,
-
-    tarea:`<div class="card">
-      <div class="fg"><label class="fl">Título *</label><input class="fi" id="f_titulo" placeholder="Nombre de la tarea"></div>
-      <div class="fg"><label class="fl">Descripción / detalle</label><textarea class="ft" id="f_descripcion" placeholder="Describí qué hay que hacer..."></textarea></div>
-      <div class="fg"><label class="fl">Prioridad</label>
-        <select class="fs" id="f_prioridad"><option value="alta">🔴 Alta</option><option value="media" selected>🟡 Media</option><option value="baja">🟢 Baja</option></select></div>
-    </div>`,
-
-    checklist:`<div class="card">
-      <div class="fg"><label class="fl">Título del checklist *</label><input class="fi" id="f_titulo" placeholder="Ej: Control de armadura, Inspección de losa..."></div>
-      <div class="fg"><label class="fl">Ítems a controlar (uno por línea)</label>
-        <textarea class="ft" id="f_items" rows="6" placeholder="Verificar estribos&#10;Revisar recubrimiento&#10;Controlar separación entre barras&#10;Limpiar fondos"></textarea></div>
-    </div>`,
-
-    material_existente:`<div class="card">
-      <div class="fg"><label class="fl">Nombre del material *</label><input class="fi" id="f_matNombre" placeholder="Ej: Cemento Portland, Hierro 10mm..."></div>
-      <div class="fr">
-        <div class="fg"><label class="fl">Cantidad *</label><input class="fi" id="f_cantidad" type="number" step="0.01" min="0" placeholder="0"></div>
-        <div class="fg"><label class="fl">Unidad</label><select class="fs" id="f_unidad">${unitOpts}</select></div>
-      </div>
-      <div class="fg"><label class="fl">Notas (ubicación, estado...)</label><textarea class="ft" id="f_notas" rows="2" placeholder="Ej: Apilado en depósito, estado regular..."></textarea></div>
-    </div>`,
-
-    material_pedido:`<div class="card">
-      <div class="fg"><label class="fl">Nombre del material *</label><input class="fi" id="f_matNombre" placeholder="Ej: Hierro 8mm, arena gruesa..."></div>
-      <div class="fr">
-        <div class="fg"><label class="fl">Cantidad *</label><input class="fi" id="f_cantidad" type="number" step="0.01" min="0" placeholder="0"></div>
-        <div class="fg"><label class="fl">Unidad</label><select class="fs" id="f_unidad">${unitOpts}</select></div>
-      </div>
-      <div class="fg"><label class="fl">Urgencia</label>
-        <select class="fs" id="f_urgencia"><option value="normal">🟡 Normal</option><option value="urgente">🔴 Urgente</option></select></div>
-      <div class="fg"><label class="fl">Notas (para qué tarea, cuándo se necesita...)</label><textarea class="ft" id="f_notas" rows="2"></textarea></div>
-    </div>`,
-  };
-  dyn.innerHTML = fields[cat] || '';
+// ── Dynamic items ───────────────────────
+function addItem(type){
+  counters[type]=counters[type]||0;
+  var idx=counters[type]++;
+  var list=$('list-'+type);
+  var div=document.createElement('div');
+  div.className='item-card';
+  div.id='item-'+type+'-'+idx;
+  div.innerHTML=buildItemHTML(type,idx);
+  list.appendChild(div);
+  updateCount(type);
 }
 
-function v(id){ const el=document.getElementById(id); return el?el.value.trim():''; }
-function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-
-async function previewPhoto(){
-  const input = document.getElementById('photoInput');
-  if(!input.files||!input.files[0]){ photoDataUrl=null; return; }
-  photoDataUrl = await compressImage(input.files[0], 800, 0.72);
-  const prev = document.getElementById('photoPreview');
-  if(photoDataUrl){ prev.src=photoDataUrl; prev.style.display='block'; }
-  else { prev.style.display='none'; }
+function removeItem(type,idx){
+  var el=$('item-'+type+'-'+idx);
+  if(el) el.remove();
+  delete photoMap[type+'_'+idx+'_foto'];
+  updateCount(type);
 }
 
-function compressImage(file, maxPx, quality){
-  return new Promise(resolve=>{
-    const reader = new FileReader();
-    reader.onload = e=>{
-      const img = new Image();
-      img.onload = ()=>{
-        let w=img.width, h=img.height;
-        if(w>maxPx||h>maxPx){ const r=Math.min(maxPx/w,maxPx/h); w=Math.round(w*r); h=Math.round(h*r); }
-        const canvas=document.createElement('canvas');
-        canvas.width=w; canvas.height=h;
+function updateCount(type){
+  var list=$('list-'+type);
+  var n=list?list.querySelectorAll('.item-card').length:0;
+  var c=$('count-'+type);
+  if(c){c.textContent=n;c.style.display=n>0?'inline-flex':'none';}
+}
+
+function buildItemHTML(type,idx){
+  var label={mov:'Movimiento',tar:'Tarea',mex:'Material existente',mpe:'Material pedido'}[type]||'Ítem';
+  var num=(counters[type]||1);
+  var hdr='<div class="item-hdr"><span class="item-label">'+label+' '+(idx+1)+'</span><button class="btn-del" onclick="removeItem(\''+type+'\','+idx+')">✕</button></div>';
+  if(type==='mov') return hdr+
+    '<div class="fg"><label class="fl">Tipo</label><select class="fs" id="mov_'+idx+'_tipo"><option value="ingreso">💵 Ingreso</option><option value="egreso">💸 Egreso</option></select></div>'+
+    '<div class="fg"><label class="fl">Monto *</label><input class="fi" id="mov_'+idx+'_monto" type="number" step="0.01" min="0" placeholder="0.00" inputmode="decimal"></div>'+
+    '<div class="fg"><label class="fl">Concepto *</label><input class="fi" id="mov_'+idx+'_concepto" placeholder="Ej: Compra de cemento, Pago mano de obra..."></div>'+
+    '<div class="fg"><label class="fl">Foto (opcional)</label><input type="file" accept="image/*" capture="environment" id="mov_'+idx+'_foto" onchange="prevFoto(\'mov_'+idx+'_foto\',\'mov_'+idx+'_prev\');" style="font-size:13px;width:100%"><img id="mov_'+idx+'_prev" class="photo-prev"></div>';
+  if(type==='tar') return hdr+
+    '<div class="fg"><label class="fl">Título *</label><input class="fi" id="tar_'+idx+'_titulo" placeholder="¿Qué tarea?"></div>'+
+    '<div class="fg"><label class="fl">Descripción / detalle</label><textarea class="ft" id="tar_'+idx+'_desc" placeholder="Describí el avance, qué hay que hacer..."></textarea></div>'+
+    '<div class="fg"><label class="fl">Prioridad</label><select class="fs" id="tar_'+idx+'_pri"><option value="alta">🔴 Alta</option><option value="media" selected>🟡 Media</option><option value="baja">🟢 Baja</option></select></div>'+
+    '<div class="fg"><label class="fl">Foto (opcional)</label><input type="file" accept="image/*" capture="environment" id="tar_'+idx+'_foto" onchange="prevFoto(\'tar_'+idx+'_foto\',\'tar_'+idx+'_prev\');" style="font-size:13px;width:100%"><img id="tar_'+idx+'_prev" class="photo-prev"></div>'+
+    '<div class="fg" id="tar_'+idx+'_captionWrap" style="display:none"><label class="fl">Comentario de la foto</label><input class="fi" id="tar_'+idx+'_caption" placeholder="¿Qué muestra esta foto?"></div>';
+  if(type==='mex') return hdr+
+    '<div class="fg"><label class="fl">Material *</label><input class="fi" id="mex_'+idx+'_nombre" placeholder="Ej: Cemento Portland, Hierro 10mm..."></div>'+
+    '<div class="fr"><div class="fg"><label class="fl">Cantidad *</label><input class="fi" id="mex_'+idx+'_qty" type="number" step="0.01" min="0" placeholder="0" inputmode="decimal"></div>'+
+    '<div class="fg"><label class="fl">Unidad</label><select class="fs" id="mex_'+idx+'_uni">'+unitOpts+'</select></div></div>'+
+    '<div class="fg"><label class="fl">Ubicación / estado</label><textarea class="ft" id="mex_'+idx+'_nota" style="min-height:52px" placeholder="Ej: Apilado en depósito, en buen estado..."></textarea></div>'+
+    '<div class="fg"><label class="fl">Foto (opcional)</label><input type="file" accept="image/*" capture="environment" id="mex_'+idx+'_foto" onchange="prevFoto(\'mex_'+idx+'_foto\',\'mex_'+idx+'_prev\');" style="font-size:13px;width:100%"><img id="mex_'+idx+'_prev" class="photo-prev"></div>';
+  if(type==='mpe') return hdr+
+    '<div class="fg"><label class="fl">Material *</label><input class="fi" id="mpe_'+idx+'_nombre" placeholder="Ej: Arena gruesa, Hierro 8mm..."></div>'+
+    '<div class="fr"><div class="fg"><label class="fl">Cantidad *</label><input class="fi" id="mpe_'+idx+'_qty" type="number" step="0.01" min="0" placeholder="0" inputmode="decimal"></div>'+
+    '<div class="fg"><label class="fl">Unidad</label><select class="fs" id="mpe_'+idx+'_uni">'+unitOpts+'</select></div></div>'+
+    '<div class="fg"><label class="fl">Urgencia</label><select class="fs" id="mpe_'+idx+'_urg"><option value="normal">🟡 Normal</option><option value="urgente">🔴 Urgente</option></select></div>'+
+    '<div class="fg"><label class="fl">¿Para qué tarea? / Cuándo se necesita</label><textarea class="ft" id="mpe_'+idx+'_nota" style="min-height:52px"></textarea></div>';
+  return hdr;
+}
+
+// ── Photo preview ────────────────────────
+function prevFoto(inputId,prevId){
+  var input=$(inputId);
+  if(!input||!input.files||!input.files[0]) return;
+  var key=inputId;
+  compressImage(input.files[0],300,0.55).then(function(d){
+    if(d){
+      photoMap[key]=d;
+      var img=$(prevId);
+      if(img){img.src=d;img.style.display='block';}
+      // show caption if tar
+      if(inputId.startsWith('tar_')){
+        var captWrap=$(inputId.replace('_foto','_captionWrap'));
+        if(captWrap) captWrap.style.display='block';
+      }
+    }
+  });
+}
+
+function compressImage(file,maxPx,quality){
+  return new Promise(function(resolve){
+    var reader=new FileReader();
+    reader.onload=function(e){
+      var img=new Image();
+      img.onload=function(){
+        var w=img.width,h=img.height;
+        if(w>maxPx||h>maxPx){var r=Math.min(maxPx/w,maxPx/h);w=Math.round(w*r);h=Math.round(h*r);}
+        var canvas=document.createElement('canvas');
+        canvas.width=w;canvas.height=h;
         canvas.getContext('2d').drawImage(img,0,0,w,h);
-        const data=canvas.toDataURL('image/jpeg',quality);
-        resolve(data.length>1400000?null:data);
+        resolve(canvas.toDataURL('image/jpeg',quality));
       };
-      img.onerror=()=>resolve(null);
+      img.onerror=function(){resolve(null);};
       img.src=e.target.result;
     };
-    reader.onerror=()=>resolve(null);
+    reader.onerror=function(){resolve(null);};
     reader.readAsDataURL(file);
   });
 }
 
-async function submitForm(){
-  const errEl=document.getElementById('errorMsg');
-  errEl.style.display='none';
-
-  const cat   = document.getElementById('categoriaSelect').value;
-  const obra  = OBRA_NAME || v('obraInput');
-  const obraId= OBRA_ID   || '';
-  const ayud  = AYUDANTE  || v('ayudanteInput');
-
-  if(!obra){ showErr('Ingresá el nombre de la obra'); return; }
-  if(!ayud){ showErr('Ingresá tu nombre'); return; }
-  if(!cat) { showErr('Elegí una categoría'); return; }
-  if(!ENDPOINT){ showErr('Este formulario no tiene endpoint configurado. Pedile al arquitecto el link correcto.'); return; }
-
-  const sub = {
-    id: Math.random().toString(36).slice(2,10)+Date.now().toString(36),
-    projectId: obraId,
-    obraName: obra,
-    ayudante: ayud,
-    categoria: cat,
-    fecha: new Date().toISOString(),
-    estado: 'pendiente',
-    foto: photoDataUrl||null,
+// ── Collect data ─────────────────────────
+function collectData(){
+  var data={
+    id:sessionId+'_v'+(sendCount+1),
+    sessionId:sessionId,
+    token:TOKEN,
+    version:sendCount+1,
+    ayudante:colabName,
+    obraId:OBRA_ID,
+    obraName:OBRA_NAME,
+    fecha:new Date().toISOString(),
+    estado:'pendiente',
+    tabsDone:Object.keys(doneTabMap).filter(function(k){return doneTabMap[k];}),
+    movimientos:[],
+    tareas:[],
+    materialesExistentes:[],
+    materialesPedidos:[],
+    checklist:null,
   };
+  allPhotos=[];
 
-  if(cat==='movimiento'){
-    if(!v('f_monto')){ showErr('Ingresá el monto'); return; }
-    if(!v('f_concepto')){ showErr('Ingresá el concepto'); return; }
-    sub.tipo=v('f_tipo'); sub.monto=parseFloat(v('f_monto'))||0; sub.concepto=v('f_concepto');
-  } else if(cat==='tarea'){
-    if(!v('f_titulo')){ showErr('Ingresá el título de la tarea'); return; }
-    sub.titulo=v('f_titulo'); sub.descripcion=v('f_descripcion'); sub.prioridad=v('f_prioridad');
-  } else if(cat==='checklist'){
-    if(!v('f_titulo')){ showErr('Ingresá el título del checklist'); return; }
-    sub.titulo=v('f_titulo'); sub.items=document.getElementById('f_items')?.value||'';
-  } else if(cat==='material_existente'||cat==='material_pedido'){
-    if(!v('f_matNombre')){ showErr('Ingresá el nombre del material'); return; }
-    if(!v('f_cantidad')){ showErr('Ingresá la cantidad'); return; }
-    sub.materialNombre=v('f_matNombre'); sub.cantidad=parseFloat(v('f_cantidad'))||0;
-    sub.unidad=v('f_unidad')||'u'; sub.notas=v('f_notas');
-    if(cat==='material_pedido') sub.urgencia=v('f_urgencia')||'normal';
+  // movimientos
+  var movList=$('list-mov');
+  if(movList) movList.querySelectorAll('.item-card').forEach(function(el,i){
+    var idx=parseInt(el.id.split('-').pop());
+    var monto=parseFloat(v('mov_'+idx+'_monto'))||0;
+    var concepto=v('mov_'+idx+'_concepto');
+    if(monto||concepto){
+      var foto=photoMap['mov_'+idx+'_foto']||null;
+      if(foto) allPhotos.push(foto);
+      data.movimientos.push({tipo:v('mov_'+idx+'_tipo')||'egreso',monto:monto,concepto:concepto,foto:foto});
+    }
+  });
+
+  // tareas
+  var tarList=$('list-tar');
+  if(tarList) tarList.querySelectorAll('.item-card').forEach(function(el,i){
+    var idx=parseInt(el.id.split('-').pop());
+    var titulo=v('tar_'+idx+'_titulo');
+    if(titulo){
+      var foto=photoMap['tar_'+idx+'_foto']||null;
+      var caption=v('tar_'+idx+'_caption');
+      if(foto) allPhotos.push(foto);
+      data.tareas.push({titulo:titulo,descripcion:v('tar_'+idx+'_desc'),prioridad:v('tar_'+idx+'_pri')||'media',foto:foto,fotoNota:caption});
+    }
+  });
+
+  // materiales existentes
+  var mexList=$('list-mex');
+  if(mexList) mexList.querySelectorAll('.item-card').forEach(function(el,i){
+    var idx=parseInt(el.id.split('-').pop());
+    var nombre=v('mex_'+idx+'_nombre');
+    if(nombre){
+      var foto=photoMap['mex_'+idx+'_foto']||null;
+      if(foto) allPhotos.push(foto);
+      data.materialesExistentes.push({nombre:nombre,cantidad:parseFloat(v('mex_'+idx+'_qty'))||0,unidad:v('mex_'+idx+'_uni')||'u',notas:v('mex_'+idx+'_nota'),foto:foto});
+    }
+  });
+
+  // materiales pedidos
+  var mpeList=$('list-mpe');
+  if(mpeList) mpeList.querySelectorAll('.item-card').forEach(function(el,i){
+    var idx=parseInt(el.id.split('-').pop());
+    var nombre=v('mpe_'+idx+'_nombre');
+    if(nombre){
+      data.materialesPedidos.push({nombre:nombre,cantidad:parseFloat(v('mpe_'+idx+'_qty'))||0,unidad:v('mpe_'+idx+'_uni')||'u',urgencia:v('mpe_'+idx+'_urg')||'normal',notas:v('mpe_'+idx+'_nota')});
+    }
+  });
+
+  // checklist
+  var chkTit=v('chk_titulo');
+  if(chkTit){
+    var foto=photoMap['chk_foto']||null;
+    if(foto) allPhotos.push(foto);
+    data.checklist={titulo:chkTit,items:($('chk_items')?.value||'').trim(),foto:foto};
   }
 
-  const btn=document.getElementById('submitBtn');
-  btn.disabled=true; btn.textContent='Enviando...';
+  return data;
+}
 
-  try{
-    const payload=new URLSearchParams();
-    payload.append('payload',JSON.stringify(sub));
-    await fetch(ENDPOINT,{method:'POST',mode:'no-cors',body:payload});
-    document.getElementById('mainForm').style.display='none';
-    document.getElementById('successScreen').style.display='block';
-    window.scrollTo(0,0);
-  }catch(err){
-    showErr('Error de red al enviar. Verificá tu conexión e intentá de nuevo.');
-    btn.disabled=false; btn.textContent='Enviar formulario';
+function hasContent(data){
+  return data.movimientos.length||data.tareas.length||data.materialesExistentes.length||data.materialesPedidos.length||data.checklist;
+}
+
+// ── Encode / send ────────────────────────
+function encodeSubmission(data){
+  // clone without photos to check size, then add if feasible
+  var noPhoto=JSON.parse(JSON.stringify(data));
+  noPhoto.movimientos.forEach(function(m){m.foto=null;});
+  noPhoto.tareas.forEach(function(t){t.foto=null;});
+  noPhoto.materialesExistentes.forEach(function(m){m.foto=null;});
+  if(noPhoto.checklist) noPhoto.checklist.foto=null;
+
+  // try with photos
+  var withPhoto=JSON.stringify(data);
+  var encoded;
+  var photosStripped=false;
+  if(withPhoto.length<=80000){
+    encoded=btoa(encodeURIComponent(withPhoto));
+  } else {
+    encoded=btoa(encodeURIComponent(JSON.stringify(noPhoto)));
+    photosStripped=true;
   }
+  return {encoded:encoded,photosStripped:photosStripped};
+}
+
+function enviarTodo(){
+  var data=collectData();
+  if(!hasContent(data)){
+    showErr('Completá al menos una sección antes de enviar.');
+    return;
+  }
+  if(!ARCH_TEL&&!ARCH_MAIL&&!SEND_WA&&!SEND_EMAIL){
+    showErr('Este formulario no tiene destino configurado. Pedile al arquitecto el link correcto.');
+    return;
+  }
+
+  var btn=$('sendBtn');
+  btn.disabled=true;btn.textContent='Enviando...';
+  $('errBanner').style.display='none';
+
+  var result=encodeSubmission(data);
+  var deepLink=APP_URL+'#r='+result.encoded;
+
+  sendCount++;
+  if(TOKEN) localStorage.setItem('oc_v_'+TOKEN,sendCount);
+
+  // Build message
+  var msg='📋 Reporte de obra: '+OBRA_NAME+'\n👤 '+colabName+(sendCount>1?' · v'+sendCount:'')+'\n'+deepLink;
+
+  var sentWA=false, sentMail=false;
+  if(SEND_WA&&ARCH_TEL){
+    var tel=ARCH_TEL.replace(/[^0-9]/g,'');
+    window.open('https://wa.me/'+tel+'?text='+encodeURIComponent(msg),'_blank');
+    sentWA=true;
+  }
+  if(SEND_EMAIL&&ARCH_MAIL){
+    var subject=encodeURIComponent('Reporte de obra: '+OBRA_NAME+' — '+colabName);
+    var body=encodeURIComponent('Nuevo reporte de obra de '+colabName+'.\n\nAbrí el link para ver los detalles:\n'+deepLink);
+    setTimeout(function(){window.open('mailto:'+ARCH_MAIL+'?subject='+subject+'&body='+body,'_blank');},sentWA?1200:0);
+    sentMail=true;
+  }
+
+  // Success screen
+  $('screenForm').classList.remove('active');
+  $('screenSuccess').classList.add('active');
+  $('hdrObra2').textContent=OBRA_NAME||'Obra';
+  $('hdrCollab2').textContent=colabName;
+  $('btnNuevo').style.display='flex';
+
+  var subLine=[];
+  if(sentWA) subLine.push('WhatsApp');
+  if(sentMail) subLine.push('email');
+  $('successSub').textContent='Enviado por '+(subLine.join(' y '))+'. El arquitecto lo recibirá al abrir el link.';
+  $('versionBadge').textContent=sendCount===1?'Versión 1 — original':'Versión '+sendCount+' — editado '+(sendCount-1)+' '+(sendCount===2?'vez':'veces');
+
+  // Show photos to share separately if any
+  if(allPhotos.length&&result.photosStripped){
+    $('photosSection').style.display='block';
+    var grid=$('photosGrid');
+    grid.innerHTML='';
+    allPhotos.forEach(function(src){
+      var img=document.createElement('img');img.src=src;grid.appendChild(img);
+    });
+  } else {
+    $('photosSection').style.display='none';
+  }
+
+  btn.disabled=false;btn.textContent='📤 Enviar todo';
+  window.scrollTo(0,0);
+}
+
+function editarYReenviar(){
+  $('screenSuccess').classList.remove('active');
+  $('screenForm').classList.add('active');
+}
+
+function nuevoFormulario(){
+  sessionId=_uid();
+  sendCount=0;
+  doneTabMap={mov:false,tar:false,mex:false,mpe:false,chk:false};
+  counters={mov:0,tar:0,mex:0,mpe:0};
+  photoMap={};allPhotos=[];
+
+  ['mov','tar','mex','mpe'].forEach(function(t){
+    $('list-'+t).innerHTML='';
+    $('count-'+t).style.display='none';
+    $('badge-'+t).style.display='none';
+    $('done-'+t).classList.remove('on');
+    $('done-'+t).textContent='✓ Marcar pestaña lista';
+  });
+  $('badge-chk').style.display='none';
+  $('done-chk').classList.remove('on');
+  $('done-chk').textContent='✓ Marcar pestaña lista';
+  $('chk_titulo').value='';$('chk_items').value='';
+  $('chk_prev').style.display='none';
+
+  $('screenSuccess').classList.remove('active');
+  $('screenForm').classList.add('active');
+  showTab('mov');
+  $('errBanner').style.display='none';
+  window.scrollTo(0,0);
 }
 
 function showErr(msg){
-  const el=document.getElementById('errorMsg');
-  el.textContent=msg; el.style.display='block';
-  el.scrollIntoView({behavior:'smooth',block:'center'});
-}
-
-function resetForm(){
-  document.getElementById('mainForm').style.display='block';
-  document.getElementById('successScreen').style.display='none';
-  document.getElementById('dynFields').innerHTML='';
-  document.getElementById('commonFields').style.display='none';
-  document.getElementById('errorMsg').style.display='none';
-  if(!CAT_LOCK){ const s=document.getElementById('categoriaSelect'); if(s)s.value=''; }
-  photoDataUrl=null;
-  document.getElementById('photoPreview').style.display='none';
-  const pi=document.getElementById('photoInput'); if(pi)pi.value='';
-  if(!AYUDANTE){ const a=document.getElementById('ayudanteInput'); if(a)a.value=''; }
-  const btn=document.getElementById('submitBtn');
-  if(btn){ btn.disabled=false; btn.textContent='Enviar formulario'; }
-  window.scrollTo(0,0);
+  var el=$('errBanner');
+  // Move banner outside the flex row if needed
+  var bar=$('sendBar');
+  if(bar&&!bar.contains(el)){bar.insertBefore(el,bar.firstChild);}
+  el.textContent=msg;el.style.display='block';
+  window.scrollTo(0,99999);
 }
 
 init();
