@@ -139,7 +139,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <button class="tab" id="tab-tar" onclick="showTab('tar')">📋 Tareas<span class="tab-badge" id="badge-tar" style="display:none">✓</span><span class="tab-count" id="count-tar" style="display:none"></span></button>
     <button class="tab" id="tab-mex" onclick="showTab('mex')">📦 Existentes<span class="tab-badge" id="badge-mex" style="display:none">✓</span><span class="tab-count" id="count-mex" style="display:none"></span></button>
     <button class="tab" id="tab-mpe" onclick="showTab('mpe')">🔔 Pedidos<span class="tab-badge" id="badge-mpe" style="display:none">✓</span><span class="tab-count" id="count-mpe" style="display:none"></span></button>
+    <button class="tab" id="tab-mrec" onclick="showTab('mrec')">📬 Ingresados<span class="tab-badge" id="badge-mrec" style="display:none">✓</span><span class="tab-count" id="count-mrec" style="display:none"></span></button>
     <button class="tab" id="tab-chk" onclick="showTab('chk')">✅ Checklist<span class="tab-badge" id="badge-chk" style="display:none">✓</span></button>
+  </div>
+  <!-- Carpeta bar -->
+  <div id="carpetaBar" style="display:none;padding:8px 14px;background:#f0fdf4;border-top:1px solid #bbf7d0;border-bottom:1px solid #bbf7d0">
+    <button onclick="openCarpetaTab()" style="border:none;background:none;color:#16a34a;font-size:12px;font-weight:600;cursor:pointer;padding:0;width:100%;text-align:left">📁 Mi carpeta — subir fotos y archivos →</button>
   </div>
 
   <!-- Scrollable form area -->
@@ -179,6 +184,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       </div>
       <div id="list-mpe"></div>
       <button class="btn-add" onclick="addItem('mpe')">+ Agregar pedido</button>
+    </div>
+
+    <!-- Tab: Materiales ingresados/recibidos -->
+    <div class="tab-pane" id="pane-mrec">
+      <div class="tab-done-bar">
+        <button class="done-toggle" id="done-mrec" onclick="toggleDone('mrec')">✓ Marcar pestaña lista</button>
+      </div>
+      <div id="list-mrec"></div>
+      <button class="btn-add" onclick="addItem('mrec')">+ Agregar material recibido</button>
     </div>
 
     <!-- Tab: Checklist -->
@@ -286,8 +300,8 @@ var unitOpts=UNITS.map(function(u){return '<option value="'+u+'">'+u+'</option>'
 var colabName='';
 var sessionId=_uid();
 var sendCount=0;
-var doneTabMap={mov:false,tar:false,mex:false,mpe:false,chk:false};
-var counters={mov:0,tar:0,mex:0,mpe:0};
+var doneTabMap={mov:false,tar:false,mex:false,mpe:false,chk:false,mrec:false};
+var counters={mov:0,tar:0,mex:0,mpe:0,mrec:0};
 var photoMap={};  // key → dataUrl
 var allPhotos=[];
 
@@ -395,12 +409,17 @@ function showFormScreen(){
   $('hdrObra').textContent=OBRA_NAME||'Obra';
   $('hdrCollab').textContent='Hola, '+colabName+' 👋';
   sendCount=parseInt(TOKEN?localStorage.getItem('oc_v_'+TOKEN)||'0':'0');
+  if(TOKEN&&OBRA_ID){var cb=$('carpetaBar');if(cb)cb.style.display='block';}
+}
+function openCarpetaTab(){
+  var url=window.location.pathname+'?mode=carpeta&obra='+encodeURIComponent(OBRA_ID)+'&token='+encodeURIComponent(TOKEN)+'&obraName='+encodeURIComponent(OBRA_NAME);
+  window.open(url,'_blank');
 }
 
 // ── Tabs ────────────────────────────────
 var currentTab='mov';
 function showTab(t){
-  var tabs=['mov','tar','mex','mpe','chk'];
+  var tabs=['mov','tar','mex','mpe','mrec','chk'];
   tabs.forEach(function(id){
     $('pane-'+id).classList.remove('active');
     $('tab-'+id).classList.remove('active');
@@ -451,7 +470,7 @@ function updateCount(type){
 }
 
 function buildItemHTML(type,idx){
-  var label={mov:'Movimiento',tar:'Tarea',mex:'Material existente',mpe:'Material pedido'}[type]||'Ítem';
+  var label={mov:'Movimiento',tar:'Tarea',mex:'Material existente',mpe:'Material pedido',mrec:'Material recibido'}[type]||'Ítem';
   var num=(counters[type]||1);
   var hdr='<div class="item-hdr"><span class="item-label">'+label+' '+(idx+1)+'</span><button class="btn-del" onclick="removeItem(\''+type+'\','+idx+')">✕</button></div>';
   if(type==='mov') return hdr+
@@ -478,6 +497,13 @@ function buildItemHTML(type,idx){
     '<div class="fg"><label class="fl">Unidad</label><select class="fs" id="mpe_'+idx+'_uni">'+unitOpts+'</select></div></div>'+
     '<div class="fg"><label class="fl">Urgencia</label><select class="fs" id="mpe_'+idx+'_urg"><option value="normal">🟡 Normal</option><option value="urgente">🔴 Urgente</option></select></div>'+
     '<div class="fg"><label class="fl">¿Para qué tarea? / Cuándo se necesita</label><textarea class="ft" id="mpe_'+idx+'_nota" style="min-height:52px"></textarea></div>';
+  if(type==='mrec') return hdr+
+    '<div class="fg"><label class="fl">Material recibido *</label><input class="fi" id="mrec_'+idx+'_nombre" placeholder="Ej: Cemento Portland, Hierro 10mm..."></div>'+
+    '<div class="fr"><div class="fg"><label class="fl">Cantidad</label><input class="fi" id="mrec_'+idx+'_qty" type="number" step="0.01" min="0" placeholder="0" inputmode="decimal"></div>'+
+    '<div class="fg"><label class="fl">Unidad</label><select class="fs" id="mrec_'+idx+'_uni">'+unitOpts+'</select></div></div>'+
+    '<div class="fg"><label class="fl">Proveedor / Remito</label><input class="fi" id="mrec_'+idx+'_prov" placeholder="Ej: Corralón ABC, Remito 001234..."></div>'+
+    '<div class="fg"><label class="fl">Notas</label><textarea class="ft" id="mrec_'+idx+'_nota" style="min-height:48px" placeholder="Observaciones sobre la entrega..."></textarea></div>'+
+    '<div class="fg"><label class="fl">Foto del remito (opcional)</label><input type="file" accept="image/*" id="mrec_'+idx+'_foto" onchange="prevFoto(\'mrec_'+idx+'_foto\',\'mrec_'+idx+'_prev\');" style="font-size:13px;width:100%"><img id="mrec_'+idx+'_prev" class="photo-prev"></div>';
   return hdr;
 }
 
@@ -538,6 +564,7 @@ function collectData(){
     tareas:[],
     materialesExistentes:[],
     materialesPedidos:[],
+    materialesIngresados:[],
     checklist:null,
   };
   allPhotos=[];
@@ -590,6 +617,18 @@ function collectData(){
     }
   });
 
+  // materiales ingresados/recibidos
+  var mrecList=$('list-mrec');
+  if(mrecList) mrecList.querySelectorAll('.item-card').forEach(function(el){
+    var idx=parseInt(el.id.split('-').pop());
+    var nombre=v('mrec_'+idx+'_nombre');
+    if(nombre){
+      var foto=photoMap['mrec_'+idx+'_foto']||null;
+      if(foto) allPhotos.push(foto);
+      data.materialesIngresados.push({nombre:nombre,cantidad:parseFloat(v('mrec_'+idx+'_qty'))||0,unidad:v('mrec_'+idx+'_uni')||'u',proveedor:v('mrec_'+idx+'_prov'),notas:v('mrec_'+idx+'_nota'),foto:foto});
+    }
+  });
+
   // checklist
   var chkTit=v('chk_titulo');
   if(chkTit){
@@ -602,7 +641,7 @@ function collectData(){
 }
 
 function hasContent(data){
-  return data.movimientos.length||data.tareas.length||data.materialesExistentes.length||data.materialesPedidos.length||data.checklist;
+  return data.movimientos.length||data.tareas.length||data.materialesExistentes.length||data.materialesPedidos.length||data.materialesIngresados.length||data.checklist;
 }
 
 // ── Encode / send ────────────────────────

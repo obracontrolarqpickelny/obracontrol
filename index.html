@@ -6634,7 +6634,7 @@ function inviteColab(id,p){
     toast('Abriendo mail...','var(--green)');
   } else if(co.phone){
     const msg=encodeURIComponent('Hola '+name+', link de acceso a la obra: '+shareURL);
-    window.open('https://api.whatsapp.com/send?phone='+co.phone.replace(/[^0-9]/g,'')+'&text='+msg,'_blank');
+    window.open('https://wa.me/'+co.phone.replace(/[^0-9]/g,'')+'?text='+msg,'_blank');
     toast('Abriendo WhatsApp...','var(--green)');
   } else {
     toast('Sin email ni teléfono cargado','var(--orange)');
@@ -6704,7 +6704,7 @@ function colabSendOrSave(id,sendWA){
   var ta=document.getElementById('colabNoteTA');
   var txt=ta?ta.value.trim():'';
   if(sendWA&&co.phone&&!txt){
-    window.open('https://api.whatsapp.com/send?phone='+co.phone.replace(/[^0-9]/g,''),'_blank');
+    window.open('https://wa.me/'+co.phone.replace(/[^0-9]/g,''),'_blank');
     return;
   }
   if(!txt){toast('Escribí algo primero','var(--orange)');return;}
@@ -6715,7 +6715,7 @@ function colabSendOrSave(id,sendWA){
   sv();
   if(sendWA&&co.phone){
     var proj=(D.projects||[]).find(function(x){return x.id===S.proj;});
-    window.open('https://api.whatsapp.com/send?phone='+co.phone.replace(/[^0-9]/g,'')+'&text='+encodeURIComponent((proj?'['+proj.name+'] ':'')+txt),'_blank');
+    window.open('https://wa.me/'+co.phone.replace(/[^0-9]/g,'')+'?text='+encodeURIComponent((proj?'['+proj.name+'] ':'')+txt),'_blank');
   } else if(!sendWA){
     toast('Mensaje guardado','var(--green)');
   }
@@ -6840,7 +6840,7 @@ function shareCarpetaUrl(colabId){
   var base=window.location.origin+window.location.pathname.replace(/\/[^/]*$/,'/form.html');
   var url=base+'?mode=carpeta&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p&&p.name||'')+'&token='+encodeURIComponent(colabId)+(SYNC.archTel?'&tel='+encodeURIComponent(SYNC.archTel):'');
   var msg='Hola '+esc(co.name||'')+'! Podés subir fotos y archivos a la carpeta compartida de la obra '+(p?p.name:'')+' desde este link: '+url;
-  window.open('https://api.whatsapp.com/send?phone='+co.phone.replace(/[^0-9]/g,'')+'&text='+encodeURIComponent(msg),'_blank');
+  window.open('https://wa.me/'+co.phone.replace(/[^0-9]/g,'')+'?text='+encodeURIComponent(msg),'_blank');
 }
 
 function saveECb(id){
@@ -7236,7 +7236,7 @@ function _rAyudantes(p){
     var link=ep?baseF+'?endpoint='+encodeURIComponent(ep)+'&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p.name)+'&ayudante='+encodeURIComponent(a.name):'';
     h+='<div style="padding:10px 0;border-bottom:1px solid var(--gray-ll)"><div class="flex justify-between items-center"><div class="ts fw6">'+a.name+'</div><div class="flex gap-4">';
     if(link)h+='<button class="btn btn-sec btn-s" onclick="copyAyudLink(\''+encodeURIComponent(link)+'\')">&#x1F4CB;</button>';
-    if(a.phone&&link)h+='<a href="https://api.whatsapp.com/send?phone='+a.phone.replace(/[^0-9]/g,'')+'&text='+encodeURIComponent('Formulario de obra '+p.name+':\n'+link)+'" target="_blank" class="btn btn-sec btn-s">&#x1F4AC;</a>';
+    if(a.phone&&link)h+='<a href="https://wa.me/'+a.phone.replace(/[^0-9]/g,'')+'?text='+encodeURIComponent('Formulario de obra '+p.name+':\n'+link)+'" target="_blank" class="btn btn-sec btn-s">&#x1F4AC;</a>';
     h+='<button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delAyudante(\''+a.id+'\')">'+I.trash+'</button>';
     h+='</div></div></div>';
   });
@@ -7260,6 +7260,7 @@ function rBandeja(mc,p){
       if(sub.tareas&&sub.tareas.length)pts.push('📋 '+sub.tareas.length+' tarea'+(sub.tareas.length>1?'s':''));
       if(sub.materialesExistentes&&sub.materialesExistentes.length)pts.push('📦 '+sub.materialesExistentes.length);
       if(sub.materialesPedidos&&sub.materialesPedidos.length)pts.push('🔔 '+sub.materialesPedidos.length+' pedido'+(sub.materialesPedidos.length>1?'s':''));
+      if(sub.materialesIngresados&&sub.materialesIngresados.length)pts.push('📬 '+sub.materialesIngresados.length+' recibido'+(sub.materialesIngresados.length>1?'s':''));
       if(sub.checklist&&sub.checklist.titulo)pts.push('✅ '+sub.checklist.titulo);
       return pts.length?pts.join(' · '):'Sin datos';
     }
@@ -7362,6 +7363,20 @@ function incorporarFormularioModal(id){
     });
     h+='</div>';
   }
+  if(sub.materialesIngresados&&sub.materialesIngresados.length){
+    var anyMrec=sub.materialesIngresados.some(function(_,i){return sub.itemsInc.indexOf('mrec_'+i)<0;});
+    h+='<div class="card" style="padding:10px;margin-bottom:8px">';
+    h+='<div class="flex items-center justify-between mb-8"><span class="ts fw7" style="color:#0891b2">📬 Recibidos</span>'+_sBtn('mrec',anyMrec)+'</div>';
+    sub.materialesIngresados.forEach(function(mr,i){
+      var key='mrec_'+i;var done=sub.itemsInc.indexOf(key)>=0;
+      h+='<div class="flex items-center gap-8" style="padding:5px 0;border-bottom:1px solid var(--gray-ll);opacity:'+(done?'0.5':'1')+'">';
+      h+=_iBtn(key,done);
+      h+='<div class="flex-1 min-w-0"><div class="ts fw6">'+esc(mr.nombre||'Sin nombre')+'</div><div class="txxs tc3 mt-1">'+(mr.cantidad||0)+' '+(mr.unidad||'u')+(mr.proveedor?' · '+esc(mr.proveedor):'')+'</div></div>';
+      if(mr.foto)h+='<img src="'+mr.foto+'" style="width:44px;height:44px;object-fit:cover;border-radius:6px;flex-shrink:0" onerror="this.style.display=\'none\'">';
+      h+='</div>';
+    });
+    h+='</div>';
+  }
   if(sub.checklist&&sub.checklist.titulo){
     var chkDone=sub.itemsInc.indexOf('chk_0')>=0;
     h+='<div class="card" style="padding:10px;margin-bottom:8px">';
@@ -7407,6 +7422,7 @@ function _getAllFormKeys(sub){
     if(sub.tareas)sub.tareas.forEach(function(_,i){keys.push('tar_'+i);});
     if(sub.materialesExistentes)sub.materialesExistentes.forEach(function(_,i){keys.push('mex_'+i);});
     if(sub.materialesPedidos)sub.materialesPedidos.forEach(function(_,i){keys.push('mpe_'+i);});
+    if(sub.materialesIngresados)sub.materialesIngresados.forEach(function(_,i){keys.push('mrec_'+i);});
     if(sub.checklist&&sub.checklist.titulo)keys.push('chk_0');
   } else if(sub.categoria){keys.push('legacy_0');}
   return keys;
@@ -7454,6 +7470,16 @@ function _doIncItem(sub,key){
       cargadoPor:by,sourceType:'formulario',sourceName:by,
       date:nw(),updatedAt:nw()});
     audit('materiales','create','form pedido: '+(mp.nombre||''));
+  } else if(type==='mrec'){
+    var mr=(sub.materialesIngresados||[])[idx];if(!mr)return;
+    D.matIngresos=D.matIngresos||[];
+    D.matIngresos.push({id:uid(),projectId:pid,matNombre:mr.nombre||'Sin nombre',
+      qty:parseFloat(mr.cantidad)||0,unit:mr.unidad||'u',
+      estado:'recibido',proveedor:mr.proveedor||'',
+      observations:(mr.notas||'')+' ['+by+']',
+      cargadoPor:by,sourceType:'formulario',sourceName:by,sourceId:sub.id,
+      date:nw(),updatedAt:nw()});
+    audit('materiales','create','form recibido: '+(mr.nombre||''));
   } else if(type==='chk'){
     if(!sub.checklist||!sub.checklist.titulo)return;
     var its=(sub.checklist.items||'').split('\n').filter(function(l){return l.trim();});
@@ -7683,8 +7709,11 @@ function shareFormColaborador(colId){
   var p=D.projects.find(function(x){return x.id===S.proj;});
   var baseUrl=window.location.href.replace(/\/[^/]*(\?.*)?$/,'/form.html');
   var formUrl=baseUrl+'?token='+encodeURIComponent(co.id)+'&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p&&p.name||'')+(SYNC.archTel?'&tel='+encodeURIComponent(SYNC.archTel):'')+(SYNC.archEmail?'&mail='+encodeURIComponent(SYNC.archEmail):'')+'&sw='+(SYNC.sendWA?'1':'0')+'&se='+(SYNC.sendEmail?'1':'0');
-  var msg=encodeURIComponent('Hola '+(co.name||'')+', te mando el formulario para la obra '+((p&&p.name)||'')+'. Con este link podés enviarme reportes de campo:\n'+formUrl);
-  window.open('https://api.whatsapp.com/send?phone='+co.phone.replace(/[^0-9]/g,'')+'&text='+msg,'_blank');
+  var isAcept=co.estado==='aceptado'||co.estado==='activo';
+  var msg=isAcept
+    ?encodeURIComponent('📋 '+(co.name||'')+', recordatorio de formulario — obra '+((p&&p.name)||'')+':\n'+formUrl)
+    :encodeURIComponent('Hola '+(co.name||'')+', te invito a colaborar en la obra '+((p&&p.name)||'')+'. Accedé con este link para enviarme reportes:\n'+formUrl);
+  window.open('https://wa.me/'+co.phone.replace(/[^0-9]/g,'')+'?text='+msg,'_blank');
 }
 function shareFormContextual(categoria,entidadId,titulo){
   if(!SYNC.archTel&&!SYNC.archEmail){toast('Configurá tu WhatsApp o email en Configuración → Formularios de campo','var(--orange)');return;}
@@ -7696,7 +7725,7 @@ function shareFormContextual(categoria,entidadId,titulo){
   colabs.forEach(function(co){
     var formUrl=baseUrl+'?token='+encodeURIComponent(co.id)+'&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p&&p.name||'')+(SYNC.archTel?'&tel='+encodeURIComponent(SYNC.archTel):'')+(SYNC.archEmail?'&mail='+encodeURIComponent(SYNC.archEmail):'')+'&sw='+(SYNC.sendWA?'1':'0')+'&se='+(SYNC.sendEmail?'1':'0');
     var msg='Hola '+(co.name||'')+', necesito que completes el formulario de '+categoria+(titulo?' — '+titulo:'')+' en la obra '+((p&&p.name)||'')+':\n'+formUrl;
-    window._sfcUrls.push('https://api.whatsapp.com/send?phone='+co.phone.replace(/[^0-9]/g,'')+'&text='+encodeURIComponent(msg));
+    window._sfcUrls.push('https://wa.me/'+co.phone.replace(/[^0-9]/g,'')+'?text='+encodeURIComponent(msg));
   });
   var d=document.createElement('div');d.className='mo open';d.id='sfcM';
   var h='<div class="mo-c"><div class="mo-h"><h3>&#x1F4AC; Compartir por WhatsApp</h3><button class="tbtn" onclick="document.getElementById(\'sfcM\').remove()">'+I.x+'</button></div>';
