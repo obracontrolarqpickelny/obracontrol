@@ -227,8 +227,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div class="photos-grid" id="photosGrid"></div>
     </div>
     <div class="success-btns">
+      <button class="btn btn-pri" style="background:#0d9488" onclick="if(window._lastDeepLink){window.location.href=window._lastDeepLink;}">🔗 Abrir en la app</button>
       <button class="btn btn-sec" onclick="editarYReenviar()">✏️ Editar y reenviar</button>
-      <button class="btn btn-pri" onclick="nuevoFormulario()">+ Nuevo formulario</button>
+      <button class="btn btn-sec" onclick="nuevoFormulario()">+ Nuevo formulario</button>
     </div>
   </div>
 </div>
@@ -642,6 +643,7 @@ function enviarTodo(){
 
   var result=encodeSubmission(data);
   var deepLink=APP_URL+'#r='+result.encoded;
+  window._lastDeepLink=deepLink;
 
   sendCount++;
   if(TOKEN) localStorage.setItem('oc_v_'+TOKEN,sendCount);
