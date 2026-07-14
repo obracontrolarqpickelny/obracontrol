@@ -190,7 +190,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <div class="fg"><label class="fl">Título del checklist</label><input class="fi" id="chk_titulo" placeholder="Ej: Inspección de armadura, Control de losa..."></div>
         <div class="fg"><label class="fl">Ítems (uno por línea)</label><textarea class="ft" id="chk_items" rows="7" placeholder="Verificar estribos&#10;Revisar recubrimiento&#10;Controlar separación entre barras&#10;Limpiar fondos&#10;Verificar pasatubos"></textarea></div>
         <div class="fg"><label class="fl">Foto general (opcional)</label>
-          <input type="file" accept="image/*" capture="environment" id="chk_foto" onchange="prevFoto('chk_foto','chk_prev')" style="font-size:13px;width:100%">
+          <input type="file" accept="image/*" id="chk_foto" onchange="prevFoto('chk_foto','chk_prev')" style="font-size:13px;width:100%">
           <img id="chk_prev" class="photo-prev">
         </div>
       </div>
@@ -348,19 +348,19 @@ function buildItemHTML(type,idx){
     '<div class="fg"><label class="fl">Tipo</label><select class="fs" id="mov_'+idx+'_tipo"><option value="ingreso">💵 Ingreso</option><option value="egreso">💸 Egreso</option></select></div>'+
     '<div class="fg"><label class="fl">Monto *</label><input class="fi" id="mov_'+idx+'_monto" type="number" step="0.01" min="0" placeholder="0.00" inputmode="decimal"></div>'+
     '<div class="fg"><label class="fl">Concepto *</label><input class="fi" id="mov_'+idx+'_concepto" placeholder="Ej: Compra de cemento, Pago mano de obra..."></div>'+
-    '<div class="fg"><label class="fl">Foto (opcional)</label><input type="file" accept="image/*" capture="environment" id="mov_'+idx+'_foto" onchange="prevFoto(\'mov_'+idx+'_foto\',\'mov_'+idx+'_prev\');" style="font-size:13px;width:100%"><img id="mov_'+idx+'_prev" class="photo-prev"></div>';
+    '<div class="fg"><label class="fl">Foto (opcional)</label><input type="file" accept="image/*" id="mov_'+idx+'_foto" onchange="prevFoto(\'mov_'+idx+'_foto\',\'mov_'+idx+'_prev\');" style="font-size:13px;width:100%"><img id="mov_'+idx+'_prev" class="photo-prev"></div>';
   if(type==='tar') return hdr+
     '<div class="fg"><label class="fl">Título *</label><input class="fi" id="tar_'+idx+'_titulo" placeholder="¿Qué tarea?"></div>'+
     '<div class="fg"><label class="fl">Descripción / detalle</label><textarea class="ft" id="tar_'+idx+'_desc" placeholder="Describí el avance, qué hay que hacer..."></textarea></div>'+
     '<div class="fg"><label class="fl">Prioridad</label><select class="fs" id="tar_'+idx+'_pri"><option value="alta">🔴 Alta</option><option value="media" selected>🟡 Media</option><option value="baja">🟢 Baja</option></select></div>'+
-    '<div class="fg"><label class="fl">Foto (opcional)</label><input type="file" accept="image/*" capture="environment" id="tar_'+idx+'_foto" onchange="prevFoto(\'tar_'+idx+'_foto\',\'tar_'+idx+'_prev\');" style="font-size:13px;width:100%"><img id="tar_'+idx+'_prev" class="photo-prev"></div>'+
+    '<div class="fg"><label class="fl">Foto (opcional)</label><input type="file" accept="image/*" id="tar_'+idx+'_foto" onchange="prevFoto(\'tar_'+idx+'_foto\',\'tar_'+idx+'_prev\');" style="font-size:13px;width:100%"><img id="tar_'+idx+'_prev" class="photo-prev"></div>'+
     '<div class="fg" id="tar_'+idx+'_captionWrap" style="display:none"><label class="fl">Comentario de la foto</label><input class="fi" id="tar_'+idx+'_caption" placeholder="¿Qué muestra esta foto?"></div>';
   if(type==='mex') return hdr+
     '<div class="fg"><label class="fl">Material *</label><input class="fi" id="mex_'+idx+'_nombre" placeholder="Ej: Cemento Portland, Hierro 10mm..."></div>'+
     '<div class="fr"><div class="fg"><label class="fl">Cantidad *</label><input class="fi" id="mex_'+idx+'_qty" type="number" step="0.01" min="0" placeholder="0" inputmode="decimal"></div>'+
     '<div class="fg"><label class="fl">Unidad</label><select class="fs" id="mex_'+idx+'_uni">'+unitOpts+'</select></div></div>'+
     '<div class="fg"><label class="fl">Ubicación / estado</label><textarea class="ft" id="mex_'+idx+'_nota" style="min-height:52px" placeholder="Ej: Apilado en depósito, en buen estado..."></textarea></div>'+
-    '<div class="fg"><label class="fl">Foto (opcional)</label><input type="file" accept="image/*" capture="environment" id="mex_'+idx+'_foto" onchange="prevFoto(\'mex_'+idx+'_foto\',\'mex_'+idx+'_prev\');" style="font-size:13px;width:100%"><img id="mex_'+idx+'_prev" class="photo-prev"></div>';
+    '<div class="fg"><label class="fl">Foto (opcional)</label><input type="file" accept="image/*" id="mex_'+idx+'_foto" onchange="prevFoto(\'mex_'+idx+'_foto\',\'mex_'+idx+'_prev\');" style="font-size:13px;width:100%"><img id="mex_'+idx+'_prev" class="photo-prev"></div>';
   if(type==='mpe') return hdr+
     '<div class="fg"><label class="fl">Material *</label><input class="fi" id="mpe_'+idx+'_nombre" placeholder="Ej: Arena gruesa, Hierro 8mm..."></div>'+
     '<div class="fr"><div class="fg"><label class="fl">Cantidad *</label><input class="fi" id="mpe_'+idx+'_qty" type="number" step="0.01" min="0" placeholder="0" inputmode="decimal"></div>'+

@@ -6541,40 +6541,31 @@ async function saveEEco(id){
 /* ===== MÓDULO: COLABORADORES ===== */
 function rColaboradores(mc,p){
   if(!D.colaboradores)D.colaboradores=[];
-  const colabs=pf('colaboradores');const c=MC.colaboradores;
-  const shareToken=btoa(S.proj+':'+SK).replace(/=/g,'').slice(0,16);
-  // Share URL: when opened, auto-loads backup if ?backup=URL param exists
-  const baseURL=window.location.href.split('?')[0];
-  const shareURL=baseURL+'?proj='+S.proj+'&token='+shareToken;
-  mc.innerHTML=`${modHeader('colaboradores','Colaboradores',`<button class="btn btn-s" style="background:${c};color:#fff" onclick="openM('newColabM')">${I.plus} Invitar</button>`)}
-  <div class="card mb-12">
-    <div class="ts fw7 mb-8" style="color:${c}">${I.share} Link de acceso a la obra</div>
-    <div class="alrt alrt-g mb-8">${I.checkc}<div class="flex-1 ts">Este link permite a colaboradores acceder a los datos de esta obra. Compártelo por mail o WhatsApp.</div></div>
-    <div style="background:var(--gray-ll);padding:10px;border-radius:8px;font-size:11px;word-break:break-all;margin-bottom:8px;color:var(--text3)">${shareURL}</div>
-    <div class="flex gap-6 wrap">
-      <button class="btn btn-sec btn-s" onclick="copyShareLink('${shareURL.replace(/'/g,'&#39;')}')">📋 Copiar link</button>
-      <a href="mailto:?subject=Acceso%20a%20obra%20${encodeURIComponent(p.name)}&body=Te%20comparto%20acceso%20a%20la%20obra%20${encodeURIComponent(p.name)}%20en%20ObraControl%3A%0A%0A${encodeURIComponent(shareURL)}" class="btn btn-sec btn-s">✉️ Enviar por mail</a>
-      <a href="https://wa.me/?text=${encodeURIComponent('Acceso a obra '+p.name+' en ObraControl: '+shareURL)}" target="_blank" class="btn btn-sec btn-s">💬 WhatsApp</a>
-    </div>
-    <div class="alrt alrt-y mt-8">${I.warn}<div class="flex-1 txxs"><strong>¿Cómo funciona la colaboración?</strong><br>1. Cada persona trabaja en su propia copia del HTML (datos locales).<br>2. Para unificar: exporta tu backup JSON y el otro colaborador lo restaura → sus datos se fusionan.<br>3. Para acceso compartido en tiempo real, publicar el HTML en GitHub Pages / Netlify (gratuito).</div></div>
-    <div class="flex gap-6 mt-8 wrap">
-      <button class="btn btn-sec btn-s" onclick="descargarHTMLApp()">📥 Descargar app + datos</button>
-      <button class="btn btn-sec btn-s" onclick="$('restF').click()">📤 Fusionar backup de otro</button>
-      <input type="file" id="restF" accept=".json" style="display:none" onchange="restoreB(this)">
-    </div>
-    <div class="alrt alrt-g mt-8">${I.checkc}<div class="flex-1 txxs"><strong>Flujo para 2 personas:</strong><br>A trabaja → exporta backup → B restaura → B trabaja → B exporta → A restaura. Los datos se suman sin duplicar.</div></div>
-  </div>
-  ${colabs.length?`<div class="ts fw7 mb-8">Colaboradores (${colabs.length})</div>${colabs.map(co=>{const _rev=co.estado==='revocado';const stCol=co.estado==='aceptado'?'var(--green)':_rev?'var(--red)':'var(--orange)';return `<div class="card" style="padding:12px${_rev?';opacity:.6':''}"><div class="flex justify-between items-start"><div class="flex-1"><div class="ts fw6">${co.name||co.email||'Sin nombre'}</div><div class="txxs tc3 mt-4">${co.phone?'📱 '+co.phone+' | ':''}${co.email?co.email+' | ':''}<strong>${co.role||'Colaborador'}</strong> | ${fmts(co.date)}</div><div class="mt-4">${colBadge(_rev?'Dado de baja':(co.estado||'pendiente'),stCol,true)}</div></div><div class="flex gap-4 flex-wrap">${_rev?'':`<button class="btn btn-sec btn-s" onclick="shareFormColaborador('${co.id}')" title="Compartir formulario">💬</button>`}<button class="btn btn-sec btn-s" onclick="editColab('${co.id}')">${I.edit}</button><button class="btn btn-s" style="font-size:10px;${_rev?'background:var(--green);color:#fff':'background:var(--gray-ll);color:var(--red)'}" onclick="_rev?reactivateColab('${co.id}'):revokeColab('${co.id}')">${_rev?'Reactivar':'Dar de baja'}</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delI('colaboradores','${co.id}')">${I.trash}</button></div></div></div>`;}).join('')}`:''}
-  <div class="card mt-12">${_rAyudantes(p)}</div>
-  <div class="mo" id="newAyudM"><div class="mo-c"><div class="mo-h"><h3 style="color:#0d9488">Nuevo Ayudante</h3><button class="tbtn" onclick="closeM('newAyudM')">${I.x}</button></div><div class="fg"><label class="fl">Nombre *</label><input class="fi" id="na_name" placeholder="Nombre del ayudante"></div><div class="fg"><label class="fl">Teléfono WhatsApp (opcional)</label><input class="fi" id="na_phone" type="tel" placeholder="+54911..."></div><button class="btn btn-w mt-8" style="background:#0d9488;color:#fff" onclick="saveAyudante()">Guardar</button></div></div>
-  <div class="mo" id="newColabM"><div class="mo-c"><div class="mo-h"><h3 style="color:${c}">Invitar Colaborador</h3><button class="tbtn" onclick="closeM('newColabM')">${I.x}</button></div>
-  <div class="fg"><label class="fl">Nombre</label><input class="fi" id="nc_name" placeholder="Nombre del colaborador"></div>
-  <div class="fg"><label class="fl">Email *</label><input class="fi" id="nc_email" type="email" placeholder="email@ejemplo.com"></div>
-  <div class="fg"><label class="fl">Teléfono (WhatsApp)</label><input class="fi" id="nc_phone" type="tel" placeholder="+54911..."></div>
-  <div class="fg"><label class="fl">Rol</label><select class="fs" id="nc_role"><option>Colaborador</option><option>Capataz</option><option>Inspector</option><option>Cliente</option><option>Propietario</option></select></div>
-  <div class="flex gap-6 mt-8 wrap"><button class="btn btn-w" style="background:${c};color:#fff" onclick="saveColab('email',p)">✉️ Invitar por mail</button><button class="btn btn-w btn-sec" onclick="saveColab('whatsapp',p)">💬 Invitar por WhatsApp</button></div>
-  </div></div>`;
+  var colabs=pf('colaboradores');
+  var colG='#16a34a';
+  mc.innerHTML=modHeader('colaboradores','👷 Colaboradores','<button class="btn btn-s" style="background:'+colG+';color:#fff" onclick="openM(\'newColabM\')">'+ I.plus+' Agregar</button>')
+  +(colabs.length?colabs.map(function(co){
+    var _rev=co.estado==='revocado';
+    var stCol=co.estado==='aceptado'?'var(--green)':_rev?'var(--red)':'var(--orange)';
+    var noteCount=(co.notas||[]).length;
+    var noteBdg=noteCount?'<span style="background:var(--pri);color:#fff;border-radius:9px;padding:0 5px;font-size:9px;margin-left:3px">'+noteCount+'</span>':''
+    var btnForm=_rev?'':('<button class="btn btn-sec btn-s" onclick="shareFormColaborador(\''+ co.id +'\')" title="Compartir formulario">📤</button>');
+    var btnNote='<button class="btn btn-sec btn-s" onclick="openColabNotes(\''+ co.id +'\')" title="Chat / Notas">💬'+noteBdg+'</button>';
+    var btnEdit='<button class="btn btn-sec btn-s" onclick="editColab(\''+ co.id +'\')">'+I.edit+'</button>';
+    var btnBaja='<button class="btn btn-s" style="font-size:10px;'+ (_rev?'background:var(--green);color:#fff':'background:var(--gray-ll);color:var(--red)')+'" onclick="'+ (_rev?'reactivateColab(\''+ co.id +'\')':'revokeColab(\''+ co.id +'\')') +'">'+(_rev?'Reactivar':'Dar de baja')+'</button>';
+    var btnDel='<button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delI(\'colaboradores\',\''+ co.id +'\')">'+I.trash+'</button>';
+    return '<div class="card" style="padding:12px;margin-bottom:8px'+ (_rev?';opacity:.65':'')+'"><div class="flex justify-between items-start gap-8"><div style="flex:1;min-width:0"><div class="ts fw7">'+esc(co.name||co.email||'Sin nombre')+'</div><div class="txxs tc3 mt-4">'+( co.phone?'📱 '+co.phone:'Sin teléfono')+(co.email?' · '+co.email:'')+(co.role?' · <strong>'+co.role+'</strong>':'')+'</div><div class="mt-4">'+colBadge(_rev?'Dado de baja':(co.estado||'pendiente'),stCol,true)+'</div></div><div class="flex gap-4 flex-wrap" style="flex-shrink:0">'+btnForm+btnNote+btnEdit+btnBaja+btnDel+'</div></div></div>';
+  }).join(''): '<div class="empty">'+I.share+'<div class="ts mt-8">Sin colaboradores</div><div class="txxs tc3 mt-4">Agregá personas para que carguen datos de campo.</div></div>')
+  +'<div class="mo" id="newColabM"><div class="mo-c"><div class="mo-h"><h3 style="color:'+colG+'">Agregar Colaborador</h3><button class="tbtn" onclick="closeM(\'newColabM\')">'+ I.x+'</button></div>'
+  +'<div class="fg"><label class="fl">Nombre *</label><input class="fi" id="nc_name" placeholder="Nombre"></div>'
+  +'<div class="fg"><label class="fl">Teléfono WhatsApp *</label><input class="fi" id="nc_phone" type="tel" placeholder="+549111234567"></div>'
+  +'<div class="fg"><label class="fl">Email (opcional)</label><input class="fi" id="nc_email" type="email" placeholder="email@ejemplo.com"></div>'
+  +'<div class="fg"><label class="fl">Rol</label><select class="fs" id="nc_role"><option>Ayudante</option><option>Capataz</option><option>Colaborador</option><option>Inspector</option><option>Cliente</option><option>Propietario</option></select></div>'
+  +'<div class="txxs tc3 mb-8">⚠️ Teléfono con código de país (ej: +54911... para Argentina).</div>'
+  +'<div class="flex gap-6 mt-8 wrap"><button class="btn btn-w" style="background:'+colG+';color:#fff" onclick="saveColab(\'whatsapp\',p)">💬 Guardar y compartir por WA</button><button class="btn btn-w btn-sec" onclick="saveColab(\'none\',p)">Solo guardar</button></div>'
+  +'</div></div>';
 }
+
 function toggleGuide(btn){
   const panel=btn.parentElement.nextElementSibling;
   const isOpen=panel.style.display!=='none';
@@ -6613,12 +6604,11 @@ function saveColab(method,p){
     const body=encodeURIComponent('Hola '+n+'\n\nTe invito a colaborar en la obra '+((p&&p.name)||'')+' usando ObraControl.\n\nAccedé desde este link:\n'+shareURL+'\n\nRol asignado: '+(co.role||'Colaborador'));
     window.open('mailto:'+e+'?subject='+sub+'&body='+body,'_blank');
     toast('Abriendo mail...','var(--green)');
-  } else if(method==='whatsapp'&&ph){
-    const msg=encodeURIComponent('Hola '+n+', te invito a colaborar en la obra '+((p&&p.name)||'')+' en ObraControl: '+shareURL);
-    window.open('https://wa.me/'+ph.replace(/[^0-9]/g,'')+'?text='+msg,'_blank');
-    toast('Abriendo WhatsApp...','var(--green)');
+  } else if(method==='whatsapp'){
+    // Share the field form link (new system)
+    setTimeout(function(){shareFormColaborador(co.id);},300);
   } else {
-    toast('Colaborador registrado (sin envío automático)','var(--pri)');
+    toast('Colaborador guardado','var(--green)');
   }
 }
 function inviteColab(id,p){
@@ -6659,6 +6649,57 @@ function reactivateColab(id){
   var co=(D.colaboradores||[]).find(function(x){return x.id===id;});if(!co)return;
   co.estado='aceptado';co.updatedAt=nw();sv();render();toast('Colaborador reactivado','var(--green)');
 }
+function openColabNotes(id){
+  var co=(D.colaboradores||[]).find(function(x){return x.id===id;});
+  if(!co)return;
+  if(!co.notas)co.notas=[];
+  document.getElementById('colabNotesM')?.remove();
+  var d=document.createElement('div');d.className='mo open';d.id='colabNotesM';
+  var h='<div class="mo-c"><div class="mo-h"><h3>💬 Notas — '+esc(co.name||co.email||'?')+'</h3><button class="tbtn" onclick="document.getElementById(\'colabNotesM\').remove()">'+ I.x+'</button></div>';
+  if(co.notas.length){
+    h+='<div style="max-height:200px;overflow-y:auto;border:1px solid var(--gray-ll);border-radius:8px;padding:8px 10px;margin-bottom:12px">';
+    co.notas.forEach(function(n){
+      h+='<div style="padding:6px 0;border-bottom:1px solid var(--gray-ll)"><div class="txxs tc3">'+fmts(n.fecha)+'</div><div class="ts mt-2" style="white-space:pre-wrap">'+esc(n.texto)+'</div></div>';
+    });
+    h+='</div>';
+  } else {
+    h+='<div class="txxs tc3 mb-10">Sin notas aún.</div>';
+  }
+  h+='<textarea id="colabNoteTA" class="fi" placeholder="Escribí una nota o instrucción..." style="height:80px;resize:vertical"></textarea>';
+  h+='<div class="flex gap-6 mt-8">';
+  h+='<button class="btn" style="background:var(--pri);color:#fff;flex:1" onclick="saveColabNote(\''+ id +'\')">💾 Guardar</button>';
+  if(co.phone)h+='<button class="btn btn-sec" onclick="sendColabNoteWA(\''+ id +'\')">💬 Enviar por WA</button>';
+  h+='</div></div>';
+  d.innerHTML=h;
+  document.body.appendChild(d);
+}
+function saveColabNote(id){
+  var co=(D.colaboradores||[]).find(function(x){return x.id===id;});if(!co)return;
+  var ta=document.getElementById('colabNoteTA');
+  var txt=ta?ta.value.trim():'';
+  if(!txt){toast('Escribí algo primero','var(--orange)');return;}
+  if(!co.notas)co.notas=[];
+  co.notas.unshift({texto:txt,fecha:nw()});
+  sv();
+  document.getElementById('colabNotesM')?.remove();
+  openColabNotes(id);
+  toast('Nota guardada','var(--green)');
+}
+function sendColabNoteWA(id){
+  var co=(D.colaboradores||[]).find(function(x){return x.id===id;});if(!co||!co.phone)return;
+  var ta=document.getElementById('colabNoteTA');
+  var txt=ta?ta.value.trim():'';
+  if(!txt){toast('Escribí algo primero','var(--orange)');return;}
+  var proj=(D.projects||[]).find(function(x){return x.id===S.proj;});
+  var msg=encodeURIComponent((proj?'['+proj.name+'] ':'')+ txt);
+  window.open('https://wa.me/'+co.phone.replace(/[^0-9]/g,'')+'?text='+msg,'_blank');
+  if(!co.notas)co.notas=[];
+  co.notas.unshift({texto:txt,fecha:nw(),enviado:'wa'});
+  sv();
+  document.getElementById('colabNotesM')?.remove();
+  openColabNotes(id);
+}
+
 function saveECb(id){
   const co=D.colaboradores.find(x=>x.id===id);if(!co)return;
   co.name=$('ecb_n').value.trim();co.email=$('ecb_e').value.trim();
@@ -6914,7 +6955,7 @@ load();render();
     S.mod='bandeja';
     render();
     toast('Nuevo reporte de '+sub.ayudante+' recibido','#0d9488',4000);
-  }catch(e){}
+  }catch(e){console.error('deep-link parse error',e);toast('Error al procesar el reporte recibido: '+e.message,'var(--red)',6000);}
 })();
 // 2. Async: init IDB + attempt Drive load in background
 (async()=>{
@@ -7050,7 +7091,7 @@ function rBandeja(mc,p){
   var c2='#0d9488';
   if(!S.bandejaTab)S.bandejaTab='pendientes';
   var tab=S.bandejaTab;
-  var all=(D.formulariosPendientes||[]).filter(function(x){return (x.obraId||x.projectId)===S.proj;}).sort(function(a,b){return new Date(b.receivedAt||b.fecha||0)-new Date(a.receivedAt||a.fecha||0);});
+  var all=(D.formulariosPendientes||[]).slice().sort(function(a,b){return new Date(b.receivedAt||b.fecha||0)-new Date(a.receivedAt||a.fecha||0);});
   var pendientes=all.filter(function(x){return x.estado==='pendiente';});
   var procesados=all.filter(function(x){return x.estado!=='pendiente';});
   function subSummary(sub){
@@ -7072,7 +7113,8 @@ function rBandeja(mc,p){
     var stLbl=isPend?'':'<span style="color:'+(sub.estado==='incorporado'?'var(--green)':'var(--gray-l)')+';font-weight:600">'+(sub.estado==='incorporado'?'✓ Cargado'+(sub.fechaIncorporado?' · '+fmts(sub.fechaIncorporado):''):'✕ Descartado')+'</span>';
     var vBdg=sub.version>1?'<span style="background:var(--gray-ll);color:var(--text3);font-size:9px;padding:1px 6px;border-radius:10px;margin-left:6px">v'+sub.version+'</span>':'';
     var btns=isPend?('<div class="flex gap-4" style="flex-shrink:0"><button class="btn btn-s" style="background:'+c2+';color:#fff;white-space:nowrap" onclick="incorporarFormularioModal(\''+sub.id+'\')">📥 Revisar</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="descartarFormulario(\''+sub.id+'\')">✕</button></div>'):('<div class="txxs" style="flex-shrink:0;text-align:right">'+stLbl+'</div>');
-    return '<div class="card" style="border-left:3px solid '+bc+';padding:12px;margin-bottom:8px"><div class="flex justify-between items-start gap-8"><div style="flex:1;min-width:0"><div class="ts fw7">👤 '+esc(sub.ayudante||'?')+vBdg+'</div><div class="txxs tc3 mt-2">📅 '+fmts(sub.receivedAt||sub.fecha||'')+'</div><div class="txxs mt-6" style="color:var(--text2);line-height:1.6">'+subSummary(sub)+'</div></div>'+btns+'</div></div>';
+    var obraNm=sub.obraName||(D.projects&&D.projects.find(function(p2){return p2.id===(sub.obraId||sub.projectId);})||{}).name||'';
+    return '<div class="card" style="border-left:3px solid '+bc+';padding:12px;margin-bottom:8px"><div class="flex justify-between items-start gap-8"><div style="flex:1;min-width:0"><div class="ts fw7">👤 '+esc(sub.ayudante||'?')+vBdg+(obraNm?'<span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:6px">🏗 '+esc(obraNm)+'</span>':'')+'</div><div class="txxs tc3 mt-2">📅 '+fmts(sub.receivedAt||sub.fecha||'')+'</div><div class="txxs mt-6" style="color:var(--text2);line-height:1.6">'+subSummary(sub)+'</div></div>'+btns+'</div></div>';
   }
   var pendBdg=pendientes.length?(' <span style="background:'+(tab==='pendientes'?'rgba(255,255,255,.3)':'#0d9488')+';color:#fff;border-radius:10px;padding:0 6px;font-size:10px;font-weight:700;margin-left:4px">'+pendientes.length+'</span>'):'';
   mc.innerHTML=modHeader('bandeja','Bandeja')
