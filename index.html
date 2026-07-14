@@ -1348,9 +1348,13 @@ const MC={dashboard:'#D97706',visitas:'#3b82f6',tareas:'#0891b2',materiales:'#7c
 const MCBG={dashboard:'#FFFBEB',visitas:'#EFF6FF',tareas:'#ECFEFF',materiales:'#F5F3FF',alertas:'#FEF2F2',checklist:'#FDF2F8',documentos:'#F8FAFC',comentarios:'#FFF7ED',colaboradores:'#F0FDF4',economia:'#ECFEFF',informes:'#FFFBEB',config:'#F8FAFC',bandeja:'#f0fdfa'};
 
 let D={user:null,projects:[],visitas:[],tareas:[],materiales:[],matIngresos:[],alertas:[],documentos:[],enlaces:[],checklists:[],comentarios:[],colaboradores:[],economia:[],auditLog:[],formulariosPendientes:[],driveConfig:{},lastSync:null};
-let S={proj:null,mod:'dashboard',menu:false,searchOpen:false,searchQ:'',taskFilter:'',taskEncFilter:'',taskSort:'',chkSort:'',chkCollapsed:{},taskCollapsed:{},visitaDetail:null,matDetail:null,matNoteEditing:null,matIngSort:'rec',cmtFilter:'',cmtSearch:'',cmtTipoFilter:'',ecoFilter:'',ecoTipoFilter:'',ecoSort:'',docSort:'',matFilter:'',matCatFilter:'',matSinCompMin:false,matExistMin:false,ecoMetrosOpen:false};
+let S={proj:null,mod:'dashboard',menu:false,searchOpen:false,searchQ:'',taskFilter:'',taskEncFilter:'',taskSort:'',chkSort:'',chkCollapsed:{},taskCollapsed:{},visitaDetail:null,matDetail:null,matNoteEditing:null,matIngSort:'rec',cmtFilter:'',cmtSearch:'',cmtTipoFilter:'',ecoFilter:'',ecoTipoFilter:'',ecoSort:'',docSort:'',matFilter:'',matCatFilter:'',matSort:'',matSinCompMin:false,matExistMin:false,matAPedirMin:false,matPedMin:false,ecoMetrosOpen:false,bandejaTab:'pendientes'};
 try{S.chkCollapsed=JSON.parse(localStorage.getItem('_cc')||'{}')}catch(e){}
 try{S.taskCollapsed=JSON.parse(localStorage.getItem('_tc')||'{}')}catch(e){}
+// Restore UI state (collapsed sections, filters, tab selections)
+const _SK_UI=SK+'_s';
+try{var _sui=localStorage.getItem(_SK_UI);if(_sui){var _sp=JSON.parse(_sui);['taskFilter','taskEncFilter','taskSort','matFilter','matCatFilter','matSort','matExistMin','matAPedirMin','matPedMin','matSinCompMin','bandejaTab','ecoFilter','ecoTipoFilter','ecoSort','matIngSort'].forEach(function(k){if(_sp[k]!==undefined)S[k]=_sp[k];});}}catch(e){}
+function saveUIState(){try{var _u={taskFilter:S.taskFilter,taskEncFilter:S.taskEncFilter,taskSort:S.taskSort,matFilter:S.matFilter,matCatFilter:S.matCatFilter,matSort:S.matSort,matExistMin:S.matExistMin,matAPedirMin:S.matAPedirMin,matPedMin:S.matPedMin,matSinCompMin:S.matSinCompMin,bandejaTab:S.bandejaTab,ecoFilter:S.ecoFilter,ecoTipoFilter:S.ecoTipoFilter,ecoSort:S.ecoSort,matIngSort:S.matIngSort};localStorage.setItem(_SK_UI,JSON.stringify(_u));}catch(e){}}
 
 async function loadAll(){
   // Step 1: Initialize IndexedDB
@@ -2210,7 +2214,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.querySelec
 // ═══════════════════════════════════════
 // RENDER
 // ═══════════════════════════════════════
-function render(){const sy=window.scrollY;if(!D.user){renderAuth();return;}if(!S.proj){renderProjects();return;}renderShell();requestAnimationFrame(()=>window.scrollTo(0,sy));}
+function render(){const sy=window.scrollY;if(!D.user){renderAuth();return;}if(!S.proj){renderProjects();return;}saveUIState();renderShell();requestAnimationFrame(()=>window.scrollTo(0,sy));}
 function renderAuth(){app.innerHTML=`<div style="background:linear-gradient(160deg,var(--pri-bg),var(--pri-mid) 40%,#fff);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px"><div style="width:100%;max-width:400px"><div class="tac" style="margin-bottom:32px"><div style="width:68px;height:68px;border-radius:18px;background:linear-gradient(135deg,#D97706,#F59E0B);display:inline-flex;align-items:center;justify-content:center;color:#fff;margin-bottom:16px;box-shadow:0 8px 28px #D9770630">${I.building}</div><div style="font-size:28px;font-weight:800">ObraControl</div><div class="tc3 mt-4">Gestion integral de obras — v9.0</div></div><div class="card" style="padding:24px"><div class="tac fw7 mb-16" style="font-size:16px">Iniciar sesion</div><div class="fg"><label class="fl">Email</label><input class="fi" id="aEmail" type="email" placeholder="tu@email.com"></div><div class="fg"><label class="fl">Nombre</label><input class="fi" id="aName" placeholder="Tu nombre"></div><button class="btn btn-p btn-w mt-8" onclick="doLogin()">Ingresar</button></div></div></div>`;}
 function doLogin(){const e=$('aEmail')?.value?.trim()||'';const n=$('aName')?.value?.trim()||'';D.user={id:uid(),name:n||e.split('@')[0]||'Usuario',email:e||'demo@obra.com',rol:'director',createdAt:nw()};sv();render();}
 function renderProjects(){const pjs=D.projects;let h='';if(!pjs.length){h=`<div class="empty">${I.building}<div style="font-size:14px;margin:16px 0">No hay obras</div><button class="btn btn-p" onclick="openM('newProjM')">${I.plus} Crear obra</button></div>`;}else{h=pjs.map(p=>{const v=D.visitas.filter(x=>x.projectId===p.id);const t=D.tareas.filter(x=>x.projectId===p.id);const pe=t.filter(x=>x.status!=='completada'&&x.status!=='cancelada').length;return `<div class="card card-click" onclick="S.proj='${p.id}';S.mod='dashboard';S.visitaDetail=null;S.matDetail=null;render();"><div class="flex justify-between items-center mb-6"><div class="fw7" style="font-size:15px">${p.name}</div>${colBadge(p.status,SC[p.status]||'#94a3b8',true)}</div><div class="flex gap-8 ts tc3 mb-8 wrap">${p.client?`<span>${I.user} ${p.client}</span>`:''}${p.location?`<span>${I.pin} ${p.location}</span>`:''}</div><div class="flex gap-12 txxs tc3"><span>${v.length} visitas</span><span>${t.length} tareas</span>${pe?`<span style="color:var(--pri)">${pe} pend</span>`:''}</div></div>`;}).join('');}app.innerHTML=`<div style="min-height:100vh;padding:16px;background:var(--bg)"><div style="max-width:600px;margin:0 auto"><div class="flex items-center justify-between mb-16" style="padding-top:16px"><div class="flex items-center gap-12"><div style="width:46px;height:46px;border-radius:14px;background:linear-gradient(135deg,#D97706,#F59E0B);display:flex;align-items:center;justify-content:center;color:#fff;box-shadow:0 4px 14px #D9770630">${I.building}</div><div><div style="font-size:22px;font-weight:800">ObraControl</div><div class="ts tc3">Hola, ${D.user?.name||''}</div></div></div><div style="display:flex;gap:4px;align-items:center"><span id="syncIndicator" class="sync-dot" onclick="showDrivePanel()" title="Estado sincronización" style="cursor:pointer">○</span><button class="tbtn" onclick="showDrivePanel()" style="color:${SYNC.method?"var(--green)":"var(--pri)"}" title="Sincronización Drive">${I.cloud}</button><button class="tbtn" onclick="D.user=null;sv();render();" style="color:var(--gray-l)">${I.out}</button></div></div><div class="flex justify-between items-center mb-12"><h2 style="font-size:16px;font-weight:700">Mis Obras</h2><button class="btn btn-p btn-s" onclick="openM('newProjM')">${I.plus} Nueva</button></div>${h}</div></div><div class="mo" id="newProjM"><div class="mo-c"><div class="mo-h"><h3>Nueva Obra</h3><button class="tbtn" onclick="closeM('newProjM')">${I.x}</button></div><div class="fg"><label class="fl">Nombre *</label><input class="fi" id="pN" placeholder="Ej: Casa Gomez"></div><div class="fg"><label class="fl">Cliente</label><input class="fi" id="pCl"></div><div class="fg"><label class="fl">Ubicacion</label><input class="fi" id="pLoc"></div><div class="fr"><div class="fg"><label class="fl">Director</label><input class="fi" id="pDir"></div><div class="fg"><label class="fl">Capataz</label><input class="fi" id="pCap"></div></div><div class="fr"><div class="fg"><label class="fl">Inicio</label><input class="fi" id="pSt" type="date" value="${td()}"></div><div class="fg"><label class="fl">Fin</label><input class="fi" id="pEn" type="date"></div></div><div class="fg"><label class="fl">Estado</label><select class="fs" id="pSta"><option>En curso</option><option>Pausada</option><option>Finalizada</option><option>Por iniciar</option></select></div><button class="btn btn-p btn-w mt-8" onclick="createProj()">Crear Obra</button></div></div>`;}
@@ -3782,6 +3786,7 @@ function setMatSort(val){
   renderMatItems();
 }
 function renderMatItems(){
+  saveUIState();
   const allItems=pf('materiales').filter(m=>!m.visitaId);
   const ings=pf('matIngresos');const c=MC.materiales;
   let items=allItems;
@@ -6540,6 +6545,7 @@ async function saveEEco(id){
 
 /* ===== MÓDULO: COLABORADORES ===== */
 function rColaboradores(mc,p){
+  try{
   if(!D.colaboradores)D.colaboradores=[];
   var colabs=pf('colaboradores');
   var colG='#16a34a';
@@ -6562,8 +6568,9 @@ function rColaboradores(mc,p){
   +'<div class="fg"><label class="fl">Email (opcional)</label><input class="fi" id="nc_email" type="email" placeholder="email@ejemplo.com"></div>'
   +'<div class="fg"><label class="fl">Rol</label><select class="fs" id="nc_role"><option>Ayudante</option><option>Capataz</option><option>Colaborador</option><option>Inspector</option><option>Cliente</option><option>Propietario</option></select></div>'
   +'<div class="txxs tc3 mb-8">⚠️ Teléfono con código de país (ej: +54911... para Argentina).</div>'
-  +'<div class="flex gap-6 mt-8 wrap"><button class="btn btn-w" style="background:'+colG+';color:#fff" onclick="saveColab(\'whatsapp\',p)">💬 Guardar y compartir por WA</button><button class="btn btn-w btn-sec" onclick="saveColab(\'none\',p)">Solo guardar</button></div>'
+  +'<div class="flex gap-6 mt-8 wrap"><button class="btn btn-w" style="background:'+colG+';color:#fff" onclick="saveColab(\'whatsapp\')">💬 Guardar y compartir por WA</button><button class="btn btn-w btn-sec" onclick="saveColab(\'none\')">Solo guardar</button></div>'
   +'</div></div>';
+  }catch(e){mc.innerHTML='<div class="card" style="color:var(--red);padding:16px">Error al cargar colaboradores: '+e.message+'</div>';console.error('rColaboradores',e);}
 }
 
 function toggleGuide(btn){
@@ -6591,7 +6598,8 @@ function saveColab(method,p){
   const n=$('nc_name')?.value.trim();
   const e=$('nc_email')?.value.trim();
   const ph=$('nc_phone')?.value.trim();
-  if(!n&&!e){toast('Ingresa nombre o email','var(--red)');return;}
+  if(!n){toast('Ingresa el nombre','var(--red)');return;}
+  if(!p)p=(D.projects||[]).find(function(x){return x.id===S.proj;});
   if(!D.colaboradores)D.colaboradores=[];
   const shareToken=btoa(S.proj+':'+SK).replace(/=/g,'').slice(0,16);
   const shareURL=window.location.href.split('?')[0]+'?access='+shareToken+'&proj='+S.proj;
