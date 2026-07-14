@@ -2224,7 +2224,7 @@ function createProj(){const n=$('pN').value.trim();if(!n){toast('Nombre obligato
 // ═══════ SHELL ═══════
 function renderShell(){
   const p=D.projects.find(x=>x.id===S.proj);if(!p){S.proj=null;render();return;}
-  const pT=pf('tareas');const pA=pf('alertas');const pendT=pT.filter(t=>t.status==='pendiente'||t.status==='en curso').length;const actAl=pA.filter(a=>!a.resolved).length;const pendForms=(D.formulariosPendientes||[]).filter(x=>x.projectId===S.proj&&x.estado==='pendiente').length;
+  const pT=pf('tareas');const pA=pf('alertas');const pendT=pT.filter(t=>t.status==='pendiente'||t.status==='en curso').length;const actAl=pA.filter(a=>!a.resolved).length;const pendForms=(D.formulariosPendientes||[]).filter(x=>(x.projectId||x.obraId)===S.proj&&x.estado==='pendiente').length;
   const drv=D.driveConfig?.[S.proj];const cloudCol=drv?'var(--green)':'var(--pri)';
   const _pendAlerts=pA.filter(a=>!a.resolved).length; // mantener badge en tareas si hay alertas legacy
   const mods=[{id:'dashboard',label:'Panel',ic:'dash'},{id:'visitas',label:'Visitas',ic:'clip'},{id:'tareas',label:'Tareas',ic:'list',badge:pendT+_pendAlerts},{id:'materiales',label:'Materiales',ic:'pkg'},{id:'checklist',label:'Checklist',ic:'chklist'},{id:'documentos',label:'Documentos',ic:'file'},{id:'comentarios',label:'Comentarios',ic:'msg'},{id:'colaboradores',label:'Colaboradores',ic:'share'},{id:'bandeja',label:'Bandeja',ic:'inbox',badge:pendForms},{id:'economia',label:'Economía',ic:'eco'},{id:'informes',label:'Informes',ic:'dl'},{id:'config',label:'Config',ic:'gear'}];
@@ -2265,7 +2265,7 @@ function renderShell(){
 function renderModule(mod,p){const mc=$('mc');if(!mc)return;if(S.visitaDetail){var _vck=(D.visitas||[]).find(function(x){return x.id===S.visitaDetail;});if(!_vck||_vck.projectId!==S.proj){S.visitaDetail=null;}else{rVisitaDetail(mc,S.visitaDetail);return;}}if(S.matDetail){rMatDetail(mc,S.matDetail);return;}switch(mod){case 'dashboard':rDash(mc,p);break;case 'visitas':rVisitas(mc);break;case 'tareas':rTareas(mc);break;case 'materiales':rMat(mc);break;case 'alertas':rAlertas(mc);break;case 'checklist':rChecklist(mc);break;case 'documentos':rDocs(mc);break;case 'comentarios':rComentarios(mc);break;case 'informes':rInformes(mc,p);break;case 'colaboradores':rColaboradores(mc,p);break;case 'bandeja':rBandeja(mc,p);break;case 'economia':rEconomia(mc,p);break;case 'config':rConfig(mc,p);break;}if(S.searchOpen)setTimeout(()=>{const si=$('searchInput');if(si)si.focus();},100);}
 
 function navStep(dir){
-  const ids=['dashboard','visitas','tareas','materiales','economia','documentos','checklist','comentarios','informes'];
+  const ids=['dashboard','visitas','tareas','materiales','economia','documentos','checklist','comentarios','bandeja','informes'];
   var cur=ids.indexOf(S.mod);
   if(cur===-1){
     // If current mod not in nav list, find nearest neighbor
@@ -6664,54 +6664,58 @@ function openColabNotes(id){
   if(!co.notas)co.notas=[];
   document.getElementById('colabNotesM')?.remove();
   var d=document.createElement('div');d.className='mo open';d.id='colabNotesM';
-  var h='<div class="mo-c"><div class="mo-h"><h3>💬 Notas — '+esc(co.name||co.email||'?')+'</h3><button class="tbtn" onclick="document.getElementById(\'colabNotesM\').remove()">'+ I.x+'</button></div>';
-  if(co.notas.length){
-    h+='<div style="max-height:200px;overflow-y:auto;border:1px solid var(--gray-ll);border-radius:8px;padding:8px 10px;margin-bottom:12px">';
-    co.notas.forEach(function(n){
-      h+='<div style="padding:6px 0;border-bottom:1px solid var(--gray-ll)"><div class="txxs tc3">'+fmts(n.fecha)+'</div><div class="ts mt-2" style="white-space:pre-wrap">'+esc(n.texto)+'</div></div>';
-    });
-    h+='</div>';
+  var notas=[...co.notas].reverse();
+  var h='<div class="mo-c" style="display:flex;flex-direction:column;max-height:88vh">';
+  h+='<div class="mo-h"><h3 style="flex:1;min-width:0">💬 '+esc(co.name||co.email||'?');
+  if(co.phone)h+='<span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:6px">'+co.phone+'</span>';
+  h+='</h3><button class="tbtn" onclick="document.getElementById('colabNotesM').remove()">'+I.x+'</button></div>';
+  h+='<div id="colabChatBox" style="flex:1;overflow-y:auto;padding:8px 4px;display:flex;flex-direction:column;gap:6px;background:var(--gray-ll);border-radius:8px;margin-bottom:8px;min-height:120px;max-height:340px">';
+  if(!notas.length){
+    h+='<div style="text-align:center;color:var(--text3);font-size:12px;padding:24px 0">Sin mensajes aún</div>';
   } else {
-    h+='<div class="txxs tc3 mb-10">Sin notas aún.</div>';
+    notas.forEach(function(n){
+      var wa=n.enviado==="wa";
+      h+='<div style="display:flex;justify-content:flex-end;margin:0 2px">';
+      h+='<div style="background:'+(wa?'#dcf8c6':'var(--surface)')+';border-radius:12px 12px 0 12px;padding:7px 11px;max-width:85%;box-shadow:0 1px 2px rgba(0,0,0,.12)">';
+      h+='<div style="font-size:13px;white-space:pre-wrap;color:var(--text)">'+esc(n.texto)+'</div>';
+      h+='<div style="font-size:9px;color:var(--text3);margin-top:3px;text-align:right">'+fmts(n.fecha)+(wa?' ✓✓':'')+'</div>';
+      h+='</div></div>';
+    });
   }
-  h+='<textarea id="colabNoteTA" class="fi" placeholder="Escribí una nota o instrucción..." style="height:80px;resize:vertical"></textarea>';
-  h+='<div class="flex gap-6 mt-8">';
-  h+='<button class="btn" style="background:var(--pri);color:#fff;flex:1" onclick="saveColabNote(\''+ id +'\')">💾 Guardar</button>';
-  if(co.phone)h+='<button class="btn btn-sec" onclick="sendColabNoteWA(\''+ id +'\')">💬 Enviar por WA</button>';
+  h+='</div>';
+  h+='<div style="display:flex;gap-6px;gap:6px;align-items:flex-end">';
+  h+='<textarea id="colabNoteTA" class="fi" placeholder="Escribí un mensaje... (Enter para guardar)" style="flex:1;min-height:52px;max-height:120px;resize:vertical;margin:0" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();colabSendOrSave(''+id+'',false);}"></textarea>';
+  h+='<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">';
+  if(co.phone)h+='<button class="btn" style="background:#25D366;color:#fff;padding:10px 12px;font-size:20px;line-height:1;min-width:44px" onclick="colabSendOrSave(''+id+'',true)" title="Guardar y abrir en WA">💬</button>';
+  h+='<button class="btn btn-sec" style="padding:10px 12px;font-size:20px;line-height:1;min-width:44px" onclick="colabSendOrSave(''+id+'',false)" title="Solo guardar en app">💾</button>';
   h+='</div></div>';
+  h+='</div>';
   d.innerHTML=h;
   document.body.appendChild(d);
+  setTimeout(function(){var b=document.getElementById('colabChatBox');if(b)b.scrollTop=b.scrollHeight;},60);
 }
-function saveColabNote(id){
+function colabSendOrSave(id,sendWA){
   var co=(D.colaboradores||[]).find(function(x){return x.id===id;});if(!co)return;
   var ta=document.getElementById('colabNoteTA');
   var txt=ta?ta.value.trim():'';
+  if(sendWA&&co.phone&&!txt){
+    window.open('https://api.whatsapp.com/send?phone='+co.phone.replace(/[^0-9]/g,''),'_blank');
+    return;
+  }
   if(!txt){toast('Escribí algo primero','var(--orange)');return;}
   if(!co.notas)co.notas=[];
-  co.notas.unshift({texto:txt,fecha:nw()});
+  var nota={texto:txt,fecha:nw()};
+  if(sendWA)nota.enviado='wa';
+  co.notas.unshift(nota);
   sv();
+  if(sendWA&&co.phone){
+    var proj=(D.projects||[]).find(function(x){return x.id===S.proj;});
+    window.open('https://api.whatsapp.com/send?phone='+co.phone.replace(/[^0-9]/g,'')+'&text='+encodeURIComponent((proj?'['+proj.name+'] ':'')+txt),'_blank');
+  } else if(!sendWA){
+    toast('Mensaje guardado','var(--green)');
+  }
   document.getElementById('colabNotesM')?.remove();
   openColabNotes(id);
-  toast('Nota guardada','var(--green)');
-}
-function sendColabNoteWA(id){
-  var co=(D.colaboradores||[]).find(function(x){return x.id===id;});
-  if(!co)return;
-  if(!co.phone){toast('Este colaborador no tiene teléfono cargado','var(--orange)');return;}
-  var ta=document.getElementById('colabNoteTA');
-  var txt=ta?ta.value.trim():'';
-  var phone=co.phone.replace(/[^0-9]/g,'');
-  var url='https://api.whatsapp.com/send?phone='+phone;
-  if(txt){
-    var proj=(D.projects||[]).find(function(x){return x.id===S.proj;});
-    url+='&text='+encodeURIComponent((proj?'['+proj.name+'] ':'')+txt);
-    if(!co.notas)co.notas=[];
-    co.notas.unshift({texto:txt,fecha:nw(),enviado:'wa'});
-    sv();
-    document.getElementById('colabNotesM')?.remove();
-    openColabNotes(id);
-  }
-  window.open(url,'_blank');
 }
 
 function saveECb(id){
