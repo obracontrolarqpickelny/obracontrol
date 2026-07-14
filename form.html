@@ -458,6 +458,7 @@ function buildItemHTML(type,idx){
     '<div class="fg"><label class="fl">Tipo</label><select class="fs" id="mov_'+idx+'_tipo"><option value="ingreso">💵 Ingreso</option><option value="egreso">💸 Egreso</option></select></div>'+
     '<div class="fg"><label class="fl">Monto *</label><input class="fi" id="mov_'+idx+'_monto" type="number" step="0.01" min="0" placeholder="0.00" inputmode="decimal"></div>'+
     '<div class="fg"><label class="fl">Concepto *</label><input class="fi" id="mov_'+idx+'_concepto" placeholder="Ej: Compra de cemento, Pago mano de obra..."></div>'+
+    '<div class="fg"><label class="fl">Proveedor / Comercio (opcional)</label><input class="fi" id="mov_'+idx+'_proveedor" placeholder="Ej: Corralón El Constructor, Ferretería Sur..."></div>'+
     '<div class="fg"><label class="fl">Foto (opcional)</label><input type="file" accept="image/*" id="mov_'+idx+'_foto" onchange="prevFoto(\'mov_'+idx+'_foto\',\'mov_'+idx+'_prev\');" style="font-size:13px;width:100%"><img id="mov_'+idx+'_prev" class="photo-prev"></div>';
   if(type==='tar') return hdr+
     '<div class="fg"><label class="fl">Título *</label><input class="fi" id="tar_'+idx+'_titulo" placeholder="¿Qué tarea?"></div>'+
@@ -550,7 +551,7 @@ function collectData(){
     if(monto||concepto){
       var foto=photoMap['mov_'+idx+'_foto']||null;
       if(foto) allPhotos.push(foto);
-      data.movimientos.push({tipo:v('mov_'+idx+'_tipo')||'egreso',monto:monto,concepto:concepto,foto:foto});
+      data.movimientos.push({tipo:v('mov_'+idx+'_tipo')||'egreso',monto:monto,concepto:concepto,proveedor:v('mov_'+idx+'_proveedor')||'',foto:foto});
     }
   });
 

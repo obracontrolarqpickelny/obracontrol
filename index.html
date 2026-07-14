@@ -693,7 +693,7 @@ function _repairEcoMatLinks(){
 // item.imagen con '[foto:imgId]' para que persistan y sean subibles.
 async function _rescueBase64BeforeSync(){
   if(!GD.idbReady)return;
-  var _tables=['tareas','alertas','visitas','comentarios','materiales','matIngresos'];
+  var _tables=['tareas','alertas','visitas','comentarios','materiales','matIngresos','carpetas'];
   // 1. economia.imagen
   var _eco=D.economia||[];
   for(var _ei=0;_ei<_eco.length;_ei++){
@@ -5731,7 +5731,7 @@ function rEconomia(mc,p){
     return `<div class="card" id="eco_item_${item.id}" style="padding:12px;border-left:3px solid ${col};${item.id===S.ecoResalt?'outline:2px solid var(--cyan);':''}">
       <div class="flex justify-between items-start mb-4">
         <div class="flex-1">
-          <div class="ts fw6">${item.concepto||'Sin concepto'}${item.interno?' <span style="font-size:9px;background:#f1f5f9;border-radius:3px;padding:1px 4px;color:#64748b">&#x1F512; Priv.</span>':''}</div>
+          <div class="ts fw6">${item.concepto||'Sin concepto'}${item.interno?' <span style="font-size:9px;background:#f1f5f9;border-radius:3px;padding:1px 4px;color:#64748b">&#x1F512; Priv.</span>':''}${item.sourceType==='formulario'?' <span style="font-size:9px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:1px 6px;color:#16a34a">&#x1F464; '+(item.cargadoPor||item.sourceName||'')+'</span>':''}</div>
           <div class="txxs tc3 mt-2">${fmts(item.fecha||item.date)} | ${item.medioPago||''} ${item.proveedor?`| <strong>${item.proveedor}</strong>`:''} ${item.rubro?`<span style="background:#f1f5f9;border-radius:3px;padding:1px 5px;margin-left:2px;color:#475569">${item.rubro}${item.item?' / '+item.item:''}</span>`:''}</div>
         </div>
         <div class="fw8" style="color:${col};font-size:15px;flex-shrink:0;margin-left:8px">${sign}$${(parseFloat(item.monto)||0).toLocaleString('es-AR')}</div>
@@ -5850,7 +5850,7 @@ function renderEcoItems(){
     return `<div class="card" id="eco_item_${item.id}" style="padding:12px;border-left:3px solid ${col};${item.id===S.ecoResalt?'outline:2px solid var(--cyan);':''  }">
       <div class="flex justify-between items-start mb-4">
         <div class="flex-1">
-          <div class="ts fw6">${item.concepto||'Sin concepto'}${item.interno?' <span style="font-size:9px;background:#f1f5f9;border-radius:3px;padding:1px 4px;color:#64748b">&#x1F512; Priv.</span>':''}</div>
+          <div class="ts fw6">${item.concepto||'Sin concepto'}${item.interno?' <span style="font-size:9px;background:#f1f5f9;border-radius:3px;padding:1px 4px;color:#64748b">&#x1F512; Priv.</span>':''}${item.sourceType==='formulario'?' <span style="font-size:9px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:1px 6px;color:#16a34a">&#x1F464; '+(item.cargadoPor||item.sourceName||'')+'</span>':''}</div>
           <div class="txxs tc3 mt-2">${fmts(item.fecha||item.date)} | ${item.medioPago||''} ${item.proveedor?`| <strong>${item.proveedor}</strong>`:''} ${item.rubro?`<span style="background:#f1f5f9;border-radius:3px;padding:1px 5px;margin-left:2px;color:#475569">${item.rubro}${item.item?' / '+item.item:''}</span>`:''}</div>
         </div>
         <div class="fw8" style="color:${col};font-size:15px;flex-shrink:0;margin-left:8px">${sign}$${(parseFloat(item.monto)||0).toLocaleString('es-AR')}</div>
@@ -6733,34 +6733,71 @@ function openCarpeta(colabId){
   var co=(D.colaboradores||[]).find(function(x){return x.id===colabId;});if(!co)return;
   var cp=getCarpeta(colabId);var archivos=cp.archivos||[];
   document.getElementById('carpetaM')?.remove();
+  if(!S.carpetaSort)S.carpetaSort='desc';
+  if(!S.carpetaFilter)S.carpetaFilter='all';
   var d=document.createElement('div');d.className='mo open';d.id='carpetaM';
   var h='<div class="mo-c" style="display:flex;flex-direction:column;max-height:90vh">';
   h+='<div class="mo-h"><h3 style="flex:1;min-width:0">📁 '+esc(co.name||co.email||'?')+'</h3><button class="tbtn" onclick="document.getElementById(\'carpetaM\').remove()">'+I.x+'</button></div>';
   h+='<div class="flex gap-6 mb-10 flex-wrap">';
   h+='<label class="btn btn-sec btn-s" style="cursor:pointer;display:flex;align-items:center;gap:5px">'+I.plus+' Subir<input type="file" multiple style="display:none" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.dwg,.zip" onchange="uploadArqCarpeta(\''+colabId+'\',this)"></label>';
-  if(co.phone)h+='<button class="btn btn-sec btn-s" onclick="shareCarpetaUrl(\''+colabId+'\')">📤 Compartir con ayudante</button>';
+  if(co.phone)h+='<button class="btn btn-sec btn-s" onclick="shareCarpetaUrl(\''+colabId+'\')">📤 Compartir</button>';
   if(archivos.length)h+='<button class="btn btn-sec btn-s" onclick="downloadCarpetaAll(\''+colabId+'\')">⬇ Descargar todo</button>';
   h+='</div>';
+  if(archivos.length){
+    h+='<div class="flex gap-6 items-center mb-8 flex-wrap">';
+    [{v:'all',l:'Todas'},{v:'img',l:'📸 Fotos'},{v:'doc',l:'📄 Archivos'}].forEach(function(f){
+      var active=S.carpetaFilter===f.v;
+      h+='<button style="border:none;background:'+(active?'var(--pri)':'var(--gray-ll)')+';color:'+(active?'#fff':'var(--text2)')+';border-radius:20px;padding:4px 12px;font-size:11px;cursor:pointer" onclick="S.carpetaFilter=\''+f.v+'\';openCarpeta(\''+colabId+'\')">'+f.l+'</button>';
+    });
+    h+='<button style="border:1px solid var(--gray-l);background:var(--surface);color:var(--text2);border-radius:20px;padding:4px 12px;font-size:11px;cursor:pointer;margin-left:auto" onclick="S.carpetaSort=S.carpetaSort===\'desc\'?\'asc\':\'desc\';openCarpeta(\''+colabId+'\')">'+(S.carpetaSort==='desc'?'↓ Más nuevo':'↑ Más antiguo')+'</button>';
+    h+='</div>';
+  }
   h+='<div style="flex:1;overflow-y:auto">';
   if(!archivos.length){
     h+='<div class="empty">📁<div class="ts mt-8">Carpeta vacía</div><div class="txxs tc3 mt-4">Subí archivos desde aquí o compartilos con el ayudante.</div></div>';
   } else {
-    var sorted=archivos.slice().sort(function(a,b){return new Date(b.fecha)-new Date(a.fecha);});
-    sorted.forEach(function(f){
-      var isImg=f.tipo&&f.tipo.startsWith('image/');
-      var upBy=f.subidoPor==='col'?('👷 '+esc(co.name||'Ayudante')):'🏗 Vos';
-      h+='<div class="card" style="padding:10px;margin-bottom:8px">';
-      if(isImg)h+='<img src="'+f.data+'" style="width:100%;max-height:200px;object-fit:cover;border-radius:8px;margin-bottom:8px" onclick="window.open(this.src)" loading="lazy">';
-      h+='<div class="flex items-center gap-6">';
-      h+='<span style="font-size:22px;flex-shrink:0">'+(isImg?'🖼':'📄')+'</span>';
-      h+='<div style="flex:1;min-width:0"><div class="ts fw6 trun">'+esc(f.nombre)+'</div>';
-      h+='<div class="txxs tc3">'+upBy+' · '+fmts(f.fecha)+'</div>';
-      if(f.descripcion)h+='<div class="txxs mt-2 tc3">'+esc(f.descripcion)+'</div>';
-      h+='</div>';
-      h+='<a href="'+f.data+'" download="'+esc(f.nombre)+'" class="btn btn-sec btn-s" style="flex-shrink:0;padding:6px 10px;text-decoration:none" title="Descargar">⬇</a>';
-      h+='<button class="btn btn-g btn-s" style="color:var(--red);flex-shrink:0" onclick="deleteCarpetaFile(\''+colabId+'\',\''+f.id+'\')" title="Eliminar">'+I.trash+'</button>';
-      h+='</div></div>';
+    var filtered=archivos.filter(function(f){
+      if(S.carpetaFilter==='img')return f.tipo&&f.tipo.startsWith('image/');
+      if(S.carpetaFilter==='doc')return !f.tipo||!f.tipo.startsWith('image/');
+      return true;
     });
+    var sorted=filtered.slice().sort(function(a,b){
+      return S.carpetaSort==='asc'?new Date(a.fecha)-new Date(b.fecha):new Date(b.fecha)-new Date(a.fecha);
+    });
+    if(!sorted.length){
+      h+='<div class="txxs tc3 mt-12" style="text-align:center">Sin archivos en esta categoría</div>';
+    } else {
+      var imgs=sorted.filter(function(f){return f.tipo&&f.tipo.startsWith('image/');});
+      var docs=sorted.filter(function(f){return !f.tipo||!f.tipo.startsWith('image/');});
+      if(imgs.length){
+        if(docs.length)h+='<div class="txxs fw7 tc3 mb-6">📸 Fotos ('+imgs.length+')</div>';
+        h+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:16px">';
+        imgs.forEach(function(f){
+          var upBy=f.subidoPor==='col'?'👷':'🏗';
+          h+='<div style="position:relative;cursor:pointer" onclick="window.open(\''+f.data+'\')" title="'+esc(f.nombre)+' · '+fmts(f.fecha)+'">';
+          h+='<img src="'+f.data+'" style="width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:8px;display:block" onerror="this.style.display=\'none\'">';
+          h+='<div style="position:absolute;bottom:3px;left:3px;background:rgba(0,0,0,.5);border-radius:5px;padding:1px 5px;font-size:9px;color:#fff">'+upBy+' '+fmts(f.fecha).slice(0,5)+'</div>';
+          h+='<button style="position:absolute;top:3px;right:3px;background:rgba(0,0,0,.5);border:none;color:#fff;border-radius:50%;width:20px;height:20px;font-size:10px;cursor:pointer;line-height:1" onclick="event.stopPropagation();deleteCarpetaFile(\''+colabId+'\',\''+f.id+'\')">✕</button>';
+          h+='</div>';
+        });
+        h+='</div>';
+      }
+      if(docs.length){
+        if(imgs.length)h+='<div class="txxs fw7 tc3 mb-6 mt-4">📄 Archivos ('+docs.length+')</div>';
+        docs.forEach(function(f){
+          var upBy=f.subidoPor==='col'?('👷 '+esc(co.name||'Ayudante')):'🏗 Vos';
+          h+='<div class="card" style="padding:10px;margin-bottom:8px"><div class="flex items-center gap-6">';
+          h+='<span style="font-size:22px;flex-shrink:0">📄</span>';
+          h+='<div style="flex:1;min-width:0"><div class="ts fw6 trun">'+esc(f.nombre)+'</div>';
+          h+='<div class="txxs tc3">'+upBy+' · '+fmts(f.fecha)+'</div>';
+          if(f.descripcion)h+='<div class="txxs mt-2 tc3">'+esc(f.descripcion)+'</div>';
+          h+='</div>';
+          h+='<a href="'+f.data+'" download="'+esc(f.nombre)+'" class="btn btn-sec btn-s" style="flex-shrink:0;padding:6px 10px;text-decoration:none" title="Descargar">⬇</a>';
+          h+='<button class="btn btn-g btn-s" style="color:var(--red);flex-shrink:0" onclick="deleteCarpetaFile(\''+colabId+'\',\''+f.id+'\')" title="Eliminar">'+I.trash+'</button>';
+          h+='</div></div>';
+        });
+      }
+    }
   }
   h+='</div></div>';
   d.innerHTML=h;document.body.appendChild(d);
@@ -7234,7 +7271,7 @@ function rBandeja(mc,p){
     var bc=isPend?c2:sub.estado==='incorporado'?'var(--green)':'var(--gray-l)';
     var stLbl=isPend?'':'<span style="color:'+(sub.estado==='incorporado'?'var(--green)':'var(--gray-l)')+';font-weight:600">'+(sub.estado==='incorporado'?'✓ Cargado'+(sub.fechaIncorporado?' · '+fmts(sub.fechaIncorporado):''):'✕ Descartado')+'</span>';
     var vBdg=sub.version>1?'<span style="background:var(--gray-ll);color:var(--text3);font-size:9px;padding:1px 6px;border-radius:10px;margin-left:6px">v'+sub.version+'</span>':'';
-    var btns=isPend?('<div class="flex gap-4" style="flex-shrink:0"><button class="btn btn-s" style="background:'+c2+';color:#fff;white-space:nowrap" onclick="incorporarFormularioModal(\''+sub.id+'\')">📥 Revisar</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="descartarFormulario(\''+sub.id+'\')">✕</button></div>'):('<div class="txxs" style="flex-shrink:0;text-align:right">'+stLbl+'</div>');
+    var btns=isPend?('<div class="flex gap-4" style="flex-shrink:0"><button class="btn btn-s" style="background:'+c2+';color:#fff;white-space:nowrap" onclick="incorporarFormularioModal(\''+sub.id+'\')">📥 Revisar</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="descartarFormulario(\''+sub.id+'\')">✕</button></div>'):('<div class="txxs" style="flex-shrink:0;text-align:right">'+stLbl+'<br><button class="btn btn-g btn-s" style="font-size:10px;margin-top:6px" onclick="incorporarFormularioModal(\''+sub.id+'\')">👁 Ver / Reabrir</button></div>');
     var obraNm=sub.obraName||(D.projects&&D.projects.find(function(p2){return p2.id===(sub.obraId||sub.projectId);})||{}).name||'';
     return '<div class="card" style="border-left:3px solid '+bc+';padding:12px;margin-bottom:8px"><div class="flex justify-between items-start gap-8"><div style="flex:1;min-width:0"><div class="ts fw7">👤 '+esc(sub.ayudante||'?')+vBdg+(obraNm?'<span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:6px">🏗 '+esc(obraNm)+'</span>':'')+'</div><div class="txxs tc3 mt-2">📅 '+fmts(sub.receivedAt||sub.fecha||'')+'</div><div class="txxs mt-6" style="color:var(--text2);line-height:1.6">'+subSummary(sub)+'</div></div>'+btns+'</div></div>';
   }
@@ -7278,7 +7315,7 @@ function incorporarFormularioModal(id){
       h+='<div class="flex items-center gap-8" style="padding:5px 0;border-bottom:1px solid var(--gray-ll);opacity:'+(done?'0.5':'1')+'">';
       h+=_iBtn(key,done);
       h+='<div class="flex-1 min-w-0"><div class="txxs fw7">'+(m.tipo==='ingreso'?'💵 Ingreso':'💸 Egreso')+'</div><div class="ts">$'+(m.monto||0)+(m.concepto?' — '+esc(m.concepto):'')+'</div></div>';
-      if(m.foto)h+='<img src="'+m.foto+'" style="width:44px;height:44px;object-fit:cover;border-radius:6px;flex-shrink:0">';
+      if(m.foto)h+='<img src="'+m.foto+'" style="width:44px;height:44px;object-fit:cover;border-radius:6px;flex-shrink:0" onerror="this.style.display=\'none\'">';
       h+='</div>';
     });
     h+='</div>';
@@ -7294,7 +7331,7 @@ function incorporarFormularioModal(id){
       h+='<div class="flex-1 min-w-0"><div class="ts fw6">'+esc(t.titulo||'Sin título')+'</div>';
       if(t.descripcion)h+='<div class="txxs tc3 mt-1">'+esc(t.descripcion)+'</div>';
       h+='<div class="txxs tc3 mt-1">'+({alta:'🔴',media:'🟡',baja:'🟢'}[t.prioridad||'media']||'🟡')+' '+(t.prioridad||'media')+'</div></div>';
-      if(t.foto)h+='<img src="'+t.foto+'" style="width:44px;height:44px;object-fit:cover;border-radius:6px;flex-shrink:0">';
+      if(t.foto)h+='<img src="'+t.foto+'" style="width:44px;height:44px;object-fit:cover;border-radius:6px;flex-shrink:0" onerror="this.style.display=\'none\'">';
       h+='</div>';
     });
     h+='</div>';
@@ -7346,9 +7383,22 @@ function incorporarFormularioModal(id){
     if(!allD)h+='<button class="btn" style="background:#0d9488;color:#fff;flex:2;padding:12px" onclick="incAll(\''+id+'\')">✓ Incorporar todo</button>';
     h+='<button class="btn btn-g btn-s" style="color:var(--red);flex:1" onclick="descartarFormulario(\''+id+'\');document.getElementById(\'ifmM\').remove()">✕ Descartar</button>';
     h+='</div>';
+  } else {
+    h+='<div class="flex gap-6" style="padding:12px 16px;border-top:1px solid var(--gray-ll)">';
+    h+='<button class="btn btn-sec" style="flex:1" onclick="reabrirFormulario(\''+id+'\')">↩ Reabrir</button>';
+    h+='<button class="btn btn-g btn-s" style="flex:1" onclick="document.getElementById(\'ifmM\').remove()">Cerrar</button>';
+    h+='</div>';
   }
   h+='</div>';
   d.innerHTML=h;document.body.appendChild(d);
+}
+function reabrirFormulario(id){
+  var sub=(D.formulariosPendientes||[]).find(function(x){return x.id===id;});
+  if(!sub)return;
+  sub.estado='pendiente';sub.itemsInc=[];sub.updatedAt=nw();
+  sv();document.getElementById('ifmM')?.remove();render();
+  incorporarFormularioModal(id);
+  toast('Formulario reabierto','var(--pri)');
 }
 function _getAllFormKeys(sub){
   var keys=[];
@@ -7370,7 +7420,7 @@ function _doIncItem(sub,key){
     D.economia=D.economia||[];
     D.economia.push({id:uid(),projectId:pid,tipo:m.tipo==='ingreso'?'ingreso':'egreso',
       fecha:(sub.fecha||nw()).slice(0,10),concepto:m.concepto||'Sin concepto',
-      monto:parseFloat(m.monto)||0,proveedor:by,medioPago:'',
+      monto:parseFloat(m.monto)||0,proveedor:m.proveedor||'',medioPago:'',
       cargadoPor:by,sourceType:'formulario',sourceName:by,sourceId:sub.id,
       date:nw(),updatedAt:nw()});
     audit('economia','create','form: '+(m.concepto||''));
@@ -7427,10 +7477,10 @@ function incItem(formId,key){
   if(!sub||sub.estado!=='pendiente')return;
   if(!sub.itemsInc)sub.itemsInc=[];
   if(sub.itemsInc.indexOf(key)>=0)return;
-  _doIncItem(sub,key);sub.itemsInc.push(key);
+  _doIncItem(sub,key);sub.itemsInc.push(key);sub.updatedAt=nw();
   var ak=_getAllFormKeys(sub);
   if(ak.length>0&&ak.every(function(k){return sub.itemsInc.indexOf(k)>=0;})){
-    sub.estado='incorporado';sub.fechaIncorporado=nw();sub.updatedAt=nw();
+    sub.estado='incorporado';sub.fechaIncorporado=nw();
     audit('formularios','incorporar',sub.ayudante||'');
     sv();document.getElementById('ifmM')?.remove();render();
     toast('Formulario completo incorporado ✓','var(--green)',3000);
@@ -7447,8 +7497,9 @@ function incSec(formId,pfx){
   ak.filter(function(k){return k.startsWith(pfx);}).forEach(function(k){
     if(sub.itemsInc.indexOf(k)<0){_doIncItem(sub,k);sub.itemsInc.push(k);}
   });
+  sub.updatedAt=nw();
   if(ak.length>0&&ak.every(function(k){return sub.itemsInc.indexOf(k)>=0;})){
-    sub.estado='incorporado';sub.fechaIncorporado=nw();sub.updatedAt=nw();
+    sub.estado='incorporado';sub.fechaIncorporado=nw();
     audit('formularios','incorporar',sub.ayudante||'');
     sv();document.getElementById('ifmM')?.remove();render();toast('Formulario completo incorporado ✓','var(--green)',3000);
   } else {
