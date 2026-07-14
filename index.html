@@ -4764,7 +4764,7 @@ function rChecklist(mc){const items=pf('checklists');const c=MC.checklist;const 
   mc.innerHTML=`${modHeader('checklist','Checklists',`<div class="flex gap-4"><button class="btn btn-s" style="background:${c};color:#fff" onclick="openM('newChkM')">${I.plus} Nueva</button><button class="btn btn-sec btn-s" onclick="showChkHistorial()">&#x1F4CB; Historial</button></div>`)}
   <div style="display:flex;align-items:center;gap:6px;margin:8px 0 12px"><span class="txxs fw6 tc3" style="white-space:nowrap">Ordenar:</span><select class="fs" style="font-size:12px;padding:4px 8px 4px 6px;min-width:150px;max-width:100%" onchange="S.chkSort=this.value;render()"><option value="" ${!S.chkSort||S.chkSort==='pri_asc'?'selected':''}>&#x26A1; Mayor prioridad</option><option value="pri_desc" ${S.chkSort==='pri_desc'?'selected':''}>&#x26A1; Menor prioridad</option><option value="fecha_desc" ${S.chkSort==='fecha_desc'?'selected':''}>&#x1F4C5; M&aacute;s reciente</option><option value="fecha_asc" ${S.chkSort==='fecha_asc'?'selected':''}>&#x1F4C5; M&aacute;s antiguo</option></select></div>
   ${visitItems.length?`<div class="alrt alrt-y mb-8">${I.clip}<div class="ts fw6 flex-1">Checklists de visitas (${visitItems.length})</div></div>`:''}
-  ${!genItems.length?`<div class="empty"><span style="color:${c}">${I.chklist}</span><div class="ts mt-8">Sin checklists</div></div>`:sortedChk.map(ch=>{const dn=ch.items.filter(i=>i.done).length;const tot=ch.items.length;const _cl=!!(S.chkCollapsed&&S.chkCollapsed[ch.id]);const _prog=dn===tot&&tot>0?'var(--green)':dn>0?'#f0a500':'#e02020';return `<div class="card" style="border-left:3px solid ${c}"><div class="flex justify-between items-center" style="cursor:pointer" onclick="toggleChkCollapsed('${ch.id}')"><div style="flex:1;min-width:0"><div class="ts fw7">${ch.title}</div><div class="txxs tc3 mt-2" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">${priBadge(ch.priority||'media',true)}<span>&#x1F4C5; ${fmts(ch.date||ch.updatedAt)}</span><span style="color:${_prog};font-weight:700">${dn}/${tot}</span></div>${ch.note?`<div style="font-size:11px;color:var(--text2);font-style:italic;margin-top:4px;white-space:pre-wrap">📝 ${ch.note}</div>`:''}</div><span style="font-size:14px;color:var(--gray-l);padding:0 6px;user-select:none">${_cl?'&#x25BC;':'&#x25B2;'}</span></div>${_cl?'':(`<div onclick="event.stopPropagation()"><textarea class="ft" style="font-size:11px;color:var(--gray-l);background:var(--gray-ll);border:1px solid var(--brd);resize:vertical;min-height:34px;margin-top:10px;padding:5px 8px" placeholder="Agregar nota..." onblur="saveChkNote('${ch.id}',this.value)">${(ch.note||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea><div class="mb-6 mt-8">${progress(dn,tot,c)}<div class="txxs mt-4" style="color:${_prog};font-weight:700">${dn}/${tot}</div></div>${ch.items.map(it=>`<div class="chk-item"><div class="chk-box${it.done?' checked':''}" onclick="togC('${ch.id}','${it.id}')">${it.done?I.check:''}</div><div class="chk-text${it.done?' done':''} flex-1">${it.text}</div><button class="btn btn-g btn-s" onclick="editChkItem('${ch.id}','${it.id}')">${I.edit}</button><button class="btn btn-g btn-s" onclick="if(confirmDel())dCI('${ch.id}','${it.id}')">${I.trash}</button></div>`).join('')}<div class="flex gap-4 mt-8"><input class="fi" id="ac_${ch.id}" placeholder="Agregar..." style="flex:1" onkeydown="if(event.key==='Enter')aCI('${ch.id}')"><button class="btn btn-s" style="background:${c};color:#fff" onclick="aCI('${ch.id}')">${I.plus}</button></div><div class="flex gap-6 mt-6"><button class="btn btn-sec btn-s" onclick="editChk('${ch.id}')">${I.edit} Editar</button><button class="btn btn-sec btn-s" title="Compartir formulario" onclick="shareFormContextual('checklist','${ch.id}','')">💬</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delI('checklists','${ch.id}')">${I.trash} Eliminar</button></div></div>`)}</div>`;}).join('')}<div class="mo" id="newChkM"><div class="mo-c"><div class="mo-h"><h3 style="color:${c}">Nueva Checklist</h3><button class="tbtn" onclick="closeM('newChkM')">${I.x}</button></div><div class="fg"><label class="fl">Titulo *</label><input class="fi" id="ck_t"></div>${priSelector('ck_p','media')}<div class="fg"><label class="fl">Items (uno por linea)</label><textarea class="ft" id="ck_i" placeholder="Verificar estribos&#10;Revisar recubrimiento"></textarea></div><button class="btn btn-w mt-8" style="background:${c};color:#fff" onclick="saveCk()">Crear</button></div></div>`;}
+  ${!genItems.length?`<div class="empty"><span style="color:${c}">${I.chklist}</span><div class="ts mt-8">Sin checklists</div></div>`:sortedChk.map(ch=>{const dn=ch.items.filter(i=>i.done).length;const tot=ch.items.length;const _cl=!!(S.chkCollapsed&&S.chkCollapsed[ch.id]);const _prog=dn===tot&&tot>0?'var(--green)':dn>0?'#f0a500':'#e02020';return `<div class="card" style="border-left:3px solid ${c}"><div class="flex justify-between items-center" style="cursor:pointer" onclick="toggleChkCollapsed('${ch.id}')"><div style="flex:1;min-width:0"><div class="ts fw7">${ch.title}</div><div class="txxs tc3 mt-2" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">${priBadge(ch.priority||'media',true)}<span>&#x1F4C5; ${fmts(ch.date||ch.updatedAt)}</span><span data-chk-score="${ch.id}" style="color:${_prog};font-weight:700">${dn}/${tot}</span></div>${ch.note?`<div style="font-size:11px;color:var(--text2);font-style:italic;margin-top:4px;white-space:pre-wrap">📝 ${ch.note}</div>`:''}</div><span style="font-size:14px;color:var(--gray-l);padding:0 6px;user-select:none">${_cl?'&#x25BC;':'&#x25B2;'}</span></div>${_cl?'':(`<div onclick="event.stopPropagation()"><textarea class="ft" style="font-size:11px;color:var(--gray-l);background:var(--gray-ll);border:1px solid var(--brd);resize:vertical;min-height:34px;margin-top:10px;padding:5px 8px" placeholder="Agregar nota..." onblur="saveChkNote('${ch.id}',this.value)">${(ch.note||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea><div class="mb-6 mt-8">${progress(dn,tot,c)}<div data-chk-score="${ch.id}" class="txxs mt-4" style="color:${_prog};font-weight:700">${dn}/${tot}</div></div>${ch.items.map(it=>`<div class="chk-item"><div class="chk-box${it.done?' checked':''}" onclick="togC('${ch.id}','${it.id}',this)">${it.done?I.check:''}</div><div class="chk-text${it.done?' done':''} flex-1">${it.text}</div><button class="btn btn-g btn-s" onclick="editChkItem('${ch.id}','${it.id}')">${I.edit}</button><button class="btn btn-g btn-s" onclick="if(confirmDel())dCI('${ch.id}','${it.id}')">${I.trash}</button></div>`).join('')}<div class="flex gap-4 mt-8"><input class="fi" id="ac_${ch.id}" placeholder="Agregar..." style="flex:1" onkeydown="if(event.key==='Enter')aCI('${ch.id}')"><button class="btn btn-s" style="background:${c};color:#fff" onclick="aCI('${ch.id}')">${I.plus}</button></div><div class="flex gap-6 mt-6"><button class="btn btn-sec btn-s" onclick="editChk('${ch.id}')">${I.edit} Editar</button><button class="btn btn-sec btn-s" title="Compartir formulario" onclick="shareFormContextual('checklist','${ch.id}','')">💬</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delI('checklists','${ch.id}')">${I.trash} Eliminar</button></div></div>`)}</div>`;}).join('')}<div class="mo" id="newChkM"><div class="mo-c"><div class="mo-h"><h3 style="color:${c}">Nueva Checklist</h3><button class="tbtn" onclick="closeM('newChkM')">${I.x}</button></div><div class="fg"><label class="fl">Titulo *</label><input class="fi" id="ck_t"></div>${priSelector('ck_p','media')}<div class="fg"><label class="fl">Items (uno por linea)</label><textarea class="ft" id="ck_i" placeholder="Verificar estribos&#10;Revisar recubrimiento"></textarea></div><button class="btn btn-w mt-8" style="background:${c};color:#fff" onclick="saveCk()">Crear</button></div></div>`;}
 function closeChkHist(){var el=document.getElementById('chkHistM');if(el)el.remove();}
 
 function showChkHistorial(){
@@ -4831,7 +4831,7 @@ function saveEditChk(ci){
 function toggleChkCollapsed(id){if(!S.chkCollapsed)S.chkCollapsed={};S.chkCollapsed[id]=!S.chkCollapsed[id];try{localStorage.setItem('_cc',JSON.stringify(S.chkCollapsed));}catch(e){}render();}
 function toggleTaskCollapsed(id){if(!S.taskCollapsed)S.taskCollapsed={};S.taskCollapsed[id]=!S.taskCollapsed[id];try{localStorage.setItem('_tc',JSON.stringify(S.taskCollapsed));}catch(e){}render();}
 function saveChkNote(id,val){var ch=(D.checklists||[]).find(function(x){return x.id===id;});if(!ch)return;ch.note=val.trim();ch.updatedAt=nw();sv();}
-function togC(ci,ii){
+function togC(ci,ii,boxEl){
   const c=D.checklists.find(x=>x.id===ci);
   if(c){const it=c.items.find(x=>x.id===ii);
     if(it){it.done=!it.done;c.updatedAt=nw();
@@ -4842,6 +4842,23 @@ function togC(ci,ii){
         D.chkHistorial.push({id:uid(),projectId:S.proj,checklistId:ci,checklistTitle:c.title,
           itemId:ii,itemText:it.text,visitaId:c.visitaId||null,visitaTitle:vis?.title||null,
           obra:proj?.name||'',fecha:nw()});
+      }
+      if(boxEl){
+        boxEl.className='chk-box'+(it.done?' checked':'');
+        boxEl.innerHTML=it.done?I.check:'';
+        var _tx=boxEl.nextElementSibling;
+        if(_tx)_tx.className='chk-text'+(it.done?' done':'')+' flex-1';
+        var _card=boxEl.closest('.card');
+        if(_card){
+          var _dn=c.items.filter(function(i){return i.done;}).length;
+          var _tot=c.items.length;
+          var _pct=_tot>0?Math.min(_dn/_tot*100,100):0;
+          var _col=_dn===_tot&&_tot>0?'var(--green)':_dn>0?'#f0a500':'#e02020';
+          var _pb=_card.querySelector('.prog-bar');
+          if(_pb){_pb.style.width=_pct+'%';_pb.style.background=_col;}
+          _card.querySelectorAll('[data-chk-score]').forEach(function(el){el.textContent=_dn+'/'+_tot;el.style.color=_col;});
+        }
+        sv();return;
       }
     }
   }
@@ -5575,7 +5592,7 @@ function rConfig(mc,p){
   [].concat(pf('visitas'),pf('tareas'),pf('materiales'),pf('matIngresos')).forEach(function(it){
     (it.photos||[]).forEach(function(p){var u=typeof p==='string'?p:(p.url||'');if(u.startsWith('data:'))_b64n++;});
   });
-mc.innerHTML=`${modHeader('config','Configuracion')}<div class="card mb-12"><div class="flex justify-between items-center mb-8"><div class="ts fw7">Datos de la obra</div><button class="btn btn-sec btn-s" onclick="openM('editProjM')">${I.edit} Editar</button></div><div class="ts tc3 lh18"><strong>Nombre:</strong> ${p.name}<br><strong>Cliente:</strong> ${p.client||'-'}<br><strong>Ubicacion:</strong> ${p.location||'-'}<br><strong>Director:</strong> ${p.director||'-'}<br><strong>Capataz:</strong> ${p.capataz||'-'}<br><strong>Inicio:</strong> ${fmts(p.startDate)||'-'}<br><strong>Fin:</strong> ${fmts(p.endDate)||'-'}<br><strong>Estado:</strong> ${p.status}</div></div><div class="card mb-12"><div class="ts fw7 mb-8">Estadisticas</div><div class="ts tc3 lh18">Visitas: ${pf('visitas').length} | Tareas: ${pf('tareas').length} | Materiales: ${pf('materiales').length} | Ingresos: ${pf('matIngresos').length} | Alertas: ${pf('alertas').length} | Comentarios: ${pf('comentarios').length} | Docs: ${pf('documentos').length} | Enlaces: ${pf('enlaces').length}</div></div><div class="card mb-12" style="border-left:4px solid #0d9488"><div class="ts fw7 mb-8" style="color:#0d9488">&#x1F4F1; Formularios de campo</div><div class="txxs tc3 mb-12">Cuando compartís el formulario con un colaborador, los envíos te llegan por los canales que tengas activos.</div><div class="flex items-center gap-8 mb-10"><div class="flex-1"><label class="fl">Tu WhatsApp</label><input class="fi" id="cfg_arch_tel" type="tel" value="${SYNC.archTel||''}" placeholder="+549..." onblur="saveArchContact('tel',this.value)"></div><button class="btn btn-s" style="margin-top:18px;min-width:80px;font-size:11px;background:${SYNC.sendWA?'var(--green)':'var(--gray-ll)'};color:${SYNC.sendWA?'#fff':'var(--text2)'}" onclick="toggleSendChannel('wa')">${SYNC.sendWA?'&#x2713; Activo':'Inactivo'}</button></div><div class="flex items-center gap-8 mb-12"><div class="flex-1"><label class="fl">Tu email</label><input class="fi" id="cfg_arch_mail" type="email" value="${SYNC.archEmail||''}" placeholder="tu@email.com" onblur="saveArchContact('mail',this.value)"></div><button class="btn btn-s" style="margin-top:18px;min-width:80px;font-size:11px;background:${SYNC.sendEmail?'var(--green)':'var(--gray-ll)'};color:${SYNC.sendEmail?'#fff':'var(--text2)'}" onclick="toggleSendChannel('email')">${SYNC.sendEmail?'&#x2713; Activo':'Inactivo'}</button></div><div class="txxs tc3">Los envíos llegan como un link. Al tocarlo la app muestra los datos en la Bandeja de entrada.</div></div>v><div class="card mb-12" style="background:var(--red-bg);border:1px solid var(--red-mid)"><div class="ts fw7 mb-8" style="color:var(--red)">Zona peligrosa</div><button class="btn btn-x btn-s btn-w" onclick="deleteProj()">Eliminar obra</button></div><div class="card mb-12" style="border-left:4px solid var(--cyan);padding:12px"><div class="ts fw7 mb-6">&#x1F4BE; Almacenamiento local</div><div style="background:var(--gray-ll);border-radius:6px;height:8px;margin-bottom:6px"><div style="background:${_lsColor};border-radius:6px;height:8px;width:${_lsPct}%"></div></div><div class="txxs tc3">${_lsUsed} KB usados de ~5120 KB disponibles</div>${_lsPct>80?'<div class="txxs mt-4" style="color:var(--orange)">&#x26A0; Almacenamiento casi lleno. Conectá Drive para liberar espacio.</div>':''}</div><div class="tac mt-20 txxs tc3"><div class="fw7">ObraControl Pro v9.0</div><div class="mt-4">Visita-centric | PDF | Materiales+Ingresos | Comentarios vinculados</div></div><div class="mo" id="editProjM"><div class="mo-c"><div class="mo-h"><h3>Editar Obra</h3><button class="tbtn" onclick="closeM('editProjM')">${I.x}</button></div><div class="fg"><label class="fl">Nombre *</label><input class="fi" id="ep_n" value="${p.name||''}"></div><div class="fg"><label class="fl">Cliente</label><input class="fi" id="ep_cl" value="${p.client||''}"></div><div class="fg"><label class="fl">Ubicacion</label><input class="fi" id="ep_loc" value="${p.location||''}"></div><div class="fr"><div class="fg"><label class="fl">Director</label><input class="fi" id="ep_dir" value="${p.director||''}"></div><div class="fg"><label class="fl">Capataz</label><input class="fi" id="ep_cap" value="${p.capataz||''}"></div></div><div class="fr"><div class="fg"><label class="fl">Inicio</label><input class="fi" id="ep_st" type="date" value="${p.startDate||''}"></div><div class="fg"><label class="fl">Fin</label><input class="fi" id="ep_en" type="date" value="${p.endDate||''}"></div></div><div class="fg"><label class="fl">Estado</label><select class="fs" id="ep_sta">${['En curso','Pausada','Finalizada','Por iniciar'].map(s=>`<option${s===p.status?' selected':''}>${s}</option>`).join('')}</select></div><button class="btn btn-p btn-w mt-8" onclick="saveEP()">Guardar</button></div></div>`;
+mc.innerHTML=`${modHeader('config','Configuracion')}<div class="card mb-12"><div class="flex justify-between items-center mb-8"><div class="ts fw7">Datos de la obra</div><button class="btn btn-sec btn-s" onclick="openM('editProjM')">${I.edit} Editar</button></div><div class="ts tc3 lh18"><strong>Nombre:</strong> ${p.name}<br><strong>Cliente:</strong> ${p.client||'-'}<br><strong>Ubicacion:</strong> ${p.location||'-'}<br><strong>Director:</strong> ${p.director||'-'}<br><strong>Capataz:</strong> ${p.capataz||'-'}<br><strong>Inicio:</strong> ${fmts(p.startDate)||'-'}<br><strong>Fin:</strong> ${fmts(p.endDate)||'-'}<br><strong>Estado:</strong> ${p.status}</div></div><div class="card mb-12"><div class="ts fw7 mb-8">Estadisticas</div><div class="ts tc3 lh18">Visitas: ${pf('visitas').length} | Tareas: ${pf('tareas').length} | Materiales: ${pf('materiales').length} | Ingresos: ${pf('matIngresos').length} | Alertas: ${pf('alertas').length} | Comentarios: ${pf('comentarios').length} | Docs: ${pf('documentos').length} | Enlaces: ${pf('enlaces').length}</div></div><div class="card mb-12" style="border-left:4px solid #0d9488"><div class="ts fw7 mb-8" style="color:#0d9488">&#x1F4F1; Informes de campo</div><div class="txxs tc3 mb-12">Cuando compartís el link con un colaborador, los informes te llegan por los canales que tengas activos.</div><div class="flex items-center gap-8 mb-10"><div class="flex-1"><label class="fl">Tu WhatsApp</label><input class="fi" id="cfg_arch_tel" type="tel" value="${SYNC.archTel||''}" placeholder="+549..." onblur="saveArchContact('tel',this.value)"></div><button class="btn btn-s" style="margin-top:18px;min-width:80px;font-size:11px;background:${SYNC.sendWA?'var(--green)':'var(--gray-ll)'};color:${SYNC.sendWA?'#fff':'var(--text2)'}" onclick="toggleSendChannel('wa')">${SYNC.sendWA?'&#x2713; Activo':'Inactivo'}</button></div><div class="flex items-center gap-8 mb-12"><div class="flex-1"><label class="fl">Tu email</label><input class="fi" id="cfg_arch_mail" type="email" value="${SYNC.archEmail||''}" placeholder="tu@email.com" onblur="saveArchContact('mail',this.value)"></div><button class="btn btn-s" style="margin-top:18px;min-width:80px;font-size:11px;background:${SYNC.sendEmail?'var(--green)':'var(--gray-ll)'};color:${SYNC.sendEmail?'#fff':'var(--text2)'}" onclick="toggleSendChannel('email')">${SYNC.sendEmail?'&#x2713; Activo':'Inactivo'}</button></div><div class="txxs tc3">Los envíos llegan como un link. Al tocarlo la app muestra los datos en la Bandeja de entrada.</div></div>v><div class="card mb-12" style="background:var(--red-bg);border:1px solid var(--red-mid)"><div class="ts fw7 mb-8" style="color:var(--red)">Zona peligrosa</div><button class="btn btn-x btn-s btn-w" onclick="deleteProj()">Eliminar obra</button></div><div class="card mb-12" style="border-left:4px solid var(--cyan);padding:12px"><div class="ts fw7 mb-6">&#x1F4BE; Almacenamiento local</div><div style="background:var(--gray-ll);border-radius:6px;height:8px;margin-bottom:6px"><div style="background:${_lsColor};border-radius:6px;height:8px;width:${_lsPct}%"></div></div><div class="txxs tc3">${_lsUsed} KB usados de ~5120 KB disponibles</div>${_lsPct>80?'<div class="txxs mt-4" style="color:var(--orange)">&#x26A0; Almacenamiento casi lleno. Conectá Drive para liberar espacio.</div>':''}</div><div class="tac mt-20 txxs tc3"><div class="fw7">ObraControl Pro v9.0</div><div class="mt-4">Visita-centric | PDF | Materiales+Ingresos | Comentarios vinculados</div></div><div class="mo" id="editProjM"><div class="mo-c"><div class="mo-h"><h3>Editar Obra</h3><button class="tbtn" onclick="closeM('editProjM')">${I.x}</button></div><div class="fg"><label class="fl">Nombre *</label><input class="fi" id="ep_n" value="${p.name||''}"></div><div class="fg"><label class="fl">Cliente</label><input class="fi" id="ep_cl" value="${p.client||''}"></div><div class="fg"><label class="fl">Ubicacion</label><input class="fi" id="ep_loc" value="${p.location||''}"></div><div class="fr"><div class="fg"><label class="fl">Director</label><input class="fi" id="ep_dir" value="${p.director||''}"></div><div class="fg"><label class="fl">Capataz</label><input class="fi" id="ep_cap" value="${p.capataz||''}"></div></div><div class="fr"><div class="fg"><label class="fl">Inicio</label><input class="fi" id="ep_st" type="date" value="${p.startDate||''}"></div><div class="fg"><label class="fl">Fin</label><input class="fi" id="ep_en" type="date" value="${p.endDate||''}"></div></div><div class="fg"><label class="fl">Estado</label><select class="fs" id="ep_sta">${['En curso','Pausada','Finalizada','Por iniciar'].map(s=>`<option${s===p.status?' selected':''}>${s}</option>`).join('')}</select></div><button class="btn btn-p btn-w mt-8" onclick="saveEP()">Guardar</button></div></div>`;
 }
 
 function renderConfigSize(){
@@ -6558,7 +6575,10 @@ function rColaboradores(mc,p){
     var noteBdg=noteCount?'<span style="background:var(--pri);color:#fff;border-radius:9px;padding:0 5px;font-size:9px;margin-left:3px">'+noteCount+'</span>':''
     var _coArch=(D.carpetas||[]).find(function(x){return x.colabId===co.id&&x.projectId===S.proj;});var _coArN=_coArch?(_coArch.archivos||[]).length:0;
     var btnCarpeta='<button class="btn btn-sec btn-s" style="position:relative" onclick="openCarpeta(\''+ co.id +'\')" title="Carpeta">📁'+(_coArN?'<span style="position:absolute;top:-3px;right:-3px;background:var(--green);color:#fff;border-radius:50%;width:14px;height:14px;font-size:8px;display:flex;align-items:center;justify-content:center">'+_coArN+'</span>':'')+'</button>';
-    var btnForm=_rev?'':('<button class="btn btn-sec btn-s" onclick="shareFormColaborador(\''+ co.id +'\')" title="Compartir formulario">📤</button>');
+    var _isAcept=co.estado==='aceptado'||co.estado==='activo';
+    var btnForm=_rev?'':(_isAcept
+      ?('<button class="btn btn-sec btn-s" onclick="openColabPortal(\''+ co.id +'\')" title="Ver portal del colaborador">👤</button>')
+      :('<button class="btn btn-sec btn-s" onclick="shareFormColaborador(\''+ co.id +'\')" title="Compartir informe">📤</button>'));
     var btnNote='<button class="btn btn-sec btn-s" onclick="openColabNotes(\''+ co.id +'\')" title="Chat / Notas">💬'+noteBdg+'</button>';
     var btnEdit='<button class="btn btn-sec btn-s" onclick="editColab(\''+ co.id +'\')">'+I.edit+'</button>';
     var btnBaja='<button class="btn btn-s" style="font-size:10px;'+ (_rev?'background:var(--green);color:#fff':'background:var(--gray-ll);color:var(--red)')+'" onclick="'+ (_rev?'reactivateColab(\''+ co.id +'\')':'revokeColab(\''+ co.id +'\')') +'">'+(_rev?'Reactivar':'Dar de baja')+'</button>';
@@ -6771,13 +6791,19 @@ function openCarpeta(colabId){
       var docs=sorted.filter(function(f){return !f.tipo||!f.tipo.startsWith('image/');});
       if(imgs.length){
         if(docs.length)h+='<div class="txxs fw7 tc3 mb-6">📸 Fotos ('+imgs.length+')</div>';
+        window._cLBImgs=imgs.map(function(f){return {data:f.data,nombre:f.nombre,fecha:f.fecha,id:f.id};});
         h+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:16px">';
-        imgs.forEach(function(f){
+        imgs.forEach(function(f,idx){
           var upBy=f.subidoPor==='col'?'👷':'🏗';
-          h+='<div style="position:relative;cursor:pointer" onclick="window.open(\''+f.data+'\')" title="'+esc(f.nombre)+' · '+fmts(f.fecha)+'">';
-          h+='<img src="'+f.data+'" style="width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:8px;display:block" onerror="this.style.display=\'none\'">';
-          h+='<div style="position:absolute;bottom:3px;left:3px;background:rgba(0,0,0,.5);border-radius:5px;padding:1px 5px;font-size:9px;color:#fff">'+upBy+' '+fmts(f.fecha).slice(0,5)+'</div>';
-          h+='<button style="position:absolute;top:3px;right:3px;background:rgba(0,0,0,.5);border:none;color:#fff;border-radius:50%;width:20px;height:20px;font-size:10px;cursor:pointer;line-height:1" onclick="event.stopPropagation();deleteCarpetaFile(\''+colabId+'\',\''+f.id+'\')">✕</button>';
+          h+='<div style="position:relative">';
+          h+='<div style="position:relative;padding-bottom:100%;overflow:hidden;border-radius:8px;cursor:pointer;background:var(--gray-ll)" onclick="openCarpetaLightbox('+idx+')">';
+          h+='<img src="'+f.data+'" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'\';">';
+          h+='<div style="position:absolute;bottom:3px;left:3px;background:rgba(0,0,0,.55);border-radius:5px;padding:1px 5px;font-size:9px;color:#fff">'+upBy+' '+fmts(f.fecha).slice(0,5)+'</div>';
+          h+='</div>';
+          h+='<div style="position:absolute;top:3px;right:3px;display:flex;flex-direction:column;gap:3px">';
+          h+='<a href="'+f.data+'" download="'+esc(f.nombre)+'" onclick="event.stopPropagation()" style="background:rgba(0,0,0,.6);color:#fff;border-radius:50%;width:20px;height:20px;font-size:10px;display:flex;align-items:center;justify-content:center;text-decoration:none" title="Descargar">⬇</a>';
+          h+='<button style="background:rgba(0,0,0,.6);border:none;color:#fff;border-radius:50%;width:20px;height:20px;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0" onclick="event.stopPropagation();deleteCarpetaFile(\''+colabId+'\',\''+f.id+'\')">✕</button>';
+          h+='</div>';
           h+='</div>';
         });
         h+='</div>';
@@ -6832,6 +6858,23 @@ function downloadCarpetaAll(colabId){
   var cp=getCarpeta(colabId);var arch=cp.archivos||[];if(!arch.length)return;
   arch.forEach(function(f,i){setTimeout(function(){var a=document.createElement('a');a.href=f.data;a.download=f.nombre;document.body.appendChild(a);a.click();document.body.removeChild(a);},i*400);});
   toast('Descargando '+arch.length+' archivo'+(arch.length>1?'s':'')+'...','var(--pri)');
+}
+function openCarpetaLightbox(idx){
+  var imgs=window._cLBImgs||[];if(!imgs.length||idx<0||idx>=imgs.length)return;
+  var f=imgs[idx];
+  document.getElementById('carpetaLB')?.remove();
+  var d=document.createElement('div');d.id='carpetaLB';
+  d.style.cssText='position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.93);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px';
+  var h='<button onclick="document.getElementById(\'carpetaLB\').remove()" style="position:absolute;top:12px;right:12px;border:none;background:rgba(255,255,255,.2);color:#fff;border-radius:50%;width:36px;height:36px;font-size:18px;cursor:pointer;z-index:1">✕</button>';
+  h+='<img src="'+f.data+'" style="max-width:92vw;max-height:68vh;object-fit:contain;border-radius:10px">';
+  h+='<div style="color:rgba(255,255,255,.8);font-size:11px;margin-top:10px;text-align:center">'+esc(f.nombre)+'<br><span style="color:rgba(255,255,255,.5)">'+fmts(f.fecha)+'</span></div>';
+  h+='<div style="display:flex;gap:10px;margin-top:14px;align-items:center">';
+  if(idx>0)h+='<button onclick="openCarpetaLightbox('+(idx-1)+')" style="border:none;background:rgba(255,255,255,.18);color:#fff;border-radius:10px;padding:8px 16px;font-size:14px;cursor:pointer">← Ant.</button>';
+  h+='<a href="'+f.data+'" download="'+esc(f.nombre)+'" style="border:none;background:#16a34a;color:#fff;border-radius:10px;padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;text-decoration:none">⬇ Descargar</a>';
+  if(idx<imgs.length-1)h+='<button onclick="openCarpetaLightbox('+(idx+1)+')" style="border:none;background:rgba(255,255,255,.18);color:#fff;border-radius:10px;padding:8px 16px;font-size:14px;cursor:pointer">Sig. →</button>';
+  h+='</div>';
+  h+='<div style="color:rgba(255,255,255,.35);font-size:11px;margin-top:8px">'+(idx+1)+' / '+imgs.length+'</div>';
+  d.innerHTML=h;document.body.appendChild(d);
 }
 function shareCarpetaUrl(colabId){
   var co=(D.colaboradores||[]).find(function(x){return x.id===colabId;});if(!co)return;
@@ -7098,6 +7141,7 @@ load();render();
     // Check if token is revoked
     var co=(D.colaboradores||[]).find(function(c){return c.id===sub.token;});
     if(co&&co.estado==='revocado'){toast('Envío de '+sub.ayudante+' descartado (colaborador dado de baja)','var(--orange)',5000);return;}
+    if(co&&co.estado==='pendiente'){co.estado='aceptado';co.updatedAt=nw();}
     // Check project match
     if(sub.obraId&&D.projects&&!D.projects.find(function(p){return p.id===sub.obraId;})){toast('El reporte es de una obra no encontrada en esta app','var(--orange)',5000);return;}
     sub.receivedAt=new Date().toISOString();
@@ -7229,14 +7273,14 @@ function _rAyudantes(p){
   var ep=SYNC.formulariosEndpoint||'';
   var baseF=window.location.href.replace(/\/[^/]*(\?.*)?$/,'/form.html');
   var h='<div class="flex justify-between items-center mb-8"><div class="ts fw7" style="color:#0d9488">&#x1F477; Ayudantes</div><button class="btn btn-s" style="background:#0d9488;color:#fff" onclick="openM(\'newAyudM\')">'+I.plus+' Agregar</button></div>';
-  h+='<div class="txxs tc3 mb-8">Los ayudantes reciben un link de formulario sin login para cargar datos de campo.</div>';
-  if(!ep)h+='<div class="txxs mb-8" style="color:var(--orange)">&#x26A0; Configurá el Apps Script en Config para activar los formularios.</div>';
+  h+='<div class="txxs tc3 mb-8">Los ayudantes reciben un link de informe sin login para cargar datos de campo.</div>';
+  if(!ep)h+='<div class="txxs mb-8" style="color:var(--orange)">&#x26A0; Configurá el Apps Script en Config para activar los informes.</div>';
   if(!ay.length){h+='<div class="txxs tc3">Sin ayudantes cargados aún.</div>';return h;}
   ay.forEach(function(a){
     var link=ep?baseF+'?endpoint='+encodeURIComponent(ep)+'&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p.name)+'&ayudante='+encodeURIComponent(a.name):'';
     h+='<div style="padding:10px 0;border-bottom:1px solid var(--gray-ll)"><div class="flex justify-between items-center"><div class="ts fw6">'+a.name+'</div><div class="flex gap-4">';
     if(link)h+='<button class="btn btn-sec btn-s" onclick="copyAyudLink(\''+encodeURIComponent(link)+'\')">&#x1F4CB;</button>';
-    if(a.phone&&link)h+='<a href="https://wa.me/'+a.phone.replace(/[^0-9]/g,'')+'?text='+encodeURIComponent('Formulario de obra '+p.name+':\n'+link)+'" target="_blank" class="btn btn-sec btn-s">&#x1F4AC;</a>';
+    if(a.phone&&link)h+='<a href="https://wa.me/'+a.phone.replace(/[^0-9]/g,'')+'?text='+encodeURIComponent('Informe de obra '+p.name+':\n'+link)+'" target="_blank" class="btn btn-sec btn-s">&#x1F4AC;</a>';
     h+='<button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delAyudante(\''+a.id+'\')">'+I.trash+'</button>';
     h+='</div></div></div>';
   });
@@ -7283,15 +7327,13 @@ function rBandeja(mc,p){
     +'<button class="btn btn-s" style="'+(tab==='log'?'background:'+c2+';color:#fff':'background:var(--gray-ll);color:var(--text2)')+'" onclick="S.bandejaTab=\'log\';render()">📋 Log ('+procesados.length+')</button>'
     +'</div>'
     +(tab==='pendientes'
-      ?(pendientes.length?pendientes.map(renderCard).join(''):'<div class="empty">'+I.checkc+'<div class="ts mt-8">Bandeja vacía</div><div class="txxs tc3 mt-4">Cuando un colaborador envíe su formulario, aparecerá aquí.</div></div>')
-      :(procesados.length?procesados.map(renderCard).join(''):'<div class="empty"><div class="ts mt-8">Sin formularios procesados aún</div></div>'));
+      ?(pendientes.length?pendientes.map(renderCard).join(''):'<div class="empty">'+I.checkc+'<div class="ts mt-8">Bandeja vacía</div><div class="txxs tc3 mt-4">Cuando un colaborador envíe su informe, aparecerá aquí.</div></div>')
+      :(procesados.length?procesados.map(renderCard).join(''):'<div class="empty"><div class="ts mt-8">Sin informes procesados aún</div></div>'));
 }
 
 function incorporarFormularioModal(id){
   var sub=(D.formulariosPendientes||[]).find(function(x){return x.id===id;});
   if(!sub)return;
-  document.getElementById('ifmM')?.remove();
-  var d=document.createElement('div');d.className='mo open';d.id='ifmM';
   var isPend=sub.estado==='pendiente';
   if(!sub.itemsInc)sub.itemsInc=[];
   var h='<div class="mo-c" style="max-height:92vh;display:flex;flex-direction:column;padding:0">';
@@ -7405,7 +7447,9 @@ function incorporarFormularioModal(id){
     h+='</div>';
   }
   h+='</div>';
-  d.innerHTML=h;document.body.appendChild(d);
+  var _ex=document.getElementById('ifmM');
+  if(_ex){_ex.innerHTML=h;}
+  else{var d=document.createElement('div');d.className='mo open';d.id='ifmM';d.innerHTML=h;document.body.appendChild(d);}
 }
 function reabrirFormulario(id){
   var sub=(D.formulariosPendientes||[]).find(function(x){return x.id===id;});
@@ -7413,7 +7457,7 @@ function reabrirFormulario(id){
   sub.estado='pendiente';sub.itemsInc=[];sub.updatedAt=nw();
   sv();document.getElementById('ifmM')?.remove();render();
   incorporarFormularioModal(id);
-  toast('Formulario reabierto','var(--pri)');
+  toast('Informe reabierto','var(--pri)');
 }
 function _getAllFormKeys(sub){
   var keys=[];
@@ -7509,7 +7553,7 @@ function incItem(formId,key){
     sub.estado='incorporado';sub.fechaIncorporado=nw();
     audit('formularios','incorporar',sub.ayudante||'');
     sv();document.getElementById('ifmM')?.remove();render();
-    toast('Formulario completo incorporado ✓','var(--green)',3000);
+    toast('Informe incorporado ✓','var(--green)',3000);
   } else {
     sv();incorporarFormularioModal(formId);
     toast('Ítem incorporado ✓','var(--green)',2000);
@@ -7527,7 +7571,7 @@ function incSec(formId,pfx){
   if(ak.length>0&&ak.every(function(k){return sub.itemsInc.indexOf(k)>=0;})){
     sub.estado='incorporado';sub.fechaIncorporado=nw();
     audit('formularios','incorporar',sub.ayudante||'');
-    sv();document.getElementById('ifmM')?.remove();render();toast('Formulario completo incorporado ✓','var(--green)',3000);
+    sv();document.getElementById('ifmM')?.remove();render();toast('Informe incorporado ✓','var(--green)',3000);
   } else {
     sv();incorporarFormularioModal(formId);toast('Sección incorporada ✓','var(--green)',2000);
   }
@@ -7591,7 +7635,7 @@ function descartarFormulario(id){
   var sub=(D.formulariosPendientes||[]).find(function(x){return x.id===id;});
   if(!sub||!confirmDel('¿Descartar este formulario?'))return;
   sub.estado='descartado';sub.updatedAt=nw();
-  sv();render();toast('Formulario descartado','var(--orange)');
+  sv();render();toast('Informe descartado','var(--orange)');
 }
 
 async function fetchFormulariosPending(){
@@ -7614,8 +7658,10 @@ async function fetchFormulariosPending(){
       if(!item.id||existingIds.has(item.id))return;
       item.estado=item.estado||'pendiente';
       D.formulariosPendientes.push(item);added++;
+      var _co=(D.colaboradores||[]).find(function(c){return c.id===item.token;});
+      if(_co&&_co.estado==='pendiente'){_co.estado='aceptado';_co.updatedAt=nw();}
     });
-    if(added>0){sv();if(S.mod==='bandeja')render();else toast(added+' formulario'+(added>1?'s':'')+' nuevo'+(added>1?'s':'')+' en Bandeja','#0d9488',4000);}
+    if(added>0){sv();if(S.mod==='bandeja')render();else toast(added+' informe'+(added>1?'s':'')+' nuevo'+(added>1?'s':'')+' en Bandeja','#0d9488',4000);}
   }catch(e){console.warn('fetchFormulariosPending:',e);}
 }
 
@@ -7705,18 +7751,25 @@ function shareFormColaborador(colId){
   if(!co)return;
   if(co.estado==='revocado'){toast('Este colaborador fue dado de baja. Reactivalo antes de compartir.','var(--orange)');return;}
   if(!co.phone){toast('Agregá un teléfono al colaborador primero','var(--orange)');return;}
-  if(!SYNC.archTel&&!SYNC.archEmail){toast('Configurá tu WhatsApp o email en Configuración → Formularios de campo','var(--orange)');return;}
+  if(!SYNC.archTel&&!SYNC.archEmail){toast('Configurá tu WhatsApp o email en Configuración → Informes de campo','var(--orange)');return;}
   var p=D.projects.find(function(x){return x.id===S.proj;});
   var baseUrl=window.location.href.replace(/\/[^/]*(\?.*)?$/,'/form.html');
   var formUrl=baseUrl+'?token='+encodeURIComponent(co.id)+'&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p&&p.name||'')+(SYNC.archTel?'&tel='+encodeURIComponent(SYNC.archTel):'')+(SYNC.archEmail?'&mail='+encodeURIComponent(SYNC.archEmail):'')+'&sw='+(SYNC.sendWA?'1':'0')+'&se='+(SYNC.sendEmail?'1':'0');
   var isAcept=co.estado==='aceptado'||co.estado==='activo';
   var msg=isAcept
-    ?encodeURIComponent('📋 '+(co.name||'')+', recordatorio de formulario — obra '+((p&&p.name)||'')+':\n'+formUrl)
+    ?encodeURIComponent('📋 '+(co.name||'')+', recordatorio de informe — obra '+((p&&p.name)||'')+':\n'+formUrl)
     :encodeURIComponent('Hola '+(co.name||'')+', te invito a colaborar en la obra '+((p&&p.name)||'')+'. Accedé con este link para enviarme reportes:\n'+formUrl);
   window.open('https://wa.me/'+co.phone.replace(/[^0-9]/g,'')+'?text='+msg,'_blank');
 }
+function openColabPortal(colId){
+  var co=(D.colaboradores||[]).find(function(c){return c.id===colId;});if(!co)return;
+  var p=D.projects.find(function(x){return x.id===S.proj;});
+  var baseUrl=window.location.href.replace(/\/[^/]*(\?.*)?$/,'/form.html');
+  var url=baseUrl+'?token='+encodeURIComponent(co.id)+'&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p&&p.name||'')+(SYNC.archTel?'&tel='+encodeURIComponent(SYNC.archTel):'')+(SYNC.archEmail?'&mail='+encodeURIComponent(SYNC.archEmail):'')+'&sw='+(SYNC.sendWA?'1':'0')+'&se='+(SYNC.sendEmail?'1':'0');
+  window.open(url,'_blank');
+}
 function shareFormContextual(categoria,entidadId,titulo){
-  if(!SYNC.archTel&&!SYNC.archEmail){toast('Configurá tu WhatsApp o email en Configuración → Formularios de campo','var(--orange)');return;}
+  if(!SYNC.archTel&&!SYNC.archEmail){toast('Configurá tu WhatsApp o email en Configuración → Informes de campo','var(--orange)');return;}
   var colabs=(D.colaboradores||[]).filter(function(c){return c.projectId===S.proj&&c.phone&&c.estado!=='revocado';});
   if(!colabs.length){toast('No hay colaboradores activos con teléfono cargado','var(--orange)');return;}
   var p=D.projects.find(function(x){return x.id===S.proj;});
@@ -7724,12 +7777,12 @@ function shareFormContextual(categoria,entidadId,titulo){
   window._sfcUrls=[];
   colabs.forEach(function(co){
     var formUrl=baseUrl+'?token='+encodeURIComponent(co.id)+'&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p&&p.name||'')+(SYNC.archTel?'&tel='+encodeURIComponent(SYNC.archTel):'')+(SYNC.archEmail?'&mail='+encodeURIComponent(SYNC.archEmail):'')+'&sw='+(SYNC.sendWA?'1':'0')+'&se='+(SYNC.sendEmail?'1':'0');
-    var msg='Hola '+(co.name||'')+', necesito que completes el formulario de '+categoria+(titulo?' — '+titulo:'')+' en la obra '+((p&&p.name)||'')+':\n'+formUrl;
+    var msg='Hola '+(co.name||'')+', necesito que completes el informe de '+categoria+(titulo?' — '+titulo:'')+' en la obra '+((p&&p.name)||'')+':\n'+formUrl;
     window._sfcUrls.push('https://wa.me/'+co.phone.replace(/[^0-9]/g,'')+'?text='+encodeURIComponent(msg));
   });
   var d=document.createElement('div');d.className='mo open';d.id='sfcM';
   var h='<div class="mo-c"><div class="mo-h"><h3>&#x1F4AC; Compartir por WhatsApp</h3><button class="tbtn" onclick="document.getElementById(\'sfcM\').remove()">'+I.x+'</button></div>';
-  h+='<div class="txxs tc3 mb-12">Elegí un colaborador para enviarle el formulario de <strong>'+categoria+'</strong></div>';
+  h+='<div class="txxs tc3 mb-12">Elegí un colaborador para enviarle el informe de <strong>'+categoria+'</strong></div>';
   colabs.forEach(function(co,idx){
     h+='<div class="flex items-center gap-8 mb-8" style="padding:8px;background:var(--gray-ll);border-radius:8px">';
     h+='<div class="flex-1"><div class="ts fw6">'+(co.name||co.email||'Sin nombre')+'</div><div class="txxs tc3">'+(co.role||'Colaborador')+' | '+co.phone+'</div></div>';

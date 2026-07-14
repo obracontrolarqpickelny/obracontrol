@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>ObraControl — Formulario de campo</title>
+<title>ObraControl — Informe de campo</title>
 <style>
 :root{--pri:#D97706;--bg:#F8FAFC;--white:#fff;--text:#1e293b;--text2:#475569;--text3:#94a3b8;--brd:#e2e8f0;--green:#16a34a;--red:#dc2626;--orange:#f59e0b;--teal:#0d9488;--gray-ll:#f1f5f9;--gray-l:#94a3b8;--rs:10px;--wa:#25d366}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -243,7 +243,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="success-btns">
       <button class="btn btn-pri" style="background:#0d9488" onclick="if(window._lastDeepLink){window.location.href=window._lastDeepLink;}">🔗 Abrir en la app</button>
       <button class="btn btn-sec" onclick="editarYReenviar()">✏️ Editar y reenviar</button>
-      <button class="btn btn-sec" onclick="nuevoFormulario()">+ Nuevo formulario</button>
+      <button class="btn btn-sec" onclick="nuevoFormulario()">+ Nuevo informe</button>
     </div>
   </div>
 </div>
@@ -673,7 +673,7 @@ function enviarTodo(){
     return;
   }
   if(!ARCH_TEL&&!ARCH_MAIL&&!SEND_WA&&!SEND_EMAIL){
-    showErr('Este formulario no tiene destino configurado. Pedile al arquitecto el link correcto.');
+    showErr('Este informe no tiene destino configurado. Pedile al arquitecto el link correcto.');
     return;
   }
 
