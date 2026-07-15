@@ -1347,7 +1347,7 @@ const SC={'En curso':'#f59e0b',Pausada:'#94a3b8',Finalizada:'#22c55e','Por inici
 const MC={dashboard:'#D97706',visitas:'#3b82f6',tareas:'#0891b2',materiales:'#7c3aed',alertas:'#dc2626',checklist:'#db2777',documentos:'#475569',comentarios:'#ea580c',colaboradores:'#16a34a',economia:'#0891b2',informes:'#D97706',config:'#64748b',bandeja:'#0d9488'};
 const MCBG={dashboard:'#FFFBEB',visitas:'#EFF6FF',tareas:'#ECFEFF',materiales:'#F5F3FF',alertas:'#FEF2F2',checklist:'#FDF2F8',documentos:'#F8FAFC',comentarios:'#FFF7ED',colaboradores:'#F0FDF4',economia:'#ECFEFF',informes:'#FFFBEB',config:'#F8FAFC',bandeja:'#f0fdfa'};
 
-let D={user:null,projects:[],visitas:[],tareas:[],materiales:[],matIngresos:[],alertas:[],documentos:[],enlaces:[],checklists:[],comentarios:[],colaboradores:[],economia:[],auditLog:[],formulariosPendientes:[],carpetas:[],driveConfig:{},lastSync:null};
+let D={user:null,projects:[],visitas:[],tareas:[],materiales:[],matIngresos:[],alertas:[],documentos:[],enlaces:[],checklists:[],comentarios:[],colaboradores:[],economia:[],auditLog:[],formulariosPendientes:[],carpetas:[],mensajesColab:[],driveConfig:{},lastSync:null};
 let S={proj:null,mod:'dashboard',menu:false,searchOpen:false,searchQ:'',taskFilter:'',taskEncFilter:'',taskSort:'',chkSort:'',chkCollapsed:{},taskCollapsed:{},visitaDetail:null,matDetail:null,matNoteEditing:null,matIngSort:'rec',cmtFilter:'',cmtSearch:'',cmtTipoFilter:'',ecoFilter:'',ecoTipoFilter:'',ecoSort:'',docSort:'',matFilter:'',matCatFilter:'',matSort:'',matSinCompMin:false,matExistMin:false,matAPedirMin:false,matPedMin:false,ecoMetrosOpen:false,bandejaTab:'pendientes'};
 try{S.chkCollapsed=JSON.parse(localStorage.getItem('_cc')||'{}')}catch(e){}
 try{S.taskCollapsed=JSON.parse(localStorage.getItem('_tc')||'{}')}catch(e){}
@@ -4764,7 +4764,7 @@ function rChecklist(mc){const items=pf('checklists');const c=MC.checklist;const 
   mc.innerHTML=`${modHeader('checklist','Checklists',`<div class="flex gap-4"><button class="btn btn-s" style="background:${c};color:#fff" onclick="openM('newChkM')">${I.plus} Nueva</button><button class="btn btn-sec btn-s" onclick="showChkHistorial()">&#x1F4CB; Historial</button></div>`)}
   <div style="display:flex;align-items:center;gap:6px;margin:8px 0 12px"><span class="txxs fw6 tc3" style="white-space:nowrap">Ordenar:</span><select class="fs" style="font-size:12px;padding:4px 8px 4px 6px;min-width:150px;max-width:100%" onchange="S.chkSort=this.value;render()"><option value="" ${!S.chkSort||S.chkSort==='pri_asc'?'selected':''}>&#x26A1; Mayor prioridad</option><option value="pri_desc" ${S.chkSort==='pri_desc'?'selected':''}>&#x26A1; Menor prioridad</option><option value="fecha_desc" ${S.chkSort==='fecha_desc'?'selected':''}>&#x1F4C5; M&aacute;s reciente</option><option value="fecha_asc" ${S.chkSort==='fecha_asc'?'selected':''}>&#x1F4C5; M&aacute;s antiguo</option></select></div>
   ${visitItems.length?`<div class="alrt alrt-y mb-8">${I.clip}<div class="ts fw6 flex-1">Checklists de visitas (${visitItems.length})</div></div>`:''}
-  ${!genItems.length?`<div class="empty"><span style="color:${c}">${I.chklist}</span><div class="ts mt-8">Sin checklists</div></div>`:sortedChk.map(ch=>{const dn=ch.items.filter(i=>i.done).length;const tot=ch.items.length;const _cl=!!(S.chkCollapsed&&S.chkCollapsed[ch.id]);const _prog=dn===tot&&tot>0?'var(--green)':dn>0?'#f0a500':'#e02020';return `<div class="card" style="border-left:3px solid ${c}"><div class="flex justify-between items-center" style="cursor:pointer" onclick="toggleChkCollapsed('${ch.id}')"><div style="flex:1;min-width:0"><div class="ts fw7">${ch.title}</div><div class="txxs tc3 mt-2" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">${priBadge(ch.priority||'media',true)}<span>&#x1F4C5; ${fmts(ch.date||ch.updatedAt)}</span><span data-chk-score="${ch.id}" style="color:${_prog};font-weight:700">${dn}/${tot}</span></div>${ch.note?`<div style="font-size:11px;color:var(--text2);font-style:italic;margin-top:4px;white-space:pre-wrap">📝 ${ch.note}</div>`:''}</div><span style="font-size:14px;color:var(--gray-l);padding:0 6px;user-select:none">${_cl?'&#x25BC;':'&#x25B2;'}</span></div>${_cl?'':(`<div onclick="event.stopPropagation()"><textarea class="ft" style="font-size:11px;color:var(--gray-l);background:var(--gray-ll);border:1px solid var(--brd);resize:vertical;min-height:34px;margin-top:10px;padding:5px 8px" placeholder="Agregar nota..." onblur="saveChkNote('${ch.id}',this.value)">${(ch.note||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea><div class="mb-6 mt-8">${progress(dn,tot,c)}<div data-chk-score="${ch.id}" class="txxs mt-4" style="color:${_prog};font-weight:700">${dn}/${tot}</div></div>${ch.items.map(it=>`<div class="chk-item"><div class="chk-box${it.done?' checked':''}" onclick="togC('${ch.id}','${it.id}',this)">${it.done?I.check:''}</div><div class="chk-text${it.done?' done':''} flex-1">${it.text}</div><button class="btn btn-g btn-s" onclick="editChkItem('${ch.id}','${it.id}')">${I.edit}</button><button class="btn btn-g btn-s" onclick="if(confirmDel())dCI('${ch.id}','${it.id}')">${I.trash}</button></div>`).join('')}<div class="flex gap-4 mt-8"><input class="fi" id="ac_${ch.id}" placeholder="Agregar..." style="flex:1" onkeydown="if(event.key==='Enter')aCI('${ch.id}')"><button class="btn btn-s" style="background:${c};color:#fff" onclick="aCI('${ch.id}')">${I.plus}</button></div><div class="flex gap-6 mt-6"><button class="btn btn-sec btn-s" onclick="editChk('${ch.id}')">${I.edit} Editar</button><button class="btn btn-sec btn-s" title="Compartir formulario" onclick="shareFormContextual('checklist','${ch.id}','')">💬</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delI('checklists','${ch.id}')">${I.trash} Eliminar</button></div></div>`)}</div>`;}).join('')}<div class="mo" id="newChkM"><div class="mo-c"><div class="mo-h"><h3 style="color:${c}">Nueva Checklist</h3><button class="tbtn" onclick="closeM('newChkM')">${I.x}</button></div><div class="fg"><label class="fl">Titulo *</label><input class="fi" id="ck_t"></div>${priSelector('ck_p','media')}<div class="fg"><label class="fl">Items (uno por linea)</label><textarea class="ft" id="ck_i" placeholder="Verificar estribos&#10;Revisar recubrimiento"></textarea></div><button class="btn btn-w mt-8" style="background:${c};color:#fff" onclick="saveCk()">Crear</button></div></div>`;}
+  ${!genItems.length?`<div class="empty"><span style="color:${c}">${I.chklist}</span><div class="ts mt-8">Sin checklists</div></div>`:sortedChk.map(ch=>{const dn=ch.items.filter(i=>i.done).length;const tot=ch.items.length;const _cl=!!(S.chkCollapsed&&S.chkCollapsed[ch.id]);const _prog=dn===tot&&tot>0?'var(--green)':dn>0?'#f0a500':'#e02020';return `<div class="card" style="border-left:3px solid ${c}"><div class="flex justify-between items-center" style="cursor:pointer" onclick="toggleChkCollapsed('${ch.id}')"><div style="flex:1;min-width:0"><div class="ts fw7">${ch.title}</div><div class="txxs tc3 mt-2" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">${priBadge(ch.priority||'media',true)}<span>&#x1F4C5; ${fmts(ch.date||ch.updatedAt)}</span><span data-chk-score="${ch.id}" style="color:${_prog};font-weight:700">${dn}/${tot}</span></div>${ch.note?`<div style="font-size:11px;color:var(--text2);font-style:italic;margin-top:4px;white-space:pre-wrap">📝 ${ch.note}</div>`:''}</div><span style="font-size:14px;color:var(--gray-l);padding:0 6px;user-select:none">${_cl?'&#x25BC;':'&#x25B2;'}</span></div>${_cl?'':(`<div onclick="event.stopPropagation()"><textarea class="ft" style="font-size:11px;color:var(--gray-l);background:var(--gray-ll);border:1px solid var(--brd);resize:vertical;min-height:34px;margin-top:10px;padding:5px 8px" placeholder="Agregar nota..." onblur="saveChkNote('${ch.id}',this.value)">${(ch.note||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea><div class="mb-6 mt-8">${progress(dn,tot,c)}<div data-chk-score="${ch.id}" class="txxs mt-4" style="color:${_prog};font-weight:700">${dn}/${tot}</div></div>${ch.items.map(it=>`<div class="chk-item"><div class="chk-box${it.done?' checked':''}" onclick="togC('${ch.id}','${it.id}',this)">${it.done?I.check:''}</div><div class="chk-text${it.done?' done':''} flex-1">${it.text}</div><button class="btn btn-g btn-s" onclick="editChkItem('${ch.id}','${it.id}')">${I.edit}</button><button class="btn btn-g btn-s" onclick="if(confirmDel())dCI('${ch.id}','${it.id}')">${I.trash}</button></div>`).join('')}<div class="flex gap-4 mt-8"><input class="fi" id="ac_${ch.id}" placeholder="Agregar..." style="flex:1" onkeydown="if(event.key==='Enter')aCI('${ch.id}')"><button class="btn btn-s" style="background:${c};color:#fff" onclick="aCI('${ch.id}')">${I.plus}</button></div><div class="flex gap-6 mt-6"><button class="btn btn-sec btn-s" onclick="editChk('${ch.id}')">${I.edit} Editar</button><button class="btn btn-sec btn-s" title="Compartir formulario" onclick="shareToInbox('checklist','${ch.id}','${ch.title.replace(/'/g,\"\\\\'\").replace(/\"/g,\"&quot;\")}')">📤</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delI('checklists','${ch.id}')">${I.trash} Eliminar</button></div></div>`)}</div>`;}).join('')}<div class="mo" id="newChkM"><div class="mo-c"><div class="mo-h"><h3 style="color:${c}">Nueva Checklist</h3><button class="tbtn" onclick="closeM('newChkM')">${I.x}</button></div><div class="fg"><label class="fl">Titulo *</label><input class="fi" id="ck_t"></div>${priSelector('ck_p','media')}<div class="fg"><label class="fl">Items (uno por linea)</label><textarea class="ft" id="ck_i" placeholder="Verificar estribos&#10;Revisar recubrimiento"></textarea></div><button class="btn btn-w mt-8" style="background:${c};color:#fff" onclick="saveCk()">Crear</button></div></div>`;}
 function closeChkHist(){var el=document.getElementById('chkHistM');if(el)el.remove();}
 
 function showChkHistorial(){
@@ -6575,9 +6575,13 @@ function rColaboradores(mc,p){
     var noteBdg=noteCount?'<span style="background:var(--pri);color:#fff;border-radius:9px;padding:0 5px;font-size:9px;margin-left:3px">'+noteCount+'</span>':''
     var _coArch=(D.carpetas||[]).find(function(x){return x.colabId===co.id&&x.projectId===S.proj;});var _coArN=_coArch?(_coArch.archivos||[]).length:0;
     var btnCarpeta='<button class="btn btn-sec btn-s" style="position:relative" onclick="openCarpeta(\''+ co.id +'\')" title="Carpeta">📁'+(_coArN?'<span style="position:absolute;top:-3px;right:-3px;background:var(--green);color:#fff;border-radius:50%;width:14px;height:14px;font-size:8px;display:flex;align-items:center;justify-content:center">'+_coArN+'</span>':'')+'</button>';
+    var _msgsPend=(D.mensajesColab||[]).filter(function(m){return m.colabId===co.id&&m.proyectoId===S.proj;});
+    var _msgsNew=_msgsPend.filter(function(m){return m.estadoColab==='nuevo';}).length;
+    var _msgsResp=_msgsPend.filter(function(m){return m.estadoColab==='completado';}).length;
     var _isAcept=co.estado==='aceptado'||co.estado==='activo';
+    var _portalBdg=(_msgsResp>0?'<span style="position:absolute;top:-3px;right:-3px;background:var(--green);color:#fff;border-radius:50%;width:14px;height:14px;font-size:8px;display:flex;align-items:center;justify-content:center">'+_msgsResp+'</span>':(_msgsNew>0?'<span style="position:absolute;top:-3px;right:-3px;background:var(--orange);color:#fff;border-radius:50%;width:14px;height:14px;font-size:8px;display:flex;align-items:center;justify-content:center">'+_msgsNew+'</span>':''));
     var btnForm=_rev?'':(_isAcept
-      ?('<button class="btn btn-sec btn-s" onclick="openColabPortal(\''+ co.id +'\')" title="Ver portal del colaborador">👤</button>')
+      ?('<button class="btn btn-sec btn-s" style="position:relative" onclick="openColabPortal(\''+ co.id +'\')" title="Ver portal / bandeja">👤'+_portalBdg+'</button>')
       :('<button class="btn btn-sec btn-s" onclick="shareFormColaborador(\''+ co.id +'\')" title="Compartir informe">📤</button>'));
     var btnNote='<button class="btn btn-sec btn-s" onclick="openColabNotes(\''+ co.id +'\')" title="Chat / Notas">💬'+noteBdg+'</button>';
     var btnEdit='<button class="btn btn-sec btn-s" onclick="editColab(\''+ co.id +'\')">'+I.edit+'</button>';
@@ -6801,7 +6805,7 @@ function openCarpeta(colabId){
           h+='<div style="position:absolute;bottom:3px;left:3px;background:rgba(0,0,0,.55);border-radius:5px;padding:1px 5px;font-size:9px;color:#fff">'+upBy+' '+fmts(f.fecha).slice(0,5)+'</div>';
           h+='</div>';
           h+='<div style="position:absolute;top:3px;right:3px;display:flex;flex-direction:column;gap:3px">';
-          h+='<a href="'+f.data+'" download="'+esc(f.nombre)+'" onclick="event.stopPropagation()" style="background:rgba(0,0,0,.6);color:#fff;border-radius:50%;width:20px;height:20px;font-size:10px;display:flex;align-items:center;justify-content:center;text-decoration:none" title="Descargar">⬇</a>';
+          h+='<button onclick="event.stopPropagation();dlImg(\''+f.data+'\',\''+esc(f.nombre)+'\')" style="background:rgba(0,0,0,.6);border:none;color:#fff;border-radius:50%;width:20px;height:20px;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0" title="Descargar">⬇</button>';
           h+='<button style="background:rgba(0,0,0,.6);border:none;color:#fff;border-radius:50%;width:20px;height:20px;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0" onclick="event.stopPropagation();deleteCarpetaFile(\''+colabId+'\',\''+f.id+'\')">✕</button>';
           h+='</div>';
           h+='</div>';
@@ -6859,6 +6863,19 @@ function downloadCarpetaAll(colabId){
   arch.forEach(function(f,i){setTimeout(function(){var a=document.createElement('a');a.href=f.data;a.download=f.nombre;document.body.appendChild(a);a.click();document.body.removeChild(a);},i*400);});
   toast('Descargando '+arch.length+' archivo'+(arch.length>1?'s':'')+'...','var(--pri)');
 }
+function dlImg(data,nombre){
+  try{
+    var byteString=atob(data.split(',')[1]);
+    var mime=data.split(',')[0].split(':')[1].split(';')[0];
+    var ab=new ArrayBuffer(byteString.length);var ia=new Uint8Array(ab);
+    for(var i=0;i<byteString.length;i++)ia[i]=byteString.charCodeAt(i);
+    var blob=new Blob([ab],{type:mime});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');a.href=url;a.download=nombre||'foto.jpg';
+    document.body.appendChild(a);a.click();
+    setTimeout(function(){URL.revokeObjectURL(url);a.remove();},600);
+  }catch(e){window.open(data,'_blank');}
+}
 function openCarpetaLightbox(idx){
   var imgs=window._cLBImgs||[];if(!imgs.length||idx<0||idx>=imgs.length)return;
   var f=imgs[idx];
@@ -6870,7 +6887,7 @@ function openCarpetaLightbox(idx){
   h+='<div style="color:rgba(255,255,255,.8);font-size:11px;margin-top:10px;text-align:center">'+esc(f.nombre)+'<br><span style="color:rgba(255,255,255,.5)">'+fmts(f.fecha)+'</span></div>';
   h+='<div style="display:flex;gap:10px;margin-top:14px;align-items:center">';
   if(idx>0)h+='<button onclick="openCarpetaLightbox('+(idx-1)+')" style="border:none;background:rgba(255,255,255,.18);color:#fff;border-radius:10px;padding:8px 16px;font-size:14px;cursor:pointer">← Ant.</button>';
-  h+='<a href="'+f.data+'" download="'+esc(f.nombre)+'" style="border:none;background:#16a34a;color:#fff;border-radius:10px;padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;text-decoration:none">⬇ Descargar</a>';
+  h+='<button onclick="dlImg(\''+f.data+'\',\''+esc(f.nombre)+'\')" style="border:none;background:#16a34a;color:#fff;border-radius:10px;padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer">⬇ Descargar</button>';
   if(idx<imgs.length-1)h+='<button onclick="openCarpetaLightbox('+(idx+1)+')" style="border:none;background:rgba(255,255,255,.18);color:#fff;border-radius:10px;padding:8px 16px;font-size:14px;cursor:pointer">Sig. →</button>';
   h+='</div>';
   h+='<div style="color:rgba(255,255,255,.35);font-size:11px;margin-top:8px">'+(idx+1)+' / '+imgs.length+'</div>';
@@ -7135,6 +7152,20 @@ load();render();
       if(sub.obraId)S.proj=sub.obraId;S.mod='dashboard';
       render();
       toast(_added+' archivo'+(_added>1?'s':'')+' recibidos de '+(sub.ayudante||'colaborador'),'#0d9488',4000);
+      return;
+    }
+    // Handle bandeja response from collaborator
+    if(sub.mode==='bandeja_resp'){
+      if(!D.mensajesColab)D.mensajesColab=[];
+      var _co2=(D.colaboradores||[]).find(function(c){return c.id===sub.token;});
+      var _resp=sub.respuestas||[];var _n=0;
+      _resp.forEach(function(r){
+        var msg=D.mensajesColab.find(function(m){return m.id===r.msgId;});
+        if(msg){msg.estadoColab='completado';msg.respuesta=r.respuesta||'';msg.fechaRespuesta=nw();_n++;}
+      });
+      if(_n){sv();if(sub.obraId)S.proj=sub.obraId;S.mod='colaboradores';render();
+        var _nom=_co2?_co2.name:'colaborador';
+        toast(_nom+' respondió '+_n+' ítem'+(_n>1?'s':'')+' de la bandeja ✓','var(--green)',4000);}
       return;
     }
     if(!sub||!sub.ayudante)return;
@@ -7780,8 +7811,36 @@ function openColabPortal(colId){
   var co=(D.colaboradores||[]).find(function(c){return c.id===colId;});if(!co)return;
   var p=D.projects.find(function(x){return x.id===S.proj;});
   var baseUrl=window.location.href.replace(/\/[^/]*(\?.*)?$/,'/form.html');
-  var url=baseUrl+'?token='+encodeURIComponent(co.id)+'&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p&&p.name||'')+(SYNC.archTel?'&tel='+encodeURIComponent(SYNC.archTel):'')+(SYNC.archEmail?'&mail='+encodeURIComponent(SYNC.archEmail):'')+'&sw='+(SYNC.sendWA?'1':'0')+'&se='+(SYNC.sendEmail?'1':'0');
+  var msgs=(D.mensajesColab||[]).filter(function(m){return m.colabId===colId&&m.proyectoId===S.proj;});
+  var msgsParam=msgs.length?'&msgs='+encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(msgs))))):'';
+  var url=baseUrl+'?token='+encodeURIComponent(co.id)+'&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p&&p.name||'')+(SYNC.archTel?'&tel='+encodeURIComponent(SYNC.archTel):'')+(SYNC.archEmail?'&mail='+encodeURIComponent(SYNC.archEmail):'')+'&sw='+(SYNC.sendWA?'1':'0')+'&se='+(SYNC.sendEmail?'1':'0')+msgsParam;
   window.open(url,'_blank');
+}
+function shareToInbox(tipo,entidadId,titulo){
+  var colabs=(D.colaboradores||[]).filter(function(c){return c.projectId===S.proj&&c.estado!=='revocado';});
+  if(!colabs.length){toast('No hay colaboradores activos en este proyecto','var(--orange)');return;}
+  var opts=colabs.map(function(c){return '<option value="'+c.id+'">'+esc(c.name||c.id)+'</option>';}).join('');
+  document.getElementById('stiMod')?.remove();
+  var d=document.createElement('div');d.className='mo open';d.id='stiMod';
+  d.innerHTML='<div class="mo-c"><div class="mo-h"><h3>📤 Enviar a colaborador</h3><button class="tbtn" onclick="document.getElementById(\'stiMod\').remove()">✕</button></div>'
+    +'<div class="fg"><label class="fl">Colaborador</label><select class="fs" id="sti_col">'+opts+'</select></div>'
+    +'<div class="fg"><label class="fl">Urgencia</label><select class="fs" id="sti_urg"><option value="baja">🟢 Baja</option><option value="media" selected>🟡 Media</option><option value="alta">🔴 Alta</option></select></div>'
+    +'<div class="fg"><label class="fl">Nota (opcional)</label><textarea class="ft" id="sti_nota" rows="2" placeholder="Indicaciones adicionales..."></textarea></div>'
+    +'<button class="btn btn-w mt-8" style="background:var(--teal);color:#fff" onclick="confirmarShareToInbox(\''+tipo+'\',\''+entidadId+'\',\''+esc(titulo)+'\')">Enviar a bandeja ✓</button></div>';
+  document.body.appendChild(d);
+}
+function confirmarShareToInbox(tipo,entidadId,titulo){
+  var colId=document.getElementById('sti_col')?.value;
+  var urg=document.getElementById('sti_urg')?.value||'media';
+  var nota=document.getElementById('sti_nota')?.value.trim()||'';
+  if(!colId)return;
+  if(!D.mensajesColab)D.mensajesColab=[];
+  D.mensajesColab.push({id:uid(),proyectoId:S.proj,colabId:colId,tipo:tipo,entidadId:entidadId,titulo:titulo,nota:nota,urgencia:urg,fechaEnvio:nw(),estadoColab:'nuevo',respuesta:null,fechaRespuesta:null});
+  sv();
+  document.getElementById('stiMod')?.remove();
+  var co=(D.colaboradores||[]).find(function(c){return c.id===colId;});
+  toast('Enviado a bandeja de '+(co&&co.name||'colaborador')+' ✓','var(--teal)',2500);
+  render();
 }
 function shareFormContextual(categoria,entidadId,titulo){
   if(!SYNC.archTel&&!SYNC.archEmail){toast('Configurá tu WhatsApp o email en Configuración → Informes de campo','var(--orange)');return;}

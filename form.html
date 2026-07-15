@@ -141,6 +141,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <button class="tab" id="tab-mpe" onclick="showTab('mpe')">🔔 Pedidos<span class="tab-badge" id="badge-mpe" style="display:none">✓</span><span class="tab-count" id="count-mpe" style="display:none"></span></button>
     <button class="tab" id="tab-mrec" onclick="showTab('mrec')">📬 Ingresados<span class="tab-badge" id="badge-mrec" style="display:none">✓</span><span class="tab-count" id="count-mrec" style="display:none"></span></button>
     <button class="tab" id="tab-chk" onclick="showTab('chk')">✅ Checklist<span class="tab-badge" id="badge-chk" style="display:none">✓</span></button>
+    <button class="tab" id="tab-bdj" onclick="showTab('bdj')">📥 Bandeja<span class="tab-badge" id="badge-bdj" style="display:none;background:var(--red)">!</span><span class="tab-count" id="count-bdj" style="display:none"></span></button>
   </div>
   <!-- Carpeta bar -->
   <div id="carpetaBar" style="display:none;padding:8px 14px;background:#f0fdf4;border-top:1px solid #bbf7d0;border-bottom:1px solid #bbf7d0">
@@ -207,6 +208,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           <input type="file" accept="image/*" id="chk_foto" onchange="prevFoto('chk_foto','chk_prev')" style="font-size:13px;width:100%">
           <img id="chk_prev" class="photo-prev">
         </div>
+      </div>
+    </div>
+
+    <!-- Tab: Bandeja de entrada -->
+    <div class="tab-pane" id="pane-bdj">
+      <div id="bdj-content">
+        <div class="empty-tab"><div class="e-icon">📭</div><div class="e-txt">Cargando bandeja...</div></div>
       </div>
     </div>
 
@@ -293,6 +301,11 @@ var ARCH_MAIL=P.get('mail')||'';
 var SEND_WA =(P.get('sw')||'1')==='1';
 var SEND_EMAIL=(P.get('se')||'0')==='1';
 var APP_URL =window.location.href.replace(/\/form\.html.*/,'/index.html');
+
+var MSGS_RAW=P.get('msgs')||'';
+var INBOX_MSGS=[];
+try{if(MSGS_RAW)INBOX_MSGS=JSON.parse(decodeURIComponent(escape(atob(MSGS_RAW))));}catch(e){console.warn('msgs parse:',e);}
+var INBOX_RESP={};  // msgId → {respuesta, done}
 
 var UNITS=['u','kg','m','m2','m3','l','bolsa 20kg','bolsa 25kg','bolsa 40kg','bolsa 50kg','balde','rollo','caja','barra','paq','gl'];
 var unitOpts=UNITS.map(function(u){return '<option value="'+u+'">'+u+'</option>';}).join('');
@@ -410,6 +423,11 @@ function showFormScreen(){
   $('hdrCollab').textContent='Hola, '+colabName+' 👋';
   sendCount=parseInt(TOKEN?localStorage.getItem('oc_v_'+TOKEN)||'0':'0');
   if(TOKEN&&OBRA_ID){var cb=$('carpetaBar');if(cb)cb.style.display='block';}
+  // Init bandeja badge
+  if(INBOX_MSGS.length){
+    var cnt=$('count-bdj');if(cnt){cnt.textContent=INBOX_MSGS.length;cnt.style.display='inline-flex';}
+    var bdg=$('badge-bdj');if(bdg)bdg.style.display='inline-flex';
+  }
 }
 function openCarpetaTab(){
   var url=window.location.pathname+'?mode=carpeta&obra='+encodeURIComponent(OBRA_ID)+'&token='+encodeURIComponent(TOKEN)+'&obraName='+encodeURIComponent(OBRA_NAME);
@@ -419,14 +437,16 @@ function openCarpetaTab(){
 // ── Tabs ────────────────────────────────
 var currentTab='mov';
 function showTab(t){
-  var tabs=['mov','tar','mex','mpe','mrec','chk'];
+  var tabs=['mov','tar','mex','mpe','mrec','chk','bdj'];
   tabs.forEach(function(id){
-    $('pane-'+id).classList.remove('active');
-    $('tab-'+id).classList.remove('active');
+    var p=$('pane-'+id);var tb=$('tab-'+id);
+    if(p)p.classList.remove('active');
+    if(tb)tb.classList.remove('active');
   });
-  $('pane-'+t).classList.add('active');
-  $('tab-'+t).classList.add('active');
+  var pane=$('pane-'+t);if(pane)pane.classList.add('active');
+  var tab=$('tab-'+t);if(tab)tab.classList.add('active');
   currentTab=t;
+  if(t==='bdj')renderBandeja();
 }
 
 function toggleDone(t){
@@ -440,6 +460,77 @@ function toggleDone(t){
     btn.classList.remove('on');btn.textContent='✓ Marcar pestaña lista';
     if(badge) badge.style.display='none';
   }
+}
+
+// ── Bandeja de entrada ──────────────────
+var urgColors={alta:'#dc2626',media:'#f59e0b',baja:'#16a34a'};
+var urgLabels={alta:'🔴 Alta',media:'🟡 Media',baja:'🟢 Baja'};
+var tipoLabels={checklist:'✅ Checklist',tarea:'📋 Tarea',nota:'📝 Nota'};
+
+function renderBandeja(){
+  var el=$('bdj-content');if(!el)return;
+  if(!INBOX_MSGS.length){
+    el.innerHTML='<div class="empty-tab"><div class="e-icon">📭</div><div class="e-txt">No hay ítems en tu bandeja.</div></div>';
+    return;
+  }
+  // Sort by urgency then date
+  var sorted=INBOX_MSGS.slice().sort(function(a,b){
+    var uOrd={alta:0,media:1,baja:2};
+    return (uOrd[a.urgencia]||1)-(uOrd[b.urgencia]||1)||(b.fechaEnvio||'').localeCompare(a.fechaEnvio||'');
+  });
+  var h='';
+  sorted.forEach(function(msg){
+    var isDone=INBOX_RESP[msg.id]&&INBOX_RESP[msg.id].done;
+    var uColor=urgColors[msg.urgencia]||'#f59e0b';
+    var uLabel=urgLabels[msg.urgencia]||msg.urgencia;
+    var tLabel=tipoLabels[msg.tipo]||msg.tipo;
+    var fecha=msg.fechaEnvio?new Date(msg.fechaEnvio).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit'}):'';
+    h+='<div class="card" style="border-left:3px solid '+uColor+';'+(isDone?'opacity:.7':'')+'">';
+    h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
+    h+='<span style="font-size:11px;font-weight:700;color:var(--text2)">'+tLabel+'</span>';
+    h+='<div style="display:flex;gap:6px;align-items:center">';
+    h+='<span style="background:'+uColor+'22;color:'+uColor+';border-radius:8px;padding:2px 8px;font-size:10px;font-weight:700">'+uLabel+'</span>';
+    h+='<span style="font-size:10px;color:var(--text3)">'+fecha+'</span>';
+    h+='</div></div>';
+    h+='<div style="font-size:14px;font-weight:700;margin-bottom:6px">'+esc(msg.titulo||'Sin título')+'</div>';
+    if(msg.nota)h+='<div style="font-size:12px;color:var(--text2);margin-bottom:8px;font-style:italic">'+esc(msg.nota)+'</div>';
+    if(!isDone){
+      h+='<textarea id="resp_'+msg.id+'" class="ft" rows="2" placeholder="Respuesta / comentario (opcional)..." style="margin-bottom:8px;font-size:12px"></textarea>';
+      h+='<button onclick="marcarBandejaItem(\''+msg.id+'\')" style="width:100%;padding:10px;background:var(--teal);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">✓ Marcar completado</button>';
+    } else {
+      h+='<div style="display:flex;align-items:center;gap:6px;padding:8px;background:#f0fdf4;border-radius:8px">';
+      h+='<span style="color:var(--green);font-size:16px">✓</span>';
+      h+='<span style="font-size:12px;color:var(--green);font-weight:700">Marcado como completado</span>';
+      if(INBOX_RESP[msg.id].respuesta)h+='<span style="font-size:11px;color:var(--text2);margin-left:4px">— '+esc(INBOX_RESP[msg.id].respuesta)+'</span>';
+      h+='</div>';
+    }
+    h+='</div>';
+  });
+  var pendingCount=INBOX_MSGS.filter(function(m){return !(INBOX_RESP[m.id]&&INBOX_RESP[m.id].done);}).length;
+  var doneCount=Object.keys(INBOX_RESP).filter(function(k){return INBOX_RESP[k].done;}).length;
+  if(doneCount>0){
+    h+='<button onclick="enviarRespuestasBandeja()" style="width:100%;padding:13px;background:var(--green);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;margin-top:8px">📤 Enviar '+doneCount+' respuesta'+(doneCount>1?'s':'')+' al arquitecto</button>';
+  }
+  el.innerHTML=h;
+  // Update badge
+  var bdg=$('badge-bdj');var cnt=$('count-bdj');
+  if(bdg)bdg.style.display=pendingCount>0?'inline-flex':'none';
+  if(cnt){cnt.textContent=INBOX_MSGS.length;cnt.style.display=INBOX_MSGS.length>0?'inline-flex':'none';}
+}
+
+function marcarBandejaItem(msgId){
+  var resp=$('resp_'+msgId);
+  INBOX_RESP[msgId]={done:true,respuesta:resp?resp.value.trim():''};
+  renderBandeja();
+}
+
+function enviarRespuestasBandeja(){
+  var respuestas=Object.keys(INBOX_RESP).filter(function(k){return INBOX_RESP[k].done;}).map(function(k){return {msgId:k,respuesta:INBOX_RESP[k].respuesta};});
+  if(!respuestas.length){alert('Marcá al menos un ítem como completado antes de enviar.');return;}
+  var payload={mode:'bandeja_resp',token:TOKEN,obraId:OBRA_ID,obraName:OBRA_NAME,ayudante:colabName,respuestas:respuestas};
+  var enc=btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+  var deepLink=APP_URL+'#r='+enc;
+  window.location.href=deepLink;
 }
 
 // ── Dynamic items ───────────────────────
