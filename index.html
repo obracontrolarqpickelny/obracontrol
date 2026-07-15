@@ -6581,7 +6581,7 @@ function rColaboradores(mc,p){
     var _isAcept=co.estado==='aceptado'||co.estado==='activo';
     var _portalBdg=(_msgsResp>0?'<span style="position:absolute;top:-3px;right:-3px;background:var(--green);color:#fff;border-radius:50%;width:14px;height:14px;font-size:8px;display:flex;align-items:center;justify-content:center">'+_msgsResp+'</span>':(_msgsNew>0?'<span style="position:absolute;top:-3px;right:-3px;background:var(--orange);color:#fff;border-radius:50%;width:14px;height:14px;font-size:8px;display:flex;align-items:center;justify-content:center">'+_msgsNew+'</span>':''));
     var btnForm=_rev?'':(_isAcept
-      ?('<button class="btn btn-sec btn-s" style="position:relative" onclick="openColabPortal(\''+ co.id +'\')" title="Ver portal / bandeja">👤'+_portalBdg+'</button>')
+      ?('<button class="btn btn-sec btn-s" style="position:relative" onclick="openAsignarModal(\''+ co.id +'\')" title="Asignar tareas / checklists">✅'+_portalBdg+'</button>')
       :('<button class="btn btn-sec btn-s" onclick="shareFormColaborador(\''+ co.id +'\')" title="Compartir informe">📤</button>'));
     var btnNote='<button class="btn btn-sec btn-s" onclick="openColabNotes(\''+ co.id +'\')" title="Chat / Notas">💬'+noteBdg+'</button>';
     var btnEdit='<button class="btn btn-sec btn-s" onclick="editColab(\''+ co.id +'\')">'+I.edit+'</button>';
@@ -7136,10 +7136,12 @@ load();render();
     var h=window.location.hash;
     if(!h.startsWith('#r='))return;
     var enc=h.slice(3);
-    var sub=JSON.parse(decodeURIComponent(atob(enc)));
+    // Support both old encoding (btoa(encodeURIComponent(json))) and new (btoa(unescape(encodeURIComponent(json))))
+    var sub;
+    try{sub=JSON.parse(decodeURIComponent(atob(enc)));}
+    catch(_){sub=JSON.parse(decodeURIComponent(escape(atob(enc))));}
     history.replaceState(null,'',window.location.pathname+window.location.search);
-    // Handle carpeta upload from collaborator
-    if(sub.mode==='carpeta'){
+    function _processCarpeta(sub){
       if(!D.carpetas)D.carpetas=[];
       var _cp=D.carpetas.find(function(c){return c.colabId===sub.token&&c.projectId===sub.obraId;});
       if(!_cp){_cp={id:Date.now().toString(36),projectId:sub.obraId,colabId:sub.token,archivos:[]};D.carpetas.push(_cp);}
@@ -7149,11 +7151,17 @@ load();render();
         _cp.archivos.push(f);_added++;
       });
       sv();
-      if(sub.obraId)S.proj=sub.obraId;S.mod='dashboard';
+      if(sub.obraId)S.proj=sub.obraId;
+      // Navigate to colaboradores so architect sees the files immediately
+      S.mod='colaboradores';
       render();
-      toast(_added+' archivo'+(_added>1?'s':'')+' recibidos de '+(sub.ayudante||'colaborador'),'#0d9488',4000);
-      return;
+      var _nom=sub.ayudante||'colaborador';
+      toast('📁 '+_added+' archivo'+(_added>1?'s':'')+' de '+_nom+' — ¡presioná 📁 para verlos!','#0d9488',6000);
     }
+    // Check for pending same-device carpeta upload
+    try{var _lsPend=localStorage.getItem('oc_carpeta_pending');if(_lsPend){localStorage.removeItem('oc_carpeta_pending');_processCarpeta(JSON.parse(_lsPend));}}catch(_){}
+    // Handle carpeta upload from collaborator
+    if(sub.mode==='carpeta'){_processCarpeta(sub);return;}
     // Handle bandeja response from collaborator
     if(sub.mode==='bandeja_resp'){
       if(!D.mensajesColab)D.mensajesColab=[];
@@ -7813,7 +7821,7 @@ function openColabPortal(colId){
   var baseUrl=window.location.href.replace(/\/[^/]*(\?.*)?$/,'/form.html');
   var msgs=(D.mensajesColab||[]).filter(function(m){return m.colabId===colId&&m.proyectoId===S.proj;});
   var msgsParam=msgs.length?'&msgs='+encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(msgs))))):'';
-  var url=baseUrl+'?token='+encodeURIComponent(co.id)+'&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p&&p.name||'')+(SYNC.archTel?'&tel='+encodeURIComponent(SYNC.archTel):'')+(SYNC.archEmail?'&mail='+encodeURIComponent(SYNC.archEmail):'')+'&sw='+(SYNC.sendWA?'1':'0')+'&se='+(SYNC.sendEmail?'1':'0')+msgsParam;
+  var url=baseUrl+'?token='+encodeURIComponent(co.id)+'&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p&&p.name||'')+'&colName='+encodeURIComponent(co.name||'')+(SYNC.archTel?'&tel='+encodeURIComponent(SYNC.archTel):'')+(SYNC.archEmail?'&mail='+encodeURIComponent(SYNC.archEmail):'')+'&sw='+(SYNC.sendWA?'1':'0')+'&se='+(SYNC.sendEmail?'1':'0')+msgsParam;
   window.open(url,'_blank');
 }
 function shareToInbox(tipo,entidadId,titulo){
@@ -7832,6 +7840,58 @@ function shareToInbox(tipo,entidadId,titulo){
     +'<div class="fg"><label class="fl">Nota (opcional)</label><textarea class="ft" id="sti_nota" rows="2" placeholder="Indicaciones adicionales..."></textarea></div>'
     +'<button class="btn btn-w mt-8" style="background:var(--teal);color:#fff" onclick="confirmarShareToInbox(\''+tipo+'\',\''+entidadId+'\',\''+esc(titulo)+'\')">Enviar a bandeja ✓</button></div>';
   document.body.appendChild(d);
+}
+function openAsignarModal(colId){
+  var co=(D.colaboradores||[]).find(function(c){return c.id===colId;});if(!co)return;
+  var tareas=(D.tareas||[]).filter(function(t){return t.projectId===S.proj&&!t.done;});
+  var chks=(D.checklists||[]).filter(function(c){return c.projectId===S.proj;});
+  if(!tareas.length&&!chks.length){toast('No hay tareas ni checklists en este proyecto','var(--orange)');return;}
+  document.getElementById('asignarMod')?.remove();
+  var d=document.createElement('div');d.className='mo open';d.id='asignarMod';
+  var h='<div class="mo-c"><div class="mo-h"><h3>✅ Asignar a '+esc(co.name||co.id)+'</h3><button class="tbtn" onclick="document.getElementById(\'asignarMod\').remove()">✕</button></div>';
+  h+='<div class="fg"><label class="fl">Urgencia</label><select class="fs" id="asig_urg"><option value="baja">🟢 Baja</option><option value="media" selected>🟡 Media</option><option value="alta">🔴 Alta</option></select></div>';
+  h+='<div class="fg"><label class="fl">Nota (opcional)</label><textarea class="ft" id="asig_nota" rows="2" placeholder="Indicaciones para el colaborador..."></textarea></div>';
+  if(chks.length){
+    h+='<div class="txxs fw7 tc3 mb-6 mt-4">✅ Checklists</div>';
+    chks.forEach(function(ch){
+      var dn=ch.items.filter(function(i){return i.done;}).length;
+      h+='<label style="display:flex;align-items:center;gap:8px;padding:8px;border:1px solid var(--brd);border-radius:8px;margin-bottom:6px;cursor:pointer">'
+        +'<input type="checkbox" value="chk:'+ch.id+'" style="width:16px;height:16px;flex-shrink:0">'
+        +'<div><div class="ts fw6">'+esc(ch.title)+'</div><div class="txxs tc3">'+dn+'/'+ch.items.length+' ítems completados</div></div>'
+        +'</label>';
+    });
+  }
+  if(tareas.length){
+    h+='<div class="txxs fw7 tc3 mb-6 mt-6">📋 Tareas pendientes</div>';
+    tareas.forEach(function(t){
+      h+='<label style="display:flex;align-items:center;gap:8px;padding:8px;border:1px solid var(--brd);border-radius:8px;margin-bottom:6px;cursor:pointer">'
+        +'<input type="checkbox" value="tarea:'+t.id+'" style="width:16px;height:16px;flex-shrink:0">'
+        +'<div class="ts fw6">'+esc(t.title)+'</div>'
+        +'</label>';
+    });
+  }
+  h+='<button class="btn btn-w mt-8" style="background:var(--teal);color:#fff" onclick="confirmarAsignar(\''+colId+'\')">Asignar seleccionados y abrir portal →</button></div>';
+  d.innerHTML=h;document.body.appendChild(d);
+}
+function confirmarAsignar(colId){
+  var urg=document.getElementById('asig_urg')?.value||'media';
+  var nota=document.getElementById('asig_nota')?.value.trim()||'';
+  var checks=document.querySelectorAll('#asignarMod input[type=checkbox]:checked');
+  if(!checks.length){toast('Seleccioná al menos un ítem','var(--orange)');return;}
+  if(!D.mensajesColab)D.mensajesColab=[];
+  checks.forEach(function(cb){
+    var parts=cb.value.split(':');var tipo=parts[0];var entId=parts[1];
+    var titulo='';
+    if(tipo==='chk'){var ch=(D.checklists||[]).find(function(x){return x.id===entId;});titulo=ch?ch.title:'';}
+    else if(tipo==='tarea'){var t=(D.tareas||[]).find(function(x){return x.id===entId;});titulo=t?t.title:'';}
+    D.mensajesColab.push({id:uid(),proyectoId:S.proj,colabId:colId,tipo:tipo==='chk'?'checklist':'tarea',entidadId:entId,titulo:titulo,nota:nota,urgencia:urg,fechaEnvio:nw(),estadoColab:'nuevo',respuesta:null,fechaRespuesta:null});
+  });
+  sv();
+  document.getElementById('asignarMod')?.remove();
+  render();
+  toast(checks.length+' ítem'+(checks.length>1?'s':'')+' asignados ✓','var(--teal)',2500);
+  // Open collaborator portal so architect can see the portal with items loaded
+  setTimeout(function(){openColabPortal(colId);},400);
 }
 function confirmarShareToInbox(tipo,entidadId,titulo){
   var colId=document.getElementById('sti_col')?.value;

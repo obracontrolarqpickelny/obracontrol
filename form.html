@@ -249,7 +249,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div class="photos-grid" id="photosGrid"></div>
     </div>
     <div class="success-btns">
-      <button class="btn btn-pri" style="background:#0d9488" onclick="if(window._lastDeepLink){window.location.href=window._lastDeepLink;}">🔗 Abrir en la app</button>
       <button class="btn btn-sec" onclick="editarYReenviar()">✏️ Editar y reenviar</button>
       <button class="btn btn-sec" onclick="nuevoFormulario()">+ Nuevo informe</button>
     </div>
@@ -303,6 +302,7 @@ var SEND_EMAIL=(P.get('se')||'0')==='1';
 var APP_URL =window.location.href.replace(/\/form\.html.*/,'/index.html');
 
 var MSGS_RAW=P.get('msgs')||'';
+var COLAB_NAME_PARAM=P.get('colName')||'';
 var INBOX_MSGS=[];
 try{if(MSGS_RAW)INBOX_MSGS=JSON.parse(decodeURIComponent(escape(atob(MSGS_RAW))));}catch(e){console.warn('msgs parse:',e);}
 var INBOX_RESP={};  // msgId → {respuesta, done}
@@ -333,9 +333,11 @@ function init(){
     if(storedName)$('carpetaColabSub').textContent='Hola, '+storedName+' 👋';
     return;
   }
-  var storedName=TOKEN?localStorage.getItem('oc_n_'+TOKEN):'';
+  // Use name from URL param (architect sets it), or from localStorage, or ask
+  var storedName=COLAB_NAME_PARAM||(TOKEN?localStorage.getItem('oc_n_'+TOKEN):'');
   if(storedName){
     colabName=storedName;
+    if(TOKEN&&COLAB_NAME_PARAM) localStorage.setItem('oc_n_'+TOKEN,COLAB_NAME_PARAM);
     showFormScreen();
   } else {
     $('screenName').classList.add('active');
@@ -364,39 +366,66 @@ function previewCarpetaFiles(input){
   });
   $('carpetaPreview').style.display='block';
 }
+async function compressImg(dataUrl, maxPx, q){
+  return new Promise(function(res){
+    var img=new Image();
+    img.onload=function(){
+      var w=img.width,h=img.height;
+      if(w>maxPx||h>maxPx){if(w>h){h=Math.round(h*maxPx/w);w=maxPx;}else{w=Math.round(w*maxPx/h);h=maxPx;}}
+      var c=document.createElement('canvas');c.width=w;c.height=h;
+      c.getContext('2d').drawImage(img,0,0,w,h);
+      res(c.toDataURL('image/jpeg',q));
+    };
+    img.src=dataUrl;
+  });
+}
 async function sendCarpeta(){
   var btn=$('carpetaSendBtn');var err=$('carpetaErr');
   err.style.display='none';
   if(!_carpetaFiles.length){err.textContent='Seleccioná al menos un archivo.';err.style.display='block';return;}
   if(!TOKEN||!OBRA_ID){err.textContent='Link inválido. Pedile uno nuevo al arquitecto.';err.style.display='block';return;}
   btn.disabled=true;btn.textContent='Procesando...';
-  var storedName=TOKEN?localStorage.getItem('oc_n_'+TOKEN):'';
-  var myName=storedName||'Colaborador';
+  var myName=COLAB_NAME_PARAM||(TOKEN?localStorage.getItem('oc_n_'+TOKEN):'')||'Colaborador';
   var archivos=[];
   for(var i=0;i<_carpetaFiles.length;i++){
     var f=_carpetaFiles[i];
-    if(f.size>8*1024*1024){continue;}
+    if(f.size>15*1024*1024){continue;}
     try{
       var data=await new Promise(function(res,rej){var r=new FileReader();r.onload=function(){res(r.result);};r.onerror=rej;r.readAsDataURL(f);});
-      if(f.type.startsWith('image/')&&data.length>300000){
-        var c2=document.createElement('canvas');var img2=new Image();
-        await new Promise(function(res){img2.onload=res;img2.src=data;});
-        var w=Math.min(img2.width,1200),h2=img2.height*(w/img2.width);
-        c2.width=w;c2.height=h2;c2.getContext('2d').drawImage(img2,0,0,w,h2);
-        data=c2.toDataURL('image/jpeg',0.72);
+      if(f.type.startsWith('image/')){
+        // Two-pass compression: first pass 720px/0.65, second if still > 60KB
+        data=await compressImg(data,720,0.65);
+        if(data.length>80000) data=await compressImg(data,480,0.5);
+        if(data.length>50000) data=await compressImg(data,360,0.45);
       }
-      archivos.push({nombre:f.name,tipo:f.type||'application/octet-stream',data:data,descripcion:$('carpetaDesc').value.trim()});
-    }catch(e){}
+      archivos.push({nombre:f.name,tipo:f.type||'application/octet-stream',data:data,descripcion:($('carpetaDesc')||{}).value||''});
+    }catch(e){console.warn('file error',e);}
   }
   if(!archivos.length){btn.disabled=false;btn.textContent='📤 Enviar al arquitecto';err.textContent='Error procesando los archivos.';err.style.display='block';return;}
   var payload={mode:'carpeta',token:TOKEN,obraId:OBRA_ID,obraName:OBRA_NAME,ayudante:myName,archivos:archivos,fecha:new Date().toISOString()};
   var APP_URL2=window.location.href.replace(/\/form\.html.*/,'/index.html');
-  var enc=btoa(encodeURIComponent(JSON.stringify(payload)));
+  var enc=btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
   var deepLink=APP_URL2+'#r='+enc;
+  // Estimate payload size
+  var payloadKB=Math.round(enc.length/1024);
+  // Always save to localStorage (same-device immediate sync)
+  try{localStorage.setItem('oc_carpeta_pending',JSON.stringify(payload));}catch(e){}
   if(ARCH_TEL){
     var tel=ARCH_TEL.replace(/[^0-9]/g,'');
-    var msg='📁 '+myName+' subió '+(archivos.length)+' archivo'+(archivos.length>1?'s':'')+' a la carpeta de la obra '+OBRA_NAME+':\n'+deepLink;
-    window.open('https://api.whatsapp.com/send?phone='+tel+'&text='+encodeURIComponent(msg),'_blank');
+    if(payloadKB<200){
+      // Small enough: send via deep link in WA
+      var msg='📁 '+myName+' subió '+archivos.length+' archivo'+(archivos.length>1?'s':'')+' a la carpeta de '+OBRA_NAME+':\n'+deepLink;
+      window.open('whatsapp://send?phone='+tel+'&text='+encodeURIComponent(msg),'_blank');
+    } else {
+      // Too large: send short WA notification + show manual link
+      var msgShort='📁 '+myName+' subió '+archivos.length+' archivo'+(archivos.length>1?'s':'')+' a la carpeta de '+OBRA_NAME+'. Abrí la app para verlos.';
+      window.open('whatsapp://send?phone='+tel+'&text='+encodeURIComponent(msgShort),'_blank');
+      // Show copy link option
+      var lnkDiv=document.createElement('div');
+      lnkDiv.style.cssText='margin-top:10px;padding:10px;background:#fef3c7;border-radius:8px;font-size:12px';
+      lnkDiv.innerHTML='⚠️ Las fotos son grandes. <button onclick="navigator.clipboard&&navigator.clipboard.writeText(\''+deepLink+'\').then(function(){this.textContent=\'✓ Copiado\';}.bind(this))" style="border:none;background:var(--teal);color:#fff;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:11px">Copiar link</button> y pegalo en WA manualmente.';
+      $('carpetaErr').parentNode.insertBefore(lnkDiv,btn.nextSibling);
+    }
   } else {
     window.location.href=deepLink;
   }
