@@ -6587,7 +6587,7 @@ function rColaboradores(mc,p){
     var btnEdit='<button class="btn btn-sec btn-s" onclick="editColab(\''+ co.id +'\')">'+I.edit+'</button>';
     var btnBaja='<button class="btn btn-s" style="font-size:10px;'+ (_rev?'background:var(--green);color:#fff':'background:var(--gray-ll);color:var(--red)')+'" onclick="'+ (_rev?'reactivateColab(\''+ co.id +'\')':'revokeColab(\''+ co.id +'\')') +'">'+(_rev?'Reactivar':'Dar de baja')+'</button>';
     var btnDel='<button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delI(\'colaboradores\',\''+ co.id +'\')">'+I.trash+'</button>';
-    return '<div class="card" style="padding:12px;margin-bottom:8px'+ (_rev?';opacity:.65':'')+'"><div class="flex justify-between items-start gap-8"><div style="flex:1;min-width:0"><div class="ts fw7">'+esc(co.name||co.email||'Sin nombre')+'</div><div class="txxs tc3 mt-4">'+( co.phone?'📱 '+co.phone:'Sin teléfono')+(co.email?' · '+co.email:'')+(co.role?' · <strong>'+co.role+'</strong>':'')+'</div><div class="mt-4">'+colBadge(_rev?'Dado de baja':(co.estado||'pendiente'),stCol,true)+'</div></div><div class="flex gap-4 flex-wrap" style="flex-shrink:0">'+btnCarpeta+btnForm+btnNote+btnEdit+btnBaja+btnDel+'</div></div></div>';
+    return '<div class="card" style="padding:12px;margin-bottom:8px'+ (_rev?';opacity:.65':'')+'"><div class="flex justify-between items-start gap-8"><div style="flex:1;min-width:0"><div class="ts fw7" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="openPerfilColab(\''+co.id+'\')">'+esc(co.name||co.email||'Sin nombre')+'</div><div class="txxs tc3 mt-4">'+( co.phone?'📱 '+co.phone:'Sin teléfono')+(co.email?' · '+co.email:'')+(co.role?' · <strong>'+co.role+'</strong>':'')+'</div><div class="mt-4">'+colBadge(_rev?'Dado de baja':(co.estado||'pendiente'),stCol,true)+'</div></div><div class="flex gap-4 flex-wrap" style="flex-shrink:0">'+btnCarpeta+btnForm+btnNote+btnEdit+btnBaja+btnDel+'</div></div></div>';
   }).join(''): '<div class="empty">'+I.share+'<div class="ts mt-8">Sin colaboradores</div><div class="txxs tc3 mt-4">Agregá personas para que carguen datos de campo.</div></div>')
   +'<div class="mo" id="newColabM"><div class="mo-c"><div class="mo-h"><h3 style="color:'+colG+'">Agregar Colaborador</h3><button class="tbtn" onclick="closeM(\'newColabM\')">'+ I.x+'</button></div>'
   +'<div class="fg"><label class="fl">Nombre *</label><input class="fi" id="nc_name" placeholder="Nombre"></div>'
@@ -6761,14 +6761,13 @@ function openPerfilColab(colabId,tab){
   var tabDefs=[{id:'carpeta',label:'📁 Carpeta'},{id:'historial',label:'📋 Historial'},{id:'bandeja',label:'📥 Bandeja'}];
   var h='<div class="mo-c" style="display:flex;flex-direction:column;max-height:90vh">';
   h+='<div class="mo-h"><h3>'+esc(co.name||co.email||'?')+'</h3><button class="tbtn" onclick="document.getElementById(\'carpetaM\').remove()">'+I.x+'</button></div>';
-  h+='<div style="display:flex;gap:4px;margin-bottom:12px;overflow-x:auto">';
+  h+='<div style="display:flex;gap:4px;margin-bottom:12px;overflow-x:auto;padding-bottom:2px">';
   tabDefs.forEach(function(t){
     var act=t.id===tab;
-    // count badges
     var badge='';
     if(t.id==='historial'){var hcnt=(D.formulariosPendientes||[]).filter(function(f){return f.token===colabId;}).length;if(hcnt)badge=' ('+hcnt+')';}
     if(t.id==='bandeja'){var bcnt=(D.mensajesColab||[]).filter(function(m){return m.colabId===colabId&&m.proyectoId===S.proj;}).length;if(bcnt)badge=' ('+bcnt+')';}
-    h+='<button onclick="openPerfilColab(\''+colabId+'\',\''+t.id+'\')" style="flex-shrink:0;border:none;background:'+(act?'var(--teal)':'var(--gray-ll)')+';color:'+(act?'#fff':'var(--text2)')+';border-radius:20px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer">'+t.label+badge+'</button>';
+    h+='<button onclick="openPerfilColab(\''+colabId+'\',\''+t.id+'\')" style="flex-shrink:0;white-space:nowrap;border:none;background:'+(act?'var(--teal)':'var(--gray-ll)')+';color:'+(act?'#fff':'var(--text2)')+';border-radius:20px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer">'+t.label+badge+'</button>';
   });
   h+='</div>';
   h+='<div style="flex:1;overflow-y:auto">';
