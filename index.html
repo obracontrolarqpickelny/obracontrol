@@ -6571,23 +6571,23 @@ function rColaboradores(mc,p){
   +(colabs.length?colabs.map(function(co){
     var _rev=co.estado==='revocado';
     var stCol=co.estado==='aceptado'?'var(--green)':_rev?'var(--red)':'var(--orange)';
-    var noteCount=(co.notas||[]).length;
-    var noteBdg=noteCount?'<span style="background:var(--pri);color:#fff;border-radius:9px;padding:0 5px;font-size:9px;margin-left:3px">'+noteCount+'</span>':''
     var _coArch=(D.carpetas||[]).find(function(x){return x.colabId===co.id&&x.projectId===S.proj;});var _coArN=_coArch?(_coArch.archivos||[]).length:0;
-    var btnCarpeta='<button class="btn btn-sec btn-s" style="position:relative" onclick="openPerfilColab(\''+ co.id +'\')" title="Perfil: Carpeta, Historial, Bandeja">📁'+(_coArN?'<span style="position:absolute;top:-3px;right:-3px;background:var(--green);color:#fff;border-radius:50%;width:14px;height:14px;font-size:8px;display:flex;align-items:center;justify-content:center">'+_coArN+'</span>':'')+'</button>';
-    var _msgsPend=(D.mensajesColab||[]).filter(function(m){return m.colabId===co.id&&m.proyectoId===S.proj;});
-    var _msgsNew=_msgsPend.filter(function(m){return m.estadoColab==='nuevo';}).length;
-    var _msgsResp=_msgsPend.filter(function(m){return m.estadoColab==='completado';}).length;
+    var _formsPend=(D.formulariosPendientes||[]).filter(function(f){return (f.token===co.id||f.colabId===co.id)&&f.estado==='pendiente';}).length;
+    var _msgsResp=(D.mensajesColab||[]).filter(function(m){return m.colabId===co.id&&m.proyectoId===S.proj&&m.estadoColab==='completado';}).length;
+    // Badge compuesto para el botón de perfil: verde si hay respuestas, rojo si hay informes pendientes
+    var _perfilBdg='';
+    if(_msgsResp>0)_perfilBdg='<span style="position:absolute;top:-3px;right:-3px;background:var(--green);color:#fff;border-radius:50%;width:14px;height:14px;font-size:8px;display:flex;align-items:center;justify-content:center">'+_msgsResp+'</span>';
+    else if(_formsPend>0)_perfilBdg='<span style="position:absolute;top:-3px;right:-3px;background:#ef4444;color:#fff;border-radius:50%;width:14px;height:14px;font-size:8px;display:flex;align-items:center;justify-content:center">'+_formsPend+'</span>';
+    else if(_coArN>0)_perfilBdg='<span style="position:absolute;top:-3px;right:-3px;background:var(--teal);color:#fff;border-radius:50%;width:14px;height:14px;font-size:8px;display:flex;align-items:center;justify-content:center">'+_coArN+'</span>';
+    var btnCarpeta='<button class="btn btn-sec btn-s" style="position:relative" onclick="openPerfilColab(\''+ co.id +'\')" title="Ver perfil">📁'+_perfilBdg+'</button>';
     var _isAcept=co.estado==='aceptado'||co.estado==='activo';
-    var _portalBdg=(_msgsResp>0?'<span style="position:absolute;top:-3px;right:-3px;background:var(--green);color:#fff;border-radius:50%;width:14px;height:14px;font-size:8px;display:flex;align-items:center;justify-content:center">'+_msgsResp+'</span>':(_msgsNew>0?'<span style="position:absolute;top:-3px;right:-3px;background:var(--orange);color:#fff;border-radius:50%;width:14px;height:14px;font-size:8px;display:flex;align-items:center;justify-content:center">'+_msgsNew+'</span>':''));
     var btnForm=_rev?'':(_isAcept
-      ?('<button class="btn btn-sec btn-s" style="position:relative" onclick="openAsignarModal(\''+ co.id +'\')" title="Asignar tareas / checklists">✅'+_portalBdg+'</button>')
-      :('<button class="btn btn-sec btn-s" onclick="shareFormColaborador(\''+ co.id +'\')" title="Compartir informe">📤</button>'));
-    var btnNote='<button class="btn btn-sec btn-s" onclick="openColabNotes(\''+ co.id +'\')" title="Chat / Notas">💬'+noteBdg+'</button>';
+      ?('<button class="btn btn-sec btn-s" onclick="openAsignarModal(\''+ co.id +'\')" title="Asignar tareas / checklists">✅</button>')
+      :('<button class="btn btn-sec btn-s" onclick="shareFormColaborador(\''+ co.id +'\')" title="Invitar por WhatsApp">📤</button>'));
     var btnEdit='<button class="btn btn-sec btn-s" onclick="editColab(\''+ co.id +'\')">'+I.edit+'</button>';
     var btnBaja='<button class="btn btn-s" style="font-size:10px;'+ (_rev?'background:var(--green);color:#fff':'background:var(--gray-ll);color:var(--red)')+'" onclick="'+ (_rev?'reactivateColab(\''+ co.id +'\')':'revokeColab(\''+ co.id +'\')') +'">'+(_rev?'Reactivar':'Dar de baja')+'</button>';
     var btnDel='<button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delI(\'colaboradores\',\''+ co.id +'\')">'+I.trash+'</button>';
-    return '<div class="card" style="padding:12px;margin-bottom:8px'+ (_rev?';opacity:.65':'')+'"><div class="flex justify-between items-start gap-8"><div style="flex:1;min-width:0"><div class="ts fw7" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="openPerfilColab(\''+co.id+'\')">'+esc(co.name||co.email||'Sin nombre')+'</div><div class="txxs tc3 mt-4">'+( co.phone?'📱 '+co.phone:'Sin teléfono')+(co.email?' · '+co.email:'')+(co.role?' · <strong>'+co.role+'</strong>':'')+'</div><div class="mt-4">'+colBadge(_rev?'Dado de baja':(co.estado||'pendiente'),stCol,true)+'</div></div><div class="flex gap-4 flex-wrap" style="flex-shrink:0">'+btnCarpeta+btnForm+btnNote+btnEdit+btnBaja+btnDel+'</div></div></div>';
+    return '<div class="card" style="padding:12px;margin-bottom:8px'+ (_rev?';opacity:.65':'')+'"><div class="flex justify-between items-start gap-8"><div style="flex:1;min-width:0"><div class="ts fw7" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="openPerfilColab(\''+co.id+'\')">'+esc(co.name||co.email||'Sin nombre')+'</div><div class="txxs tc3 mt-4">'+( co.phone?'📱 '+co.phone:'Sin teléfono')+(co.email?' · '+co.email:'')+(co.role?' · <strong>'+co.role+'</strong>':'')+'</div><div class="mt-4">'+colBadge(_rev?'Dado de baja':(co.estado||'pendiente'),stCol,true)+'</div></div><div class="flex gap-4 flex-wrap" style="flex-shrink:0">'+btnCarpeta+btnForm+btnEdit+btnBaja+btnDel+'</div></div></div>';
   }).join(''): '<div class="empty">'+I.share+'<div class="ts mt-8">Sin colaboradores</div><div class="txxs tc3 mt-4">Agregá personas para que carguen datos de campo.</div></div>')
   +'<div class="mo" id="newColabM"><div class="mo-c"><div class="mo-h"><h3 style="color:'+colG+'">Agregar Colaborador</h3><button class="tbtn" onclick="closeM(\'newColabM\')">'+ I.x+'</button></div>'
   +'<div class="fg"><label class="fl">Nombre *</label><input class="fi" id="nc_name" placeholder="Nombre"></div>'
@@ -6758,16 +6758,19 @@ function openPerfilColab(colabId,tab){
   var co=(D.colaboradores||[]).find(function(x){return x.id===colabId;});if(!co)return;
   document.getElementById('carpetaM')?.remove();
   var d=document.createElement('div');d.className='mo open';d.id='carpetaM';
-  var tabDefs=[{id:'carpeta',label:'📁 Carpeta'},{id:'historial',label:'📋 Historial'},{id:'bandeja',label:'📥 Bandeja'}];
+  var tabDefs=[{id:'carpeta',label:'📁 Carpeta'},{id:'historial',label:'📋 Historial'},{id:'bandeja',label:'📥 Bandeja'},{id:'mensajes',label:'💬 Mensajes'}];
   var h='<div class="mo-c" style="display:flex;flex-direction:column;max-height:90vh">';
   h+='<div class="mo-h"><h3>'+esc(co.name||co.email||'?')+'</h3><button class="tbtn" onclick="document.getElementById(\'carpetaM\').remove()">'+I.x+'</button></div>';
   h+='<div style="display:flex;gap:4px;margin-bottom:12px;overflow-x:auto;padding-bottom:2px">';
   tabDefs.forEach(function(t){
     var act=t.id===tab;
     var badge='';
-    if(t.id==='historial'){var hcnt=(D.formulariosPendientes||[]).filter(function(f){return f.token===colabId;}).length;if(hcnt)badge=' ('+hcnt+')';}
-    if(t.id==='bandeja'){var bcnt=(D.mensajesColab||[]).filter(function(m){return m.colabId===colabId&&m.proyectoId===S.proj;}).length;if(bcnt)badge=' ('+bcnt+')';}
-    h+='<button onclick="openPerfilColab(\''+colabId+'\',\''+t.id+'\')" style="flex-shrink:0;white-space:nowrap;border:none;background:'+(act?'var(--teal)':'var(--gray-ll)')+';color:'+(act?'#fff':'var(--text2)')+';border-radius:20px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer">'+t.label+badge+'</button>';
+    var badgeBg='';
+    if(t.id==='historial'){var hpend=(D.formulariosPendientes||[]).filter(function(f){return (f.token===colabId||f.colabId===colabId)&&f.estado==='pendiente';}).length;var htot=(D.formulariosPendientes||[]).filter(function(f){return f.token===colabId||f.colabId===colabId;}).length;if(htot){badge=' ('+htot+')';if(hpend)badgeBg='background:#ef4444;color:#fff;';}};
+    if(t.id==='bandeja'){var bresp=(D.mensajesColab||[]).filter(function(m){return m.colabId===colabId&&m.proyectoId===S.proj&&m.estadoColab==='completado';}).length;var btot=(D.mensajesColab||[]).filter(function(m){return m.colabId===colabId&&m.proyectoId===S.proj;}).length;if(btot){badge=' ('+btot+')';if(bresp)badgeBg='background:#16a34a;color:#fff;';}}
+    if(t.id==='mensajes'){var mnotaCnt=(co.notas||[]).length;if(mnotaCnt)badge=' ('+mnotaCnt+')';}
+    var actBg=(!badgeBg&&act)?'background:var(--teal);color:#fff;':(badgeBg||'background:var(--gray-ll);color:var(--text2);');
+    h+='<button onclick="openPerfilColab(\''+colabId+'\',\''+t.id+'\')" style="flex-shrink:0;white-space:nowrap;border:none;'+actBg+'border-radius:20px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer">'+t.label+badge+'</button>';
   });
   h+='</div>';
   h+='<div style="flex:1;overflow-y:auto">';
@@ -6857,31 +6860,103 @@ function openPerfilColab(colabId,tab){
       h+='<div class="empty">📥<div class="ts mt-8">Bandeja vacía</div><div class="txxs tc3 mt-4">Usá el botón ✅ para asignar tareas o checklists a este colaborador.</div></div>';
     } else {
       var uC={alta:'#dc2626',media:'#f59e0b',baja:'#16a34a'};
-      var eC={'nuevo':'var(--orange)','visto':'var(--pri)','completado':'var(--green)'};
+      var eC={'nuevo':'var(--orange)','visto':'#0891b2','completado':'var(--green)'};
       var eL={'nuevo':'📤 Enviado','visto':'👁 Visto','completado':'✅ Respondido'};
       msgs.forEach(function(m){
         var uc=uC[m.urgencia]||'#f59e0b';var ec=eC[m.estadoColab]||'var(--orange)';
-        h+='<div class="card" style="padding:12px;margin-bottom:8px;border-left:3px solid '+uc+'">';
+        h+='<div class="card" style="padding:12px;margin-bottom:10px;border-left:3px solid '+uc+'">';
+        // Header
         h+='<div class="flex justify-between items-start gap-8 mb-6">';
         h+='<div style="flex:1"><div class="ts fw7">'+esc(m.titulo||'Sin título')+'</div>';
         h+='<div class="txxs tc3 mt-2">'+({checklist:'✅ Checklist',tarea:'📋 Tarea',nota:'📝 Nota'}[m.tipo]||m.tipo)+' · '+fmts(m.fechaEnvio)+'</div>';
         if(m.nota)h+='<div class="txxs mt-4 tc3" style="font-style:italic">'+esc(m.nota)+'</div>';
         h+='</div>';
-        h+='<span style="background:'+ec+'22;color:'+ec+';border-radius:8px;padding:2px 8px;font-size:10px;font-weight:700;flex-shrink:0">'+(eL[m.estadoColab]||m.estadoColab)+'</span>';
+        h+='<span style="background:'+ec+'22;color:'+ec+';border-radius:8px;padding:2px 8px;font-size:10px;font-weight:700;flex-shrink:0;white-space:nowrap">'+(eL[m.estadoColab]||m.estadoColab)+'</span>';
         h+='</div>';
-        if(m.respuesta)h+='<div style="background:var(--gray-ll);border-radius:8px;padding:8px;font-size:12px"><span class="fw7">Respuesta:</span> '+esc(m.respuesta)+'</div>';
-        h+='<div style="display:flex;gap:6px;margin-top:8px">';
-        h+='<button onclick="borrarMsgColab(\''+m.id+'\',\''+colabId+'\')" style="border:none;background:var(--gray-ll);color:var(--red);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer">🗑</button>';
+        // Content: expand checklist items or task details
+        if(m.tipo==='checklist'&&m.entidadId){
+          var chEnt=(D.checklists||[]).find(function(c){return c.id===m.entidadId;});
+          if(chEnt&&(chEnt.items||[]).length){
+            h+='<div style="background:var(--gray-ll);border-radius:8px;padding:8px 10px;margin-bottom:8px">';
+            h+='<div class="txxs fw7 tc3 mb-4">Ítems del checklist:</div>';
+            chEnt.items.forEach(function(it){
+              h+='<div style="display:flex;align-items:flex-start;gap:6px;padding:3px 0;font-size:12px">';
+              h+='<span style="color:'+(it.done?'var(--green)':'var(--gray-l)')+';flex-shrink:0">'+(it.done?'☑':'☐')+'</span>';
+              h+='<span style="color:'+(it.done?'var(--text3)':'var(--text)')+';text-decoration:'+(it.done?'line-through':'none')+'">'+esc(it.text||'')+'</span>';
+              h+='</div>';
+            });
+            var doneN=chEnt.items.filter(function(i){return i.done;}).length;
+            h+='<div class="txxs tc3 mt-4">'+doneN+'/'+chEnt.items.length+' completados</div>';
+            h+='</div>';
+          }
+        } else if(m.tipo==='tarea'&&m.entidadId){
+          var taEnt=(D.tareas||[]).find(function(t){return t.id===m.entidadId;});
+          if(taEnt){
+            h+='<div style="background:var(--gray-ll);border-radius:8px;padding:8px 10px;margin-bottom:8px">';
+            if(taEnt.descripcion||taEnt.desc)h+='<div style="font-size:12px;color:var(--text);margin-bottom:4px">'+esc(taEnt.descripcion||taEnt.desc||'')+'</div>';
+            if(taEnt.prioridad||taEnt.priority){var pr=taEnt.prioridad||taEnt.priority;h+='<div class="txxs tc3">'+({alta:'🔴 Alta',media:'🟡 Media',baja:'🟢 Baja'}[pr]||pr)+'</div>';}
+            if(taEnt.status)h+='<div class="txxs tc3 mt-2">Estado actual: '+esc(taEnt.status)+'</div>';
+            h+='</div>';
+          }
+        }
+        // Collaborator response
+        if(m.respuesta)h+='<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:12px"><span class="fw7" style="color:var(--green)">Respuesta del colaborador:</span><div class="mt-4">'+esc(m.respuesta)+'</div><div class="txxs tc3 mt-4">'+fmts(m.fechaRespuesta||'')+'</div></div>';
+        // Footer
+        h+='<button onclick="borrarMsgColab(\''+m.id+'\',\''+colabId+'\')" style="border:none;background:var(--gray-ll);color:var(--red);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer">🗑 Eliminar</button>';
+        h+='</div>';
+      });
+    }
+
+  } else if(tab==='mensajes'){
+    var notas=[...(co.notas||[])].reverse();
+    h+='<div id="colabChatBox" style="display:flex;flex-direction:column;gap:6px;background:var(--gray-ll);border-radius:8px;padding:8px;margin-bottom:8px;min-height:80px;max-height:320px;overflow-y:auto">';
+    if(!notas.length){
+      h+='<div style="text-align:center;color:var(--text3);font-size:12px;padding:24px 0">Sin mensajes aún</div>';
+    } else {
+      notas.forEach(function(n){
+        var wa=n.enviado==='wa';
+        h+='<div style="display:flex;justify-content:flex-end;margin:0 2px">';
+        h+='<div style="background:'+(wa?'#dcf8c6':'var(--surface)')+';border-radius:12px 12px 0 12px;padding:7px 11px;max-width:85%;box-shadow:0 1px 2px rgba(0,0,0,.12)">';
+        h+='<div style="font-size:13px;white-space:pre-wrap;color:var(--text)">'+esc(n.texto)+'</div>';
+        h+='<div style="font-size:9px;color:var(--text3);margin-top:3px;text-align:right">'+fmts(n.fecha)+(wa?' ✓✓':'')+'</div>';
         h+='</div></div>';
       });
     }
+    h+='</div>';
+    h+='<div style="display:flex;gap:6px;align-items:flex-end">';
+    if(co.phone){
+      h+='<textarea id="colabNoteTA" class="fi" placeholder="Escribí un mensaje para enviar por WA..." style="flex:1;min-height:52px;max-height:120px;resize:vertical;margin:0"></textarea>';
+      h+='<button class="btn" style="background:#25D366;color:#fff;padding:10px 14px;font-size:20px;line-height:1;flex-shrink:0" onclick="colabSendFromPerfil(\''+colabId+'\',true)" title="Enviar por WhatsApp">💬</button>';
+    } else {
+      h+='<textarea id="colabNoteTA" class="fi" placeholder="Escribí una nota..." style="flex:1;min-height:52px;max-height:120px;resize:vertical;margin:0"></textarea>';
+      h+='<button class="btn btn-sec" style="padding:10px 14px;font-size:20px;line-height:1;flex-shrink:0" onclick="colabSendFromPerfil(\''+colabId+'\',false)" title="Guardar nota">💾</button>';
+    }
+    h+='</div>';
   }
 
   h+='</div></div>';
   d.innerHTML=h;document.body.appendChild(d);
+  if(tab==='mensajes'){var cb=document.getElementById('colabChatBox');if(cb)cb.scrollTop=cb.scrollHeight;}
+}
+function colabSendFromPerfil(colabId,sendWA){
+  var co=(D.colaboradores||[]).find(function(x){return x.id===colabId;});if(!co)return;
+  var ta=document.getElementById('colabNoteTA');
+  var txt=ta?ta.value.trim():'';
+  if(!txt){toast('Escribí algo primero','var(--orange)');return;}
+  if(!co.notas)co.notas=[];
+  var nota={texto:txt,fecha:nw()};
+  if(sendWA)nota.enviado='wa';
+  co.notas.unshift(nota);
+  sv();
+  if(sendWA&&co.phone){
+    var proj=(D.projects||[]).find(function(x){return x.id===S.proj;});
+    window.open('whatsapp://send?phone='+co.phone.replace(/[^0-9]/g,'')+'&text='+encodeURIComponent((proj?'['+proj.name+'] ':'')+txt),'_blank');
+  } else {
+    toast('Nota guardada','var(--green)');
+  }
+  openPerfilColab(colabId,'mensajes');
 }
 function borrarMsgColab(msgId,colabId){
-  if(!confirmDel('¿Eliminar este ítem de la bandeja?'))return;
   D.mensajesColab=(D.mensajesColab||[]).filter(function(m){return m.id!==msgId;});
   sv();openPerfilColab(colabId,'bandeja');
 }
@@ -7613,7 +7688,7 @@ function incorporarFormularioModal(id){
     var ak=_getAllFormKeys(sub);var allD=ak.length>0&&ak.every(function(k){return sub.itemsInc.indexOf(k)>=0;});
     h+='<div class="flex gap-6" style="padding:12px 16px;border-top:1px solid var(--gray-ll)">';
     if(!allD)h+='<button class="btn" style="background:#0d9488;color:#fff;flex:2;padding:12px" onclick="incAll(\''+id+'\')">✓ Incorporar todo</button>';
-    h+='<button class="btn btn-g btn-s" style="color:var(--red);flex:1" onclick="descartarFormulario(\''+id+'\');document.getElementById(\'ifmM\').remove()">✕ Descartar</button>';
+    h+='<button class="btn btn-g btn-s" style="color:var(--red);flex:1" onclick="descartarFormulario(\''+id+'\')">✕ Descartar</button>';
     h+='</div>';
   } else {
     h+='<div class="flex gap-6" style="padding:12px 16px;border-top:1px solid var(--gray-ll)">';
@@ -7818,8 +7893,9 @@ function incorporarFormulario(id){
 
 function descartarFormulario(id){
   var sub=(D.formulariosPendientes||[]).find(function(x){return x.id===id;});
-  if(!sub||!confirmDel('¿Descartar este formulario?'))return;
-  sub.estado='descartado';sub.updatedAt=nw();
+  if(!sub)return;
+  D.formulariosPendientes=D.formulariosPendientes.filter(function(x){return x.id!==id;});
+  document.getElementById('ifmM')?.remove();
   sv();render();toast('Informe descartado','var(--orange)');
 }
 
