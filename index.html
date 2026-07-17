@@ -5034,7 +5034,8 @@ function rComentarios(mc){
   else if(S.cmtState==='cumplido')filtered=filtered.filter(x=>x.cumplido);
   const propietario=filtered.filter(x=>x.tipo==='propietario');
   const general=filtered.filter(x=>x.tipo!=='propietario');
-  mc.innerHTML=`${modHeader('comentarios','Comentarios',`<div class="flex gap-4"><button class="btn btn-sec btn-s" onclick="exportComentariosPDF()">&#x1F4C4; PDF</button><button class="btn btn-s" style="background:${c};color:#fff" onclick="openM('newCmtM')">${I.plus} Nuevo</button></div>`)}
+  if(!S.cmtSelected)S.cmtSelected={};
+  mc.innerHTML=`${modHeader('comentarios','Comentarios',`<div class="flex gap-4"><div id="cmt_pdf_btns"></div><button class="btn btn-s" style="background:${c};color:#fff" onclick="openM('newCmtM')">${I.plus} Nuevo</button></div>`)}
   <!-- BUSCADOR -->
   <div class="flex gap-6 mb-8 items-center">
     <input class="fi" id="cmt_search" placeholder="Buscar en comentarios..." value="${S.cmtSearch||''}" oninput="S.cmtSearch=this.value;renderCmtItems()" style="flex:1">
@@ -5086,6 +5087,17 @@ function renderCmtItems(){
   _sb('cmt_tp_all',!S.cmtTipoFilter);
   _sb('cmt_tp_pro',S.cmtTipoFilter==='propietario');
   _sb('cmt_tp_gen',S.cmtTipoFilter==='general');
+  // Actualizar zona de botones PDF
+  var _pdfEl=$('cmt_pdf_btns');
+  if(_pdfEl){
+    var _selIds=Object.keys(S.cmtSelected||{}).filter(function(k){return S.cmtSelected[k];});
+    var _pdfH='<button class="btn btn-sec btn-s" onclick="exportComentariosPDF()" title="Exportar comentarios filtrados">&#x1F4C4; PDF</button>';
+    if(_selIds.length>0){
+      _pdfH+='<button class="btn btn-s" style="background:#0d9488;color:#fff" onclick="exportSeleccionadosPDF()" title="Exportar solo los seleccionados">&#x1F4C4; PDF ('+_selIds.length+')</button>';
+      _pdfH+='<button class="btn btn-sec btn-s" onclick="S.cmtSelected={};renderCmtItems()" title="Limpiar selección" style="color:var(--red)">&#x2715;</button>';
+    }
+    _pdfEl.innerHTML='<div class="flex gap-4">'+_pdfH+'</div>';
+  }
   // Ordenar
   const dir=(S.cmtSort==='asc')?1:-1;
   let allItems=[...pf('comentarios')].sort((a,b)=>dir*(a.date||'').localeCompare(b.date||''));
@@ -5103,14 +5115,17 @@ function renderCmtItems(){
     const linkedT=cm.tareaId?(D.tareas||[]).find(x=>x.id===cm.tareaId):null;
     const ph=cm.photos||[];const af=cm.archivos||[];
     const done=!!cm.cumplido;
-    const cardStyle='padding:12px;border-left:3px solid '+(done?'#16a34a':borderColor)+';'+(done?'opacity:0.7;':'');
+    const sel=!!(S.cmtSelected&&S.cmtSelected[cm.id]);
+    const cardStyle='padding:12px;border-left:3px solid '+(sel?'#0d9488':done?'#16a34a':borderColor)+';'+(done&&!sel?'opacity:0.7;':'')+(sel?'background:#f0fdfa;':'');
     let h='<div class="card" style="'+cardStyle+'">';
-    // Cabecera: badges + fecha + (si cumplido, badge verde)
-    h+='<div class="flex justify-between mb-4" style="align-items:flex-start"><div class="flex gap-4 wrap">';
+    // Cabecera: checkbox de selección + badges + fecha
+    h+='<div class="flex justify-between mb-4" style="align-items:flex-start;gap:6px">';
+    h+='<div class="flex gap-4 wrap" style="flex:1;align-items:center">';
+    h+='<button onclick="toggleCmtSel(\''+cm.id+'\')" style="flex-shrink:0;border:2px solid '+(sel?'#0d9488':'var(--gray-l)')+';background:'+(sel?'#0d9488':'transparent')+';color:'+(sel?'#fff':'var(--gray-l)')+';border-radius:5px;width:22px;height:22px;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0" title="'+(sel?'Deseleccionar':'Seleccionar para PDF')+'">'+(sel?'✓':'')+'</button>';
     h+=colBadge(cm.rubro||'General','var(--slate)',true);
     if(cm.etapa)h+=colBadge(cm.etapa,'var(--blue)',true);
     if(done)h+='<span style="background:#16a34a;color:#fff;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px">✓ Realizado</span>';
-    h+='</div><span class="txxs tc3">'+fmts(cm.date)+'</span></div>';
+    h+='</div><span class="txxs tc3" style="flex-shrink:0">'+fmts(cm.date)+'</span></div>';
     // Texto
     h+='<div class="ts mb-6" style="'+(done?'text-decoration:line-through;color:#94a3b8':'')+'">'+cm.text+'</div>';
     // Fotos y archivos
@@ -5191,6 +5206,65 @@ function exportComentariosPDF(){
     +'<div style="margin-top:32px;border-top:2px solid #eee;padding-top:12px;font-size:9px;color:#999;text-align:center">ObraControl Pro v9.0 — '+new Date().toLocaleString('es-AR')+'</div>'
     +'<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:20px;border-top:2px solid #ea580c;padding-top:10px">'
     +'<div><div style="font-size:15px;font-weight:800;color:#ea580c">FEDERICO PICKELNY</div><div style="font-size:10pt;font-weight:700;color:#555;margin-top:1px">ARQUITECTO</div><div style="font-size:9pt;color:#666;margin-top:1px">MP 2304</div></div>'
+    +'<div style="text-align:right"><div style="font-size:9pt;color:#666">&#9742; 264 4397772</div><div style="font-size:9pt;color:#666">&#9993; federicopickelny@gmail.com</div><div style="font-size:9pt;color:#666">&#127968; B. Rivadavia Oeste 114</div></div></div>'
+    +'</body></html>';
+  const w=window.open('','_blank');if(!w){toast('Habilitá las ventanas emergentes','var(--orange)');return;}
+  w.document.write(doc);w.document.close();setTimeout(function(){w.print();},400);
+  }catch(e){toast('Error al generar PDF','var(--red)');console.error(e);}
+}
+function toggleCmtSel(id){
+  if(!S.cmtSelected)S.cmtSelected={};
+  S.cmtSelected[id]=!S.cmtSelected[id];
+  renderCmtItems();
+}
+function exportSeleccionadosPDF(){
+  try{
+  const selIds=Object.keys(S.cmtSelected||{}).filter(function(k){return S.cmtSelected[k];});
+  if(!selIds.length){toast('No hay comentarios seleccionados','var(--orange)');return;}
+  const all=pf('comentarios');
+  const filtered=selIds.map(function(id){return all.find(function(x){return x.id===id;});}).filter(Boolean);
+  if(!filtered.length){toast('No se encontraron los comentarios seleccionados','var(--orange)');return;}
+  const p=D.projects.find(function(x){return x.id===S.proj;});
+  var html='';
+  filtered.forEach(function(cm){
+    const iP=cm.tipo==='propietario';
+    const borderCol=iP?'#ea580c':'#64748b';
+    const done=!!cm.cumplido;
+    const linkedT=cm.tareaId?(D.tareas||[]).find(function(x){return x.id===cm.tareaId;}):null;
+    html+='<div style="padding:10px 12px;margin-bottom:8px;border-radius:6px;border-left:3px solid '+borderCol+';background:#fafafa;break-inside:avoid;page-break-inside:avoid">';
+    html+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap">';
+    html+='<span style="background:'+borderCol+';color:#fff;font-size:8px;font-weight:700;padding:2px 6px;border-radius:3px">'+(iP?'PROPIETARIO':'GENERAL')+'</span>';
+    if(cm.rubro)html+='<span style="background:#f1f5f9;color:#475569;font-size:8px;font-weight:600;padding:2px 6px;border-radius:3px">'+cm.rubro+'</span>';
+    if(cm.etapa)html+='<span style="background:#eff6ff;color:#3b82f6;font-size:8px;font-weight:600;padding:2px 6px;border-radius:3px">'+cm.etapa+'</span>';
+    if(done)html+='<span style="background:#16a34a;color:#fff;font-size:8px;font-weight:700;padding:2px 6px;border-radius:3px">✓ REALIZADO</span>';
+    html+='<span style="font-size:9px;color:#64748b;margin-left:auto">'+fmt(cm.date)+'</span></div>';
+    html+='<div style="font-size:10.5px;color:#1a1a1a;line-height:1.5;'+(done?'text-decoration:line-through;color:#94a3b8':'')+';white-space:pre-wrap;margin-bottom:4px">'+cm.text+'</div>';
+    if(linkedT)html+='<div style="font-size:9px;color:#0891b2;margin-top:4px">📋 Tarea: '+linkedT.title+'</div>';
+    const photos=(cm.photos||[]).filter(function(ph){const u=typeof ph==='string'?ph:ph.url;return u&&u.length>4&&!u.startsWith('[');});
+    if(photos.length){html+='<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">';photos.forEach(function(ph){const u=typeof ph==='string'?ph:ph.url;html+='<img src="'+u+'" style="width:80px;height:80px;object-fit:cover;border-radius:3px;border:1px solid #ddd">';});html+='</div>';}
+    html+='</div>';
+  });
+  const propCount=filtered.filter(function(x){return x.tipo==='propietario';}).length;
+  const genCount=filtered.length-propCount;
+  const doc='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Comentarios seleccionados — '+(p?p.name:'')+'</title>'
+    +'<style>@page{size:A4;margin:18mm 18mm 22mm 18mm}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-sizing:border-box}'
+    +'body{font-family:Arial,sans-serif;padding:0;color:#1a1a1a;max-width:210mm;margin:0 auto;font-size:8.5pt;line-height:1.4}'
+    +'h1{font-size:14px;border-bottom:3px solid #0d9488;padding-bottom:6px;margin:0 0 8px}'
+    +'.meta{color:#555;font-size:9px;margin-bottom:12px;line-height:1.6}'
+    +'.r{display:flex;gap:10px;margin:0 0 14px}.rc{flex:1;border-radius:6px;padding:7px;text-align:center}'
+    +'.rc .n{font-size:13px;font-weight:800}.rc .l{font-size:7.5pt;color:#666;margin-top:1px}'
+    +'@media print{button{display:none!important}}</style></head><body>'
+    +'<h1>Comentarios seleccionados — '+(p?p.name:'')+'</h1>'
+    +'<div class="meta">'+new Date().toLocaleDateString('es-AR')+' — '+filtered.length+' comentario'+(filtered.length!==1?'s':'')+' seleccionado'+(filtered.length!==1?'s':'')+' manualmente</div>'
+    +'<div class="r">'
+    +'<div class="rc" style="background:#fff7ed"><div class="n" style="color:#ea580c">'+propCount+'</div><div class="l">Propietario</div></div>'
+    +'<div class="rc" style="background:#f8fafc"><div class="n" style="color:#64748b">'+genCount+'</div><div class="l">General</div></div>'
+    +'<div class="rc" style="background:#f0fdf4"><div class="n" style="color:#16a34a">'+filtered.filter(function(x){return x.cumplido;}).length+'</div><div class="l">Realizados</div></div>'
+    +'</div>'
+    +html
+    +'<div style="margin-top:32px;border-top:2px solid #eee;padding-top:12px;font-size:9px;color:#999;text-align:center">ObraControl Pro v9.0 — '+new Date().toLocaleString('es-AR')+'</div>'
+    +'<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:20px;border-top:2px solid #0d9488;padding-top:10px">'
+    +'<div><div style="font-size:15px;font-weight:800;color:#0d9488">FEDERICO PICKELNY</div><div style="font-size:10pt;font-weight:700;color:#555;margin-top:1px">ARQUITECTO</div><div style="font-size:9pt;color:#666;margin-top:1px">MP 2304</div></div>'
     +'<div style="text-align:right"><div style="font-size:9pt;color:#666">&#9742; 264 4397772</div><div style="font-size:9pt;color:#666">&#9993; federicopickelny@gmail.com</div><div style="font-size:9pt;color:#666">&#127968; B. Rivadavia Oeste 114</div></div></div>'
     +'</body></html>';
   const w=window.open('','_blank');if(!w){toast('Habilitá las ventanas emergentes','var(--orange)');return;}
