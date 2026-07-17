@@ -6852,11 +6852,19 @@ function openPerfilColab(colabId,tab){
   if(tab==='carpeta'){
     // reuse carpeta render logic
     var cp=getCarpeta(colabId);var archivos=cp.archivos||[];
+    var _pendMsgs=(D.mensajesColab||[]).filter(function(m){return m.colabId===colabId&&m.proyectoId===S.proj&&m.estadoColab==='nuevo';}).length;
     h+='<div class="flex gap-6 mb-10 flex-wrap">';
     h+='<label class="btn btn-sec btn-s" style="cursor:pointer;display:flex;align-items:center;gap:5px">'+I.plus+' Subir<input type="file" multiple style="display:none" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.dwg,.zip" onchange="uploadArqCarpeta(\''+colabId+'\',this)"></label>';
     if(co.phone)h+='<button class="btn btn-sec btn-s" onclick="shareCarpetaUrl(\''+colabId+'\')">📤 Compartir</button>';
     if(archivos.length)h+='<button class="btn btn-sec btn-s" onclick="downloadCarpetaAll(\''+colabId+'\')">⬇ Descargar todo</button>';
     h+='</div>';
+    if(_pendMsgs>0&&co.phone){
+      h+='<div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:8px;padding:10px 12px;margin-bottom:10px;display:flex;align-items:center;gap:10px">';
+      h+='<span style="font-size:18px">🔔</span>';
+      h+='<div style="flex:1;font-size:12px;color:#92400e"><strong>'+_pendMsgs+' notificación'+(_pendMsgs>1?'es':'')+' pendiente'+(_pendMsgs>1?'s':'')+' de enviar.</strong><br>El colaborador no las vio todavía.</div>';
+      h+='<button class="btn btn-s" style="background:#d97706;color:#fff;flex-shrink:0" onclick="notificarColabWA(\''+colabId+'\')">📲 Notificar</button>';
+      h+='</div>';
+    }
     if(!archivos.length){
       h+='<div class="empty">📁<div class="ts mt-8">Carpeta vacía</div><div class="txxs tc3 mt-4">Subí archivos o compartí el link al colaborador.</div></div>';
     } else {
@@ -7139,14 +7147,14 @@ async function uploadArqCarpeta(colabId,input){
       urgencia:'baja',fechaEnvio:nw(),estadoColab:'nuevo',respuesta:null,fechaRespuesta:null
     });
   }
-  sv();
+  sv();render();
   openPerfilColab(colabId,'carpeta');
-  if(added)toast(added+' archivo'+(added>1?'s':'')+' subido'+(added>1?'s':'')+' — se notificará al colaborador cuando abras su portal','var(--green)',4000);
+  if(added)toast(added+' archivo'+(added>1?'s':'')+' subido'+(added>1?'s':'')+' ✓','var(--green)',3000);
 }
 function deleteCarpetaFile(colabId,fileId){
   var cp=getCarpeta(colabId);
   cp.archivos=(cp.archivos||[]).filter(function(f){return f.id!==fileId;});
-  sv();openPerfilColab(colabId,'carpeta');toast('Eliminado','var(--green)');
+  sv();render();openPerfilColab(colabId,'carpeta');toast('Eliminado','var(--green)');
 }
 function downloadCarpetaAll(colabId){
   var cp=getCarpeta(colabId);var arch=cp.archivos||[];if(!arch.length)return;
@@ -8105,6 +8113,18 @@ function shareFormColaborador(colId){
     :encodeURIComponent('Hola '+(co.name||'')+', te invito a colaborar en la obra '+((p&&p.name)||'')+'. Accedé con este link para enviarme reportes:\n'+formUrl);
   window.open('whatsapp://send?phone='+co.phone.replace(/[^0-9]/g,'')+'&text='+msg,'_blank');
   if(co.estado==='pendiente'){co.estado='aceptado';co.updatedAt=nw();sv();render();}
+}
+function notificarColabWA(colabId){
+  var co=(D.colaboradores||[]).find(function(c){return c.id===colabId;});if(!co||!co.phone)return;
+  var p=(D.projects||[]).find(function(x){return x.id===S.proj;});
+  var msgs=(D.mensajesColab||[]).filter(function(m){return m.colabId===colabId&&m.proyectoId===S.proj;});
+  var baseUrl=window.location.href.replace(/\/[^/]*(\?.*)?$/,'/form.html');
+  var msgsParam=msgs.length?'&msgs='+encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(msgs))))):'';
+  var url=baseUrl+'?token='+encodeURIComponent(co.id)+'&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p&&p.name||'')+'&colName='+encodeURIComponent(co.name||'')+(SYNC.archTel?'&tel='+encodeURIComponent(SYNC.archTel):'')+'&sw='+(SYNC.sendWA?'1':'0')+'&se='+(SYNC.sendEmail?'1':'0')+msgsParam;
+  var pendMsgs=msgs.filter(function(m){return m.estadoColab==='nuevo';});
+  var resumen=pendMsgs.map(function(m){return '• '+esc(m.titulo);}).slice(0,5).join('\n');
+  var texto='Hola '+(co.name||'')+' 👋 Tenés '+(pendMsgs.length)+' notificación'+(pendMsgs.length>1?'es':'')+' nueva'+(pendMsgs.length>1?'s':'')+' en ObraControl — obra '+(p?p.name:'')+':'+(resumen?'\n'+resumen:'')+'\n\nIngresá con este link:\n'+url;
+  window.open('whatsapp://send?phone='+co.phone.replace(/[^0-9]/g,'')+'&text='+encodeURIComponent(texto),'_blank');
 }
 function openColabPortal(colId){
   var co=(D.colaboradores||[]).find(function(c){return c.id===colId;});if(!co)return;
