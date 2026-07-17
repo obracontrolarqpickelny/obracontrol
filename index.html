@@ -7118,7 +7118,7 @@ function fileToDataUrl(file){
 }
 async function uploadArqCarpeta(colabId,input){
   if(!input.files||!input.files.length)return;
-  var cp=getCarpeta(colabId);var added=0;
+  var cp=getCarpeta(colabId);var added=0;var nombres=[];
   toast('Procesando archivos...','var(--pri)');
   for(var i=0;i<input.files.length;i++){
     var f=input.files[i];
@@ -7126,18 +7126,27 @@ async function uploadArqCarpeta(colabId,input){
     try{
       var data=f.type.startsWith('image/')?await compressImage(await fileToDataUrl(f),1400,0.75):await fileToDataUrl(f);
       cp.archivos.push({id:uid(),nombre:f.name,tipo:f.type||'application/octet-stream',data:data,fecha:nw(),subidoPor:'arq',descripcion:''});
-      added++;
+      nombres.push(f.name);added++;
     }catch(e){toast('Error en '+f.name+': '+e.message,'var(--red)');}
   }
+  if(added){
+    // Crear notificación automática en bandeja del colaborador
+    if(!D.mensajesColab)D.mensajesColab=[];
+    D.mensajesColab.push({
+      id:uid(),proyectoId:S.proj,colabId:colabId,tipo:'nota',entidadId:null,
+      titulo:'📁 '+added+' archivo'+(added>1?'s':'')+' nuevo'+(added>1?'s':'')+' en tu carpeta',
+      nota:nombres.slice(0,3).join(', ')+(nombres.length>3?' y '+(nombres.length-3)+' más':''),
+      urgencia:'baja',fechaEnvio:nw(),estadoColab:'nuevo',respuesta:null,fechaRespuesta:null
+    });
+  }
   sv();
-  openCarpeta(colabId);
-  if(added)toast(added+' archivo'+(added>1?'s':'')+' subido'+(added>1?'s':''),'var(--green)');
+  openPerfilColab(colabId,'carpeta');
+  if(added)toast(added+' archivo'+(added>1?'s':'')+' subido'+(added>1?'s':'')+' — se notificará al colaborador cuando abras su portal','var(--green)',4000);
 }
 function deleteCarpetaFile(colabId,fileId){
-  if(!confirmDel('¿Eliminar este archivo?'))return;
   var cp=getCarpeta(colabId);
   cp.archivos=(cp.archivos||[]).filter(function(f){return f.id!==fileId;});
-  sv();openCarpeta(colabId);toast('Eliminado','var(--green)');
+  sv();openPerfilColab(colabId,'carpeta');toast('Eliminado','var(--green)');
 }
 function downloadCarpetaAll(colabId){
   var cp=getCarpeta(colabId);var arch=cp.archivos||[];if(!arch.length)return;
