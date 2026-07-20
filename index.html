@@ -2215,6 +2215,23 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.querySelec
 // ═══════════════════════════════════════
 // RENDER
 // ═══════════════════════════════════════
+function _morphEl(a,b){
+  if(a.nodeType===3){if(a.nodeValue!==b.nodeValue)a.nodeValue=b.nodeValue;return;}
+  if(a.nodeType!==1)return;
+  if(a.id==='mc')return; // content filled by renderModule
+  var aa=a.attributes,ba=b.attributes,i;
+  for(i=aa.length-1;i>=0;i--){if(!b.hasAttribute(aa[i].name))a.removeAttribute(aa[i].name);}
+  for(i=0;i<ba.length;i++){if(a.getAttribute(ba[i].name)!==ba[i].value)a.setAttribute(ba[i].name,ba[i].value);}
+  var ac=a.firstChild,bc=b.firstChild;
+  while(bc){
+    if(!ac){a.appendChild(bc.cloneNode(true));bc=bc.nextSibling;continue;}
+    if(ac.nodeType!==bc.nodeType||ac.nodeName!==bc.nodeName){a.insertBefore(bc.cloneNode(true),ac);}
+    else{_morphEl(ac,bc);ac=ac.nextSibling;}
+    bc=bc.nextSibling;
+  }
+  while(ac){var nx=ac.nextSibling;a.removeChild(ac);ac=nx;}
+}
+function patchHTML(el,html){var t=document.createElement('div');t.innerHTML=html;_morphEl(el,t);}
 function render(){const sy=window.scrollY;if(!D.user){renderAuth();return;}if(!S.proj){renderProjects();return;}saveUIState();renderShell();requestAnimationFrame(()=>window.scrollTo(0,sy));}
 function renderAuth(){app.innerHTML=`<div style="background:linear-gradient(160deg,var(--pri-bg),var(--pri-mid) 40%,#fff);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px"><div style="width:100%;max-width:400px"><div class="tac" style="margin-bottom:32px"><div style="width:68px;height:68px;border-radius:18px;background:linear-gradient(135deg,#D97706,#F59E0B);display:inline-flex;align-items:center;justify-content:center;color:#fff;margin-bottom:16px;box-shadow:0 8px 28px #D9770630">${I.building}</div><div style="font-size:28px;font-weight:800">ObraControl</div><div class="tc3 mt-4">Gestion integral de obras — v9.0</div></div><div class="card" style="padding:24px"><div class="tac fw7 mb-16" style="font-size:16px">Iniciar sesion</div><div class="fg"><label class="fl">Email</label><input class="fi" id="aEmail" type="email" placeholder="tu@email.com"></div><div class="fg"><label class="fl">Nombre</label><input class="fi" id="aName" placeholder="Tu nombre"></div><button class="btn btn-p btn-w mt-8" onclick="doLogin()">Ingresar</button></div></div></div>`;}
 function doLogin(){const e=$('aEmail')?.value?.trim()||'';const n=$('aName')?.value?.trim()||'';D.user={id:uid(),name:n||e.split('@')[0]||'Usuario',email:e||'demo@obra.com',rol:'director',createdAt:nw()};sv();render();}
@@ -2247,7 +2264,7 @@ function renderShell(){
   var _wstart=Math.max(0,_bnavIdx-2);
   if(_wstart+5>allBnav.length)_wstart=Math.max(0,allBnav.length-5);
   const bnav=allBnav.slice(_wstart,_wstart+5);
-  app.innerHTML=`
+  patchHTML(app,`
   <div class="topbar">
     <button class="tbtn" onclick="S.menu=!S.menu;render();">${S.menu?I.x:I.menu}</button>
     <h1>${p.name}</h1>
@@ -2256,10 +2273,10 @@ function renderShell(){
     <button class="tbtn" onclick="cloudSave()" style="color:${cloudCol}" title="${drv?'Guardar en Drive':'Configurar Drive'}">${I.cloud}</button>
     <button class="tbtn" onclick="S.proj=null;render();" style="color:var(--gray-l)">${I.home}</button>
   </div>
-  ${S.menu?`<div class="ov open" onclick="S.menu=false;render();"><div class="smenu" onclick="event.stopPropagation()"><div class="smenu-hdr"><div class="flex items-center gap-10 mb-4"><span style="color:var(--pri)">${I.building}</span><span style="font-size:15px;font-weight:800">${p.name}</span></div><div class="txxs tc3">${p.client||''} ${p.location?'| '+p.location:''}</div></div><div style="flex:1;overflow-y:auto;padding:4px 0">${mi}</div><div style="padding:12px 16px;border-top:1px solid var(--gray-ll)"><button class="btn btn-g btn-s btn-w" style="color:var(--red)" onclick="D.user=null;sv();render();">${I.out} Cerrar sesion</button></div></div></div>`:''}
-  ${S.searchOpen?renderSearchModal():''}
+  <div class="ov${S.menu?' open':''}" onclick="S.menu=false;render();"><div class="smenu" onclick="event.stopPropagation()"><div class="smenu-hdr"><div class="flex items-center gap-10 mb-4"><span style="color:var(--pri)">${I.building}</span><span style="font-size:15px;font-weight:800">${p.name}</span></div><div class="txxs tc3">${p.client||''} ${p.location?'| '+p.location:''}</div></div><div style="flex:1;overflow-y:auto;padding:4px 0">${mi}</div><div style="padding:12px 16px;border-top:1px solid var(--gray-ll)"><button class="btn btn-g btn-s btn-w" style="color:var(--red)" onclick="D.user=null;sv();render();">${I.out} Cerrar sesion</button></div></div></div>
+  <div class="mo${S.searchOpen?' open':''}" onclick="S.searchOpen=false;render();"><div class="mo-c" style="max-width:600px" onclick="event.stopPropagation()"><div class="mo-h"><h3>${I.search} Buscador</h3><button class="tbtn" onclick="S.searchOpen=false;render();">${I.x}</button></div><div class="searchbar"><span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--gray-l)">${I.search}</span><input class="fi" style="padding-left:38px" id="searchInput" placeholder="Buscar..." value="${S.searchQ||''}" oninput="S.searchQ=this.value;renderSR();"></div><div id="searchResults"></div></div></div>
   <div class="content" id="mc"></div>
-  <div class="bottomnav" ontouchstart="window._bnTX=event.changedTouches[0].clientX" ontouchend="var _dx=event.changedTouches[0].clientX-(window._bnTX||0);if(Math.abs(_dx)>40){navStep(_dx<0?1:-1)}"><button class="bnav" style="max-width:32px;min-width:32px;font-size:16px;opacity:${_bnavIdx<=0?'0.3':'1'}" onclick="navStep(-1)" title="Anterior">&#x276E;</button>${bnav.map(t=>{const act=S.mod===t.id;const c=act?MC[t.id]:'var(--gray-l)';return `<button class="bnav${act?' active':''}" style="color:${c}" onclick="S.mod='${t.id}';S.visitaDetail=null;S.matDetail=null;render();">${I[t.ic]}<span>${t.l}</span>${(t.id==='alertas'&&actAl>0)||(t.id==='bandeja'&&pendForms>0)?'<span class="ndot"></span>':''}</button>`;}).join('')}<button class="bnav" style="max-width:32px;min-width:32px;font-size:16px;opacity:${_bnavIdx>=_allNavIds.length-1?'0.3':'1'}" onclick="navStep(1)" title="Siguiente">&#x276F;</button></div>`;
+  <div class="bottomnav" ontouchstart="window._bnTX=event.changedTouches[0].clientX" ontouchend="var _dx=event.changedTouches[0].clientX-(window._bnTX||0);if(Math.abs(_dx)>40){navStep(_dx<0?1:-1)}"><button class="bnav" style="max-width:32px;min-width:32px;font-size:16px;opacity:${_bnavIdx<=0?'0.3':'1'}" onclick="navStep(-1)" title="Anterior">&#x276E;</button>${bnav.map(t=>{const act=S.mod===t.id;const c=act?MC[t.id]:'var(--gray-l)';return `<button class="bnav${act?' active':''}" style="color:${c}" onclick="S.mod='${t.id}';S.visitaDetail=null;S.matDetail=null;render();">${I[t.ic]}<span>${t.l}</span>${(t.id==='alertas'&&actAl>0)||(t.id==='bandeja'&&pendForms>0)?'<span class="ndot"></span>':''}</button>`;}).join('')}<button class="bnav" style="max-width:32px;min-width:32px;font-size:16px;opacity:${_bnavIdx>=_allNavIds.length-1?'0.3':'1'}" onclick="navStep(1)" title="Siguiente">&#x276F;</button></div>`);
   renderModule(S.mod,p);
 }
 function renderModule(mod,p){const mc=$('mc');if(!mc)return;if(S.visitaDetail){var _vck=(D.visitas||[]).find(function(x){return x.id===S.visitaDetail;});if(!_vck||_vck.projectId!==S.proj){S.visitaDetail=null;}else{rVisitaDetail(mc,S.visitaDetail);return;}}if(S.matDetail){rMatDetail(mc,S.matDetail);return;}switch(mod){case 'dashboard':rDash(mc,p);break;case 'visitas':rVisitas(mc);break;case 'tareas':rTareas(mc);break;case 'materiales':rMat(mc);break;case 'alertas':rAlertas(mc);break;case 'checklist':rChecklist(mc);break;case 'documentos':rDocs(mc);break;case 'comentarios':rComentarios(mc);break;case 'informes':rInformes(mc,p);break;case 'colaboradores':rColaboradores(mc,p);break;case 'bandeja':rBandeja(mc,p);break;case 'economia':rEconomia(mc,p);break;case 'config':rConfig(mc,p);break;}if(S.searchOpen)setTimeout(()=>{const si=$('searchInput');if(si)si.focus();},100);}
@@ -3418,8 +3435,15 @@ function exportTareasPDF(){
     // Fotos
     const tPh=(t.photos||[]).filter(function(ph){const u=typeof ph==='string'?ph:ph.url;return u&&u.length>4&&!u.startsWith('[');});
     if(tPh.length){
-      _tHtml+='<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:5px">';
-      tPh.forEach(function(ph){const u=typeof ph==='string'?ph:ph.url;_tHtml+='<img src="'+u+'" style="width:75px;height:75px;object-fit:cover;border-radius:3px;border:1px solid #ddd">';});
+      _tHtml+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:5px">';
+      tPh.forEach(function(ph){
+        const u=typeof ph==='string'?ph:ph.url;
+        const cmts=typeof ph==='object'&&ph.comments&&ph.comments.length?ph.comments:[];
+        _tHtml+='<div style="display:inline-block;vertical-align:top">';
+        _tHtml+='<img src="'+u+'" style="width:75px;height:75px;object-fit:cover;border-radius:3px;border:1px solid #ddd;display:block">';
+        if(cmts.length){_tHtml+='<div style="max-width:75px;margin-top:2px">';cmts.forEach(function(c){_tHtml+='<div style="font-size:7px;color:#374151;line-height:1.3;word-break:break-word">\u{1F4AC} '+c.text+(c.author?'<span style="color:#94a3b8"> — '+c.author+'</span>':'')+'</div>';});_tHtml+='</div>';}
+        _tHtml+='</div>';
+      });
       _tHtml+='</div>';
     }
     _tHtml+='</div>';
@@ -3708,7 +3732,7 @@ function rMat(mc){
     const status=comp===0?'':pct>=100?'ok':pct>=80?'limit':'under';
     cats[cat].push({...m,totalIng,pct,status});
   });
-  mc.innerHTML=`${modHeader('materiales','Materiales',`<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end"><div class="flex gap-4 wrap" style="justify-content:flex-end"><button class="btn btn-s" style="background:#8b5cf6;color:#fff" onclick="openM('newAPedirM')">&#x1F4DD; A pedir</button><button class="btn btn-s" style="background:var(--orange);color:#fff" onclick="openM('newPedidoM')">&#x1F4CB; Pedido</button><button class="btn btn-s" style="background:${c};color:#fff" onclick="openM('newIngM')">${I.truck} Ingreso</button><button class="btn btn-s" style="background:var(--green);color:#fff" onclick="openM('newExistenteM')">&#x2713; Existente</button></div><div class="flex gap-4 wrap" style="justify-content:flex-end"><button class="btn btn-sec btn-s" onclick="openM('newMatM')">${I.plus} Material</button><button class="btn btn-sec btn-s" onclick="exportMatPDF()">${I.pdf} PDF</button><button class="btn btn-sec btn-s" id="mat_mic_btn" onclick="startMatVoice()" title="Dictar">🎤</button><button class="btn btn-sec btn-s" onclick="abrirFusionMat()" title="Fusionar">&#x1F501;</button></div></div>`)}
+  mc.innerHTML=`${modHeader('materiales','Materiales',`<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><button class="btn btn-s" style="background:#8b5cf6;color:#fff;white-space:nowrap" onclick="openM('newAPedirM')">&#x1F4DD; A pedir</button><button class="btn btn-s" style="background:var(--orange);color:#fff;white-space:nowrap" onclick="openM('newPedidoM')">&#x1F4CB; Pedido</button><button class="btn btn-s" style="background:${c};color:#fff;white-space:nowrap" onclick="openM('newIngM')">${I.truck} Ingreso</button><button class="btn btn-s" style="background:var(--green);color:#fff;white-space:nowrap" onclick="openM('newExistenteM')">&#x2713; Existente</button><button class="btn btn-sec btn-s" style="white-space:nowrap" onclick="openM('newMatM')">${I.plus} Material</button><button class="btn btn-sec btn-s" style="white-space:nowrap" onclick="exportMatPDF()">${I.pdf} PDF</button><button class="btn btn-sec btn-s" style="white-space:nowrap" id="mat_mic_btn" onclick="startMatVoice()">🎤 Voz</button><button class="btn btn-sec btn-s" style="white-space:nowrap" onclick="abrirFusionMat()">&#x1F501; Fusionar</button></div>`)}
   <!-- FILTROS MATERIALES -->
   <div class="card mb-12" style="padding:12px">
     <div class="flex gap-6 mb-8 items-center">
@@ -5182,7 +5206,7 @@ function exportComentariosPDF(){
     html+='<div style="font-size:10.5px;color:#1a1a1a;line-height:1.5;'+(done?'text-decoration:line-through;color:#94a3b8':'')+';white-space:pre-wrap;margin-bottom:4px">'+cm.text+'</div>';
     if(linkedT)html+='<div style="font-size:9px;color:#0891b2;margin-top:4px">📋 Tarea: '+linkedT.title+'</div>';
     const photos=(cm.photos||[]).filter(function(ph){const u=typeof ph==='string'?ph:ph.url;return u&&u.length>4&&!u.startsWith('[');});
-    if(photos.length){html+='<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">';photos.forEach(function(ph){const u=typeof ph==='string'?ph:ph.url;html+='<img src="'+u+'" style="width:80px;height:80px;object-fit:cover;border-radius:3px;border:1px solid #ddd">';});html+='</div>';}
+    if(photos.length){html+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">';photos.forEach(function(ph){const u=typeof ph==='string'?ph:ph.url;const cmts=typeof ph==='object'&&ph.comments&&ph.comments.length?ph.comments:[];html+='<div style="display:inline-block;vertical-align:top"><img src="'+u+'" style="width:80px;height:80px;object-fit:cover;border-radius:3px;border:1px solid #ddd;display:block">';if(cmts.length){html+='<div style="max-width:80px;margin-top:2px">';cmts.forEach(function(c){html+='<div style="font-size:7px;color:#374151;line-height:1.3;word-break:break-word">💬 '+c.text+(c.author?'<span style="color:#94a3b8"> — '+c.author+'</span>':'')+'</div>';});html+='</div>';}html+='</div>';});html+='</div>';}
     html+='</div>';
   });
   const propCount=filtered.filter(x=>x.tipo==='propietario').length;
@@ -5241,7 +5265,7 @@ function exportSeleccionadosPDF(){
     html+='<div style="font-size:10.5px;color:#1a1a1a;line-height:1.5;'+(done?'text-decoration:line-through;color:#94a3b8':'')+';white-space:pre-wrap;margin-bottom:4px">'+cm.text+'</div>';
     if(linkedT)html+='<div style="font-size:9px;color:#0891b2;margin-top:4px">📋 Tarea: '+linkedT.title+'</div>';
     const photos=(cm.photos||[]).filter(function(ph){const u=typeof ph==='string'?ph:ph.url;return u&&u.length>4&&!u.startsWith('[');});
-    if(photos.length){html+='<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">';photos.forEach(function(ph){const u=typeof ph==='string'?ph:ph.url;html+='<img src="'+u+'" style="width:80px;height:80px;object-fit:cover;border-radius:3px;border:1px solid #ddd">';});html+='</div>';}
+    if(photos.length){html+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">';photos.forEach(function(ph){const u=typeof ph==='string'?ph:ph.url;const cmts=typeof ph==='object'&&ph.comments&&ph.comments.length?ph.comments:[];html+='<div style="display:inline-block;vertical-align:top"><img src="'+u+'" style="width:80px;height:80px;object-fit:cover;border-radius:3px;border:1px solid #ddd;display:block">';if(cmts.length){html+='<div style="max-width:80px;margin-top:2px">';cmts.forEach(function(c){html+='<div style="font-size:7px;color:#374151;line-height:1.3;word-break:break-word">💬 '+c.text+(c.author?'<span style="color:#94a3b8"> — '+c.author+'</span>':'')+'</div>';});html+='</div>';}html+='</div>';});html+='</div>';}
     html+='</div>';
   });
   const propCount=filtered.filter(function(x){return x.tipo==='propietario';}).length;
@@ -5754,7 +5778,7 @@ function rEconomia(mc,p){
   const ecoCtxBanner=S.ecoSingleId
     ?`<div style="background:#e0f2fe;border-left:3px solid var(--cyan);border-radius:6px;padding:8px 12px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center"><span class="txxs fw7" style="color:var(--cyan)">&#x1F4CC; Movimiento vinculado: <strong>${_singleItem?(_singleItem.concepto||''):'?'}</strong></span><button class="btn btn-sec btn-s" onclick="S.ecoSingleId=null;S.ecoResalt=null;S.mod='materiales';render()">&larr; Volver a Materiales</button></div>`
     :S.ecoResalt?'<div style="background:#e0f2fe;border-left:3px solid var(--cyan);border-radius:6px;padding:8px 12px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center"><span class="txxs fw7" style="color:var(--cyan)">&#x1F4CC; Movimiento vinculado desde Materiales</span><button class="btn btn-sec btn-s" onclick="S.mod=\'materiales\';S.ecoResalt=null;render()">&larr; Volver a Materiales</button></div>':'';
-  mc.innerHTML=`${ecoCtxBanner}${modHeader('economia','Economía',`<div class="flex gap-4 wrap"><button class="btn btn-sec btn-s" onclick="openEcoPDFDialog()">${I.pdf} PDF</button><button class="btn btn-sec btn-s" onclick="exportEcoCSV()">📊 Excel</button><button class="btn btn-s" style="background:${c};color:#fff" onclick="openNEM()">${I.plus} Movimiento</button></div>`)}
+  mc.innerHTML=`${ecoCtxBanner}${modHeader('economia','Economía',`<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><button class="btn btn-sec btn-s" style="white-space:nowrap" onclick="openEcoPDFDialog()">${I.pdf} PDF</button><button class="btn btn-sec btn-s" style="white-space:nowrap" onclick="exportEcoCSV()">📊 Excel</button><button class="btn btn-s" style="background:${c};color:#fff;white-space:nowrap;grid-column:span 2" onclick="openNEM()">${I.plus} Movimiento</button></div>`)}
   <!-- FILTROS -->
   <div class="card mb-12" style="padding:10px 12px">
     <div class="flex gap-6 items-center mb-8">
@@ -7631,7 +7655,7 @@ function rBandeja(mc,p){
   var c2='#0d9488';
   if(!S.bandejaTab)S.bandejaTab='pendientes';
   var tab=S.bandejaTab;
-  var all=(D.formulariosPendientes||[]).slice().sort(function(a,b){return new Date(b.receivedAt||b.fecha||0)-new Date(a.receivedAt||a.fecha||0);});
+  var all=(D.formulariosPendientes||[]).filter(function(x){return x.estado!=='eliminado';}).slice().sort(function(a,b){return new Date(b.receivedAt||b.fecha||0)-new Date(a.receivedAt||a.fecha||0);});
   var pendientes=all.filter(function(x){return x.estado==='pendiente';});
   var procesados=all.filter(function(x){return x.estado!=='pendiente';});
   function subSummary(sub){
@@ -7653,7 +7677,7 @@ function rBandeja(mc,p){
     var bc=isPend?c2:sub.estado==='incorporado'?'var(--green)':'var(--gray-l)';
     var stLbl=isPend?'':'<span style="color:'+(sub.estado==='incorporado'?'var(--green)':'var(--gray-l)')+';font-weight:600">'+(sub.estado==='incorporado'?'✓ Cargado'+(sub.fechaIncorporado?' · '+fmts(sub.fechaIncorporado):''):'✕ Descartado')+'</span>';
     var vBdg=sub.version>1?'<span style="background:var(--gray-ll);color:var(--text3);font-size:9px;padding:1px 6px;border-radius:10px;margin-left:6px">v'+sub.version+'</span>':'';
-    var btns=isPend?('<div class="flex gap-4" style="flex-shrink:0"><button class="btn btn-s" style="background:'+c2+';color:#fff;white-space:nowrap" onclick="incorporarFormularioModal(\''+sub.id+'\')">📥 Revisar</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="descartarFormulario(\''+sub.id+'\')">✕</button></div>'):('<div class="txxs" style="flex-shrink:0;text-align:right">'+stLbl+'<br><button class="btn btn-g btn-s" style="font-size:10px;margin-top:6px" onclick="incorporarFormularioModal(\''+sub.id+'\')">👁 Ver / Reabrir</button></div>');
+    var btns=isPend?('<div class="flex gap-4" style="flex-shrink:0"><button class="btn btn-s" style="background:'+c2+';color:#fff;white-space:nowrap" onclick="incorporarFormularioModal(\''+sub.id+'\')">📥 Revisar</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="descartarFormulario(\''+sub.id+'\')">✕</button></div>'):('<div style="flex-shrink:0;text-align:right"><div class="txxs">'+stLbl+'</div><div class="flex gap-4 mt-6"><button class="btn btn-g btn-s" style="font-size:10px" onclick="incorporarFormularioModal(\''+sub.id+'\')">👁 Ver</button><button class="btn btn-s" style="font-size:10px;background:#dc2626;color:#fff" onclick="descartarFormulario(\''+sub.id+'\')">🗑</button></div></div>');
     var obraNm=sub.obraName||(D.projects&&D.projects.find(function(p2){return p2.id===(sub.obraId||sub.projectId);})||{}).name||'';
     return '<div class="card" style="border-left:3px solid '+bc+';padding:12px;margin-bottom:8px"><div class="flex justify-between items-start gap-8"><div style="flex:1;min-width:0"><div class="ts fw7">👤 '+esc(sub.ayudante||'?')+vBdg+(obraNm?'<span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:6px">🏗 '+esc(obraNm)+'</span>':'')+'</div><div class="txxs tc3 mt-2">📅 '+fmts(sub.receivedAt||sub.fecha||'')+'</div><div class="txxs mt-6" style="color:var(--text2);line-height:1.6">'+subSummary(sub)+'</div></div>'+btns+'</div></div>';
   }
@@ -7784,6 +7808,7 @@ function incorporarFormularioModal(id){
   } else {
     h+='<div class="flex gap-6" style="padding:12px 16px;border-top:1px solid var(--gray-ll)">';
     h+='<button class="btn btn-sec" style="flex:1" onclick="reabrirFormulario(\''+id+'\')">↩ Reabrir</button>';
+    h+='<button class="btn btn-s" style="flex:1;background:#dc2626;color:#fff" onclick="descartarFormulario(\''+id+'\')">🗑 Eliminar</button>';
     h+='<button class="btn btn-g btn-s" style="flex:1" onclick="document.getElementById(\'ifmM\').remove()">Cerrar</button>';
     h+='</div>';
   }
@@ -7985,9 +8010,11 @@ function incorporarFormulario(id){
 function descartarFormulario(id){
   var sub=(D.formulariosPendientes||[]).find(function(x){return x.id===id;});
   if(!sub)return;
-  D.formulariosPendientes=D.formulariosPendientes.filter(function(x){return x.id!==id;});
+  // Marcar como eliminado en lugar de borrar del array — si se borra, el próximo
+  // fetchFormulariosPending() lo restaura desde Drive porque ya no está en existingIds.
+  sub.estado='eliminado';sub.updatedAt=nw();
   document.getElementById('ifmM')?.remove();
-  sv();render();toast('Informe descartado','var(--orange)');
+  sv();render();toast('Informe eliminado','var(--red)');
 }
 
 async function fetchFormulariosPending(){
