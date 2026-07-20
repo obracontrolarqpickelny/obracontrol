@@ -5341,30 +5341,40 @@ function addCmtMedia(cmId, type){
   inp.style.display='none';
   document.body.appendChild(inp);
   inp.onchange=async ()=>{
-    // Re-fetch cm aquí: _silentMerge puede haber reemplazado D.comentarios
-    // mientras el picker estaba abierto, invalidando el ref capturado antes
-    const cm=D.comentarios.find(x=>x.id===cmId);
     const files=Array.from(inp.files||[]);
     if(!files.length){document.body.removeChild(inp);return;}
-    if(!cm){document.body.removeChild(inp);toast('Comentario no encontrado','var(--red)');return;}
+    // Acumular resultados en arrays temporales durante todos los awaits.
+    // D.comentarios puede ser reemplazado por _silentMerge en cualquier yield,
+    // así que el re-fetch de cm se hace AL FINAL, sin más yields después.
     if(type==='photo'){
-      if(!cm.photos)cm.photos=[];
       const _cmFid=(S.proj&&GD.moduleFolders[S.proj+'_comentarios'])||GD.imagesFolderId||null;
+      const _newPhotos=[];
       for(const file of files){
         var _comp=await new Promise(res=>{const r=new FileReader();r.onload=async e=>res(await compressImage(e.target.result,800,0.7));r.readAsDataURL(file);});
         var _url=_comp;
         if(GD.online&&GD.accessToken&&(_cmFid||GD.imagesFolderId)){
           try{const _up=await uploadImageToDrive(_comp,'cmt_'+uid()+'.jpg',_cmFid);if(_up&&_up.url)_url=_up.url;}catch(e){}
         }
-        cm.photos.push(mkPhoto(_url,''));
+        _newPhotos.push(mkPhoto(_url,''));
       }
-      toast(files.length+' foto(s) agregada(s)');
+      // Re-fetch cm justo aquí: ya no hay más awaits hasta el final del handler
+      const cm=D.comentarios.find(x=>x.id===cmId);
+      if(!cm){document.body.removeChild(inp);toast('Error: comentario no encontrado','var(--red)');return;}
+      if(!cm.photos)cm.photos=[];
+      _newPhotos.forEach(function(p){cm.photos.push(p);});
+      cm.updatedAt=nw();
+      toast(_newPhotos.length+' foto(s) agregada(s)');
     } else {
+      const _newArchivos=[];
+      await Promise.all(files.map(file=>new Promise(res=>{const r=new FileReader();r.onload=e=>{_newArchivos.push({id:uid(),name:file.name,type:file.type,data:e.target.result,date:td()});res();};r.readAsDataURL(file);})));
+      // Re-fetch cm justo aquí: ya no hay más awaits hasta el final del handler
+      const cm=D.comentarios.find(x=>x.id===cmId);
+      if(!cm){document.body.removeChild(inp);toast('Error: comentario no encontrado','var(--red)');return;}
       if(!cm.archivos)cm.archivos=[];
-      await Promise.all(files.map(file=>new Promise(res=>{const r=new FileReader();r.onload=e=>{cm.archivos.push({id:uid(),name:file.name,type:file.type,data:e.target.result,date:td()});res();};r.readAsDataURL(file);})));
-      toast(files.length+' archivo(s) adjuntado(s)');
+      _newArchivos.forEach(function(a){cm.archivos.push(a);});
+      cm.updatedAt=nw();
+      toast(_newArchivos.length+' archivo(s) adjuntado(s)');
     }
-    cm.updatedAt=nw();
     document.body.removeChild(inp);
     sv();render();
   };
