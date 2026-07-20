@@ -2231,7 +2231,18 @@ function _morphEl(a,b){
   }
   while(ac){var nx=ac.nextSibling;a.removeChild(ac);ac=nx;}
 }
-function patchHTML(el,html){var t=document.createElement('div');t.innerHTML=html;_morphEl(el,t);}
+function patchHTML(el,html){
+  var t=document.createElement('div');t.innerHTML=html;
+  // Sincroniza solo los hijos — nunca toca los atributos del elemento raíz (evita borrar id="app")
+  var ac=el.firstChild,bc=t.firstChild;
+  while(bc){
+    if(!ac){el.appendChild(bc.cloneNode(true));bc=bc.nextSibling;continue;}
+    if(ac.nodeType!==bc.nodeType||ac.nodeName!==bc.nodeName){el.insertBefore(bc.cloneNode(true),ac);}
+    else{_morphEl(ac,bc);ac=ac.nextSibling;}
+    bc=bc.nextSibling;
+  }
+  while(ac){var nx=ac.nextSibling;el.removeChild(ac);ac=nx;}
+}
 function render(){const sy=window.scrollY;if(!D.user){renderAuth();return;}if(!S.proj){renderProjects();return;}saveUIState();renderShell();requestAnimationFrame(()=>window.scrollTo(0,sy));}
 function renderAuth(){app.innerHTML=`<div style="background:linear-gradient(160deg,var(--pri-bg),var(--pri-mid) 40%,#fff);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px"><div style="width:100%;max-width:400px"><div class="tac" style="margin-bottom:32px"><div style="width:68px;height:68px;border-radius:18px;background:linear-gradient(135deg,#D97706,#F59E0B);display:inline-flex;align-items:center;justify-content:center;color:#fff;margin-bottom:16px;box-shadow:0 8px 28px #D9770630">${I.building}</div><div style="font-size:28px;font-weight:800">ObraControl</div><div class="tc3 mt-4">Gestion integral de obras — v9.0</div></div><div class="card" style="padding:24px"><div class="tac fw7 mb-16" style="font-size:16px">Iniciar sesion</div><div class="fg"><label class="fl">Email</label><input class="fi" id="aEmail" type="email" placeholder="tu@email.com"></div><div class="fg"><label class="fl">Nombre</label><input class="fi" id="aName" placeholder="Tu nombre"></div><button class="btn btn-p btn-w mt-8" onclick="doLogin()">Ingresar</button></div></div></div>`;}
 function doLogin(){const e=$('aEmail')?.value?.trim()||'';const n=$('aName')?.value?.trim()||'';D.user={id:uid(),name:n||e.split('@')[0]||'Usuario',email:e||'demo@obra.com',rol:'director',createdAt:nw()};sv();render();}
