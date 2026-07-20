@@ -5333,7 +5333,6 @@ async function saveCmt(){
 }
 
 function addCmtMedia(cmId, type){
-  const cm=D.comentarios.find(x=>x.id===cmId);if(!cm)return;
   const inp=document.createElement('input');
   inp.type='file';
   inp.multiple=true;
@@ -5342,8 +5341,12 @@ function addCmtMedia(cmId, type){
   inp.style.display='none';
   document.body.appendChild(inp);
   inp.onchange=async ()=>{
+    // Re-fetch cm aquí: _silentMerge puede haber reemplazado D.comentarios
+    // mientras el picker estaba abierto, invalidando el ref capturado antes
+    const cm=D.comentarios.find(x=>x.id===cmId);
     const files=Array.from(inp.files||[]);
     if(!files.length){document.body.removeChild(inp);return;}
+    if(!cm){document.body.removeChild(inp);toast('Comentario no encontrado','var(--red)');return;}
     if(type==='photo'){
       if(!cm.photos)cm.photos=[];
       const _cmFid=(S.proj&&GD.moduleFolders[S.proj+'_comentarios'])||GD.imagesFolderId||null;
