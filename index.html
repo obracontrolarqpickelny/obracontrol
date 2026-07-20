@@ -5361,6 +5361,7 @@ function addCmtMedia(cmId, type){
       await Promise.all(files.map(file=>new Promise(res=>{const r=new FileReader();r.onload=e=>{cm.archivos.push({id:uid(),name:file.name,type:file.type,data:e.target.result,date:td()});res();};r.readAsDataURL(file);})));
       toast(files.length+' archivo(s) adjuntado(s)');
     }
+    cm.updatedAt=nw();
     document.body.removeChild(inp);
     sv();render();
   };
