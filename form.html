@@ -135,7 +135,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
   <!-- Tabs -->
   <div class="tabs-wrap">
-    <button class="tab active" id="tab-mov" onclick="showTab('mov')">💰 Movimientos<span class="tab-badge" id="badge-mov" style="display:none">✓</span><span class="tab-count" id="count-mov" style="display:none"></span></button>
+    <button class="tab active" id="tab-msg" onclick="showTab('msg')">💬 Mensaje</button>
+    <button class="tab" id="tab-mov" onclick="showTab('mov')">💰 Movimientos<span class="tab-badge" id="badge-mov" style="display:none">✓</span><span class="tab-count" id="count-mov" style="display:none"></span></button>
     <button class="tab" id="tab-tar" onclick="showTab('tar')">📋 Tareas<span class="tab-badge" id="badge-tar" style="display:none">✓</span><span class="tab-count" id="count-tar" style="display:none"></span></button>
     <button class="tab" id="tab-mex" onclick="showTab('mex')">📦 Existentes<span class="tab-badge" id="badge-mex" style="display:none">✓</span><span class="tab-count" id="count-mex" style="display:none"></span></button>
     <button class="tab" id="tab-mpe" onclick="showTab('mpe')">🔔 Pedidos<span class="tab-badge" id="badge-mpe" style="display:none">✓</span><span class="tab-count" id="count-mpe" style="display:none"></span></button>
@@ -151,8 +152,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <!-- Scrollable form area -->
   <div class="form-body">
 
+    <!-- Tab: Mensaje general -->
+    <div class="tab-pane active" id="pane-msg">
+      <div class="card">
+        <div class="fg"><label class="fl" style="margin-bottom:6px">Mensaje / comentario general</label><textarea class="ft" id="msg_general" rows="5" placeholder="Escribí aquí el resumen del día, novedades o comentarios para el arquitecto..."></textarea></div>
+      </div>
+    </div>
+
     <!-- Tab: Movimientos -->
-    <div class="tab-pane active" id="pane-mov">
+    <div class="tab-pane" id="pane-mov">
       <div class="tab-done-bar">
         <button class="done-toggle" id="done-mov" onclick="toggleDone('mov')">✓ Marcar pestaña lista</button>
       </div>
@@ -251,6 +259,27 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="success-btns">
       <button class="btn btn-sec" onclick="editarYReenviar()">✏️ Editar y reenviar</button>
       <button class="btn btn-sec" onclick="nuevoFormulario()">+ Nuevo informe</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── SCREEN 4: Carpeta enviada ────────────────── -->
+<div class="screen" id="screenCarpetaSuccess">
+  <div class="hdr">
+    <div class="logo" style="background:linear-gradient(135deg,#16a34a,#4ade80)">📁</div>
+    <div class="hdr-info">
+      <div class="hdr-obra" id="carpetaSuccessObra">—</div>
+      <div class="hdr-sub" id="carpetaSuccessCollab">Archivos compartidos</div>
+    </div>
+  </div>
+  <div class="success-wrap">
+    <div class="success-icon">✅</div>
+    <div class="success-title">¡Enviado!</div>
+    <div class="success-sub" id="carpetaSuccessSub">Las fotos y archivos fueron enviados al arquitecto.</div>
+    <div id="carpetaHistSection" style="width:100%;max-width:360px;margin-bottom:16px;text-align:left"></div>
+    <div class="success-btns">
+      <button class="btn btn-sec" onclick="volverCarpeta()">📁 Enviar más archivos</button>
+      <button class="btn btn-sec" onclick="irAFormulario()">📋 Generar informe</button>
     </div>
   </div>
 </div>
@@ -429,12 +458,44 @@ async function sendCarpeta(){
   } else {
     window.location.href=deepLink;
   }
-  btn.textContent='✅ ¡Enviado!';
+  // Guardar historial de envíos en localStorage
+  try{
+    var _hist=JSON.parse(localStorage.getItem('oc_cp_hist_'+TOKEN)||'[]');
+    _hist.unshift({fecha:new Date().toISOString(),count:archivos.length,imgs:archivos.filter(function(f){return f.tipo&&f.tipo.startsWith('image/');}).length,desc:($('carpetaDesc')||{}).value||''});
+    if(_hist.length>20)_hist=_hist.slice(0,20);
+    localStorage.setItem('oc_cp_hist_'+TOKEN,JSON.stringify(_hist));
+  }catch(_){}
+  // Mostrar pantalla de éxito
   $('carpetaDesc').value='';
   $('carpetaFiles').value='';
   $('carpetaPreview').style.display='none';
   _carpetaFiles=[];
-  setTimeout(function(){btn.disabled=false;btn.textContent='📤 Enviar al arquitecto';},3000);
+  btn.disabled=false;btn.textContent='📤 Enviar al arquitecto';
+  $('screenCarpeta').classList.remove('active');
+  $('screenCarpetaSuccess').classList.add('active');
+  $('carpetaSuccessObra').textContent=OBRA_NAME||'Obra';
+  var _myName=COLAB_NAME_PARAM||(TOKEN?localStorage.getItem('oc_n_'+TOKEN):'')||'Colaborador';
+  $('carpetaSuccessSub').textContent=archivos.length+' archivo'+(archivos.length>1?'s':'')+' enviado'+(archivos.length>1?'s':'')+' al arquitecto.';
+  // Mostrar historial de envíos anteriores
+  try{
+    var _hist2=JSON.parse(localStorage.getItem('oc_cp_hist_'+TOKEN)||'[]');
+    if(_hist2.length>1){
+      var _hHTML='<div style="background:var(--white);border-radius:12px;padding:12px;box-shadow:0 1px 3px #0001"><div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:8px">📋 Envíos anteriores</div>';
+      _hist2.slice(1,6).forEach(function(e){var d=new Date(e.fecha);var dl=d.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit'})+' '+d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});_hHTML+='<div style="display:flex;justify-content:space-between;padding:5px 0;border-top:1px solid var(--brd);font-size:12px"><span style="color:var(--text2)">'+dl+'</span><span style="color:var(--text3)">'+e.count+' archivo'+(e.count>1?'s':'')+(e.imgs?' · '+e.imgs+' 📸':'')+'</span></div>';});
+      _hHTML+='</div>';
+      $('carpetaHistSection').innerHTML=_hHTML;
+    }else{$('carpetaHistSection').innerHTML='';}
+  }catch(_){$('carpetaHistSection').innerHTML='';}
+}
+
+function volverCarpeta(){
+  $('screenCarpetaSuccess').classList.remove('active');
+  $('screenCarpeta').classList.add('active');
+}
+function irAFormulario(){
+  $('screenCarpetaSuccess').classList.remove('active');
+  var url=window.location.pathname+'?obra='+encodeURIComponent(OBRA_ID)+'&token='+encodeURIComponent(TOKEN)+'&obraName='+encodeURIComponent(OBRA_NAME)+(ARCH_TEL?'&tel='+encodeURIComponent(ARCH_TEL):'')+(ARCH_MAIL?'&mail='+encodeURIComponent(ARCH_MAIL):'')+(SEND_WA?'':'&sw=0');
+  window.location.href=url;
 }
 
 function saveName(){
@@ -464,9 +525,9 @@ function openCarpetaTab(){
 }
 
 // ── Tabs ────────────────────────────────
-var currentTab='mov';
+var currentTab='msg';
 function showTab(t){
-  var tabs=['mov','tar','mex','mpe','mrec','chk','bdj'];
+  var tabs=['msg','mov','tar','mex','mpe','mrec','chk','bdj'];
   tabs.forEach(function(id){
     var p=$('pane-'+id);var tb=$('tab-'+id);
     if(p)p.classList.remove('active');
@@ -680,6 +741,7 @@ function collectData(){
     fecha:new Date().toISOString(),
     estado:'pendiente',
     tabsDone:Object.keys(doneTabMap).filter(function(k){return doneTabMap[k];}),
+    mensajeGeneral:v('msg_general')||'',
     movimientos:[],
     tareas:[],
     materialesExistentes:[],
@@ -761,7 +823,7 @@ function collectData(){
 }
 
 function hasContent(data){
-  return data.movimientos.length||data.tareas.length||data.materialesExistentes.length||data.materialesPedidos.length||data.materialesIngresados.length||data.checklist;
+  return data.mensajeGeneral||data.movimientos.length||data.tareas.length||data.materialesExistentes.length||data.materialesPedidos.length||data.materialesIngresados.length||data.checklist;
 }
 
 // ── Encode / send ────────────────────────
@@ -877,10 +939,11 @@ function nuevoFormulario(){
   $('done-chk').textContent='✓ Marcar pestaña lista';
   $('chk_titulo').value='';$('chk_items').value='';
   $('chk_prev').style.display='none';
+  if($('msg_general'))$('msg_general').value='';
 
   $('screenSuccess').classList.remove('active');
   $('screenForm').classList.add('active');
-  showTab('mov');
+  showTab('msg');
   $('errBanner').style.display='none';
   window.scrollTo(0,0);
 }

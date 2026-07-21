@@ -1603,16 +1603,31 @@ async function loadFromDriveAndMerge(silent){
 
 
 /* ===== MÓDULO: UTILIDADES COMPARTIDAS (sv, uid, td, pf, toast, audit) ===== */
-function _lsSave(){try{localStorage.setItem(SK,JSON.stringify(D));}catch(_){try{localStorage.setItem(SK,JSON.stringify(buildCleanData()));}catch(_2){}}}
+function _lsSave(){
+  try{localStorage.setItem(SK,JSON.stringify(D));}
+  catch(_){
+    // Conservar carpetas (fotos de colaboradores sin backup en Drive) antes de stripear todo
+    var _c=buildCleanData();
+    if(D.carpetas)try{_c.carpetas=JSON.parse(JSON.stringify(D.carpetas));}catch(_e){}
+    try{localStorage.setItem(SK,JSON.stringify(_c));}
+    catch(_2){try{localStorage.setItem(SK,JSON.stringify(buildCleanData()));}catch(_3){}}
+  }
+}
 function sv(){
   // 1. Always save to localStorage (instant, synchronous fallback)
   try{localStorage.setItem(SK,JSON.stringify(D));}
   catch(e){
-    try{localStorage.setItem(SK,JSON.stringify(buildCleanData()));}
-    catch(_){
-      if(!GD._lsFullWarned){GD._lsFullWarned=true;
-        var _approxKB=Math.round(JSON.stringify(D).length*2/1024);
-        toast('Almacenamiento lleno (~'+_approxKB+'KB) — conectá Drive o eliminá fotos antiguas.','var(--red)',7000);}
+    // Intento intermedio: mantener carpetas intactas, stripear solo el resto
+    var _c=buildCleanData();
+    if(D.carpetas)try{_c.carpetas=JSON.parse(JSON.stringify(D.carpetas));}catch(_e){}
+    try{localStorage.setItem(SK,JSON.stringify(_c));}
+    catch(e2){
+      try{localStorage.setItem(SK,JSON.stringify(buildCleanData()));}
+      catch(_){
+        if(!GD._lsFullWarned){GD._lsFullWarned=true;
+          var _approxKB=Math.round(JSON.stringify(D).length*2/1024);
+          toast('Almacenamiento lleno (~'+_approxKB+'KB) — conectá Drive o eliminá fotos antiguas.','var(--red)',7000);}
+      }
     }
   }
   if(GD.idbReady) saveToIDB().catch(function(e){console.warn('IDB sv:',e);});
@@ -2252,10 +2267,10 @@ function createProj(){const n=$('pN').value.trim();if(!n){toast('Nombre obligato
 // ═══════ SHELL ═══════
 function renderShell(){
   const p=D.projects.find(x=>x.id===S.proj);if(!p){S.proj=null;render();return;}
-  const pT=pf('tareas');const pA=pf('alertas');const pendT=pT.filter(t=>t.status==='pendiente'||t.status==='en curso').length;const actAl=pA.filter(a=>!a.resolved).length;const pendForms=(D.formulariosPendientes||[]).filter(x=>(x.projectId||x.obraId)===S.proj&&x.estado==='pendiente').length;
+  const pT=pf('tareas');const pA=pf('alertas');const pendT=pT.filter(t=>t.status==='pendiente'||t.status==='en curso').length;const actAl=pA.filter(a=>!a.resolved).length;const pendForms=(D.formulariosPendientes||[]).filter(x=>(x.projectId||x.obraId)===S.proj&&x.estado==='pendiente').length;const pendCarpeta=(D.carpetas||[]).filter(function(cp){return cp.projectId===S.proj;}).reduce(function(sum,cp){return sum+(cp.archivos||[]).filter(function(f){return f.subidoPor==='col'&&f.visto===false;}).length;},0);
   const drv=D.driveConfig?.[S.proj];const cloudCol=drv?'var(--green)':'var(--pri)';
   const _pendAlerts=pA.filter(a=>!a.resolved).length; // mantener badge en tareas si hay alertas legacy
-  const mods=[{id:'dashboard',label:'Panel',ic:'dash'},{id:'visitas',label:'Visitas',ic:'clip'},{id:'tareas',label:'Tareas',ic:'list',badge:pendT+_pendAlerts},{id:'materiales',label:'Materiales',ic:'pkg'},{id:'checklist',label:'Checklist',ic:'chklist'},{id:'documentos',label:'Documentos',ic:'file'},{id:'comentarios',label:'Comentarios',ic:'msg'},{id:'colaboradores',label:'Colaboradores',ic:'share'},{id:'bandeja',label:'Bandeja',ic:'inbox',badge:pendForms},{id:'economia',label:'Economía',ic:'eco'},{id:'informes',label:'Informes',ic:'dl'},{id:'config',label:'Config',ic:'gear'}];
+  const mods=[{id:'dashboard',label:'Panel',ic:'dash'},{id:'visitas',label:'Visitas',ic:'clip'},{id:'tareas',label:'Tareas',ic:'list',badge:pendT+_pendAlerts},{id:'materiales',label:'Materiales',ic:'pkg'},{id:'checklist',label:'Checklist',ic:'chklist'},{id:'documentos',label:'Documentos',ic:'file'},{id:'comentarios',label:'Comentarios',ic:'msg'},{id:'colaboradores',label:'Colaboradores',ic:'share'},{id:'bandeja',label:'Bandeja',ic:'inbox',badge:pendForms+pendCarpeta},{id:'economia',label:'Economía',ic:'eco'},{id:'informes',label:'Informes',ic:'dl'},{id:'config',label:'Config',ic:'gear'}];
   const mi=mods.map(m=>{const c=MC[m.id];const act=S.mod===m.id;return `<button class="smi${act?' act':''}" style="${act?'background:'+c+'08;color:'+c+';border-left-color:'+c:''}" onclick="S.mod='${m.id}';S.menu=false;S.visitaDetail=null;S.matDetail=null;render();"><span style="color:${act?c:'var(--text3)'}">${I[m.ic]||''}</span><span style="flex:1;text-align:left">${m.label}</span>${m.badge>0?`<span class="sbadge">${m.badge}</span>`:''}</button>`;}).join('');
   const allBnav=[
     {id:'dashboard',ic:'dash',l:'Panel'},
@@ -2278,7 +2293,7 @@ function renderShell(){
   patchHTML(app,`
   <div class="topbar">
     <button class="tbtn" onclick="S.menu=!S.menu;render();">${S.menu?I.x:I.menu}</button>
-    <h1>${p.name}</h1>
+    <h1 onclick="S.mod='config';S.menu=false;render();" style="cursor:pointer;-webkit-tap-highlight-color:transparent">${p.name}</h1>
     <button class="tbtn" onclick="S.searchOpen=true;render();" style="color:var(--cyan)">${I.search}</button>
     <span id="syncIndicator" class="sync-dot" onclick="showDrivePanel()" title="Estado sincronización">○</span>
     <button class="tbtn" onclick="cloudSave()" style="color:${cloudCol}" title="${drv?'Guardar en Drive':'Configurar Drive'}">${I.cloud}</button>
@@ -6877,11 +6892,20 @@ function getCarpeta(colabId){
   return cp;
 }
 function openPerfilColab(colabId,tab){
-  if(!tab)tab='carpeta';
+  var _fPend=(D.formulariosPendientes||[]).filter(function(f){return (f.token===colabId||f.colabId===colabId)&&f.estado==='pendiente';}).length;
+  if(!tab)tab=_fPend>0?'historial':'carpeta';
   var co=(D.colaboradores||[]).find(function(x){return x.id===colabId;});if(!co)return;
+  // Marcar archivos de carpeta como vistos si el arquitecto abre la carpeta
+  if(tab==='carpeta'){
+    var _cp2=getCarpeta(colabId);
+    if(_cp2&&_cp2.archivos){
+      var _hadUnseen=_cp2.archivos.some(function(f){return f.subidoPor==='col'&&f.visto===false;});
+      if(_hadUnseen){_cp2.archivos.forEach(function(f){if(f.subidoPor==='col')f.visto=true;});sv();}
+    }
+  }
   document.getElementById('carpetaM')?.remove();
   var d=document.createElement('div');d.className='mo open';d.id='carpetaM';
-  var tabDefs=[{id:'carpeta',label:'📁 Carpeta'},{id:'historial',label:'📋 Historial'},{id:'bandeja',label:'📥 Bandeja'},{id:'mensajes',label:'💬 Mensajes'}];
+  var tabDefs=[{id:'historial',label:'📋 Historial'},{id:'carpeta',label:'📁 Carpeta'},{id:'bandeja',label:'📥 Bandeja'},{id:'mensajes',label:'💬 Mensajes'}];
   var h='<div class="mo-c" style="display:flex;flex-direction:column;max-height:90vh">';
   h+='<div class="mo-h"><h3>'+esc(co.name||co.email||'?')+'</h3><button class="tbtn" onclick="document.getElementById(\'carpetaM\').remove()">'+I.x+'</button></div>';
   h+='<div style="display:flex;gap:4px;margin-bottom:12px;overflow-x:auto;padding-bottom:2px">';
@@ -7494,7 +7518,7 @@ load();render();
       if(!_cp){_cp={id:Date.now().toString(36),projectId:sub.obraId,colabId:sub.token,archivos:[]};D.carpetas.push(_cp);}
       var _added=0;
       (sub.archivos||[]).forEach(function(f){
-        f.id=Date.now().toString(36)+Math.random().toString(36).slice(2,6);f.fecha=new Date().toISOString();f.subidoPor='col';
+        f.id=Date.now().toString(36)+Math.random().toString(36).slice(2,6);f.fecha=new Date().toISOString();f.subidoPor='col';f.visto=false;
         _cp.archivos.push(f);_added++;
       });
       sv();
@@ -7686,6 +7710,7 @@ function rBandeja(mc,p){
   function subSummary(sub){
     if(sub.tareas!==undefined){
       var pts=[];
+      if(sub.mensajeGeneral)pts.push('💬 '+sub.mensajeGeneral.slice(0,60)+(sub.mensajeGeneral.length>60?'…':''));
       if(sub.movimientos&&sub.movimientos.length)pts.push('💰 '+sub.movimientos.length+' movimiento'+(sub.movimientos.length>1?'s':''));
       if(sub.tareas&&sub.tareas.length)pts.push('📋 '+sub.tareas.length+' tarea'+(sub.tareas.length>1?'s':''));
       if(sub.materialesExistentes&&sub.materialesExistentes.length)pts.push('📦 '+sub.materialesExistentes.length);
@@ -7706,14 +7731,25 @@ function rBandeja(mc,p){
     var obraNm=sub.obraName||(D.projects&&D.projects.find(function(p2){return p2.id===(sub.obraId||sub.projectId);})||{}).name||'';
     return '<div class="card" style="border-left:3px solid '+bc+';padding:12px;margin-bottom:8px"><div class="flex justify-between items-start gap-8"><div style="flex:1;min-width:0"><div class="ts fw7">👤 '+esc(sub.ayudante||'?')+vBdg+(obraNm?'<span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:6px">🏗 '+esc(obraNm)+'</span>':'')+'</div><div class="txxs tc3 mt-2">📅 '+fmts(sub.receivedAt||sub.fecha||'')+'</div><div class="txxs mt-6" style="color:var(--text2);line-height:1.6">'+subSummary(sub)+'</div></div>'+btns+'</div></div>';
   }
-  var pendBdg=pendientes.length?(' <span style="background:'+(tab==='pendientes'?'rgba(255,255,255,.3)':'#0d9488')+';color:#fff;border-radius:10px;padding:0 6px;font-size:10px;font-weight:700;margin-left:4px">'+pendientes.length+'</span>'):'';
+  // Carpeta items nuevos (no vistos) para mostrar en Pendientes
+  var newCarpetaGroups=[];
+  (D.carpetas||[]).filter(function(cp){return cp.projectId===S.proj;}).forEach(function(cp){
+    var co2=(D.colaboradores||[]).find(function(c){return c.id===cp.colabId;});
+    var coName=co2?co2.name:'Colaborador';
+    var newFiles=(cp.archivos||[]).filter(function(f){return f.subidoPor==='col'&&f.visto===false;});
+    if(newFiles.length) newCarpetaGroups.push({colabId:cp.colabId,coName:coName,count:newFiles.length,imgs:newFiles.filter(function(f){return f.tipo&&f.tipo.startsWith('image/');}).length});
+  });
+  var totalPend=pendientes.length+newCarpetaGroups.length;
+  var pendBdg=totalPend?(' <span style="background:'+(tab==='pendientes'?'rgba(255,255,255,.3)':'#0d9488')+';color:#fff;border-radius:10px;padding:0 6px;font-size:10px;font-weight:700;margin-left:4px">'+totalPend+'</span>'):'';
   mc.innerHTML=modHeader('bandeja','Bandeja')
     +'<div class="flex gap-6 mb-12">'
     +'<button class="btn btn-s" style="'+(tab==='pendientes'?'background:'+c2+';color:#fff':'background:var(--gray-ll);color:var(--text2)')+'" onclick="S.bandejaTab=\'pendientes\';render()">'+I.bell+' Pendientes'+pendBdg+'</button>'
     +'<button class="btn btn-s" style="'+(tab==='log'?'background:'+c2+';color:#fff':'background:var(--gray-ll);color:var(--text2)')+'" onclick="S.bandejaTab=\'log\';render()">📋 Log ('+procesados.length+')</button>'
     +'</div>'
     +(tab==='pendientes'
-      ?(pendientes.length?pendientes.map(renderCard).join(''):'<div class="empty">'+I.checkc+'<div class="ts mt-8">Bandeja vacía</div><div class="txxs tc3 mt-4">Cuando un colaborador envíe su informe, aparecerá aquí.</div></div>')
+      ?(newCarpetaGroups.map(function(g){
+          return '<div class="card" style="border-left:3px solid #16a34a;padding:12px;margin-bottom:8px"><div class="flex justify-between items-center gap-8"><div><div class="ts fw7">📁 '+esc(g.coName)+'</div><div class="txxs tc3 mt-2">'+g.count+' archivo'+(g.count>1?'s':'')+' nuevo'+(g.count>1?'s':'')+(g.imgs?' · '+g.imgs+' foto'+(g.imgs>1?'s':''):'')+'</div></div><button class="btn btn-s" style="background:#16a34a;color:#fff;white-space:nowrap;flex-shrink:0" onclick="S.mod=\'colaboradores\';render();setTimeout(function(){openPerfilColab(\''+g.colabId+'\',\'carpeta\');},100)">📁 Ver</button></div></div>';
+        }).join('')+(pendientes.length?pendientes.map(renderCard).join(''):'')+(newCarpetaGroups.length===0&&!pendientes.length?'<div class="empty">'+I.checkc+'<div class="ts mt-8">Bandeja vacía</div><div class="txxs tc3 mt-4">Cuando un colaborador envíe su informe o suba archivos, aparecerá aquí.</div></div>':''))
       :(procesados.length?procesados.map(renderCard).join(''):'<div class="empty"><div class="ts mt-8">Sin informes procesados aún</div></div>'));
 }
 
@@ -7726,6 +7762,12 @@ function incorporarFormularioModal(id){
   h+='<div class="mo-h" style="padding:14px 16px"><h3 style="color:#0d9488;flex:1;min-width:0">📥 '+esc(sub.ayudante||'?')+'</h3><button class="tbtn" onclick="document.getElementById(\'ifmM\').remove()">'+I.x+'</button></div>';
   h+='<div class="txxs tc3 mb-4" style="padding:0 16px">📅 '+fmts(sub.receivedAt||sub.fecha||'')+(sub.version>1?' · <strong>v'+sub.version+'</strong>':'')+'</div>';
   h+='<div style="flex:1;overflow-y:auto;padding:8px 16px 8px">';
+  if(sub.mensajeGeneral){
+    h+='<div class="card" style="padding:10px;margin-bottom:8px;border-left:3px solid #0d9488">';
+    h+='<div class="txxs fw7" style="color:#0d9488;margin-bottom:6px">💬 Mensaje general</div>';
+    h+='<div class="ts" style="white-space:pre-wrap;line-height:1.5">'+esc(sub.mensajeGeneral)+'</div>';
+    h+='</div>';
+  }
   var _iBtn=function(key,done){
     if(isPend){
       if(done)return '<button disabled style="flex-shrink:0;border:none;background:#0d9488;color:#fff;border-radius:6px;padding:5px 9px;font-size:11px">✓</button>';
