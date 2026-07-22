@@ -794,7 +794,7 @@ async function saveToDrive() {
           // Data changed after merge — save locally and update UI (if no modal open)
           await saveToIDB();
           _lsSave();
-          if(!document.querySelector('.mo.open')&&!_isUserTyping())render();
+          if(!_isPinLocked()&&!document.querySelector('.mo.open')&&!_isUserTyping())render();
         }
       }
     }catch(_me){console.warn('Pre-upload merge skipped:',_me);}
@@ -1605,8 +1605,8 @@ async function loadFromDriveAndMerge(silent){
     await saveToIDB();
     _lsSave();
     updateSyncIndicator('ok');
-    // No re-renderizar si hay un modal abierto — evita destruir formularios en uso
-    if(!document.querySelector('.mo.open')&&!_isUserTyping())render();
+    // No re-renderizar si hay un modal abierto o si el PIN está bloqueando
+    if(!_isPinLocked()&&!document.querySelector('.mo.open')&&!_isUserTyping())render();
     if(!silent)toast('Datos sincronizados con Drive','var(--green)',2500);
     fetchFormulariosPending();
   }catch(e){
@@ -5456,6 +5456,7 @@ function rInformes(mc,p){
       </div>
     </div>
   </div>
+  <div class="card card-click mb-12" style="border-left:3px solid #D97706" onclick="openInformeMixto()"><div class="flex items-center gap-12"><div class="stico" style="background:#FFFBEB;color:#D97706;font-size:20px">📄</div><div class="flex-1"><div class="ts fw7" style="color:#D97706">Informe Mixto (PDF)</div><div class="txxs tc3">Seleccioná tareas, comentarios, checklists, materiales y más en un solo PDF</div></div>${I.chev}</div></div>
   <div class="card card-click mb-12" onclick="dlReport()"><div class="flex items-center gap-12"><div class="stico" style="background:var(--pri-bg);color:var(--pri)">${I.dl}</div><div class="flex-1"><div class="ts fw7">Informe completo (TXT)</div><div class="txxs tc3">Visitas, tareas, materiales, comentarios</div></div>${I.chev}</div></div>
   <div class="card mb-12" style="background:var(--gray-ll)"><div class="ts fw7 mb-8">Backup JSON</div><div class="flex gap-8 wrap"><button class="btn btn-sec btn-s" onclick="dlBackup()">${I.save} Descargar</button><button class="btn btn-sec btn-s" onclick="$('restF').click()">${I.up} Restaurar</button><button class="btn btn-s" style="background:var(--purple);color:#fff" onclick="$('importHistF').click()">📥 Importar Historial JSON</button></div><input type="file" id="restF" accept=".json" style="display:none" onchange="restoreB(this)"><input type="file" id="importHistF" accept=".json" style="display:none" onchange="importHistorial(this)"><div class="txxs tc3 mt-8">Exporta/importa todos los datos — El botón Importar también distribuye los datos en Google Drive</div></div>
   ${drv?`<div class="card mb-12"><div class="flex items-center gap-10"><span style="color:var(--green)">${I.cloud}</span><div class="flex-1"><div class="ts fw7">Google Drive configurado</div><div class="txxs tc3">Carpeta: ${drv.folderName}</div>${drv.lastBackup?`<div class="txxs tc3">Ultimo backup: ${fmts(drv.lastBackup)} ${fmtt(drv.lastBackup)}</div>`:''}</div><button class="btn btn-sec btn-s" onclick="cloudSave()">Guardar ahora</button></div></div>`:'<div class="card mb-12"><div class="ts tc3 tac">Drive no configurado. Usa el icono ${I.cloud} en la barra superior.</div></div>'}`;
@@ -5474,6 +5475,215 @@ function dlReport(){
     toast('Error al generar informe: '+e.message,'var(--red)',5000);
   }
 }
+function openInformeMixto(){
+  var p=D.projects.find(function(x){return x.id===S.proj;});if(!p)return;
+  var tareas=pf('tareas');
+  var comentarios=pf('comentarios');
+  var checklists=pf('checklists');
+  var hasMat=pf('materiales').length>0;
+  var hasIngs=pf('matIngresos').length>0;
+  var hasEco=pf('economia').length>0;
+  // Remove any previous modal
+  var _old=document.getElementById('informeMixtoM');if(_old)_old.remove();
+  var d=document.createElement('div');
+  d.id='informeMixtoM';d.className='mo open';
+  var tHtml='';
+  if(tareas.length){
+    tHtml='<div class="ts fw7 mb-6" style="color:var(--cyan)">📋 Tareas</div>';
+    tHtml+='<div style="display:flex;gap-6;margin-bottom:6px"><label style="font-size:11px;cursor:pointer"><input type="checkbox" id="imx_t_all" onchange="document.querySelectorAll(\'.imx-t\').forEach(function(c){c.checked=this.checked;},this)"> Seleccionar todas</label></div>';
+    tareas.forEach(function(t){
+      var sc={pendiente:'🔘',completada:'✅','en curso':'🔵',cancelada:'❌'};
+      tHtml+='<label style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid var(--gray-ll);cursor:pointer;font-size:12px">';
+      tHtml+='<input type="checkbox" class="imx-t" name="imx_tarea" value="'+t.id+'" style="margin-top:2px;flex-shrink:0">';
+      tHtml+='<span>'+(sc[t.status]||'🔘')+' '+esc(t.title||'Sin título')+'<span style="color:var(--text3);font-size:10px;margin-left:6px">'+(t.status||'')+'</span></span></label>';
+    });
+  }
+  var cHtml='';
+  if(comentarios.length){
+    cHtml='<div class="ts fw7 mb-6 mt-12" style="color:var(--orange)">💬 Comentarios</div>';
+    cHtml+='<div style="margin-bottom:6px"><label style="font-size:11px;cursor:pointer"><input type="checkbox" id="imx_c_all" onchange="document.querySelectorAll(\'.imx-c\').forEach(function(c){c.checked=this.checked;},this)"> Seleccionar todos</label></div>';
+    comentarios.slice(0,30).forEach(function(c){
+      var _txt=(c.text||c.content||'').slice(0,60)+(c.text&&c.text.length>60?'…':'');
+      cHtml+='<label style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid var(--gray-ll);cursor:pointer;font-size:12px">';
+      cHtml+='<input type="checkbox" class="imx-c" name="imx_com" value="'+c.id+'" style="margin-top:2px;flex-shrink:0">';
+      cHtml+='<span>'+esc(_txt||'Comentario')+'<span style="color:var(--text3);font-size:10px;margin-left:6px">'+fmts(c.date||c.fecha||'')+'</span></span></label>';
+    });
+  }
+  var chHtml='';
+  if(checklists.length){
+    chHtml='<div class="ts fw7 mb-6 mt-12" style="color:var(--pink)">✅ Checklists</div>';
+    chHtml+='<div style="margin-bottom:6px"><label style="font-size:11px;cursor:pointer"><input type="checkbox" id="imx_ch_all" onchange="document.querySelectorAll(\'.imx-ch\').forEach(function(c){c.checked=this.checked;},this)"> Seleccionar todas</label></div>';
+    checklists.forEach(function(ch){
+      var dn=(ch.items||[]).filter(function(i){return i.done;}).length;
+      var tot=(ch.items||[]).length;
+      chHtml+='<label style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid var(--gray-ll);cursor:pointer;font-size:12px">';
+      chHtml+='<input type="checkbox" class="imx-ch" name="imx_chk" value="'+ch.id+'" style="margin-top:2px;flex-shrink:0">';
+      chHtml+='<span>'+esc(ch.title||'Sin título')+'<span style="color:var(--text3);font-size:10px;margin-left:6px">'+dn+'/'+tot+' completados</span></span></label>';
+    });
+  }
+  d.innerHTML='<div class="mo-c" style="max-width:520px"><div class="mo-h"><h3>📄 Informe Mixto</h3><button class="tbtn" onclick="this.closest(\'.mo\').remove()">'+I.x+'</button></div>'
+    +'<div style="margin-bottom:12px;font-size:12px;color:var(--text3)">Seleccioná qué incluir en el PDF. Podés mezclar ítems de distintas secciones.</div>'
+    +'<div style="max-height:55vh;overflow-y:auto;padding-right:4px">'
+    +(tHtml||'')+(cHtml||'')+(chHtml||'')
+    +'<div class="ts fw7 mb-6 mt-12" style="color:var(--purple)">📦 Secciones globales</div>'
+    +(hasMat?'<label style="display:flex;align-items:center;gap-8;padding:8px 0;border-bottom:1px solid var(--gray-ll);cursor:pointer;font-size:12px"><input type="checkbox" id="imx_mat" style="margin-right:8px"> Resumen de materiales y avance</label>':'')
+    +(hasIngs?'<label style="display:flex;align-items:center;gap-8;padding:8px 0;border-bottom:1px solid var(--gray-ll);cursor:pointer;font-size:12px"><input type="checkbox" id="imx_ing" style="margin-right:8px"> Historial de ingresos de materiales</label>':'')
+    +(hasEco?'<label style="display:flex;align-items:center;gap-8;padding:8px 0;border-bottom:1px solid var(--gray-ll);cursor:pointer;font-size:12px"><input type="checkbox" id="imx_eco" style="margin-right:8px"> Resumen económico (ingresos/egresos)</label>':'')
+    +'</div>'
+    +'<div class="fg mt-12"><label class="fl">Título del informe (opcional)</label><input class="fi" id="imx_titulo" placeholder="Ej: Avance semanal, Informe de obra..."></div>'
+    +'<button class="btn btn-p btn-w mt-8" style="background:#D97706;color:#fff" onclick="generarInformeMixto()">📄 Generar PDF</button></div>';
+  document.body.appendChild(d);
+}
+
+function generarInformeMixto(){
+  try{
+    var p=D.projects.find(function(x){return x.id===S.proj;});if(!p)return;
+    var titulo=($('imx_titulo')&&$('imx_titulo').value.trim())||('Informe Mixto — '+p.name);
+    // Collect selections
+    var selTareas=[].slice.call(document.querySelectorAll('input[name="imx_tarea"]:checked')).map(function(c){return c.value;});
+    var selComs=[].slice.call(document.querySelectorAll('input[name="imx_com"]:checked')).map(function(c){return c.value;});
+    var selChks=[].slice.call(document.querySelectorAll('input[name="imx_chk"]:checked')).map(function(c){return c.value;});
+    var incMat=$('imx_mat')&&$('imx_mat').checked;
+    var incIng=$('imx_ing')&&$('imx_ing').checked;
+    var incEco=$('imx_eco')&&$('imx_eco').checked;
+    if(!selTareas.length&&!selComs.length&&!selChks.length&&!incMat&&!incIng&&!incEco){
+      toast('Seleccioná al menos un ítem','var(--orange)');return;
+    }
+    var priCol={urgente:'#dc2626',alta:'#ea580c',media:'#D97706',baja:'#16a34a'};
+    var body='';
+    // ── Tareas
+    if(selTareas.length){
+      var stCol={pendiente:'#94a3b8','en curso':'#3b82f6',completada:'#16a34a',cancelada:'#ef4444'};
+      body+='<h2>Tareas ('+selTareas.length+')</h2>';
+      selTareas.forEach(function(id){
+        var t=(D.tareas||[]).find(function(x){return x.id===id;});if(!t)return;
+        var col=priCol[t.priority]||'#D97706';var sc=stCol[t.status]||'#94a3b8';
+        var over=t.dueDate&&(t.status==='pendiente'||t.status==='en curso')&&new Date(t.dueDate)<new Date(td());
+        body+='<div style="padding:9px 10px;margin-bottom:6px;border-radius:6px;border-left:3px solid '+col+';background:#fafafa;break-inside:avoid;page-break-inside:avoid">';
+        body+='<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">';
+        body+='<span style="background:'+col+';color:#fff;font-size:8px;font-weight:700;padding:2px 6px;border-radius:3px">'+(t.priority||'media').toUpperCase()+'</span>';
+        body+='<span style="background:'+sc+';color:#fff;font-size:8px;font-weight:600;padding:2px 6px;border-radius:3px">'+(t.status||'pendiente')+'</span>';
+        body+='<span style="font-weight:700;font-size:10.5px;'+(t.status==='completada'?'text-decoration:line-through;color:#94a3b8':'')+'">'+(t.title||'')+'</span></div>';
+        var _meta=[];
+        if(t.dueDate)_meta.push('<span style="color:'+(over?'#dc2626':'#475569')+';font-weight:'+(over?'700':'400')+'">📅 Vence: '+fmt(t.dueDate)+(over?' ⚠ VENCIDA':'')+'</span>');
+        if(t.encargado)_meta.push('👤 '+t.encargado);
+        if(t.rubro)_meta.push('Rubro: '+t.rubro);
+        if(_meta.length)body+='<div style="font-size:9px;margin-bottom:4px;display:flex;gap:12px;flex-wrap:wrap">'+_meta.join('')+'</div>';
+        if(t.description)body+='<div style="color:#374151;font-size:9.5px;margin-bottom:4px;line-height:1.5;white-space:pre-wrap">'+esc(t.description)+'</div>';
+        if(t.comment)body+='<div style="font-size:9px;color:#64748b;background:#f1f5f9;border-radius:4px;padding:4px 7px;margin-bottom:4px"><em>'+esc(t.comment)+'</em></div>';
+        var tPh=(t.photos||[]).filter(function(ph){var u=typeof ph==='string'?ph:ph.url;return u&&u.length>4&&!u.startsWith('[');});
+        if(tPh.length){body+='<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:5px">';tPh.forEach(function(ph){var u=typeof ph==='string'?ph:ph.url;body+='<img src="'+u+'" style="width:75px;height:75px;object-fit:cover;border-radius:3px;border:1px solid #ddd">';});body+='</div>';}
+        body+='</div>';
+      });
+    }
+    // ── Comentarios
+    if(selComs.length){
+      body+='<h2>Comentarios ('+selComs.length+')</h2>';
+      selComs.forEach(function(id){
+        var c=(D.comentarios||[]).find(function(x){return x.id===id;});if(!c)return;
+        var _txt=c.text||c.content||'';
+        body+='<div style="padding:9px 10px;margin-bottom:6px;border-radius:6px;border-left:3px solid #ea580c;background:#fafafa;break-inside:avoid;page-break-inside:avoid">';
+        if(c.category||c.tipo)body+='<span style="font-size:8px;background:#ea580c;color:#fff;padding:2px 6px;border-radius:3px;font-weight:700">'+(c.category||c.tipo||'')+'</span> ';
+        body+='<span style="font-size:9px;color:#64748b">'+fmts(c.date||c.fecha||'')+'</span>';
+        body+='<div style="font-size:10px;margin-top:5px;line-height:1.5;white-space:pre-wrap">'+esc(_txt)+'</div>';
+        var cPh=(c.photos||[]).filter(function(ph){var u=typeof ph==='string'?ph:ph.url;return u&&u.length>4&&!u.startsWith('[');});
+        if(cPh.length){body+='<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:5px">';cPh.forEach(function(ph){var u=typeof ph==='string'?ph:ph.url;body+='<img src="'+u+'" style="width:75px;height:75px;object-fit:cover;border-radius:3px;border:1px solid #ddd">';});body+='</div>';}
+        body+='</div>';
+      });
+    }
+    // ── Checklists
+    if(selChks.length){
+      body+='<h2>Checklists ('+selChks.length+')</h2>';
+      selChks.forEach(function(id){
+        var ch=(D.checklists||[]).find(function(x){return x.id===id;});if(!ch)return;
+        var dn=(ch.items||[]).filter(function(i){return i.done;}).length;
+        var tot=(ch.items||[]).length;
+        body+='<div style="padding:9px 10px;margin-bottom:8px;border-radius:6px;border-left:3px solid #db2777;background:#fafafa;break-inside:avoid;page-break-inside:avoid">';
+        body+='<div style="font-weight:700;font-size:10.5px;margin-bottom:5px">'+esc(ch.title||'Sin título')+'<span style="font-size:9px;color:#64748b;font-weight:400;margin-left:8px">'+dn+'/'+tot+' completados</span></div>';
+        (ch.items||[]).forEach(function(it){
+          body+='<div style="display:flex;align-items:flex-start;gap:5px;padding:3px 0;font-size:9px;'+(it.done?'color:#94a3b8;text-decoration:line-through':'')+'">';
+          body+='<span style="color:'+(it.done?'#16a34a':'#94a3b8')+';flex-shrink:0">'+(it.done?'☑':'☐')+'</span>';
+          body+=esc(it.text||'')+'</div>';
+        });
+        body+='</div>';
+      });
+    }
+    // ── Materiales resumen
+    if(incMat){
+      var mats=pf('materiales');var ings=pf('matIngresos');
+      body+='<h2>Resumen de Materiales</h2>';
+      body+='<table style="width:100%;border-collapse:collapse;font-size:9px;margin-bottom:8px"><tr><th style="background:#7c3aed;color:#fff;padding:4px 5px;text-align:left">Material</th><th style="background:#7c3aed;color:#fff;padding:4px 5px;text-align:center">Computado</th><th style="background:#7c3aed;color:#fff;padding:4px 5px;text-align:center">Ingresado</th><th style="background:#7c3aed;color:#fff;padding:4px 5px;text-align:center">Falta</th><th style="background:#7c3aed;color:#fff;padding:4px 5px;text-align:center">Avance</th></tr>';
+      mats.forEach(function(m){
+        var totalIng=ings.filter(function(i){return i.materialId===m.id&&(i.estado==='ingresado'||!i.estado);}).reduce(function(s,i){return s+(i.qty||0);},0);
+        var comp=m.computado||0;var pct=comp>0?Math.round(totalIng/comp*100):null;
+        var col=pct===null?'#64748b':pct>=100?'#16a34a':pct>=80?'#ea580c':'#3b82f6';
+        body+='<tr><td style="padding:3px 5px;border-bottom:1px solid #eee">'+esc(m.name)+'</td><td style="padding:3px 5px;border-bottom:1px solid #eee;text-align:center">'+comp+' '+(m.unit||'')+'</td><td style="padding:3px 5px;border-bottom:1px solid #eee;text-align:center;color:#3b82f6">'+totalIng+'</td><td style="padding:3px 5px;border-bottom:1px solid #eee;text-align:center;color:#ea580c">'+Math.max(comp-totalIng,0)+'</td><td style="padding:3px 5px;border-bottom:1px solid #eee;text-align:center;font-weight:700;color:'+col+'">'+(pct!==null?pct+'%':'-')+'</td></tr>';
+      });
+      body+='</table>';
+    }
+    // ── Ingresos
+    if(incIng){
+      var allIngs=pf('matIngresos').slice().sort(function(a,b){return (b.fecha||b.date||'').localeCompare(a.fecha||a.date||'');});
+      body+='<h2>Historial de Ingresos de Materiales ('+allIngs.length+')</h2>';
+      body+='<table style="width:100%;border-collapse:collapse;font-size:9px;margin-bottom:8px"><tr><th style="background:#7c3aed;color:#fff;padding:4px 5px;text-align:left">Fecha</th><th style="background:#7c3aed;color:#fff;padding:4px 5px;text-align:left">Material</th><th style="background:#7c3aed;color:#fff;padding:4px 5px;text-align:center">Cantidad</th><th style="background:#7c3aed;color:#fff;padding:4px 5px;text-align:left">Proveedor</th></tr>';
+      allIngs.forEach(function(i){
+        body+='<tr><td style="padding:3px 5px;border-bottom:1px solid #eee">'+fmt(i.fecha||i.date||'')+'</td><td style="padding:3px 5px;border-bottom:1px solid #eee">'+esc(i.matNombre||'')+'</td><td style="padding:3px 5px;border-bottom:1px solid #eee;text-align:center">'+i.qty+' '+(i.unit||'')+'</td><td style="padding:3px 5px;border-bottom:1px solid #eee">'+esc(i.proveedor||'-')+'</td></tr>';
+      });
+      body+='</table>';
+    }
+    // ── Economía
+    if(incEco){
+      var ecos=pf('economia').filter(function(e){return !e.interno;});
+      var totalIng2=ecos.filter(function(e){return e.tipo==='ingreso';}).reduce(function(s,e){return s+(parseFloat(e.monto)||0);},0);
+      var totalEgr2=ecos.filter(function(e){return e.tipo==='egreso';}).reduce(function(s,e){return s+(parseFloat(e.monto)||0);},0);
+      body+='<h2>Resumen Económico</h2>';
+      body+='<div style="display:flex;gap:12px;margin-bottom:8px">';
+      body+='<div style="background:#f0fdf4;border-radius:6px;padding:8px 12px;flex:1;text-align:center"><div style="font-size:8px;color:#64748b;font-weight:700">INGRESOS</div><div style="font-size:13px;font-weight:800;color:#16a34a">$'+totalIng2.toLocaleString('es-AR')+'</div></div>';
+      body+='<div style="background:#fef2f2;border-radius:6px;padding:8px 12px;flex:1;text-align:center"><div style="font-size:8px;color:#64748b;font-weight:700">EGRESOS</div><div style="font-size:13px;font-weight:800;color:#dc2626">$'+totalEgr2.toLocaleString('es-AR')+'</div></div>';
+      body+='<div style="background:#f8fafc;border-radius:6px;padding:8px 12px;flex:1;text-align:center"><div style="font-size:8px;color:#64748b;font-weight:700">SALDO</div><div style="font-size:13px;font-weight:800;color:'+(totalIng2-totalEgr2>=0?'#16a34a':'#dc2626')+'">$'+(totalIng2-totalEgr2).toLocaleString('es-AR')+'</div></div>';
+      body+='</div>';
+      body+='<table style="width:100%;border-collapse:collapse;font-size:9px;margin-bottom:8px"><tr><th style="background:#0891b2;color:#fff;padding:4px 5px;text-align:left">Fecha</th><th style="background:#0891b2;color:#fff;padding:4px 5px;text-align:left">Concepto</th><th style="background:#0891b2;color:#fff;padding:4px 5px;text-align:left">Tipo</th><th style="background:#0891b2;color:#fff;padding:4px 5px;text-align:right">Monto</th></tr>';
+      ecos.slice().sort(function(a,b){return (b.fecha||b.date||'').localeCompare(a.fecha||a.date||'');}).forEach(function(e){
+        var col=e.tipo==='ingreso'?'#16a34a':'#dc2626';
+        body+='<tr><td style="padding:3px 5px;border-bottom:1px solid #eee">'+fmt(e.fecha||e.date||'')+'</td><td style="padding:3px 5px;border-bottom:1px solid #eee">'+esc(e.concepto||'')+'</td><td style="padding:3px 5px;border-bottom:1px solid #eee;color:'+col+'">'+esc(e.tipo)+'</td><td style="padding:3px 5px;border-bottom:1px solid #eee;text-align:right;font-weight:700;color:'+col+'">$'+(parseFloat(e.monto)||0).toLocaleString('es-AR')+'</td></tr>';
+      });
+      body+='</table>';
+    }
+    // ── Assemble HTML
+    var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+esc(titulo)+'</title>'
+      +'<style>@page{size:A4;margin:18mm 18mm 22mm 18mm}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-sizing:border-box}'
+      +'body{font-family:Arial,sans-serif;padding:0;color:#1a1a1a;max-width:210mm;margin:0 auto;font-size:8.5pt;line-height:1.4}'
+      +'.no-print{display:none!important}h1{font-size:14px;border-bottom:3px solid #D97706;padding-bottom:6px;margin:0 0 8px}'
+      +'h2{font-size:10px;color:#D97706;margin:14px 0 6px;border-bottom:1px solid #e5e7eb;padding-bottom:3px;text-transform:uppercase;letter-spacing:.5px}'
+      +'.meta{color:#555;font-size:9px;margin-bottom:12px;line-height:1.6}'
+      +'table th{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}'
+      +'@media print{body{padding:0}}</style></head><body>'
+      +'<h1>'+esc(titulo)+'</h1>'
+      +'<div class="meta"><strong>Obra:</strong> '+esc(p.name)+(p.client?' | <strong>Cliente:</strong> '+esc(p.client):'')+' | <strong>Fecha:</strong> '+new Date().toLocaleDateString('es-AR')+'</div>'
+      +body
+      +'<div style="margin-top:32px;border-top:2px solid #D97706;padding-top:12px;display:flex;justify-content:space-between;align-items:flex-end">'
+      +'<div><div style="font-size:15px;font-weight:800;color:#D97706">FEDERICO PICKELNY</div><div style="font-size:10pt;font-weight:700;color:#555;margin-top:1px">ARQUITECTO</div><div style="font-size:9pt;color:#666;margin-top:1px">MP 2304</div></div>'
+      +'<div style="text-align:right"><div style="font-size:9pt;color:#666">&#9742; 264 4397772</div><div style="font-size:9pt;color:#666">&#9993; federicopickelny@gmail.com</div><div style="font-size:9pt;color:#666">&#127968; B. Rivadavia Oeste 114</div></div></div>'
+      +'</body></html>';
+    var _old=document.getElementById('informeMixtoM');if(_old)_old.remove();
+    var w=window.open('','_blank');
+    if(!w){toast('Activá ventanas emergentes para ver el PDF','var(--orange)',4000);return;}
+    w.document.write(html);w.document.close();
+    setTimeout(function(){
+      var btn=w.document.createElement('button');
+      btn.textContent='Imprimir / Guardar PDF (A4)';
+      btn.style.cssText='position:fixed;top:10px;right:10px;background:#D97706;color:#fff;border:none;padding:10px 18px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,.2)';
+      btn.className='no-print';
+      btn.onclick=function(){w.print();};
+      w.document.body.appendChild(btn);
+      w.print();
+    },600);
+  }catch(e){
+    console.error('Informe mixto error:',e);
+    toast('Error al generar informe: '+e.message,'var(--red)',5000);
+  }
+}
+
 function dlBackup(){
   // Advertir si hay fotos base64 sin sincronizar con Drive
   var _localPh=0;
@@ -7706,7 +7916,7 @@ if(!_isPinLocked())render();
     await _rescueBase64BeforeSync().catch(function(){});
     // Repair bidirectional eco↔matIngreso links broken by old saves or sync gaps
     _repairEcoMatLinks();
-    render();
+    if(!_isPinLocked())render();
   }
   // Initialize Google Auth library
   await initGoogleAuth();
