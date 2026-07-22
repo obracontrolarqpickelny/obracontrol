@@ -37,6 +37,10 @@ a{color:var(--blue);text-decoration:none}
 .bnav.active{font-weight:700}
 .bnav .ndot{position:absolute;top:2px;right:22%;width:7px;height:7px;border-radius:50%;background:var(--red);border:2px solid var(--white)}
 .bnav .nbadge{position:absolute;top:0;right:12%;background:var(--red);color:#fff;border-radius:10px;font-size:8px;font-weight:800;min-width:14px;height:14px;display:flex;align-items:center;justify-content:center;padding:0 3px;border:1.5px solid var(--white);line-height:1}
+.mcs{position:relative}
+.mcs-drop{position:absolute;top:calc(100% + 2px);left:0;right:0;z-index:9000;background:var(--white);border:1px solid var(--brd);border-radius:8px;box-shadow:0 8px 20px #0002;max-height:210px;overflow-y:auto;display:none}
+.mcs-opt{padding:10px 14px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--gray-ll);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mcs-opt:hover,.mcs-opt:active{background:var(--gray-ll)}
 .tbtn{background:none;border:none;padding:6px;display:flex;align-items:center;border-radius:8px;transition:background .15s}
 .tbtn:active{background:var(--gray-ll)}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 16px;border-radius:var(--rs);font-size:13px;font-weight:600;transition:all .15s;white-space:nowrap;background:none}
@@ -3759,6 +3763,8 @@ async function saveET(id){
 function rMat(mc){
   const allItems=pf('materiales').filter(m=>!m.visitaId);
   const ings=pf('matIngresos');const c=MC.materiales;
+  const _provSet=new Set([...ings.map(i=>i.proveedor||''),...(pf('matPedidos')||[]).map(p=>p.proveedor||'')].filter(Boolean));
+  const _provDl='<datalist id="mat_prov_dl">'+[..._provSet].sort().map(p=>'<option value="'+esc(p)+'">').join('')+'</datalist>';
   // Build category list
   const cats_all=[...new Set(allItems.map(m=>m.category||'General'))].sort();
   // Apply filters
@@ -3795,11 +3801,11 @@ function rMat(mc){
   <div id="mat_items_list"><div class="txxs tc3 tac" style="padding:16px">Cargando...</div></div>
   
   <div class="mo" id="newMatM"><div class="mo-c"><div class="mo-h"><h3 style="color:${c}">Nuevo Material</h3><button class="tbtn" onclick="closeM('newMatM')">${I.x}</button></div><div class="fg"><label class="fl">Material *</label><input class="fi" id="nm_n"></div><div class="fr"><div class="fg"><label class="fl">Computado</label><input class="fi" id="nm_comp" type="number" min="0" placeholder="Cantidad prevista"></div><div class="fg"><label class="fl">Unidad</label><select class="fs" id="nm_u">${UNI.map(u=>`<option>${u}</option>`).join('')}</select></div></div><div class="fg"><label class="fl">Categoría</label><select class="fs" id="nm_c">${MATCAT.map(c=>`<option>${c}</option>`).join('')}</select></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="nm_no"></textarea></div><div class="fg"><label class="fl">Fotos</label><input type="file" accept="image/*" multiple id="nm_ph" class="fi" style="padding:6px"></div><button class="btn btn-w mt-8" style="background:${c};color:#fff" onclick="saveMat()">Guardar</button></div></div>
-  <div class="mo" id="newIngM"><div class="mo-c"><div class="mo-h"><h3 style="color:${c}">Ingreso de Material</h3><button class="tbtn" onclick="closeM('newIngM')">${I.x}</button></div>${allItems.length?`<div class="fg"><label class="fl">Material *</label><select class="fs" id="ni_mat"><option value="">Seleccionar...</option>${allItems.map(m=>`<option value="${m.id}">${m.name} (${m.category})</option>`).join('')}</select></div>`:'<div class="ts tc3 mb-12">Primero carga materiales en el cómputo</div>'}<div class="fr"><div class="fg"><label class="fl">Cantidad *</label><input class="fi" id="ni_q" type="number" min="0"></div><div class="fg"><label class="fl">Fecha</label><input class="fi" id="ni_d" type="date" value="${td()}"></div></div><div class="fg"><label class="fl">Proveedor</label><input class="fi" id="ni_prov"></div><div class="fg"><label class="fl">Remito</label><input class="fi" id="ni_rem"></div><div class="fg"><label class="fl">Observaciones</label><textarea class="ft" id="ni_obs"></textarea></div><div class="fg"><label class="fl">Fotos del ingreso</label><input type="file" accept="image/*" multiple id="ni_ph" class="fi" style="padding:6px"></div><button class="btn btn-w mt-8" style="background:${c};color:#fff" onclick="saveIng()">Registrar</button>
+  <div class="mo" id="newIngM"><div class="mo-c"><div class="mo-h"><h3 style="color:${c}">Ingreso de Material</h3><button class="tbtn" onclick="closeM('newIngM')">${I.x}</button></div>${allItems.length?`<div class="fg"><label class="fl">Material *</label>${_mcsHtml('ni_mat',allItems,'Buscar material...',null)}</div>`:'<div class="ts tc3 mb-12">Primero carga materiales en el cómputo</div>'}<div class="fr"><div class="fg"><label class="fl">Cantidad *</label><input class="fi" id="ni_q" type="number" min="0"></div><div class="fg"><label class="fl">Fecha</label><input class="fi" id="ni_d" type="date" value="${td()}"></div></div>${_provDl}<div class="fg"><label class="fl">Proveedor</label><input class="fi" id="ni_prov" list="mat_prov_dl" autocomplete="off"></div><div class="fg"><label class="fl">Remito</label><input class="fi" id="ni_rem"></div><div class="fg"><label class="fl">Observaciones</label><textarea class="ft" id="ni_obs"></textarea></div><div class="fg"><label class="fl">Fotos del ingreso</label><input type="file" accept="image/*" multiple id="ni_ph" class="fi" style="padding:6px"></div><button class="btn btn-w mt-8" style="background:${c};color:#fff" onclick="saveIng()">Registrar</button>
 </div></div>
-  <div class="mo" id="newPedidoM"><div class="mo-c"><div class="mo-h"><h3 style="color:var(--orange)">&#x1F4CB; Nuevo Pedido</h3><button class="tbtn" onclick="closeM('newPedidoM')">${I.x}</button></div><div style="background:#fff7ed;border-left:3px solid var(--orange);border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px">Los pedidos <strong>no computan</strong> como ingresados. Se convierten en ingreso con un clic cuando lleguen.</div><div class="fg"><label class="fl">Material del c&oacute;mputo (opcional)</label><select class="fs" id="np_mat"><option value="">-- Ninguno --</option>${allItems.map(m=>`<option value="${m.id}">${m.name} (${m.category})</option>`).join('')}</select></div><div class="fg"><label class="fl">Nombre libre</label><input class="fi" id="np_nombre" placeholder="Si no est&aacute; en el c&oacute;mputo..."></div><div class="fr"><div class="fg"><label class="fl">Cantidad *</label><input class="fi" id="np_q" type="number" min="0" step="0.01"></div><div class="fg"><label class="fl">Unidad</label><select class="fs" id="np_u">${UNI.map(u=>`<option>${u}</option>`).join('')}</select></div></div><div class="fg"><label class="fl">Proveedor</label><input class="fi" id="np_prov" placeholder="A qui&eacute;n se pide..."></div><div class="fg"><label class="fl">Fecha pedido</label><input class="fi" id="np_fecha" type="date" value="${td()}"></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="np_obs"></textarea></div><button class="btn btn-w mt-8" style="background:var(--orange);color:#fff" onclick="savePedido()">Registrar Pedido</button></div></div>
-  <div class="mo" id="newAPedirM"><div class="mo-c"><div class="mo-h"><h3 style="color:#8b5cf6">&#x1F4DD; A pedir</h3><button class="tbtn" onclick="closeM('newAPedirM')">${I.x}</button></div><div style="background:#f5f3ff;border-left:3px solid #8b5cf6;border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px">Material pendiente de pedido. Pas&aacute;lo a Pedido cuando se solicite.</div><div class="fg"><label class="fl">Material del c&oacute;mputo (opcional)</label><select class="fs" id="nap_mat"><option value="">-- Ninguno --</option>${allItems.map(m=>`<option value="${m.id}">${m.name} (${m.category})</option>`).join('')}</select></div><div class="fg"><label class="fl">Nombre</label><input class="fi" id="nap_nombre" placeholder="Nombre del material"></div><div class="fr"><div class="fg"><label class="fl">Cantidad</label><input class="fi" id="nap_q" type="number" min="0" step="0.01"></div><div class="fg"><label class="fl">Unidad</label><select class="fs" id="nap_u">${UNI.map(u=>`<option>${u}</option>`).join('')}</select></div></div><div class="fg"><label class="fl">Proveedor sugerido</label><input class="fi" id="nap_prov"></div><div class="fg"><label class="fl">Fecha estimada</label><input class="fi" id="nap_fecha" type="date" value="${td()}"></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="nap_obs"></textarea></div><button class="btn btn-w mt-8" style="background:#8b5cf6;color:#fff" onclick="saveAPedir()">Registrar A pedir</button></div></div>
-  <div class="mo" id="newExistenteM"><div class="mo-c"><div class="mo-h"><h3 style="color:var(--green)">&#x2713; Registrar Existente</h3><button class="tbtn" onclick="closeM('newExistenteM')">${I.x}</button></div><div style="background:var(--green-bg);border-left:3px solid var(--green);border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px">Material ya disponible en obra — no genera pedido ni ingreso.</div><div class="fg"><label class="fl">Material del c&oacute;mputo (opcional)</label><select class="fs" id="nex_mat"><option value="">-- Ninguno --</option>${allItems.map(m=>`<option value="${m.id}">${m.name} (${m.category})</option>`).join('')}</select></div><div class="fg"><label class="fl">Nombre</label><input class="fi" id="nex_nombre" placeholder="Nombre del material existente"></div><div class="fr"><div class="fg"><label class="fl">Cantidad</label><input class="fi" id="nex_q" type="number" min="0" step="0.01"></div><div class="fg"><label class="fl">Unidad</label><select class="fs" id="nex_u">${UNI.map(u=>`<option>${u}</option>`).join('')}</select></div></div><div class="fg"><label class="fl">Fecha</label><input class="fi" id="nex_fecha" type="date" value="${td()}"></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="nex_obs"></textarea></div><button class="btn btn-w mt-8" style="background:var(--green);color:#fff" onclick="saveExistente()">Registrar Existente</button></div></div>`;
+  <div class="mo" id="newPedidoM"><div class="mo-c"><div class="mo-h"><h3 style="color:var(--orange)">&#x1F4CB; Nuevo Pedido</h3><button class="tbtn" onclick="closeM('newPedidoM')">${I.x}</button></div><div style="background:#fff7ed;border-left:3px solid var(--orange);border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px">Los pedidos <strong>no computan</strong> como ingresados. Se convierten en ingreso con un clic cuando lleguen.</div><div class="fg"><label class="fl">Material del c&oacute;mputo (opcional)</label>${_mcsHtml('np_mat',allItems,'Buscar o dejar vacío...','— Ninguno —')}</div><div class="fg"><label class="fl">Nombre libre</label><input class="fi" id="np_nombre" placeholder="Si no est&aacute; en el c&oacute;mputo..."></div><div class="fr"><div class="fg"><label class="fl">Cantidad *</label><input class="fi" id="np_q" type="number" min="0" step="0.01"></div><div class="fg"><label class="fl">Unidad</label><select class="fs" id="np_u">${UNI.map(u=>`<option>${u}</option>`).join('')}</select></div></div><div class="fg"><label class="fl">Proveedor</label><input class="fi" id="np_prov" list="mat_prov_dl" autocomplete="off" placeholder="A quién se pide..."></div><div class="fg"><label class="fl">Fecha pedido</label><input class="fi" id="np_fecha" type="date" value="${td()}"></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="np_obs"></textarea></div><button class="btn btn-w mt-8" style="background:var(--orange);color:#fff" onclick="savePedido()">Registrar Pedido</button></div></div>
+  <div class="mo" id="newAPedirM"><div class="mo-c"><div class="mo-h"><h3 style="color:#8b5cf6">&#x1F4DD; A pedir</h3><button class="tbtn" onclick="closeM('newAPedirM')">${I.x}</button></div><div style="background:#f5f3ff;border-left:3px solid #8b5cf6;border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px">Material pendiente de pedido. Pas&aacute;lo a Pedido cuando se solicite.</div><div class="fg"><label class="fl">Material del c&oacute;mputo (opcional)</label>${_mcsHtml('nap_mat',allItems,'Buscar o dejar vacío...','— Ninguno —')}</div><div class="fg"><label class="fl">Nombre</label><input class="fi" id="nap_nombre" placeholder="Nombre del material"></div><div class="fr"><div class="fg"><label class="fl">Cantidad</label><input class="fi" id="nap_q" type="number" min="0" step="0.01"></div><div class="fg"><label class="fl">Unidad</label><select class="fs" id="nap_u">${UNI.map(u=>`<option>${u}</option>`).join('')}</select></div></div><div class="fg"><label class="fl">Proveedor sugerido</label><input class="fi" id="nap_prov" list="mat_prov_dl" autocomplete="off"></div><div class="fg"><label class="fl">Fecha estimada</label><input class="fi" id="nap_fecha" type="date" value="${td()}"></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="nap_obs"></textarea></div><button class="btn btn-w mt-8" style="background:#8b5cf6;color:#fff" onclick="saveAPedir()">Registrar A pedir</button></div></div>
+  <div class="mo" id="newExistenteM"><div class="mo-c"><div class="mo-h"><h3 style="color:var(--green)">&#x2713; Registrar Existente</h3><button class="tbtn" onclick="closeM('newExistenteM')">${I.x}</button></div><div style="background:var(--green-bg);border-left:3px solid var(--green);border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px">Material ya disponible en obra — no genera pedido ni ingreso.</div><div class="fg"><label class="fl">Material del c&oacute;mputo (opcional)</label>${_mcsHtml('nex_mat',allItems,'Buscar o dejar vacío...','— Ninguno —')}</div><div class="fg"><label class="fl">Nombre</label><input class="fi" id="nex_nombre" placeholder="Nombre del material existente"></div><div class="fr"><div class="fg"><label class="fl">Cantidad</label><input class="fi" id="nex_q" type="number" min="0" step="0.01"></div><div class="fg"><label class="fl">Unidad</label><select class="fs" id="nex_u">${UNI.map(u=>`<option>${u}</option>`).join('')}</select></div></div><div class="fg"><label class="fl">Fecha</label><input class="fi" id="nex_fecha" type="date" value="${td()}"></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="nex_obs"></textarea></div><button class="btn btn-w mt-8" style="background:var(--green);color:#fff" onclick="saveExistente()">Registrar Existente</button></div></div>`;
   setTimeout(renderMatItems,0);
 }
 function editSinComp(id){
@@ -4492,7 +4498,7 @@ function ejecutarConfirmarPedido(pedidoId){
 
 async function saveMat(){
   if(!requireWrite())return;const n=$('nm_n').value.trim();if(!n){toast('Nombre obligatorio','var(--red)');return;}const pu=await readPhotos('nm_ph','materiales');D.materiales.push({id:uid(),projectId:S.proj,name:n,computado:parseFloat($('nm_comp').value)||0,qty:0,unit:$('nm_u').value,category:$('nm_c').value||'General',notes:$('nm_no').value,photos:pu.map(u=>mkPhoto(u,'')),date:td(),updatedAt:nw()});audit('materiales','create',n);sv();closeM('newMatM');render();toast('Material registrado');}
-async function saveIng(){const mid=$('ni_mat')?.value;const q=parseFloat($('ni_q').value);if(!mid){toast('Selecciona material','var(--red)');return;}if(!q||q<=0){toast('Cantidad invalida','var(--red)');return;}if(!D.matIngresos)D.matIngresos=[];const pu=await readPhotos('ni_ph','materiales');D.matIngresos.push({id:uid(),projectId:S.proj,materialId:mid,qty:q,date:$('ni_d').value||td(),proveedor:$('ni_prov').value,remito:$('ni_rem').value,observations:$('ni_obs').value,photos:pu.map(u=>mkPhoto(u,'')),updatedAt:nw()});audit('matIngresos','create','+'+q);sv();closeM('newIngM');render();toast('Ingreso registrado');}
+async function saveIng(){const mid=$('ni_mat')?.value;const q=parseFloat($('ni_q').value);if(!mid){toast('Selecciona material','var(--red)');return;}if(!q||q<=0){toast('Cantidad invalida','var(--red)');return;}if(!D.matIngresos)D.matIngresos=[];const pu=await readPhotos('ni_ph','materiales');const _ingMat=(D.materiales||[]).find(function(m){return m.id===mid;});D.matIngresos.push({id:uid(),projectId:S.proj,materialId:mid,matNombre:_ingMat?_ingMat.name:'',qty:q,date:$('ni_d').value||td(),proveedor:$('ni_prov').value,remito:$('ni_rem').value,observations:$('ni_obs').value,photos:pu.map(u=>mkPhoto(u,'')),updatedAt:nw()});audit('matIngresos','create','+'+q);sv();closeM('newIngM');render();toast('Ingreso registrado');}
 // Material detail with history
 function exportMatDetailPDF(mid){
   try{
@@ -5582,12 +5588,22 @@ function generarInformeMixto(){
       selComs.forEach(function(id){
         var c=(D.comentarios||[]).find(function(x){return x.id===id;});if(!c)return;
         var _txt=c.text||c.content||'';
+        var _done=c.cumplido||c.done||false;
+        var _tipo=(c.tipo||c.category||'').toUpperCase();
+        var _tipoBg=_tipo==='PROPIETARIO'?'#0891b2':'#7c3aed';
+        var _tarea=c.tareaId?(D.tareas||[]).find(function(t){return t.id===c.tareaId;}):null;
         body+='<div style="padding:9px 10px;margin-bottom:6px;border-radius:6px;border-left:3px solid #ea580c;background:#fafafa;break-inside:avoid;page-break-inside:avoid">';
-        if(c.category||c.tipo)body+='<span style="font-size:8px;background:#ea580c;color:#fff;padding:2px 6px;border-radius:3px;font-weight:700">'+(c.category||c.tipo||'')+'</span> ';
-        body+='<span style="font-size:9px;color:#64748b">'+fmts(c.date||c.fecha||'')+'</span>';
-        body+='<div style="font-size:10px;margin-top:5px;line-height:1.5;white-space:pre-wrap">'+esc(_txt)+'</div>';
+        body+='<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:5px">';
+        if(_tipo)body+='<span style="font-size:8px;background:'+_tipoBg+';color:#fff;padding:2px 6px;border-radius:3px;font-weight:700">'+_tipo+'</span>';
+        if(c.rubro)body+='<span style="font-size:8px;background:#f1f5f9;color:#475569;padding:2px 6px;border-radius:3px;border:1px solid #e2e8f0">'+esc(c.rubro)+'</span>';
+        if(c.etapa)body+='<span style="font-size:8px;background:#f0fdf4;color:#16a34a;padding:2px 6px;border-radius:3px;border:1px solid #bbf7d0">'+esc(c.etapa)+'</span>';
+        if(_done)body+='<span style="font-size:8px;background:#16a34a;color:#fff;padding:2px 6px;border-radius:3px;font-weight:700">✓ REALIZADO</span>';
+        body+='<span style="font-size:9px;color:#64748b;margin-left:auto">'+fmts(c.date||c.fecha||'')+'</span>';
+        body+='</div>';
+        body+='<div style="font-size:10px;line-height:1.5;white-space:pre-wrap;'+(_done?'color:#94a3b8;text-decoration:line-through':'')+'">'+esc(_txt)+'</div>';
+        if(_tarea)body+='<div style="font-size:8.5px;color:#0891b2;margin-top:4px;padding:3px 7px;background:#f0f9ff;border-radius:4px">↳ Tarea: '+esc(_tarea.title||'')+'</div>';
         var cPh=(c.photos||[]).filter(function(ph){var u=typeof ph==='string'?ph:ph.url;return u&&u.length>4&&!u.startsWith('[');});
-        if(cPh.length){body+='<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:5px">';cPh.forEach(function(ph){var u=typeof ph==='string'?ph:ph.url;body+='<img src="'+u+'" style="width:75px;height:75px;object-fit:cover;border-radius:3px;border:1px solid #ddd">';});body+='</div>';}
+        if(cPh.length){body+='<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:5px">';cPh.forEach(function(ph){var u=typeof ph==='string'?ph:ph.url;var cap=typeof ph==='string'?'':ph.caption||'';body+='<div style="text-align:center"><img src="'+u+'" style="width:75px;height:75px;object-fit:cover;border-radius:3px;border:1px solid #ddd">'+(cap?'<div style="font-size:7px;color:#64748b;margin-top:1px;width:75px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(cap)+'</div>':'')+'</div>';});body+='</div>';}
         body+='</div>';
       });
     }
@@ -5626,8 +5642,11 @@ function generarInformeMixto(){
       var allIngs=pf('matIngresos').slice().sort(function(a,b){return (b.fecha||b.date||'').localeCompare(a.fecha||a.date||'');});
       body+='<h2>Historial de Ingresos de Materiales ('+allIngs.length+')</h2>';
       body+='<table style="width:100%;border-collapse:collapse;font-size:9px;margin-bottom:8px"><tr><th style="background:#7c3aed;color:#fff;padding:4px 5px;text-align:left">Fecha</th><th style="background:#7c3aed;color:#fff;padding:4px 5px;text-align:left">Material</th><th style="background:#7c3aed;color:#fff;padding:4px 5px;text-align:center">Cantidad</th><th style="background:#7c3aed;color:#fff;padding:4px 5px;text-align:left">Proveedor</th></tr>';
+      var _allMatsRef=pf('materiales');
       allIngs.forEach(function(i){
-        body+='<tr><td style="padding:3px 5px;border-bottom:1px solid #eee">'+fmt(i.fecha||i.date||'')+'</td><td style="padding:3px 5px;border-bottom:1px solid #eee">'+esc(i.matNombre||'')+'</td><td style="padding:3px 5px;border-bottom:1px solid #eee;text-align:center">'+i.qty+' '+(i.unit||'')+'</td><td style="padding:3px 5px;border-bottom:1px solid #eee">'+esc(i.proveedor||'-')+'</td></tr>';
+        var _mName=i.matNombre||(_allMatsRef.find(function(m){return m.id===i.materialId;})||{}).name||'-';
+        var _mUnit=i.unit||(_allMatsRef.find(function(m){return m.id===i.materialId;})||{}).unit||'';
+        body+='<tr><td style="padding:3px 5px;border-bottom:1px solid #eee">'+fmt(i.fecha||i.date||'')+'</td><td style="padding:3px 5px;border-bottom:1px solid #eee">'+esc(_mName)+'</td><td style="padding:3px 5px;border-bottom:1px solid #eee;text-align:center">'+i.qty+' '+_mUnit+'</td><td style="padding:3px 5px;border-bottom:1px solid #eee">'+esc(i.proveedor||'-')+'</td></tr>';
       });
       body+='</table>';
     }
@@ -7822,6 +7841,44 @@ function savePin(newPin){
   if(!newPin){localStorage.removeItem(_PIN_KEY);toast('PIN eliminado — la app ya no pide contraseña');}
   else{localStorage.setItem(_PIN_KEY,newPin);sessionStorage.setItem('oc_pin_ok','1');toast('PIN guardado ✓','var(--green)');}
   render();
+}
+
+// ═══════ MATERIAL COMBO SEARCH ═══════
+var _mcsOpts={};
+function _mcsHtml(selId,items,placeholder,emptyLabel){
+  _mcsOpts[selId]=items.map(function(m){return{id:m.id,label:m.name+' ('+(m.category||'General')+')',unit:m.unit||'u',name:m.name};});
+  var empty=emptyLabel?'<div class="mcs-opt" style="color:var(--text3)" onmousedown="_mcsP(\''+selId+'\',\'\',\'\',\'\',\'\')">'+emptyLabel+'</div>':'';
+  return '<div class="mcs" id="'+selId+'_w">'
+    +'<input class="fi" id="'+selId+'_q" type="text" placeholder="'+placeholder+'" autocomplete="off" style="margin:0;width:100%" '
+    +'oninput="_mcsF(\''+selId+'\')" onfocus="_mcsF(\''+selId+'\')" onblur="setTimeout(function(){_mcsCl(\''+selId+'\')},220)">'
+    +'<div class="mcs-drop" id="'+selId+'_d">'+empty+'</div>'
+    +'<input type="hidden" id="'+selId+'" value="">'
+    +'</div>';
+}
+function _mcsF(selId){
+  var inp=$(selId+'_q'),drop=$(selId+'_d');
+  if(!inp||!drop)return;
+  var q=inp.value.toLowerCase();
+  var opts=_mcsOpts[selId]||[];
+  var filtered=q?opts.filter(function(o){return o.label.toLowerCase().includes(q);}):opts;
+  var empty=selId==='np_mat'||selId==='nap_mat'||selId==='nex_mat'?'<div class="mcs-opt" style="color:var(--text3)" onmousedown="_mcsP(\''+selId+'\',\'\',\'\',\'\',\'\')">— Ninguno —</div>':'';
+  if(!filtered.length&&!empty){drop.style.display='none';return;}
+  drop.innerHTML=empty+filtered.slice(0,35).map(function(o){
+    return '<div class="mcs-opt" onmousedown="_mcsP(\''+selId+'\','+JSON.stringify(o.id)+','+JSON.stringify(o.label)+','+JSON.stringify(o.unit)+','+JSON.stringify(o.name)+')">'+esc(o.label)+'</div>';
+  }).join('');
+  drop.style.display='block';
+}
+function _mcsCl(selId){var d=$(selId+'_d');if(d)d.style.display='none';}
+function _mcsP(selId,id,label,unit,name){
+  var inp=$(selId+'_q'),hid=$(selId),drop=$(selId+'_d');
+  if(inp)inp.value=id?label:'';
+  if(hid)hid.value=id||'';
+  if(drop)drop.style.display='none';
+  if(id){
+    var sfx=selId==='ni_mat'?'ni':selId==='np_mat'?'np':selId==='nap_mat'?'nap':selId==='nex_mat'?'nex':'';
+    var uSel=sfx?$(sfx+'_u'):null;if(uSel&&unit)uSel.value=unit;
+    var nInp=(sfx&&sfx!=='ni')?$(sfx+'_nombre'):null;if(nInp&&!nInp.value)nInp.value=name;
+  }
 }
 
 // ═══════ INIT ═══════
