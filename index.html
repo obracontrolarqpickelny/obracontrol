@@ -36,6 +36,7 @@ a{color:var(--blue);text-decoration:none}
 .bnav{flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;padding:6px 2px;background:0;font-family:inherit;color:var(--gray-l);font-size:9px;font-weight:500;position:relative;transition:color .15s}
 .bnav.active{font-weight:700}
 .bnav .ndot{position:absolute;top:2px;right:22%;width:7px;height:7px;border-radius:50%;background:var(--red);border:2px solid var(--white)}
+.bnav .nbadge{position:absolute;top:0;right:12%;background:var(--red);color:#fff;border-radius:10px;font-size:8px;font-weight:800;min-width:14px;height:14px;display:flex;align-items:center;justify-content:center;padding:0 3px;border:1.5px solid var(--white);line-height:1}
 .tbtn{background:none;border:none;padding:6px;display:flex;align-items:center;border-radius:8px;transition:background .15s}
 .tbtn:active{background:var(--gray-ll)}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 16px;border-radius:var(--rs);font-size:13px;font-weight:600;transition:all .15s;white-space:nowrap;background:none}
@@ -169,9 +170,28 @@ a{color:var(--blue);text-decoration:none}
 .tipo-btn.inactive{background:var(--gray-ll);color:var(--text3);border-color:var(--brd)}
 .tipo-btn.active-egr{background:#dc2626;color:#fff;border-color:#dc2626}
 .tipo-btn.active-ing{background:#16a34a;color:#fff;border-color:#16a34a}
+#pin-overlay{position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 24px}
+#pin-overlay .pin-box{width:100%;max-width:340px;background:var(--white);border-radius:20px;box-shadow:0 8px 40px #0002;padding:32px 28px;display:flex;flex-direction:column;align-items:center;gap:16px}
+#pin-overlay .pin-logo{font-size:48px;line-height:1}
+#pin-overlay .pin-title{font-size:18px;font-weight:800;color:var(--text1);text-align:center}
+#pin-overlay .pin-sub{font-size:13px;color:var(--text3);text-align:center;margin-top:-8px}
+#pin-overlay .pin-input{width:100%;border:2px solid var(--brd);border-radius:12px;padding:14px 16px;font-size:22px;font-weight:700;letter-spacing:6px;text-align:center;background:var(--bg);color:var(--text1);outline:none;font-family:inherit}
+#pin-overlay .pin-input:focus{border-color:var(--cyan)}
+#pin-overlay .pin-btn{width:100%;padding:14px;border-radius:12px;background:var(--cyan);color:#fff;font-size:15px;font-weight:700;border:none;cursor:pointer}
+#pin-overlay .pin-err{font-size:12px;color:var(--red);font-weight:600;min-height:16px;text-align:center}
 </style>
 </head>
 <body>
+<div id="pin-overlay" style="display:none">
+  <div class="pin-box">
+    <div class="pin-logo">🏗️</div>
+    <div class="pin-title">ObraControl Pro</div>
+    <div class="pin-sub">Ingresá tu PIN para acceder</div>
+    <input class="pin-input" id="pin-input" type="password" inputmode="numeric" maxlength="8" placeholder="••••" onkeydown="if(event.key==='Enter')_pinSubmit()">
+    <div class="pin-err" id="pin-err"></div>
+    <button class="pin-btn" onclick="_pinSubmit()">Ingresar</button>
+  </div>
+</div>
 <div id="app"></div>
 <script>
 /* ╔══════════════════════════════════════════════════════════════╗
@@ -1446,7 +1466,7 @@ function _isUserTyping(){var ae=document.activeElement;if(!ae)return false;var t
 // Returns true if any data actually changed (items added/removed/updated).
 function _silentMerge(driveData){
   if(!driveData)return false;
-  var arrKeys=['visitas','tareas','materiales','matIngresos','alertas','checklists','documentos','enlaces','comentarios','colaboradores','economia','auditLog','formulariosPendientes','projects'];
+  var arrKeys=['visitas','tareas','materiales','matIngresos','alertas','checklists','documentos','enlaces','comentarios','colaboradores','economia','auditLog','formulariosPendientes','projects','mensajesColab'];
   // Unir tombstones de Drive + local
   var driveTombs=(driveData.tombstones&&Array.isArray(driveData.tombstones))?driveData.tombstones:[];
   var localTombs=D.tombstones||[];
@@ -2302,7 +2322,7 @@ function renderShell(){
   <div class="ov${S.menu?' open':''}" onclick="S.menu=false;render();"><div class="smenu" onclick="event.stopPropagation()"><div class="smenu-hdr"><div class="flex items-center gap-10 mb-4"><span style="color:var(--pri)">${I.building}</span><span style="font-size:15px;font-weight:800">${p.name}</span></div><div class="txxs tc3">${p.client||''} ${p.location?'| '+p.location:''}</div></div><div style="flex:1;overflow-y:auto;padding:4px 0">${mi}</div><div style="padding:12px 16px;border-top:1px solid var(--gray-ll)"><button class="btn btn-g btn-s btn-w" style="color:var(--red)" onclick="D.user=null;sv();render();">${I.out} Cerrar sesion</button></div></div></div>
   <div class="mo${S.searchOpen?' open':''}" onclick="S.searchOpen=false;render();"><div class="mo-c" style="max-width:600px" onclick="event.stopPropagation()"><div class="mo-h"><h3>${I.search} Buscador</h3><button class="tbtn" onclick="S.searchOpen=false;render();">${I.x}</button></div><div class="searchbar"><span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--gray-l)">${I.search}</span><input class="fi" style="padding-left:38px" id="searchInput" placeholder="Buscar..." value="${S.searchQ||''}" oninput="S.searchQ=this.value;renderSR();"></div><div id="searchResults"></div></div></div>
   <div class="content" id="mc"></div>
-  <div class="bottomnav" ontouchstart="window._bnTX=event.changedTouches[0].clientX" ontouchend="var _dx=event.changedTouches[0].clientX-(window._bnTX||0);if(Math.abs(_dx)>40){navStep(_dx<0?1:-1)}"><button class="bnav" style="max-width:32px;min-width:32px;font-size:16px;opacity:${_bnavIdx<=0?'0.3':'1'}" onclick="navStep(-1)" title="Anterior">&#x276E;</button>${bnav.map(t=>{const act=S.mod===t.id;const c=act?MC[t.id]:'var(--gray-l)';return `<button class="bnav${act?' active':''}" style="color:${c}" onclick="S.mod='${t.id}';S.visitaDetail=null;S.matDetail=null;render();">${I[t.ic]}<span>${t.l}</span>${(t.id==='alertas'&&actAl>0)||(t.id==='bandeja'&&pendForms>0)?'<span class="ndot"></span>':''}</button>`;}).join('')}<button class="bnav" style="max-width:32px;min-width:32px;font-size:16px;opacity:${_bnavIdx>=_allNavIds.length-1?'0.3':'1'}" onclick="navStep(1)" title="Siguiente">&#x276F;</button></div>`);
+  <div class="bottomnav" ontouchstart="window._bnTX=event.changedTouches[0].clientX" ontouchend="var _dx=event.changedTouches[0].clientX-(window._bnTX||0);if(Math.abs(_dx)>40){navStep(_dx<0?1:-1)}"><button class="bnav" style="max-width:32px;min-width:32px;font-size:16px;opacity:${_bnavIdx<=0?'0.3':'1'}" onclick="navStep(-1)" title="Anterior">&#x276E;</button>${bnav.map(t=>{const act=S.mod===t.id;const c=act?MC[t.id]:'var(--gray-l)';return `<button class="bnav${act?' active':''}" style="color:${c}" onclick="S.mod='${t.id}';S.visitaDetail=null;S.matDetail=null;render();">${I[t.ic]}<span>${t.l}</span>${t.id==='alertas'&&actAl>0?'<span class="ndot"></span>':t.id==='bandeja'&&(pendForms+pendCarpeta)>0?'<span class="nbadge">'+(pendForms+pendCarpeta)+'</span>':''}</button>`;}).join('')}<button class="bnav" style="max-width:32px;min-width:32px;font-size:16px;opacity:${_bnavIdx>=_allNavIds.length-1?'0.3':'1'}" onclick="navStep(1)" title="Siguiente">&#x276F;</button></div>`);
   renderModule(S.mod,p);
 }
 function renderModule(mod,p){const mc=$('mc');if(!mc)return;if(S.visitaDetail){var _vck=(D.visitas||[]).find(function(x){return x.id===S.visitaDetail;});if(!_vck||_vck.projectId!==S.proj){S.visitaDetail=null;}else{rVisitaDetail(mc,S.visitaDetail);return;}}if(S.matDetail){rMatDetail(mc,S.matDetail);return;}switch(mod){case 'dashboard':rDash(mc,p);break;case 'visitas':rVisitas(mc);break;case 'tareas':rTareas(mc);break;case 'materiales':rMat(mc);break;case 'alertas':rAlertas(mc);break;case 'checklist':rChecklist(mc);break;case 'documentos':rDocs(mc);break;case 'comentarios':rComentarios(mc);break;case 'informes':rInformes(mc,p);break;case 'colaboradores':rColaboradores(mc,p);break;case 'bandeja':rBandeja(mc,p);break;case 'economia':rEconomia(mc,p);break;case 'config':rConfig(mc,p);break;}if(S.searchOpen)setTimeout(()=>{const si=$('searchInput');if(si)si.focus();},100);}
@@ -5730,7 +5750,7 @@ function rConfig(mc,p){
   [].concat(pf('visitas'),pf('tareas'),pf('materiales'),pf('matIngresos')).forEach(function(it){
     (it.photos||[]).forEach(function(p){var u=typeof p==='string'?p:(p.url||'');if(u.startsWith('data:'))_b64n++;});
   });
-mc.innerHTML=`${modHeader('config','Configuracion')}<div class="card mb-12"><div class="flex justify-between items-center mb-8"><div class="ts fw7">Datos de la obra</div><button class="btn btn-sec btn-s" onclick="openM('editProjM')">${I.edit} Editar</button></div><div class="ts tc3 lh18"><strong>Nombre:</strong> ${p.name}<br><strong>Cliente:</strong> ${p.client||'-'}<br><strong>Ubicacion:</strong> ${p.location||'-'}<br><strong>Director:</strong> ${p.director||'-'}<br><strong>Capataz:</strong> ${p.capataz||'-'}<br><strong>Inicio:</strong> ${fmts(p.startDate)||'-'}<br><strong>Fin:</strong> ${fmts(p.endDate)||'-'}<br><strong>Estado:</strong> ${p.status}</div></div><div class="card mb-12"><div class="ts fw7 mb-8">Estadisticas</div><div class="ts tc3 lh18">Visitas: ${pf('visitas').length} | Tareas: ${pf('tareas').length} | Materiales: ${pf('materiales').length} | Ingresos: ${pf('matIngresos').length} | Alertas: ${pf('alertas').length} | Comentarios: ${pf('comentarios').length} | Docs: ${pf('documentos').length} | Enlaces: ${pf('enlaces').length}</div></div><div class="card mb-12" style="border-left:4px solid #0d9488"><div class="ts fw7 mb-8" style="color:#0d9488">&#x1F4F1; Informes de campo</div><div class="txxs tc3 mb-12">Cuando compartís el link con un colaborador, los informes te llegan por los canales que tengas activos.</div><div class="flex items-center gap-8 mb-10"><div class="flex-1"><label class="fl">Tu WhatsApp</label><input class="fi" id="cfg_arch_tel" type="tel" value="${SYNC.archTel||''}" placeholder="+549..." onblur="saveArchContact('tel',this.value)"></div><button class="btn btn-s" style="margin-top:18px;min-width:80px;font-size:11px;background:${SYNC.sendWA?'var(--green)':'var(--gray-ll)'};color:${SYNC.sendWA?'#fff':'var(--text2)'}" onclick="toggleSendChannel('wa')">${SYNC.sendWA?'&#x2713; Activo':'Inactivo'}</button></div><div class="flex items-center gap-8 mb-12"><div class="flex-1"><label class="fl">Tu email</label><input class="fi" id="cfg_arch_mail" type="email" value="${SYNC.archEmail||''}" placeholder="tu@email.com" onblur="saveArchContact('mail',this.value)"></div><button class="btn btn-s" style="margin-top:18px;min-width:80px;font-size:11px;background:${SYNC.sendEmail?'var(--green)':'var(--gray-ll)'};color:${SYNC.sendEmail?'#fff':'var(--text2)'}" onclick="toggleSendChannel('email')">${SYNC.sendEmail?'&#x2713; Activo':'Inactivo'}</button></div><div class="txxs tc3">Los envíos llegan como un link. Al tocarlo la app muestra los datos en la Bandeja de entrada.</div></div>v><div class="card mb-12" style="background:var(--red-bg);border:1px solid var(--red-mid)"><div class="ts fw7 mb-8" style="color:var(--red)">Zona peligrosa</div><button class="btn btn-x btn-s btn-w" onclick="deleteProj()">Eliminar obra</button></div><div class="card mb-12" style="border-left:4px solid var(--cyan);padding:12px"><div class="ts fw7 mb-6">&#x1F4BE; Almacenamiento local</div><div style="background:var(--gray-ll);border-radius:6px;height:8px;margin-bottom:6px"><div style="background:${_lsColor};border-radius:6px;height:8px;width:${_lsPct}%"></div></div><div class="txxs tc3">${_lsUsed} KB usados de ~5120 KB disponibles</div>${_lsPct>80?'<div class="txxs mt-4" style="color:var(--orange)">&#x26A0; Almacenamiento casi lleno. Conectá Drive para liberar espacio.</div>':''}</div><div class="tac mt-20 txxs tc3"><div class="fw7">ObraControl Pro v9.0</div><div class="mt-4">Visita-centric | PDF | Materiales+Ingresos | Comentarios vinculados</div></div><div class="mo" id="editProjM"><div class="mo-c"><div class="mo-h"><h3>Editar Obra</h3><button class="tbtn" onclick="closeM('editProjM')">${I.x}</button></div><div class="fg"><label class="fl">Nombre *</label><input class="fi" id="ep_n" value="${p.name||''}"></div><div class="fg"><label class="fl">Cliente</label><input class="fi" id="ep_cl" value="${p.client||''}"></div><div class="fg"><label class="fl">Ubicacion</label><input class="fi" id="ep_loc" value="${p.location||''}"></div><div class="fr"><div class="fg"><label class="fl">Director</label><input class="fi" id="ep_dir" value="${p.director||''}"></div><div class="fg"><label class="fl">Capataz</label><input class="fi" id="ep_cap" value="${p.capataz||''}"></div></div><div class="fr"><div class="fg"><label class="fl">Inicio</label><input class="fi" id="ep_st" type="date" value="${p.startDate||''}"></div><div class="fg"><label class="fl">Fin</label><input class="fi" id="ep_en" type="date" value="${p.endDate||''}"></div></div><div class="fg"><label class="fl">Estado</label><select class="fs" id="ep_sta">${['En curso','Pausada','Finalizada','Por iniciar'].map(s=>`<option${s===p.status?' selected':''}>${s}</option>`).join('')}</select></div><button class="btn btn-p btn-w mt-8" onclick="saveEP()">Guardar</button></div></div>`;
+mc.innerHTML=`${modHeader('config','Configuracion')}<div class="card mb-12"><div class="flex justify-between items-center mb-8"><div class="ts fw7">Datos de la obra</div><button class="btn btn-sec btn-s" onclick="openM('editProjM')">${I.edit} Editar</button></div><div class="ts tc3 lh18"><strong>Nombre:</strong> ${p.name}<br><strong>Cliente:</strong> ${p.client||'-'}<br><strong>Ubicacion:</strong> ${p.location||'-'}<br><strong>Director:</strong> ${p.director||'-'}<br><strong>Capataz:</strong> ${p.capataz||'-'}<br><strong>Inicio:</strong> ${fmts(p.startDate)||'-'}<br><strong>Fin:</strong> ${fmts(p.endDate)||'-'}<br><strong>Estado:</strong> ${p.status}</div></div><div class="card mb-12"><div class="ts fw7 mb-8">Estadisticas</div><div class="ts tc3 lh18">Visitas: ${pf('visitas').length} | Tareas: ${pf('tareas').length} | Materiales: ${pf('materiales').length} | Ingresos: ${pf('matIngresos').length} | Alertas: ${pf('alertas').length} | Comentarios: ${pf('comentarios').length} | Docs: ${pf('documentos').length} | Enlaces: ${pf('enlaces').length}</div></div><div class="card mb-12" style="border-left:4px solid #0d9488"><div class="ts fw7 mb-8" style="color:#0d9488">&#x1F4F1; Informes de campo</div><div class="txxs tc3 mb-12">Cuando compartís el link con un colaborador, los informes te llegan por los canales que tengas activos.</div><div class="flex items-center gap-8 mb-10"><div class="flex-1"><label class="fl">Tu WhatsApp</label><input class="fi" id="cfg_arch_tel" type="tel" value="${SYNC.archTel||''}" placeholder="+549..." onblur="saveArchContact('tel',this.value)"></div><button class="btn btn-s" style="margin-top:18px;min-width:80px;font-size:11px;background:${SYNC.sendWA?'var(--green)':'var(--gray-ll)'};color:${SYNC.sendWA?'#fff':'var(--text2)'}" onclick="toggleSendChannel('wa')">${SYNC.sendWA?'&#x2713; Activo':'Inactivo'}</button></div><div class="flex items-center gap-8 mb-12"><div class="flex-1"><label class="fl">Tu email</label><input class="fi" id="cfg_arch_mail" type="email" value="${SYNC.archEmail||''}" placeholder="tu@email.com" onblur="saveArchContact('mail',this.value)"></div><button class="btn btn-s" style="margin-top:18px;min-width:80px;font-size:11px;background:${SYNC.sendEmail?'var(--green)':'var(--gray-ll)'};color:${SYNC.sendEmail?'#fff':'var(--text2)'}" onclick="toggleSendChannel('email')">${SYNC.sendEmail?'&#x2713; Activo':'Inactivo'}</button></div><div class="txxs tc3">Los envíos llegan como un link. Al tocarlo la app muestra los datos en la Bandeja de entrada.</div></div>v><div class="card mb-12" style="border-left:4px solid #6366f1"><div class="ts fw7 mb-8" style="color:#6366f1">🔒 Protección con PIN</div><div class="txxs tc3 mb-12">Solo vos podés acceder a la app. Al abrir desde cualquier dispositivo se pedirá el PIN.</div>${(function(){var _p=localStorage.getItem('oc_pin');if(_p){return '<div class="txxs mb-10" style="color:var(--green);font-weight:700">✓ PIN activo ('+_p.length+' dígitos)</div><div class="flex gap-6"><input class="fi" id="cfg_pin_new" type="password" inputmode="numeric" maxlength="8" placeholder="Nuevo PIN" style="flex:1;margin:0"><button class="btn btn-s" style="background:#6366f1;color:#fff;white-space:nowrap" onclick="var v=$(\'cfg_pin_new\').value.trim();if(v.length>=4)savePin(v);else toast(\'Mínimo 4 dígitos\',\'var(--red)\')">Cambiar</button></div><button class="btn btn-x btn-s btn-w mt-8" onclick="if(confirm(\'¿Eliminar PIN? La app quedará sin protección.\'))savePin(\'\')">Quitar PIN</button>';}else{return '<div class="txxs mb-10 tc3">Sin PIN configurado — cualquiera con el link puede acceder.</div><div class="flex gap-6"><input class="fi" id="cfg_pin_new" type="password" inputmode="numeric" maxlength="8" placeholder="Nuevo PIN (mín. 4 dígitos)" style="flex:1;margin:0"><button class="btn btn-s" style="background:#6366f1;color:#fff;white-space:nowrap" onclick="var v=$(\'cfg_pin_new\').value.trim();if(v.length>=4)savePin(v);else toast(\'Mínimo 4 dígitos\',\'var(--red)\')">Activar PIN</button></div>';}})()}</div><div class="card mb-12" style="background:var(--red-bg);border:1px solid var(--red-mid)"><div class="ts fw7 mb-8" style="color:var(--red)">Zona peligrosa</div><button class="btn btn-x btn-s btn-w" onclick="deleteProj()">Eliminar obra</button></div><div class="card mb-12" style="border-left:4px solid var(--cyan);padding:12px"><div class="ts fw7 mb-6">&#x1F4BE; Almacenamiento local</div><div style="background:var(--gray-ll);border-radius:6px;height:8px;margin-bottom:6px"><div style="background:${_lsColor};border-radius:6px;height:8px;width:${_lsPct}%"></div></div><div class="txxs tc3">${_lsUsed} KB usados de ~5120 KB disponibles</div>${_lsPct>80?'<div class="txxs mt-4" style="color:var(--orange)">&#x26A0; Almacenamiento casi lleno. Conectá Drive para liberar espacio.</div>':''}</div><div class="tac mt-20 txxs tc3"><div class="fw7">ObraControl Pro v9.0</div><div class="mt-4">Visita-centric | PDF | Materiales+Ingresos | Comentarios vinculados</div></div><div class="mo" id="editProjM"><div class="mo-c"><div class="mo-h"><h3>Editar Obra</h3><button class="tbtn" onclick="closeM('editProjM')">${I.x}</button></div><div class="fg"><label class="fl">Nombre *</label><input class="fi" id="ep_n" value="${p.name||''}"></div><div class="fg"><label class="fl">Cliente</label><input class="fi" id="ep_cl" value="${p.client||''}"></div><div class="fg"><label class="fl">Ubicacion</label><input class="fi" id="ep_loc" value="${p.location||''}"></div><div class="fr"><div class="fg"><label class="fl">Director</label><input class="fi" id="ep_dir" value="${p.director||''}"></div><div class="fg"><label class="fl">Capataz</label><input class="fi" id="ep_cap" value="${p.capataz||''}"></div></div><div class="fr"><div class="fg"><label class="fl">Inicio</label><input class="fi" id="ep_st" type="date" value="${p.startDate||''}"></div><div class="fg"><label class="fl">Fin</label><input class="fi" id="ep_en" type="date" value="${p.endDate||''}"></div></div><div class="fg"><label class="fl">Estado</label><select class="fs" id="ep_sta">${['En curso','Pausada','Finalizada','Por iniciar'].map(s=>`<option${s===p.status?' selected':''}>${s}</option>`).join('')}</select></div><button class="btn btn-p btn-w mt-8" onclick="saveEP()">Guardar</button></div></div>`;
 }
 
 function renderConfigSize(){
@@ -6959,9 +6979,15 @@ function openPerfilColab(colabId,tab){
         h+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:16px">';
         imgs.forEach(function(f,idx){
           var upBy=f.subidoPor==='col'?'👷':'🏗';
+          var _fok=f.data&&!f.data.startsWith('[foto')&&!f.data.startsWith('[arch');
           h+='<div style="position:relative">';
-          h+='<div style="position:relative;padding-bottom:100%;overflow:hidden;border-radius:8px;cursor:pointer;background:var(--gray-ll)" onclick="openCarpetaLightbox('+idx+')">';
-          h+='<img src="'+f.data+'" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'\';">';
+          h+='<div style="position:relative;padding-bottom:100%;overflow:hidden;border-radius:8px;cursor:pointer;background:var(--gray-ll)" onclick="'+(_fok?'openCarpetaLightbox('+idx+')':'void(0)')+'\">';
+          if(_fok){
+            h+='<img src="'+f.data+'" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">';
+            h+='<div style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;flex-direction:column;font-size:22px;color:var(--text3)">☁️<div style="font-size:9px;margin-top:2px">Sincronizando</div></div>';
+          } else {
+            h+='<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;font-size:22px;color:var(--text3)">☁️<div style="font-size:9px;margin-top:2px">Sincronizando</div></div>';
+          }
           h+='<div style="position:absolute;bottom:3px;left:3px;background:rgba(0,0,0,.55);border-radius:5px;padding:1px 5px;font-size:9px;color:#fff">'+upBy+' '+fmts(f.fecha).slice(0,5)+'</div>';
           h+='</div>';
           h+='<div style="position:absolute;top:3px;right:3px;display:flex;flex-direction:column;gap:3px">';
@@ -7015,8 +7041,8 @@ function openPerfilColab(colabId,tab){
       h+='<div class="empty">📥<div class="ts mt-8">Bandeja vacía</div><div class="txxs tc3 mt-4">Usá el botón ✅ para asignar tareas o checklists a este colaborador.</div></div>';
     } else {
       var uC={alta:'#dc2626',media:'#f59e0b',baja:'#16a34a'};
-      var eC={'nuevo':'var(--orange)','visto':'#0891b2','completado':'var(--green)'};
-      var eL={'nuevo':'📤 Enviado','visto':'👁 Visto','completado':'✅ Respondido'};
+      var eC={'nuevo':'var(--orange)','visto':'#0891b2','completado':'var(--green)','aceptado':'var(--green)','rechazado':'var(--red)'};
+      var eL={'nuevo':'📤 Enviado','visto':'👁 Visto','completado':'✅ Respondido','aceptado':'✅ Aceptado','rechazado':'❌ Rechazado'};
       msgs.forEach(function(m){
         var uc=uC[m.urgencia]||'#f59e0b';var ec=eC[m.estadoColab]||'var(--orange)';
         h+='<div class="card" style="padding:12px;margin-bottom:10px;border-left:3px solid '+uc+'">';
@@ -7055,9 +7081,21 @@ function openPerfilColab(colabId,tab){
           }
         }
         // Collaborator response
-        if(m.respuesta)h+='<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:12px"><span class="fw7" style="color:var(--green)">Respuesta del colaborador:</span><div class="mt-4">'+esc(m.respuesta)+'</div><div class="txxs tc3 mt-4">'+fmts(m.fechaRespuesta||'')+'</div></div>';
-        // Footer
-        h+='<button onclick="borrarMsgColab(\''+m.id+'\',\''+colabId+'\')" style="border:none;background:var(--gray-ll);color:var(--red);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer">🗑 Eliminar</button>';
+        if(m.respuesta)h+='<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:12px"><span class="fw7" style="color:var(--green)">✅ Respuesta del colaborador:</span><div class="mt-4">'+esc(m.respuesta)+'</div><div class="txxs tc3 mt-4">'+fmts(m.fechaRespuesta||'')+'</div></div>';
+        if(m.notaRechazo)h+='<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:12px"><span class="fw7" style="color:var(--red)">❌ Motivo de rechazo:</span><div class="mt-4">'+esc(m.notaRechazo)+'</div></div>';
+        // Footer actions
+        h+='<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">';
+        if(m.estadoColab==='completado'){
+          h+='<button onclick="aceptarMsgColab(\''+m.id+'\',\''+colabId+'\')" style="border:none;background:var(--green);color:#fff;border-radius:6px;padding:5px 12px;font-size:11px;cursor:pointer;font-weight:700">✅ Aceptar</button>';
+          if(m.entidadId){h+='<button onclick="editarEntidadDesdeColab(\''+m.tipo+'\',\''+m.entidadId+'\')" style="border:none;background:var(--cyan);color:#fff;border-radius:6px;padding:5px 12px;font-size:11px;cursor:pointer;font-weight:700">✏️ Editar tarea</button>';}
+          h+='<button onclick="rechazarMsgColab(\''+m.id+'\',\''+colabId+'\')" style="border:none;background:var(--red);color:#fff;border-radius:6px;padding:5px 12px;font-size:11px;cursor:pointer;font-weight:700">❌ Rechazar</button>';
+        } else if(m.estadoColab==='aceptado'){
+          h+='<span style="font-size:11px;color:var(--green);font-weight:700">✅ Completado y aceptado</span>';
+        } else if(m.estadoColab==='rechazado'){
+          h+='<span style="font-size:11px;color:var(--red);font-weight:700">❌ Rechazado</span>';
+        }
+        h+='<button onclick="borrarMsgColab(\''+m.id+'\',\''+colabId+'\')" style="border:none;background:var(--gray-ll);color:var(--red);border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;margin-left:auto">🗑</button>';
+        h+='</div>';
         h+='</div>';
       });
     }
@@ -7115,6 +7153,38 @@ function borrarMsgColab(msgId,colabId){
   D.mensajesColab=(D.mensajesColab||[]).filter(function(m){return m.id!==msgId;});
   sv();openPerfilColab(colabId,'bandeja');
 }
+function aceptarMsgColab(msgId,colabId){
+  var m=(D.mensajesColab||[]).find(function(x){return x.id===msgId;});
+  if(!m)return;
+  m.estadoColab='aceptado';m.updatedAt=nw();
+  // If it's a task, mark it as done in D.tareas
+  if(m.tipo==='tarea'&&m.entidadId){
+    var t=(D.tareas||[]).find(function(x){return x.id===m.entidadId;});
+    if(t){t.status='Completada';t.updatedAt=nw();}
+  }
+  sv();openPerfilColab(colabId,'bandeja');
+  toast('Tarea aceptada ✓','var(--green)');
+}
+function rechazarMsgColab(msgId,colabId){
+  var nota=prompt('Motivo del rechazo (opcional):');
+  if(nota===null)return; // cancelled
+  var m=(D.mensajesColab||[]).find(function(x){return x.id===msgId;});
+  if(!m)return;
+  m.estadoColab='rechazado';m.notaRechazo=nota||'';m.updatedAt=nw();
+  sv();openPerfilColab(colabId,'bandeja');
+  toast('Marcado como rechazado','var(--orange)');
+}
+function editarEntidadDesdeColab(tipo,entidadId){
+  document.getElementById('carpetaM')&&document.getElementById('carpetaM').remove();
+  if(tipo==='tarea'||tipo==='checklist'){
+    S.mod=tipo==='tarea'?'tareas':'checklist';
+    render();
+    setTimeout(function(){
+      if(tipo==='tarea'){var _fn=window.openEditTarea||window.editTarea;if(_fn)_fn(entidadId);}
+      else{var _fn2=window.openEditChecklist||window.editChecklist;if(_fn2)_fn2(entidadId);}
+    },200);
+  }
+}
 function openCarpeta(colabId){
   var co=(D.colaboradores||[]).find(function(x){return x.id===colabId;});if(!co)return;
   var cp=getCarpeta(colabId);var archivos=cp.archivos||[];
@@ -7161,9 +7231,15 @@ function openCarpeta(colabId){
         h+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:16px">';
         imgs.forEach(function(f,idx){
           var upBy=f.subidoPor==='col'?'👷':'🏗';
+          var _fok=f.data&&!f.data.startsWith('[foto')&&!f.data.startsWith('[arch');
           h+='<div style="position:relative">';
-          h+='<div style="position:relative;padding-bottom:100%;overflow:hidden;border-radius:8px;cursor:pointer;background:var(--gray-ll)" onclick="openCarpetaLightbox('+idx+')">';
-          h+='<img src="'+f.data+'" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'\';">';
+          h+='<div style="position:relative;padding-bottom:100%;overflow:hidden;border-radius:8px;cursor:pointer;background:var(--gray-ll)" onclick="'+(_fok?'openCarpetaLightbox('+idx+')':'void(0)')+'\">';
+          if(_fok){
+            h+='<img src="'+f.data+'" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">';
+            h+='<div style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;flex-direction:column;font-size:22px;color:var(--text3)">☁️<div style="font-size:9px;margin-top:2px">Sincronizando</div></div>';
+          } else {
+            h+='<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;font-size:22px;color:var(--text3)">☁️<div style="font-size:9px;margin-top:2px">Sincronizando</div></div>';
+          }
           h+='<div style="position:absolute;bottom:3px;left:3px;background:rgba(0,0,0,.55);border-radius:5px;padding:1px 5px;font-size:9px;color:#fff">'+upBy+' '+fmts(f.fecha).slice(0,5)+'</div>';
           h+='</div>';
           h+='<div style="position:absolute;top:3px;right:3px;display:flex;flex-direction:column;gap:3px">';
@@ -7498,9 +7574,51 @@ function exportEcoCSV(){
   document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
   toast('CSV descargado — abre con Excel');
 }
+// ═══════ PIN PROTECTION ═══════
+var _PIN_KEY='oc_pin';
+function _pinCheck(){
+  var pin=localStorage.getItem(_PIN_KEY);
+  if(!pin)return; // No PIN set → app opens normally
+  if(sessionStorage.getItem('oc_pin_ok')==='1')return; // Already unlocked this session
+  // Show overlay and block render until unlocked
+  var ov=document.getElementById('pin-overlay');
+  if(ov){ov.style.display='flex';setTimeout(function(){var inp=document.getElementById('pin-input');if(inp)inp.focus();},100);}
+}
+function _pinSubmit(){
+  var pin=localStorage.getItem(_PIN_KEY);
+  if(!pin){sessionStorage.setItem('oc_pin_ok','1');return;}
+  var inp=document.getElementById('pin-input');
+  var err=document.getElementById('pin-err');
+  if(!inp)return;
+  var val=inp.value.trim();
+  if(val===pin){
+    sessionStorage.setItem('oc_pin_ok','1');
+    var ov=document.getElementById('pin-overlay');
+    if(ov)ov.style.display='none';
+    render();
+  } else {
+    if(err)err.textContent='PIN incorrecto. Intentá de nuevo.';
+    inp.value='';
+    inp.focus();
+    inp.style.borderColor='var(--red)';
+    setTimeout(function(){if(inp)inp.style.borderColor='';},1200);
+  }
+}
+function _isPinLocked(){
+  var pin=localStorage.getItem(_PIN_KEY);
+  return pin&&sessionStorage.getItem('oc_pin_ok')!=='1';
+}
+function savePin(newPin){
+  if(!newPin){localStorage.removeItem(_PIN_KEY);toast('PIN eliminado — la app ya no pide contraseña');}
+  else{localStorage.setItem(_PIN_KEY,newPin);sessionStorage.setItem('oc_pin_ok','1');toast('PIN guardado ✓','var(--green)');}
+  render();
+}
+
 // ═══════ INIT ═══════
 // 1. Sync bootstrap from localStorage (immediate render)
-load();render();
+load();
+_pinCheck();
+if(!_isPinLocked())render();
 // 2b. Deep-link incoming report (#r=BASE64)
 (function(){
   try{
@@ -7522,8 +7640,9 @@ load();render();
         _cp.archivos.push(f);_added++;
       });
       sv();
+      // Guardar en IDB inmediatamente (no esperar scheduleSync) para proteger fotos de colaboradores
+      if(GD.idbReady) saveToIDB().catch(function(){});
       if(sub.obraId)S.proj=sub.obraId;
-      // Navigate to colaboradores so architect sees the files immediately
       S.mod='colaboradores';
       render();
       var _nom=sub.ayudante||'colaborador';
@@ -7729,7 +7848,9 @@ function rBandeja(mc,p){
     var vBdg=sub.version>1?'<span style="background:var(--gray-ll);color:var(--text3);font-size:9px;padding:1px 6px;border-radius:10px;margin-left:6px">v'+sub.version+'</span>':'';
     var btns=isPend?('<div class="flex gap-4" style="flex-shrink:0"><button class="btn btn-s" style="background:'+c2+';color:#fff;white-space:nowrap" onclick="incorporarFormularioModal(\''+sub.id+'\')">📥 Revisar</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="descartarFormulario(\''+sub.id+'\')">✕</button></div>'):('<div style="flex-shrink:0;text-align:right"><div class="txxs">'+stLbl+'</div><div class="flex gap-4 mt-6"><button class="btn btn-g btn-s" style="font-size:10px" onclick="incorporarFormularioModal(\''+sub.id+'\')">👁 Ver</button><button class="btn btn-s" style="font-size:10px;background:#dc2626;color:#fff" onclick="descartarFormulario(\''+sub.id+'\')">🗑</button></div></div>');
     var obraNm=sub.obraName||(D.projects&&D.projects.find(function(p2){return p2.id===(sub.obraId||sub.projectId);})||{}).name||'';
-    return '<div class="card" style="border-left:3px solid '+bc+';padding:12px;margin-bottom:8px"><div class="flex justify-between items-start gap-8"><div style="flex:1;min-width:0"><div class="ts fw7">👤 '+esc(sub.ayudante||'?')+vBdg+(obraNm?'<span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:6px">🏗 '+esc(obraNm)+'</span>':'')+'</div><div class="txxs tc3 mt-2">📅 '+fmts(sub.receivedAt||sub.fecha||'')+'</div><div class="txxs mt-6" style="color:var(--text2);line-height:1.6">'+subSummary(sub)+'</div></div>'+btns+'</div></div>';
+    var _regColab=(D.colaboradores||[]).find(function(c){return c.id===sub.token;});
+    var _dispName=_regColab?_regColab.name:sub.ayudante||'?';
+    return '<div class="card" style="border-left:3px solid '+bc+';padding:12px;margin-bottom:8px"><div class="flex justify-between items-start gap-8"><div style="flex:1;min-width:0"><div class="ts fw7">👤 '+esc(_dispName)+vBdg+(obraNm?'<span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:6px">🏗 '+esc(obraNm)+'</span>':'')+'</div><div class="txxs tc3 mt-2">📅 '+fmts(sub.receivedAt||sub.fecha||'')+'</div><div class="txxs mt-6" style="color:var(--text2);line-height:1.6">'+subSummary(sub)+'</div></div>'+btns+'</div></div>';
   }
   // Carpeta items nuevos (no vistos) para mostrar en Pendientes
   var newCarpetaGroups=[];
@@ -8213,7 +8334,19 @@ function notificarColabWA(colabId){
   var p=(D.projects||[]).find(function(x){return x.id===S.proj;});
   var msgs=(D.mensajesColab||[]).filter(function(m){return m.colabId===colabId&&m.proyectoId===S.proj;});
   var baseUrl=window.location.href.replace(/\/[^/]*(\?.*)?$/,'/form.html');
-  var msgsParam=msgs.length?'&msgs='+encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(msgs))))):'';
+  // Enrich msgs with full entity data (strip base64 photos to keep URL manageable)
+  var enrichedMsgs=msgs.map(function(m){
+    var ent=null;
+    if(m.tipo==='tarea')ent=(D.tareas||[]).find(function(t){return t.id===m.entidadId;})||null;
+    else if(m.tipo==='checklist')ent=(D.checklists||[]).find(function(c){return c.id===m.entidadId;})||null;
+    if(!ent)return m;
+    try{
+      var ec=JSON.parse(JSON.stringify(ent));
+      if(ec.photos)ec.photos=ec.photos.map(function(ph){return typeof ph==='string'?null:{url:(ph.url&&ph.url.startsWith('data:'))?null:ph.url,caption:ph.caption};}).filter(Boolean);
+      return Object.assign({},m,{_entidad:ec});
+    }catch(_e){return m;}
+  });
+  var msgsParam=enrichedMsgs.length?'&msgs='+encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(enrichedMsgs))))):'';
   var url=baseUrl+'?token='+encodeURIComponent(co.id)+'&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p&&p.name||'')+'&colName='+encodeURIComponent(co.name||'')+(SYNC.archTel?'&tel='+encodeURIComponent(SYNC.archTel):'')+'&sw='+(SYNC.sendWA?'1':'0')+'&se='+(SYNC.sendEmail?'1':'0')+msgsParam;
   var pendMsgs=msgs.filter(function(m){return m.estadoColab==='nuevo';});
   var resumen=pendMsgs.map(function(m){return '• '+esc(m.titulo);}).slice(0,5).join('\n');
