@@ -8805,9 +8805,12 @@ function confirmarAsignar(colId){
   sv();
   document.getElementById('asignarMod')?.remove();
   render();
-  toast(checks.length+' ítem'+(checks.length>1?'s':'')+' asignados ✓','var(--teal)',2500);
-  // Open collaborator portal so architect can see the portal with items loaded
-  setTimeout(function(){openColabPortal(colId);},400);
+  var _coA=(D.colaboradores||[]).find(function(c){return c.id===colId;});
+  toast(checks.length+' ítem'+(checks.length>1?'s':'')+' asignados a '+(_coA&&_coA.name||'colaborador')+' ✓','var(--teal)',2500);
+  setTimeout(function(){
+    if(_coA&&_coA.phone){notificarColabWA(colId);}
+    else{toast('⚠️ El colaborador no tiene teléfono — entrá a su perfil para notificarlo','var(--orange)',4500);}
+  },400);
 }
 function confirmarShareToInbox(tipo,entidadId,titulo){
   var colId=document.getElementById('sti_col')?.value;
@@ -8819,8 +8822,12 @@ function confirmarShareToInbox(tipo,entidadId,titulo){
   sv();
   document.getElementById('stiMod')?.remove();
   var co=(D.colaboradores||[]).find(function(c){return c.id===colId;});
-  toast('Enviado a bandeja de '+(co&&co.name||'colaborador')+' ✓','var(--teal)',2500);
+  toast('Asignado a '+(co&&co.name||'colaborador')+' ✓','var(--teal)',2500);
   render();
+  setTimeout(function(){
+    if(co&&co.phone){notificarColabWA(colId);}
+    else{toast('⚠️ El colaborador no tiene teléfono — entrá a su perfil para notificarlo','var(--orange)',4500);}
+  },400);
 }
 function shareFormContextual(categoria,entidadId,titulo){
   if(!SYNC.archTel&&!SYNC.archEmail){toast('Configurá tu WhatsApp o email en Configuración → Informes de campo','var(--orange)');return;}

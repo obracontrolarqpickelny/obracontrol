@@ -562,7 +562,7 @@ var tipoLabels={checklist:'✅ Checklist',tarea:'📋 Tarea',nota:'📝 Nota'};
 function renderBandeja(){
   var el=$('bdj-content');if(!el)return;
   if(!INBOX_MSGS.length){
-    el.innerHTML='<div class="empty-tab"><div class="e-icon">📭</div><div class="e-txt">No hay ítems en tu bandeja.</div></div>';
+    el.innerHTML='<div class="empty-tab"><div class="e-icon">📭</div><div class="e-txt">Tu bandeja está vacía.</div><div style="font-size:12px;color:var(--text3);margin-top:8px;line-height:1.5">El arquitecto no te ha enviado tareas ni checklists todavía,<br>o estás usando un link anterior.<br><strong>Pedile que te reenvíe el link actualizado.</strong></div></div>';
     return;
   }
   // Sort by urgency then date
@@ -929,11 +929,13 @@ function enviarTodo(){
   // Build message
   var msg='📋 Reporte de obra: '+OBRA_NAME+'\n👤 '+colabName+(sendCount>1?' · v'+sendCount:'')+'\n'+deepLink;
 
-  var sentWA=false, sentMail=false;
-  if(SEND_WA&&ARCH_TEL){
-    var tel=ARCH_TEL.replace(/[^0-9]/g,'');
-    window.open('https://wa.me/'+tel+'?text='+encodeURIComponent(msg),'_blank');
+  var sentWA=false, sentMail=false, sentWADirect=false;
+  if(SEND_WA){
+    var _tel=ARCH_TEL?ARCH_TEL.replace(/[^0-9]/g,''):'';
+    var waUrl=_tel?'https://wa.me/'+_tel+'?text='+encodeURIComponent(msg):'https://wa.me/?text='+encodeURIComponent(msg);
+    window.open(waUrl,'_blank');
     sentWA=true;
+    sentWADirect=!!_tel;
   }
   if(SEND_EMAIL&&ARCH_MAIL){
     var subject=encodeURIComponent('Reporte de obra: '+OBRA_NAME+' — '+colabName);
@@ -953,10 +955,11 @@ function enviarTodo(){
   $('btnNuevo').style.display='flex';
 
   var subLine=[];
-  if(sentWA) subLine.push('WhatsApp');
+  if(sentWA&&sentWADirect) subLine.push('WhatsApp');
   if(sentMail) subLine.push('email');
-  $('successSub').textContent=subLine.length?'Enviado por '+subLine.join(' y ')+'. El arquitecto lo recibirá al abrir el link.':'Copiá el link de abajo y enviáselo al arquitecto por WhatsApp.';
-  _renderFormSuccess(deepLink,sentWA,sentMail);
+  var _sub=sentWA&&!sentWADirect?'📱 WhatsApp se abrió — elegí al arquitecto entre tus contactos y enviá el mensaje.':subLine.length?'Enviado por '+subLine.join(' y ')+'. El arquitecto lo recibirá al abrir el link.':'Copiá el link de abajo y enviáselo al arquitecto.';
+  $('successSub').textContent=_sub;
+  _renderFormSuccess(deepLink,sentWA,sentMail,sentWADirect);
   $('versionBadge').textContent=sendCount===1?'Versión 1 — original':'Versión '+sendCount+' — editado '+(sendCount-1)+' '+(sendCount===2?'vez':'veces');
 
   // Show photos to share separately if any
@@ -1012,12 +1015,21 @@ function _copyHistLink(idx){
   if(navigator.clipboard){navigator.clipboard.writeText(e.deepLink).then(function(){if(btn){btn.textContent='✓ Copiado';setTimeout(function(){if(btn)btn.textContent='📋 Copiar link';},2000);}}).catch(function(){_fbCopy(e.deepLink);});}
   else{_fbCopy(e.deepLink);if(btn){btn.textContent='✓ Copiado';setTimeout(function(){if(btn)btn.textContent='📋 Copiar link';},2000);}}
 }
-function _renderFormSuccess(deepLink,sentWA,sentMail){
+function _renderFormSuccess(deepLink,sentWA,sentMail,sentWADirect){
   var ls=$('linkShareSection');
   if(ls){
     var ok=sentWA||sentMail;
-    var bg=ok?'#f0fdf4':'#fff7ed';var brd=ok?'#bbf7d0':'#fed7aa';
-    var msg=ok?'✅ Enviado. Como respaldo, copiá también el link:':'⚠️ No se pudo enviar automáticamente.<br>Copiá este link y enviáselo al arquitecto por WhatsApp o mensaje:';
+    var bg,brd,msg;
+    if(sentWA&&!sentWADirect){
+      bg='#eff6ff';brd='#bfdbfe';
+      msg='📱 <strong>WhatsApp se abrió</strong> — elegí al arquitecto en tus contactos y tocá Enviar.<br><span style="font-weight:400;font-size:11px">Si se cerró antes de enviar, usá el botón de abajo como respaldo.</span>';
+    } else if(ok){
+      bg='#f0fdf4';brd='#bbf7d0';
+      msg='✅ Enviado. Si necesitás reenviar, copiá el link:';
+    } else {
+      bg='#fff7ed';brd='#fed7aa';
+      msg='⚠️ No se pudo enviar automáticamente.<br>Copiá este link y enviáselo al arquitecto:';
+    }
     ls.innerHTML='<div style="background:'+bg+';border:1px solid '+brd+';border-radius:10px;padding:12px;margin-bottom:4px">'
       +'<div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:8px">'+msg+'</div>'
       +'<button id="_copyLinkBtn" onclick="_copyFormLink()" style="width:100%;padding:11px;background:var(--teal);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">📋 Copiar link del informe</button>'
