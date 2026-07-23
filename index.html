@@ -8684,13 +8684,13 @@ function shareFormColaborador(colId){
   if(!SYNC.archTel&&!SYNC.archEmail){toast('Configurá tu WhatsApp o email en Configuración → Informes de campo','var(--orange)');return;}
   var p=D.projects.find(function(x){return x.id===S.proj;});
   var baseUrl=window.location.href.replace(/\/[^/]*(\?.*)?$/,'/form.html');
-  var formUrl=baseUrl+'?token='+encodeURIComponent(co.id)+'&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p&&p.name||'')+(SYNC.archTel?'&tel='+encodeURIComponent(SYNC.archTel):'')+(SYNC.archEmail?'&mail='+encodeURIComponent(SYNC.archEmail):'')+'&sw='+(SYNC.sendWA?'1':'0')+'&se='+(SYNC.sendEmail?'1':'0');
+  var formUrl=baseUrl+'?token='+encodeURIComponent(co.id)+'&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p&&p.name||'')+(SYNC.archTel?'&tel='+encodeURIComponent(SYNC.archTel):'')+(SYNC.archEmail?'&mail='+encodeURIComponent(SYNC.archEmail):'')+'&sw=1&se='+(SYNC.sendEmail?'1':'0');
   var isAcept=co.estado==='aceptado'||co.estado==='activo';
   var msg=isAcept
     ?encodeURIComponent('📋 '+(co.name||'')+', recordatorio de informe — obra '+((p&&p.name)||'')+':\n'+formUrl)
     :encodeURIComponent('Hola '+(co.name||'')+', te invito a colaborar en la obra '+((p&&p.name)||'')+'. Accedé con este link para enviarme reportes:\n'+formUrl);
   window.open('whatsapp://send?phone='+co.phone.replace(/[^0-9]/g,'')+'&text='+msg,'_blank');
-  if(co.estado==='pendiente'){co.estado='aceptado';co.updatedAt=nw();sv();render();}
+  // NO cambiar estado aquí — se cambia solo cuando el colaborador abre el link
 }
 function notificarColabWA(colabId){
   var co=(D.colaboradores||[]).find(function(c){return c.id===colabId;});if(!co||!co.phone)return;
@@ -8711,7 +8711,7 @@ function notificarColabWA(colabId){
     }catch(_e){return m;}
   });
   var msgsParam=enrichedMsgs.length?'&msgs='+encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(enrichedMsgs))))):'';
-  var url=baseUrl+'?token='+encodeURIComponent(co.id)+'&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p&&p.name||'')+'&colName='+encodeURIComponent(co.name||'')+(SYNC.archTel?'&tel='+encodeURIComponent(SYNC.archTel):'')+'&sw='+(SYNC.sendWA?'1':'0')+'&se='+(SYNC.sendEmail?'1':'0')+msgsParam;
+  var url=baseUrl+'?token='+encodeURIComponent(co.id)+'&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p&&p.name||'')+'&colName='+encodeURIComponent(co.name||'')+(SYNC.archTel?'&tel='+encodeURIComponent(SYNC.archTel):'')+'&sw=1&se='+(SYNC.sendEmail?'1':'0')+msgsParam;
   var pendMsgs=msgs.filter(function(m){return m.estadoColab==='nuevo';});
   var resumen=pendMsgs.map(function(m){return '• '+esc(m.titulo);}).slice(0,5).join('\n');
   var texto='Hola '+(co.name||'')+' 👋 Tenés '+(pendMsgs.length)+' notificación'+(pendMsgs.length>1?'es':'')+' nueva'+(pendMsgs.length>1?'s':'')+' en ObraControl — obra '+(p?p.name:'')+':'+(resumen?'\n'+resumen:'')+'\n\nIngresá con este link:\n'+url;
@@ -8735,7 +8735,7 @@ function openColabPortal(colId){
     }catch(_e){return m;}
   });
   var msgsParam=enrichedMsgs.length?'&msgs='+encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(enrichedMsgs))))):'';
-  var url=baseUrl+'?token='+encodeURIComponent(co.id)+'&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p&&p.name||'')+'&colName='+encodeURIComponent(co.name||'')+(SYNC.archTel?'&tel='+encodeURIComponent(SYNC.archTel):'')+(SYNC.archEmail?'&mail='+encodeURIComponent(SYNC.archEmail):'')+'&sw='+(SYNC.sendWA?'1':'0')+'&se='+(SYNC.sendEmail?'1':'0')+msgsParam;
+  var url=baseUrl+'?token='+encodeURIComponent(co.id)+'&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p&&p.name||'')+'&colName='+encodeURIComponent(co.name||'')+(SYNC.archTel?'&tel='+encodeURIComponent(SYNC.archTel):'')+(SYNC.archEmail?'&mail='+encodeURIComponent(SYNC.archEmail):'')+'&sw=1&se='+(SYNC.sendEmail?'1':'0')+msgsParam;
   window.open(url,'_blank');
 }
 function shareToInbox(tipo,entidadId,titulo){
@@ -8840,7 +8840,7 @@ function shareFormContextual(categoria,entidadId,titulo){
   var baseUrl=window.location.href.replace(/\/[^/]*(\?.*)?$/,'/form.html');
   window._sfcUrls=[];
   colabs.forEach(function(co){
-    var formUrl=baseUrl+'?token='+encodeURIComponent(co.id)+'&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p&&p.name||'')+(SYNC.archTel?'&tel='+encodeURIComponent(SYNC.archTel):'')+(SYNC.archEmail?'&mail='+encodeURIComponent(SYNC.archEmail):'')+'&sw='+(SYNC.sendWA?'1':'0')+'&se='+(SYNC.sendEmail?'1':'0');
+    var formUrl=baseUrl+'?token='+encodeURIComponent(co.id)+'&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p&&p.name||'')+(SYNC.archTel?'&tel='+encodeURIComponent(SYNC.archTel):'')+(SYNC.archEmail?'&mail='+encodeURIComponent(SYNC.archEmail):'')+'&sw=1&se='+(SYNC.sendEmail?'1':'0');
     var msg='Hola '+(co.name||'')+', necesito que completes el informe de '+categoria+(titulo?' — '+titulo:'')+' en la obra '+((p&&p.name)||'')+':\n'+formUrl;
     window._sfcUrls.push('whatsapp://send?phone='+co.phone.replace(/[^0-9]/g,'')+'&text='+encodeURIComponent(msg));
   });

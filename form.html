@@ -328,7 +328,7 @@ var OBRA_NAME=P.get('obraName')||P.get('obra')||'';
 var MODE    =P.get('mode')||'';
 var ARCH_TEL=P.get('tel')||'';
 var ARCH_MAIL=P.get('mail')||'';
-var SEND_WA =(P.get('sw')||'1')==='1';
+var SEND_WA = true; // siempre intenta enviar — el colaborador siempre puede reportar
 var SEND_EMAIL=(P.get('se')||'0')==='1';
 var APP_URL =window.location.href.replace(/\/form\.html.*/,'/index.html');
 
@@ -930,12 +930,19 @@ function enviarTodo(){
   var msg='📋 Reporte de obra: '+OBRA_NAME+'\n👤 '+colabName+(sendCount>1?' · v'+sendCount:'')+'\n'+deepLink;
 
   var sentWA=false, sentMail=false, sentWADirect=false;
-  if(SEND_WA){
-    var _tel=ARCH_TEL?ARCH_TEL.replace(/[^0-9]/g,''):'';
-    var waUrl=_tel?'https://wa.me/'+_tel+'?text='+encodeURIComponent(msg):'https://wa.me/?text='+encodeURIComponent(msg);
-    window.open(waUrl,'_blank');
-    sentWA=true;
-    sentWADirect=!!_tel;
+  var _tel=ARCH_TEL?ARCH_TEL.replace(/[^0-9]/g,''):'';
+  if(navigator.share){
+    // Native share sheet (Android/iOS) — el más fluido
+    navigator.share({title:'Reporte ObraControl',text:msg}).catch(function(){});
+    sentWA=true;sentWADirect=!!_tel;
+  } else if(_tel){
+    // WhatsApp directo al número del arquitecto
+    window.open('whatsapp://send?phone='+_tel+'&text='+encodeURIComponent(msg),'_blank');
+    sentWA=true;sentWADirect=true;
+  } else {
+    // Fallback: WA sin número específico
+    window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+    sentWA=true;sentWADirect=false;
   }
   if(SEND_EMAIL&&ARCH_MAIL){
     var subject=encodeURIComponent('Reporte de obra: '+OBRA_NAME+' — '+colabName);
