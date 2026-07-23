@@ -888,14 +888,15 @@ function encodeSubmission(data){
   noPhoto.materialesExistentes.forEach(function(m){m.foto=null;});
   if(noPhoto.checklist) noPhoto.checklist.foto=null;
 
-  // try with photos
-  var withPhoto=JSON.stringify(data);
+  // Encoding compacto: btoa(unescape(encodeURIComponent(json))) — mucho más corto que btoa(encodeURIComponent(json))
+  function _enc(obj){return btoa(unescape(encodeURIComponent(JSON.stringify(obj))));}
   var encoded;
   var photosStripped=false;
-  if(withPhoto.length<=80000){
-    encoded=btoa(encodeURIComponent(withPhoto));
+  var withPhotoEnc=_enc(data);
+  if(withPhotoEnc.length<=12000){
+    encoded=withPhotoEnc;
   } else {
-    encoded=btoa(encodeURIComponent(JSON.stringify(noPhoto)));
+    encoded=_enc(noPhoto);
     photosStripped=true;
   }
   return {encoded:encoded,photosStripped:photosStripped};

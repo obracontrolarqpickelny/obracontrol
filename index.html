@@ -7948,10 +7948,12 @@ if(!_isPinLocked())render();
     var h=window.location.hash;
     if(!h.startsWith('#r='))return;
     var enc=h.slice(3);
-    // Support both old encoding (btoa(encodeURIComponent(json))) and new (btoa(unescape(encodeURIComponent(json))))
+    // En caso de que WhatsApp u otro intermediario haya percent-encodeado el hash (+ → %2B, / → %2F, = → %3D)
+    try{enc=decodeURIComponent(enc);}catch(_){}
+    // Soporte encoding compacto (btoa(unescape(encodeURIComponent(json)))) y encoding viejo (btoa(encodeURIComponent(json)))
     var sub;
-    try{sub=JSON.parse(decodeURIComponent(atob(enc)));}
-    catch(_){sub=JSON.parse(decodeURIComponent(escape(atob(enc))));}
+    try{sub=JSON.parse(decodeURIComponent(escape(atob(enc))));}
+    catch(_){try{sub=JSON.parse(decodeURIComponent(atob(enc)));}catch(__){throw new Error('No se pudo decodificar el reporte');}}
     history.replaceState(null,'',window.location.pathname+window.location.search);
     function _processCarpeta(sub){
       if(!D.carpetas)D.carpetas=[];
@@ -7990,10 +7992,14 @@ if(!_isPinLocked())render();
         toast(_nom+' respondió '+_n+' ítem'+(_n>1?'s':'')+' de la bandeja ✓','var(--green)',4000);}
       return;
     }
-    if(!sub||!sub.ayudante)return;
-    // Check if token is revoked
+    // Look up registered collaborator from token BEFORE any guard checks
     var co=(D.colaboradores||[]).find(function(c){return c.id===sub.token;});
-    if(co&&co.estado==='revocado'){toast('Envío de '+sub.ayudante+' descartado (colaborador dado de baja)','var(--orange)',5000);return;}
+    // Fill in name from architect's registered record if collaborator didn't set one
+    if(!sub.ayudante&&co)sub.ayudante=co.name||'Colaborador';
+    if(!sub.ayudante)sub.ayudante='Colaborador';
+    // Guard: need at least token or obra to identify source
+    if(!sub.token&&!sub.obraId)return;
+    if(co&&co.estado==='revocado'){toast('Envío de '+(co.name||sub.ayudante)+' descartado (colaborador dado de baja)','var(--orange)',5000);return;}
     if(co&&co.estado==='pendiente'){co.estado='aceptado';co.updatedAt=nw();}
     // Check project match
     if(sub.obraId&&D.projects&&!D.projects.find(function(p){return p.id===sub.obraId;})){toast('El reporte es de una obra no encontrada en esta app','var(--orange)',5000);return;}
@@ -8010,7 +8016,7 @@ if(!_isPinLocked())render();
     if(sub.obraId)S.proj=sub.obraId;
     S.mod='bandeja';
     render();
-    toast('Nuevo reporte de '+(co?co.name:sub.ayudante||'colaborador')+' recibido','#0d9488',4000);
+    toast('Nuevo reporte de '+(co?co.name:sub.ayudante)+' recibido','#0d9488',4000);
   }catch(e){console.error('deep-link parse error',e);toast('Error al procesar el reporte recibido: '+e.message,'var(--red)',6000);}
 })();
 // 2. Async: init IDB + attempt Drive load in background
