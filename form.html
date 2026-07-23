@@ -252,6 +252,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="success-title">¡Enviado!</div>
     <div class="success-sub" id="successSub">El arquitecto ya lo recibió.</div>
     <div class="version-badge" id="versionBadge">Versión 1</div>
+    <div id="linkShareSection" style="width:100%;max-width:380px;margin-bottom:12px;text-align:left"></div>
     <div class="photos-to-share" id="photosSection" style="display:none">
       <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:4px">📸 Fotos del informe — enviá también estas por WhatsApp</div>
       <div class="photos-grid" id="photosGrid"></div>
@@ -260,6 +261,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="btn btn-sec" onclick="editarYReenviar()">✏️ Editar y reenviar</button>
       <button class="btn btn-sec" onclick="nuevoFormulario()">+ Nuevo informe</button>
     </div>
+    <div id="historialSection" style="width:100%;max-width:380px;margin-top:8px;text-align:left"></div>
   </div>
 </div>
 
@@ -940,6 +942,9 @@ function enviarTodo(){
     sentMail=true;
   }
 
+  // Save to local historial before showing success
+  _saveFormHist(data,deepLink);
+
   // Success screen
   $('screenForm').classList.remove('active');
   $('screenSuccess').classList.add('active');
@@ -950,7 +955,8 @@ function enviarTodo(){
   var subLine=[];
   if(sentWA) subLine.push('WhatsApp');
   if(sentMail) subLine.push('email');
-  $('successSub').textContent='Enviado por '+(subLine.join(' y '))+'. El arquitecto lo recibirá al abrir el link.';
+  $('successSub').textContent=subLine.length?'Enviado por '+subLine.join(' y ')+'. El arquitecto lo recibirá al abrir el link.':'Copiá el link de abajo y enviáselo al arquitecto por WhatsApp.';
+  _renderFormSuccess(deepLink,sentWA,sentMail);
   $('versionBadge').textContent=sendCount===1?'Versión 1 — original':'Versión '+sendCount+' — editado '+(sendCount-1)+' '+(sendCount===2?'vez':'veces');
 
   // Show photos to share separately if any
@@ -967,6 +973,72 @@ function enviarTodo(){
 
   btn.disabled=false;btn.textContent='📤 Enviar todo';
   window.scrollTo(0,0);
+}
+
+// ── Historial local de informes ──────────────────
+var _HIST_KEY='oc_form_hist_'+(TOKEN||OBRA_ID||'anon');
+var _formHistorial=[];
+function _loadFormHist(){try{_formHistorial=JSON.parse(localStorage.getItem(_HIST_KEY)||'[]');}catch(_){_formHistorial=[];}}
+function _saveFormHist(data,deepLink){
+  try{
+    _loadFormHist();
+    var noP=JSON.parse(JSON.stringify(data));
+    noP.movimientos&&noP.movimientos.forEach(function(m){m.foto=null;});
+    noP.tareas&&noP.tareas.forEach(function(t){t.foto=null;});
+    noP.materialesExistentes&&noP.materialesExistentes.forEach(function(m){m.foto=null;});
+    if(noP.checklist)noP.checklist.foto=null;
+    var pts=[];
+    if(data.mensajeGeneral)pts.push('💬 '+data.mensajeGeneral.slice(0,40));
+    if((data.movimientos||[]).length)pts.push('💰 '+data.movimientos.length+' mov.');
+    if((data.tareas||[]).length)pts.push('📋 '+data.tareas.length+' tarea'+(data.tareas.length>1?'s':''));
+    if(data.checklist&&data.checklist.titulo)pts.push('✅ '+data.checklist.titulo);
+    _formHistorial=_formHistorial.filter(function(e){return e.id!==data.id;});
+    _formHistorial.unshift({id:data.id,fecha:data.fecha,version:data.version||1,deepLink:deepLink,obraName:OBRA_NAME,resumen:pts.join(' · ')||'Informe'});
+    if(_formHistorial.length>20)_formHistorial=_formHistorial.slice(0,20);
+    localStorage.setItem(_HIST_KEY,JSON.stringify(_formHistorial));
+  }catch(e){console.warn('hist:',e);}
+}
+function _copyFormLink(){
+  var lnk=window._lastDeepLink||'';if(!lnk)return;
+  function _fbCopy(t){var ta=document.createElement('textarea');ta.value=t;ta.style.cssText='position:fixed;opacity:0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');}catch(_){}document.body.removeChild(ta);}
+  var btn=$('_copyLinkBtn');
+  if(navigator.clipboard){navigator.clipboard.writeText(lnk).then(function(){if(btn){btn.textContent='✓ ¡Copiado!';btn.style.background='#16a34a';setTimeout(function(){if(btn){btn.textContent='📋 Copiar link del informe';btn.style.background=''}},2500);}}).catch(function(){_fbCopy(lnk);});}
+  else{_fbCopy(lnk);if(btn){btn.textContent='✓ ¡Copiado!';setTimeout(function(){if(btn)btn.textContent='📋 Copiar link del informe';},2500);}}
+}
+function _copyHistLink(idx){
+  var e=_formHistorial[idx];if(!e||!e.deepLink)return;
+  var btn=$('_histBtn_'+idx);
+  function _fbCopy(t){var ta=document.createElement('textarea');ta.value=t;ta.style.cssText='position:fixed;opacity:0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');}catch(_){}document.body.removeChild(ta);}
+  if(navigator.clipboard){navigator.clipboard.writeText(e.deepLink).then(function(){if(btn){btn.textContent='✓ Copiado';setTimeout(function(){if(btn)btn.textContent='📋 Copiar link';},2000);}}).catch(function(){_fbCopy(e.deepLink);});}
+  else{_fbCopy(e.deepLink);if(btn){btn.textContent='✓ Copiado';setTimeout(function(){if(btn)btn.textContent='📋 Copiar link';},2000);}}
+}
+function _renderFormSuccess(deepLink,sentWA,sentMail){
+  var ls=$('linkShareSection');
+  if(ls){
+    var ok=sentWA||sentMail;
+    var bg=ok?'#f0fdf4':'#fff7ed';var brd=ok?'#bbf7d0':'#fed7aa';
+    var msg=ok?'✅ Enviado. Como respaldo, copiá también el link:':'⚠️ No se pudo enviar automáticamente.<br>Copiá este link y enviáselo al arquitecto por WhatsApp o mensaje:';
+    ls.innerHTML='<div style="background:'+bg+';border:1px solid '+brd+';border-radius:10px;padding:12px;margin-bottom:4px">'
+      +'<div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:8px">'+msg+'</div>'
+      +'<button id="_copyLinkBtn" onclick="_copyFormLink()" style="width:100%;padding:11px;background:var(--teal);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">📋 Copiar link del informe</button>'
+      +'</div>';
+  }
+  _loadFormHist();
+  var hs=$('historialSection');
+  if(hs&&_formHistorial.length>1){
+    var h='<div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:8px;margin-top:4px">📋 Informes anteriores</div>';
+    _formHistorial.slice(1,7).forEach(function(e,i){
+      var idx=i+1;
+      var d=new Date(e.fecha);
+      var dl=d.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit'})+' '+d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+      h+='<div style="background:var(--white);border:1px solid var(--brd);border-radius:8px;padding:10px;margin-bottom:6px">';
+      h+='<div style="font-size:12px;font-weight:700;margin-bottom:2px">v'+e.version+' — '+dl+'</div>';
+      if(e.resumen)h+='<div style="font-size:10px;color:var(--text3);margin-bottom:6px">'+esc(e.resumen)+'</div>';
+      h+='<button id="_histBtn_'+idx+'" onclick="_copyHistLink('+idx+')" style="width:100%;padding:7px;background:var(--gray-ll);color:var(--text2);border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">📋 Copiar link</button>';
+      h+='</div>';
+    });
+    hs.innerHTML=h;
+  }else if(hs){hs.innerHTML='';}
 }
 
 function editarYReenviar(){
