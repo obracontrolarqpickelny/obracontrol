@@ -8022,8 +8022,16 @@ if(!_isPinLocked())render();
     const DATA_KEYS=['projects','visitas','tareas','materiales','matIngresos',
                      'alertas','checklists','documentos','enlaces','comentarios',
                      'colaboradores','economia','auditLog',
-                     'mensajesColab','formulariosPendientes','carpetas'];
+                     'carpetas'];
     DATA_KEYS.forEach(k=>{if(idbData[k]!==undefined)D[k]=idbData[k];});
+    // formulariosPendientes y mensajesColab: merge additive (no reemplazar — pueden tener datos de deep-link recibidos antes de que IDB cargue)
+    ['formulariosPendientes','mensajesColab'].forEach(function(k){
+      if(!idbData[k]||!idbData[k].length)return;
+      var curr=D[k]||[];
+      var currIds={};curr.forEach(function(x){if(x.id)currIds[x.id]=true;});
+      idbData[k].forEach(function(item){if(item.id&&!currIds[item.id]){curr.push(item);currIds[item.id]=true;}});
+      D[k]=curr;
+    });
     // Preserve live session state — never overwrite
     if(idbData.driveConfig)D.driveConfig={...D.driveConfig,...idbData.driveConfig};
     if(idbData.lastSync)D.lastSync=idbData.lastSync;
