@@ -600,18 +600,19 @@ function renderBandeja(){
         h+='<div style="font-size:10px;color:#94a3b8;margin-top:6px">'+doneN+'/'+ent.items.length+' completados</div>';
         h+='</div>';
       } else if(msg.tipo==='tarea'){
-        if(ent.descripcion||ent.desc){
+        if(ent.description||ent.descripcion||ent.desc){
           h+='<div style="background:#f8fafc;border-radius:8px;padding:10px;margin-bottom:10px;border:1px solid #e2e8f0">';
           h+='<div style="font-size:11px;font-weight:700;color:#64748b;margin-bottom:4px">📋 Descripción</div>';
-          h+='<div style="font-size:13px;color:#1e293b;white-space:pre-wrap;line-height:1.5">'+esc(ent.descripcion||ent.desc)+'</div>';
+          h+='<div style="font-size:13px;color:#1e293b;white-space:pre-wrap;line-height:1.5">'+esc(ent.description||ent.descripcion||ent.desc)+'</div>';
           h+='</div>';
         }
-        // Checklist items inside task
-        if((ent.checklistItems||ent.items||[]).length){
-          var tItems=ent.checklistItems||ent.items||[];
+        // Linked checklist embedded by notificarColabWA/_checklist
+        var _tChkItems=ent._checklist?(ent._checklist.items||[]):ent.checklistItems||ent.items||[];
+        var _tChkTitle=ent._checklist?(ent._checklist.title||'Checklist'):'Checklist';
+        if(_tChkItems.length){
           h+='<div style="background:#f8fafc;border-radius:8px;padding:10px;margin-bottom:10px;border:1px solid #e2e8f0">';
-          h+='<div style="font-size:11px;font-weight:700;color:#64748b;margin-bottom:6px">✅ Checklist</div>';
-          tItems.forEach(function(it){
+          h+='<div style="font-size:11px;font-weight:700;color:#64748b;margin-bottom:6px">✅ '+esc(_tChkTitle)+'</div>';
+          _tChkItems.forEach(function(it){
             h+='<div style="display:flex;align-items:flex-start;gap:6px;padding:3px 0;font-size:13px">';
             h+='<span style="color:'+(it.done?'#16a34a':'#94a3b8')+';flex-shrink:0">'+(it.done?'☑':'☐')+'</span>';
             h+='<span style="color:'+(it.done?'#64748b':'#1e293b')+';text-decoration:'+(it.done?'line-through':'none')+'">'+esc(it.text||it.label||'')+'</span>';
@@ -619,11 +620,21 @@ function renderBandeja(){
           });
           h+='</div>';
         }
-        // Status / priority
+        // Photos (Drive URLs only, no base64)
+        var _tPhotos=(ent.photos||[]).filter(function(ph){return ph&&ph.url&&!ph.url.startsWith('data:');});
+        if(_tPhotos.length){
+          h+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">';
+          _tPhotos.forEach(function(ph){h+='<img src="'+ph.url+'" style="width:72px;height:72px;object-fit:cover;border-radius:6px;border:1px solid #e2e8f0">';});
+          h+='</div>';
+        }
+        // Status / priority / extras
         var extras=[];
         if(ent.prioridad||ent.priority){var pr=ent.prioridad||ent.priority;extras.push(({alta:'🔴 Alta',media:'🟡 Media',baja:'🟢 Baja'}[pr]||pr));}
+        if(ent.rubro)extras.push('🏗 '+esc(ent.rubro));
+        if(ent.encargado)extras.push('👤 '+esc(ent.encargado));
+        if(ent.dueDate)extras.push('📅 '+esc(ent.dueDate));
         if(ent.status)extras.push('Estado: '+esc(ent.status));
-        if(extras.length)h+='<div style="font-size:11px;color:#64748b;margin-bottom:8px">'+extras.join(' · ')+'</div>';
+        if(extras.length)h+='<div style="font-size:11px;color:#64748b;margin-bottom:8px;line-height:1.8">'+extras.join(' · ')+'</div>';
       }
     }
     if(!isDone){
