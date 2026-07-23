@@ -8001,8 +8001,8 @@ if(!_isPinLocked())render();
     if(!sub.token&&!sub.obraId)return;
     if(co&&co.estado==='revocado'){toast('Envío de '+(co.name||sub.ayudante)+' descartado (colaborador dado de baja)','var(--orange)',5000);return;}
     if(co&&co.estado==='pendiente'){co.estado='aceptado';co.updatedAt=nw();}
-    // Check project match
-    if(sub.obraId&&D.projects&&!D.projects.find(function(p){return p.id===sub.obraId;})){toast('El reporte es de una obra no encontrada en esta app','var(--orange)',5000);return;}
+    // Check project match (solo rechazar si hay proyectos cargados pero ninguno coincide)
+    if(sub.obraId&&D.projects&&D.projects.length&&!D.projects.find(function(p){return p.id===sub.obraId;})){toast('El reporte es de una obra no encontrada en esta app','var(--orange)',5000);return;}
     sub.receivedAt=new Date().toISOString();
     sub.estado='pendiente';
     if(!sub.id)sub.id=Date.now().toString(36);
