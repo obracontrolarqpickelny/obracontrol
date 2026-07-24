@@ -143,6 +143,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <button class="tab" id="tab-mrec" onclick="showTab('mrec')">📬 Ingresados<span class="tab-badge" id="badge-mrec" style="display:none">✓</span><span class="tab-count" id="count-mrec" style="display:none"></span></button>
     <button class="tab" id="tab-chk" onclick="showTab('chk')">✅ Checklist<span class="tab-badge" id="badge-chk" style="display:none">✓</span></button>
     <button class="tab" id="tab-bdj" onclick="showTab('bdj')">📥 Bandeja<span class="tab-badge" id="badge-bdj" style="display:none;background:var(--red)">!</span><span class="tab-count" id="count-bdj" style="display:none"></span></button>
+    <button class="tab" id="tab-hist" onclick="showTab('hist')">📋 Historial<span class="tab-count" id="count-hist" style="display:none"></span></button>
   </div>
   <!-- Carpeta bar -->
   <div id="carpetaBar" style="display:none;padding:8px 14px;background:#f0fdf4;border-top:1px solid #bbf7d0;border-bottom:1px solid #bbf7d0">
@@ -223,6 +224,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="tab-pane" id="pane-bdj">
       <div id="bdj-content">
         <div class="empty-tab"><div class="e-icon">📭</div><div class="e-txt">Cargando bandeja...</div></div>
+      </div>
+    </div>
+
+    <!-- Tab: Historial de informes enviados -->
+    <div class="tab-pane" id="pane-hist">
+      <div id="hist-content">
+        <div class="empty-tab"><div class="e-icon">📋</div><div class="e-txt">Cargando historial...</div></div>
       </div>
     </div>
 
@@ -529,7 +537,7 @@ function openCarpetaTab(){
 // ── Tabs ────────────────────────────────
 var currentTab='msg';
 function showTab(t){
-  var tabs=['msg','mov','tar','mex','mpe','mrec','chk','bdj'];
+  var tabs=['msg','mov','tar','mex','mpe','mrec','chk','bdj','hist'];
   tabs.forEach(function(id){
     var p=$('pane-'+id);var tb=$('tab-'+id);
     if(p)p.classList.remove('active');
@@ -539,6 +547,44 @@ function showTab(t){
   var tab=$('tab-'+t);if(tab)tab.classList.add('active');
   currentTab=t;
   if(t==='bdj')renderBandeja();
+  if(t==='hist')renderHistorialTab();
+}
+function renderHistorialTab(){
+  _loadFormHist();
+  var el=$('hist-content');if(!el)return;
+  var cnt=$('count-hist');
+  if(cnt){cnt.textContent=_formHistorial.length;cnt.style.display=_formHistorial.length?'inline-flex':'none';}
+  if(!_formHistorial.length){
+    el.innerHTML='<div class="empty-tab"><div class="e-icon">📭</div><div class="e-txt">No enviaste informes aún.</div></div>';
+    return;
+  }
+  var h='<div style="padding:4px 0">';
+  _formHistorial.forEach(function(e,i){
+    var d=new Date(e.fecha);
+    var dl=d.toLocaleDateString('es-AR',{day:'2-digit',month:'short',year:'2-digit'})+' '+d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+    h+='<div style="background:var(--white);border:1px solid var(--brd);border-radius:10px;padding:12px;margin-bottom:10px">';
+    h+='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">';
+    h+='<div style="font-size:13px;font-weight:700">v'+e.version+' — '+dl+'</div>';
+    h+='<span style="font-size:10px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;border-radius:9px;padding:1px 8px;font-weight:700">Enviado</span>';
+    h+='</div>';
+    if(e.resumen)h+='<div style="font-size:11px;color:var(--text3);margin-bottom:8px">'+esc(e.resumen)+'</div>';
+    h+='<div style="display:flex;gap:6px">';
+    h+='<button onclick="_reenviarHistorial('+i+')" style="flex:1;padding:8px;background:var(--teal);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer">📤 Reenviar</button>';
+    h+='<button onclick="_copyHistLink('+i+')" id="_histBtn_'+i+'" style="padding:8px 12px;background:var(--gray-ll);color:var(--text2);border:none;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer">📋 Copiar link</button>';
+    h+='</div></div>';
+  });
+  h+='</div>';
+  el.innerHTML=h;
+}
+function _reenviarHistorial(idx){
+  var e=_formHistorial[idx];if(!e||!e.deepLink)return;
+  window._lastDeepLink=e.deepLink;
+  var _tel=ARCH_TEL?ARCH_TEL.replace(/[^0-9]/g,''):'';
+  var _lbl='v'+e.version+' — '+new Date(e.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'short'});
+  var msg='📋 Reporte de obra ('+_lbl+'): '+OBRA_NAME+'\n👤 '+colabName+'\n'+e.deepLink;
+  if(navigator.share){navigator.share({title:'Reporte ObraControl',text:msg}).catch(function(){});}
+  else if(_tel){window.open('whatsapp://send?phone='+_tel+'&text='+encodeURIComponent(msg),'_blank');}
+  else{window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');}
 }
 
 function toggleDone(t){
