@@ -950,8 +950,10 @@ function encodeSubmission(data){
   function _enc(obj){return btoa(unescape(encodeURIComponent(JSON.stringify(obj))));}
   var encoded;
   var photosStripped=false;
+  // 12000 es el maximo probado que WhatsApp/Android transportan sin truncar el link.
+  // Por encima de eso el deep link llega cortado y el informe NUNCA se decodifica.
   var withPhotoEnc=_enc(data);
-  if(withPhotoEnc.length<=40000){
+  if(withPhotoEnc.length<=12000){
     encoded=withPhotoEnc;
   } else {
     encoded=_enc(noPhoto);
@@ -1152,23 +1154,24 @@ function editarYReenviar(){
 function nuevoFormulario(){
   sessionId=_uid();
   sendCount=0;
-  doneTabMap={mov:false,tar:false,mex:false,mpe:false,chk:false};
-  counters={mov:0,tar:0,mex:0,mpe:0};
+  doneTabMap={mov:false,tar:false,mex:false,mpe:false,mrec:false,chk:false};
+  counters={mov:0,tar:0,mex:0,mpe:0,mrec:0};
   photoMap={};allPhotos=[];
 
-  ['mov','tar','mex','mpe'].forEach(function(t){
-    $('list-'+t).innerHTML='';
-    $('count-'+t).style.display='none';
-    $('badge-'+t).style.display='none';
-    $('done-'+t).classList.remove('on');
-    $('done-'+t).textContent='✓ Marcar pestaña lista';
+  ['mov','tar','mex','mpe','mrec'].forEach(function(t){
+    var _l=$('list-'+t);if(_l)_l.innerHTML='';
+    var _c=$('count-'+t);if(_c){_c.style.display='none';_c.textContent='';}
+    var _b=$('badge-'+t);if(_b)_b.style.display='none';
+    var _d=$('done-'+t);if(_d){_d.classList.remove('on');_d.textContent='✓ Marcar pestaña lista';}
   });
   $('badge-chk').style.display='none';
   $('done-chk').classList.remove('on');
   $('done-chk').textContent='✓ Marcar pestaña lista';
   $('chk_titulo').value='';$('chk_items').value='';
   $('chk_prev').style.display='none';
+  if($('chk_foto'))$('chk_foto').value='';
   if($('msg_general'))$('msg_general').value='';
+  if($('photosSection'))$('photosSection').style.display='none';
 
   $('screenSuccess').classList.remove('active');
   $('screenForm').classList.add('active');

@@ -746,6 +746,21 @@ async function _rescueBase64BeforeSync(){
       });
     });
   });
+  // 3. photos[].url — fotos base64 en tareas/visitas (incluye las que llegan
+  // en informes de colaboradores via _doIncItem). Sin esto buildCleanData las
+  // reemplaza por '[foto-local-no-sincronizada]' y se pierden para siempre.
+  ['tareas','visitas','comentarios','alertas'].forEach(function(tbl){
+    (D[tbl]||[]).forEach(function(item){
+      (item.photos||[]).forEach(function(ph){
+        if(ph&&typeof ph.url==='string'&&ph.url.startsWith('data:')){
+          var _phid='ph_rescue_'+uid();
+          var _phFid=(S.proj&&GD.moduleFolders[S.proj+'_'+tbl])||GD.imagesFolderId||null;
+          queueImageUpload(_phid,ph.url,'foto_'+_phid+'.jpg',item.projectId||S.proj||'',_phFid).catch(function(){});
+          ph.url='[foto:'+_phid+']';
+        }
+      });
+    });
+  });
 }
 
 function showDriveReconnectBanner(){
@@ -1455,7 +1470,7 @@ function mergeLocalData(){
   try{
     const ls=localStorage.getItem(SK);if(!ls)return;
     const ld=JSON.parse(ls);
-    const arrKeys=['visitas','tareas','materiales','matIngresos','alertas','checklists','documentos','enlaces','comentarios','colaboradores','economia','auditLog','formulariosPendientes','carpetas','projects'];
+    const arrKeys=['visitas','tareas','materiales','matIngresos','alertas','checklists','documentos','enlaces','comentarios','colaboradores','economia','auditLog','formulariosPendientes','carpetas','mensajesColab','projects'];
     arrKeys.forEach(k=>{
       if(ld[k]&&Array.isArray(ld[k])){
         const existing=new Set((D[k]||[]).map(x=>x.id));
@@ -1470,7 +1485,7 @@ function _isUserTyping(){var ae=document.activeElement;if(!ae)return false;var t
 // Returns true if any data actually changed (items added/removed/updated).
 function _silentMerge(driveData){
   if(!driveData)return false;
-  var arrKeys=['visitas','tareas','materiales','matIngresos','alertas','checklists','documentos','enlaces','comentarios','colaboradores','economia','auditLog','formulariosPendientes','projects','mensajesColab'];
+  var arrKeys=['visitas','tareas','materiales','matIngresos','alertas','checklists','documentos','enlaces','comentarios','colaboradores','economia','auditLog','formulariosPendientes','projects','mensajesColab','carpetas'];
   // Unir tombstones de Drive + local
   var driveTombs=(driveData.tombstones&&Array.isArray(driveData.tombstones))?driveData.tombstones:[];
   var localTombs=D.tombstones||[];
@@ -1498,7 +1513,24 @@ function _silentMerge(driveData){
         // En ambos → gana el más reciente (updatedAt tiene prioridad sobre date)
         var ld=new Date(li.updatedAt||li.date||li.timestamp||0).getTime();
         var dd=new Date(di.updatedAt||di.date||di.timestamp||0).getTime();
+        // Snapshot de archivos de Drive ANTES del assign (carpetas no tienen updatedAt:
+        // sin esto el registro entero se reemplaza y se pierden archivos de un lado)
+        var _diArch=Array.isArray(di.archivos)?di.archivos.slice():null;
         if(ld>dd){Object.assign(di,li);changed=true;}
+        // Unir archivos de ambos lados por id, y restaurar base64 que Drive haya strippeado
+        if(_diArch||Array.isArray(li.archivos)){
+          var _union=[],_seenA={};
+          [].concat(_diArch||[],li.archivos||[]).forEach(function(a){
+            if(!a||!a.id)return;
+            var _prev=_seenA[a.id];
+            if(!_prev){_seenA[a.id]=a;_union.push(a);return;}
+            // mismo archivo en ambos → conservar el que tenga el base64 real
+            var _pd=(_prev.data||'')+'',_ad=(a.data||'')+'';
+            if(_pd.startsWith('[')&&_ad.startsWith('data:')){_prev.data=a.data;changed=true;}
+          });
+          if(_union.length!==(_diArch||[]).length)changed=true;
+          if(_union.length)di.archivos=_union;
+        }
         // Restaurar fotos locales si Drive tiene placeholders (stripped base64)
         if(li.photos&&di.photos&&di.photos.length){
           di.photos=di.photos.map(function(dp,idx){
@@ -7958,6 +7990,28 @@ _pinCheck();
 if(!_isPinLocked())render();
 // 2b. Deep-link incoming report (#r=BASE64)
 (function(){
+  function _processCarpeta(sub){
+    if(!D.carpetas)D.carpetas=[];
+    var _cp=D.carpetas.find(function(c){return c.colabId===sub.token&&c.projectId===sub.obraId;});
+    if(!_cp){_cp={id:Date.now().toString(36),projectId:sub.obraId,colabId:sub.token,archivos:[]};D.carpetas.push(_cp);}
+    var _added=0;
+    (sub.archivos||[]).forEach(function(f){
+      f.id=Date.now().toString(36)+Math.random().toString(36).slice(2,6);f.fecha=new Date().toISOString();f.subidoPor='col';f.visto=false;
+      _cp.archivos.push(f);_added++;
+    });
+    sv();
+    // Guardar en IDB inmediatamente (no esperar scheduleSync) para proteger fotos de colaboradores
+    if(GD.idbReady) saveToIDB().catch(function(){});
+    if(sub.obraId)S.proj=sub.obraId;
+    S.mod='colaboradores';
+    render();
+    var _colReg=(D.colaboradores||[]).find(function(c){return c.id===sub.token;});
+    var _nom=_colReg?_colReg.name:sub.ayudante||'colaborador';
+    toast('📁 '+_added+' archivo'+(_added>1?'s':'')+' de '+_nom+' — ¡presioná 📁 para verlos!','#0d9488',6000);
+  }
+  // Pickup mismo-dispositivo: se chequea SIEMPRE, aunque la URL no traiga #r=
+  // (antes estaba despues del return temprano y por eso nunca se ejecutaba)
+  try{var _lsPend=localStorage.getItem('oc_carpeta_pending');if(_lsPend){localStorage.removeItem('oc_carpeta_pending');_processCarpeta(JSON.parse(_lsPend));}}catch(_){}
   try{
     var h=window.location.hash;
     if(!h.startsWith('#r='))return;
@@ -7967,29 +8021,8 @@ if(!_isPinLocked())render();
     // Soporte encoding compacto (btoa(unescape(encodeURIComponent(json)))) y encoding viejo (btoa(encodeURIComponent(json)))
     var sub;
     try{sub=JSON.parse(decodeURIComponent(escape(atob(enc))));}
-    catch(_){try{sub=JSON.parse(decodeURIComponent(atob(enc)));}catch(__){throw new Error('No se pudo decodificar el reporte');}}
+    catch(_){try{sub=JSON.parse(decodeURIComponent(atob(enc)));}catch(__){throw new Error('El link llegó cortado o incompleto. Pedile al colaborador que lo reenvíe desde su pestaña Historial.');}}
     history.replaceState(null,'',window.location.pathname+window.location.search);
-    function _processCarpeta(sub){
-      if(!D.carpetas)D.carpetas=[];
-      var _cp=D.carpetas.find(function(c){return c.colabId===sub.token&&c.projectId===sub.obraId;});
-      if(!_cp){_cp={id:Date.now().toString(36),projectId:sub.obraId,colabId:sub.token,archivos:[]};D.carpetas.push(_cp);}
-      var _added=0;
-      (sub.archivos||[]).forEach(function(f){
-        f.id=Date.now().toString(36)+Math.random().toString(36).slice(2,6);f.fecha=new Date().toISOString();f.subidoPor='col';f.visto=false;
-        _cp.archivos.push(f);_added++;
-      });
-      sv();
-      // Guardar en IDB inmediatamente (no esperar scheduleSync) para proteger fotos de colaboradores
-      if(GD.idbReady) saveToIDB().catch(function(){});
-      if(sub.obraId)S.proj=sub.obraId;
-      S.mod='colaboradores';
-      render();
-      var _colReg=(D.colaboradores||[]).find(function(c){return c.id===sub.token;});
-      var _nom=_colReg?_colReg.name:sub.ayudante||'colaborador';
-      toast('📁 '+_added+' archivo'+(_added>1?'s':'')+' de '+_nom+' — ¡presioná 📁 para verlos!','#0d9488',6000);
-    }
-    // Check for pending same-device carpeta upload
-    try{var _lsPend=localStorage.getItem('oc_carpeta_pending');if(_lsPend){localStorage.removeItem('oc_carpeta_pending');_processCarpeta(JSON.parse(_lsPend));}}catch(_){}
     // Handle carpeta upload from collaborator
     if(sub.mode==='carpeta'){_processCarpeta(sub);return;}
     // Handle bandeja response from collaborator
