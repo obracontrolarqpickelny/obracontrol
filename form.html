@@ -340,6 +340,16 @@ var SEND_WA = true; // siempre intenta enviar — el colaborador siempre puede r
 var SEND_EMAIL=(P.get('se')||'0')==='1';
 var APP_URL =window.location.href.replace(/\/form\.html.*/,'/index.html');
 
+// Servidor propio (Google Apps Script). Si está configurado, el envío NO depende
+// de WhatsApp: el informe viaja directo al Drive del arquitecto.
+var API_URL=P.get('api')||'';
+var API_SEC=P.get('sec')||'';
+
+// Mantiene los datos del servidor al navegar entre formulario y carpeta
+function _apiParams(){
+  return (API_URL?'&api='+encodeURIComponent(API_URL):'')+(API_SEC?'&sec='+encodeURIComponent(API_SEC):'');
+}
+
 var MSGS_RAW=P.get('msgs')||'';
 var COLAB_NAME_PARAM=P.get('colName')||'';
 var INBOX_MSGS=[];
@@ -449,7 +459,24 @@ async function sendCarpeta(){
   var payloadKB=Math.round(enc.length/1024);
   // Always save to localStorage (same-device immediate sync)
   try{localStorage.setItem('oc_carpeta_pending',JSON.stringify(payload));}catch(e){}
-  if(ARCH_TEL){
+
+  // ── Canal principal: servidor propio. Acá no hay límite de tamaño,
+  //    así que las fotos viajan completas sin depender de WhatsApp.
+  var _cpServidor=false;
+  if(API_URL){
+    btn.textContent='Subiendo al Drive del arquitecto...';
+    try{
+      var _cr=await _postServidor(payload);
+      _cpServidor=!!(_cr&&_cr.ok);
+    }catch(_e){_cpServidor=false;}
+  }
+  if(_cpServidor){
+    // Entregado. WhatsApp queda como aviso opcional, no como requisito.
+    if(ARCH_TEL){
+      var _avisoWA='📁 '+myName+' subió '+archivos.length+' archivo'+(archivos.length>1?'s':'')+' a la carpeta de '+OBRA_NAME+'.';
+      window._lastWAMsg=_avisoWA;
+    }
+  } else if(ARCH_TEL){
     var tel=ARCH_TEL.replace(/[^0-9]/g,'');
     if(payloadKB<200){
       // Small enough: send via deep link in WA
@@ -485,7 +512,9 @@ async function sendCarpeta(){
   $('screenCarpetaSuccess').classList.add('active');
   $('carpetaSuccessObra').textContent=OBRA_NAME||'Obra';
   var _myName=COLAB_NAME_PARAM||(TOKEN?localStorage.getItem('oc_n_'+TOKEN):'')||'Colaborador';
-  $('carpetaSuccessSub').textContent=archivos.length+' archivo'+(archivos.length>1?'s':'')+' enviado'+(archivos.length>1?'s':'')+' al arquitecto.';
+  $('carpetaSuccessSub').textContent=_cpServidor
+    ? archivos.length+' archivo'+(archivos.length>1?'s':'')+' guardado'+(archivos.length>1?'s':'')+' en el Drive del arquitecto. Ya puede verlos.'
+    : archivos.length+' archivo'+(archivos.length>1?'s':'')+' enviado'+(archivos.length>1?'s':'')+' al arquitecto.';
   // Mostrar historial de envíos anteriores
   try{
     var _hist2=JSON.parse(localStorage.getItem('oc_cp_hist_'+TOKEN)||'[]');
@@ -504,7 +533,7 @@ function volverCarpeta(){
 }
 function irAFormulario(){
   $('screenCarpetaSuccess').classList.remove('active');
-  var url=window.location.pathname+'?obra='+encodeURIComponent(OBRA_ID)+'&token='+encodeURIComponent(TOKEN)+'&obraName='+encodeURIComponent(OBRA_NAME)+(ARCH_TEL?'&tel='+encodeURIComponent(ARCH_TEL):'')+(ARCH_MAIL?'&mail='+encodeURIComponent(ARCH_MAIL):'')+(SEND_WA?'':'&sw=0');
+  var url=window.location.pathname+'?obra='+encodeURIComponent(OBRA_ID)+'&token='+encodeURIComponent(TOKEN)+'&obraName='+encodeURIComponent(OBRA_NAME)+(ARCH_TEL?'&tel='+encodeURIComponent(ARCH_TEL):'')+(ARCH_MAIL?'&mail='+encodeURIComponent(ARCH_MAIL):'')+(SEND_WA?'':'&sw=0')+_apiParams();
   window.location.href=url;
 }
 
@@ -530,7 +559,7 @@ function showFormScreen(){
   }
 }
 function openCarpetaTab(){
-  var url=window.location.pathname+'?mode=carpeta&obra='+encodeURIComponent(OBRA_ID)+'&token='+encodeURIComponent(TOKEN)+'&obraName='+encodeURIComponent(OBRA_NAME);
+  var url=window.location.pathname+'?mode=carpeta&obra='+encodeURIComponent(OBRA_ID)+'&token='+encodeURIComponent(TOKEN)+'&obraName='+encodeURIComponent(OBRA_NAME)+(ARCH_TEL?'&tel='+encodeURIComponent(ARCH_TEL):'')+_apiParams();
   window.open(url,'_blank');
 }
 
@@ -937,6 +966,25 @@ function hasContent(data){
   return data.mensajeGeneral||data.movimientos.length||data.tareas.length||data.materialesExistentes.length||data.materialesPedidos.length||data.materialesIngresados.length||data.checklist;
 }
 
+// ── Envío al servidor propio ─────────────
+// Se manda como text/plain a propósito: es una petición "simple" y así el
+// navegador no dispara el preflight CORS, que Apps Script no sabe contestar.
+function _postServidor(payload){
+  return new Promise(function(resolve,reject){
+    var ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
+    var timer=setTimeout(function(){if(ctrl)ctrl.abort();},60000);
+    fetch(API_URL,{
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({secreto:API_SEC,payload:payload}),
+      redirect:'follow',
+      signal:ctrl?ctrl.signal:undefined
+    }).then(function(r){return r.json();})
+      .then(function(j){clearTimeout(timer);resolve(j);})
+      .catch(function(e){clearTimeout(timer);reject(e);});
+  });
+}
+
 // ── Encode / send ────────────────────────
 function encodeSubmission(data){
   // clone without photos to check size, then add if feasible
@@ -968,7 +1016,7 @@ async function enviarTodo(){
     showErr('Completá al menos una sección antes de enviar.');
     return;
   }
-  if(!ARCH_TEL&&!ARCH_MAIL&&!SEND_WA&&!SEND_EMAIL){
+  if(!API_URL&&!ARCH_TEL&&!ARCH_MAIL&&!SEND_WA&&!SEND_EMAIL){
     showErr('Este informe no tiene destino configurado. Pedile al arquitecto el link correcto.');
     return;
   }
@@ -977,14 +1025,31 @@ async function enviarTodo(){
   btn.disabled=true;btn.textContent='Enviando...';
   $('errBanner').style.display='none';
 
-  // Re-compress photos more aggressively before encoding (compressImg: dataUrl→dataUrl)
+  // Con servidor no hay límite de URL → fotos en buena calidad.
+  // Sin servidor el informe viaja dentro del link, así que hay que achicarlas.
+  var _px=API_URL?1000:380, _q=API_URL?0.7:0.45;
   var _cps=[];
-  data.tareas.forEach(function(t){if(t.foto&&t.foto.startsWith('data:'))_cps.push(compressImg(t.foto,380,0.45).then(function(c){t.foto=c;}));});
-  data.movimientos.forEach(function(m){if(m.foto&&m.foto.startsWith('data:'))_cps.push(compressImg(m.foto,380,0.45).then(function(c){m.foto=c;}));});
-  data.materialesExistentes.forEach(function(m){if(m.foto&&m.foto.startsWith('data:'))_cps.push(compressImg(m.foto,380,0.45).then(function(c){m.foto=c;}));});
-  if(data.checklist&&data.checklist.foto&&data.checklist.foto.startsWith('data:'))_cps.push(compressImg(data.checklist.foto,380,0.45).then(function(c){data.checklist.foto=c;}));
+  data.tareas.forEach(function(t){if(t.foto&&t.foto.startsWith('data:'))_cps.push(compressImg(t.foto,_px,_q).then(function(c){t.foto=c;}));});
+  data.movimientos.forEach(function(m){if(m.foto&&m.foto.startsWith('data:'))_cps.push(compressImg(m.foto,_px,_q).then(function(c){m.foto=c;}));});
+  data.materialesExistentes.forEach(function(m){if(m.foto&&m.foto.startsWith('data:'))_cps.push(compressImg(m.foto,_px,_q).then(function(c){m.foto=c;}));});
+  if(data.checklist&&data.checklist.foto&&data.checklist.foto.startsWith('data:'))_cps.push(compressImg(data.checklist.foto,_px,_q).then(function(c){data.checklist.foto=c;}));
   if(_cps.length)try{await Promise.all(_cps);}catch(_){}
 
+  // ── 1. Canal principal: servidor propio ──────────────────────────
+  var enviadoServidor=false, errorServidor='';
+  if(API_URL){
+    btn.textContent='Enviando al arquitecto...';
+    try{
+      var _r=await _postServidor(data);
+      if(_r&&_r.ok) enviadoServidor=true;
+      else errorServidor=(_r&&_r.error)||'el servidor rechazó el informe';
+    }catch(_e){
+      errorServidor=(_e&&_e.message)||'sin conexión';
+    }
+  }
+
+  // El link se genera igual: sirve para compartir por WhatsApp si el
+  // colaborador quiere, y como respaldo si el servidor no respondió.
   var result=encodeSubmission(data);
   var deepLink=APP_URL+'#r='+result.encoded;
   window._lastDeepLink=deepLink;
@@ -992,33 +1057,33 @@ async function enviarTodo(){
   sendCount++;
   if(TOKEN) localStorage.setItem('oc_v_'+TOKEN,sendCount);
 
-  // Build message
   var msg='📋 Reporte de obra: '+OBRA_NAME+'\n👤 '+colabName+(sendCount>1?' · v'+sendCount:'')+'\n'+deepLink;
+  window._lastWAMsg=msg;
 
+  // ── 2. WhatsApp / email: sólo automático si el servidor NO funcionó ──
   var sentWA=false, sentMail=false, sentWADirect=false;
   var _tel=ARCH_TEL?ARCH_TEL.replace(/[^0-9]/g,''):'';
-  if(navigator.share){
-    // Native share sheet (Android/iOS) — el más fluido
-    navigator.share({title:'Reporte ObraControl',text:msg}).catch(function(){});
-    sentWA=true;sentWADirect=!!_tel;
-  } else if(_tel){
-    // WhatsApp directo al número del arquitecto
-    window.open('whatsapp://send?phone='+_tel+'&text='+encodeURIComponent(msg),'_blank');
-    sentWA=true;sentWADirect=true;
-  } else {
-    // Fallback: WA sin número específico
-    window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
-    sentWA=true;sentWADirect=false;
-  }
-  if(SEND_EMAIL&&ARCH_MAIL){
-    var subject=encodeURIComponent('Reporte de obra: '+OBRA_NAME+' — '+colabName);
-    var body=encodeURIComponent('Nuevo reporte de obra de '+colabName+'.\n\nAbrí el link para ver los detalles:\n'+deepLink);
-    setTimeout(function(){window.open('mailto:'+ARCH_MAIL+'?subject='+subject+'&body='+body,'_blank');},sentWA?1200:0);
-    sentMail=true;
+  if(!enviadoServidor){
+    if(navigator.share){
+      navigator.share({title:'Reporte ObraControl',text:msg}).catch(function(){});
+      sentWA=true;sentWADirect=!!_tel;
+    } else if(_tel){
+      window.open('whatsapp://send?phone='+_tel+'&text='+encodeURIComponent(msg),'_blank');
+      sentWA=true;sentWADirect=true;
+    } else {
+      window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+      sentWA=true;sentWADirect=false;
+    }
+    if(SEND_EMAIL&&ARCH_MAIL){
+      var subject=encodeURIComponent('Reporte de obra: '+OBRA_NAME+' — '+colabName);
+      var body=encodeURIComponent('Nuevo reporte de obra de '+colabName+'.\n\nAbrí el link para ver los detalles:\n'+deepLink);
+      setTimeout(function(){window.open('mailto:'+ARCH_MAIL+'?subject='+subject+'&body='+body,'_blank');},sentWA?1200:0);
+      sentMail=true;
+    }
   }
 
   // Save to local historial before showing success
-  _saveFormHist(data,deepLink);
+  _saveFormHist(data,deepLink,enviadoServidor);
 
   // Success screen
   $('screenForm').classList.remove('active');
@@ -1030,13 +1095,17 @@ async function enviarTodo(){
   var subLine=[];
   if(sentWA&&sentWADirect) subLine.push('WhatsApp');
   if(sentMail) subLine.push('email');
-  var _sub=sentWA&&!sentWADirect?'📱 WhatsApp se abrió — elegí al arquitecto entre tus contactos y enviá el mensaje.':subLine.length?'Enviado por '+subLine.join(' y ')+'. El arquitecto lo recibirá al abrir el link.':'Copiá el link de abajo y enviáselo al arquitecto.';
+  var _sub;
+  if(enviadoServidor) _sub='El arquitecto ya lo tiene, con las fotos incluidas. No hace falta nada más.';
+  else if(sentWA&&!sentWADirect) _sub='📱 WhatsApp se abrió — elegí al arquitecto entre tus contactos y enviá el mensaje.';
+  else if(subLine.length) _sub='Enviado por '+subLine.join(' y ')+'. El arquitecto lo recibirá al abrir el link.';
+  else _sub='Copiá el link de abajo y enviáselo al arquitecto.';
   $('successSub').textContent=_sub;
-  _renderFormSuccess(deepLink,sentWA,sentMail,sentWADirect);
+  _renderFormSuccess(deepLink,sentWA,sentMail,sentWADirect,enviadoServidor,errorServidor);
   $('versionBadge').textContent=sendCount===1?'Versión 1 — original':'Versión '+sendCount+' — editado '+(sendCount-1)+' '+(sendCount===2?'vez':'veces');
 
-  // Show photos to share separately if any
-  if(allPhotos.length&&result.photosStripped){
+  // Show photos to share separately if any (con servidor las fotos ya viajaron)
+  if(allPhotos.length&&result.photosStripped&&!enviadoServidor){
     $('photosSection').style.display='block';
     var grid=$('photosGrid');
     grid.innerHTML='';
@@ -1055,7 +1124,7 @@ async function enviarTodo(){
 var _HIST_KEY='oc_form_hist_'+(TOKEN||OBRA_ID||'anon');
 var _formHistorial=[];
 function _loadFormHist(){try{_formHistorial=JSON.parse(localStorage.getItem(_HIST_KEY)||'[]');}catch(_){_formHistorial=[];}}
-function _saveFormHist(data,deepLink){
+function _saveFormHist(data,deepLink,enviadoServidor){
   try{
     _loadFormHist();
     var noP=JSON.parse(JSON.stringify(data));
@@ -1069,7 +1138,7 @@ function _saveFormHist(data,deepLink){
     if((data.tareas||[]).length)pts.push('📋 '+data.tareas.length+' tarea'+(data.tareas.length>1?'s':''));
     if(data.checklist&&data.checklist.titulo)pts.push('✅ '+data.checklist.titulo);
     _formHistorial=_formHistorial.filter(function(e){return e.id!==data.id;});
-    _formHistorial.unshift({id:data.id,fecha:data.fecha,version:data.version||1,deepLink:deepLink,obraName:OBRA_NAME,resumen:pts.join(' · ')||'Informe',data:noP});
+    _formHistorial.unshift({id:data.id,fecha:data.fecha,version:data.version||1,deepLink:deepLink,obraName:OBRA_NAME,resumen:pts.join(' · ')||'Informe',data:noP,servidor:!!enviadoServidor});
     if(_formHistorial.length>20)_formHistorial=_formHistorial.slice(0,20);
     localStorage.setItem(_HIST_KEY,JSON.stringify(_formHistorial));
   }catch(e){console.warn('hist:',e);}
@@ -1108,12 +1177,31 @@ function _copyHistLink(idx){
   if(navigator.clipboard){navigator.clipboard.writeText(e.deepLink).then(function(){if(btn){btn.textContent='✓ Copiado';setTimeout(function(){if(btn)btn.textContent='📋 Copiar link';},2000);}}).catch(function(){_fbCopy(e.deepLink);});}
   else{_fbCopy(e.deepLink);if(btn){btn.textContent='✓ Copiado';setTimeout(function(){if(btn)btn.textContent='📋 Copiar link';},2000);}}
 }
-function _renderFormSuccess(deepLink,sentWA,sentMail,sentWADirect){
+function _compartirWAOpcional(){
+  var m=window._lastWAMsg||window._lastDeepLink||'';if(!m)return;
+  var _t=ARCH_TEL?ARCH_TEL.replace(/[^0-9]/g,''):'';
+  if(navigator.share){navigator.share({title:'Reporte ObraControl',text:m}).catch(function(){});}
+  else if(_t){window.open('whatsapp://send?phone='+_t+'&text='+encodeURIComponent(m),'_blank');}
+  else{window.open('https://wa.me/?text='+encodeURIComponent(m),'_blank');}
+}
+function _renderFormSuccess(deepLink,sentWA,sentMail,sentWADirect,enviadoServidor,errorServidor){
   var ls=$('linkShareSection');
   if(ls){
     var ok=sentWA||sentMail;
+    // Caso ideal: el servidor lo recibió. No hace falta WhatsApp ni copiar nada.
+    if(enviadoServidor){
+      ls.innerHTML='<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:14px;margin-bottom:4px">'
+        +'<div style="font-size:13px;font-weight:800;color:#15803d;margin-bottom:4px">✅ Informe entregado</div>'
+        +'<div style="font-size:11px;color:var(--text2);line-height:1.5;margin-bottom:10px">Se guardó en el Drive del arquitecto con las fotos. Le va a aparecer en su Bandeja.</div>'
+        +'<button onclick="_compartirWAOpcional()" style="width:100%;padding:10px;background:var(--gray-ll);color:var(--text2);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">💬 Avisarle por WhatsApp (opcional)</button>'
+        +'</div>';
+      return;
+    }
     var bg,brd,msg;
-    if(sentWA&&!sentWADirect){
+    if(errorServidor){
+      bg='#fff7ed';brd='#fed7aa';
+      msg='⚠️ <strong>No se pudo entregar al servidor</strong> ('+esc(String(errorServidor).slice(0,60))+').<br><span style="font-weight:400;font-size:11px">Se usó WhatsApp como respaldo. Si no llegó, copiá el link. Tu informe quedó guardado en Historial.</span>';
+    } else if(sentWA&&!sentWADirect){
       bg='#eff6ff';brd='#bfdbfe';
       msg='📱 <strong>WhatsApp se abrió</strong> — elegí al arquitecto en tus contactos y tocá Enviar.<br><span style="font-weight:400;font-size:11px">Si se cerró antes de enviar, usá el botón de abajo como respaldo.</span>';
     } else if(ok){

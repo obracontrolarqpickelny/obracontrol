@@ -2387,6 +2387,8 @@ const SYNC = {
   dropboxToken: null,
   netlifyConfigured: false,
   formulariosEndpoint: null,
+  apiUrl: null,      // URL del Apps Script que recibe los informes
+  apiSecret: null,   // clave compartida con los colaboradores
   archTel: null,
   archEmail: null,
   sendWA: true,
@@ -2401,6 +2403,8 @@ function loadSyncConfig() {
     if (cfg.dropboxToken)   SYNC.dropboxToken = cfg.dropboxToken;
     if (cfg.netlifyConfigured) SYNC.netlifyConfigured = cfg.netlifyConfigured;
     if (cfg.formulariosEndpoint) SYNC.formulariosEndpoint = cfg.formulariosEndpoint;
+    if (cfg.apiUrl)    SYNC.apiUrl    = cfg.apiUrl;
+    if (cfg.apiSecret) SYNC.apiSecret = cfg.apiSecret;
     if (cfg.archTel)   SYNC.archTel   = cfg.archTel;
     if (cfg.archEmail) SYNC.archEmail = cfg.archEmail;
     if (cfg.sendWA   !== undefined) SYNC.sendWA   = cfg.sendWA;
@@ -2415,6 +2419,8 @@ function saveSyncConfig() {
     dropboxToken: SYNC.dropboxToken,
     netlifyConfigured: SYNC.netlifyConfigured,
     formulariosEndpoint: SYNC.formulariosEndpoint,
+    apiUrl:    SYNC.apiUrl,
+    apiSecret: SYNC.apiSecret,
     archTel:   SYNC.archTel,
     archEmail: SYNC.archEmail,
     sendWA:    SYNC.sendWA,
@@ -6025,7 +6031,7 @@ function rConfig(mc,p){
   [].concat(pf('visitas'),pf('tareas'),pf('materiales'),pf('matIngresos')).forEach(function(it){
     (it.photos||[]).forEach(function(p){var u=typeof p==='string'?p:(p.url||'');if(u.startsWith('data:'))_b64n++;});
   });
-mc.innerHTML=`${modHeader('config','Configuracion')}<div class="card mb-12"><div class="flex justify-between items-center mb-8"><div class="ts fw7">Datos de la obra</div><button class="btn btn-sec btn-s" onclick="openM('editProjM')">${I.edit} Editar</button></div><div class="ts tc3 lh18"><strong>Nombre:</strong> ${p.name}<br><strong>Cliente:</strong> ${p.client||'-'}<br><strong>Ubicacion:</strong> ${p.location||'-'}<br><strong>Director:</strong> ${p.director||'-'}<br><strong>Capataz:</strong> ${p.capataz||'-'}<br><strong>Inicio:</strong> ${fmts(p.startDate)||'-'}<br><strong>Fin:</strong> ${fmts(p.endDate)||'-'}<br><strong>Estado:</strong> ${p.status}</div></div><div class="card mb-12"><div class="ts fw7 mb-8">Estadisticas</div><div class="ts tc3 lh18">Visitas: ${pf('visitas').length} | Tareas: ${pf('tareas').length} | Materiales: ${pf('materiales').length} | Ingresos: ${pf('matIngresos').length} | Alertas: ${pf('alertas').length} | Comentarios: ${pf('comentarios').length} | Docs: ${pf('documentos').length} | Enlaces: ${pf('enlaces').length}</div></div><div class="card mb-12" style="border-left:4px solid #0d9488"><div class="ts fw7 mb-8" style="color:#0d9488">&#x1F4F1; Informes de campo</div><div class="txxs tc3 mb-12">Cuando compartís el link con un colaborador, los informes te llegan por los canales que tengas activos.</div><div class="flex items-center gap-8 mb-10"><div class="flex-1"><label class="fl">Tu WhatsApp</label><input class="fi" id="cfg_arch_tel" type="tel" value="${SYNC.archTel||''}" placeholder="+549..." onblur="saveArchContact('tel',this.value)"></div><button class="btn btn-s" style="margin-top:18px;min-width:80px;font-size:11px;background:${SYNC.sendWA?'var(--green)':'var(--gray-ll)'};color:${SYNC.sendWA?'#fff':'var(--text2)'}" onclick="toggleSendChannel('wa')">${SYNC.sendWA?'&#x2713; Activo':'Inactivo'}</button></div><div class="flex items-center gap-8 mb-12"><div class="flex-1"><label class="fl">Tu email</label><input class="fi" id="cfg_arch_mail" type="email" value="${SYNC.archEmail||''}" placeholder="tu@email.com" onblur="saveArchContact('mail',this.value)"></div><button class="btn btn-s" style="margin-top:18px;min-width:80px;font-size:11px;background:${SYNC.sendEmail?'var(--green)':'var(--gray-ll)'};color:${SYNC.sendEmail?'#fff':'var(--text2)'}" onclick="toggleSendChannel('email')">${SYNC.sendEmail?'&#x2713; Activo':'Inactivo'}</button></div><div class="txxs tc3">Los envíos llegan como un link. Al tocarlo la app muestra los datos en la Bandeja de entrada.</div></div>v><div class="card mb-12" style="border-left:4px solid #6366f1"><div class="ts fw7 mb-8" style="color:#6366f1">🔒 Protección con PIN</div><div class="txxs tc3 mb-12">Solo vos podés acceder a la app. Al abrir desde cualquier dispositivo se pedirá el PIN.</div>${(function(){var _p=localStorage.getItem('oc_pin');if(_p){return '<div class="txxs mb-10" style="color:var(--green);font-weight:700">✓ PIN activo ('+_p.length+' dígitos)</div><div class="flex gap-6"><input class="fi" id="cfg_pin_new" type="password" inputmode="numeric" maxlength="8" placeholder="Nuevo PIN" style="flex:1;margin:0"><button class="btn btn-s" style="background:#6366f1;color:#fff;white-space:nowrap" onclick="var v=$(\'cfg_pin_new\').value.trim();if(v.length>=4)savePin(v);else toast(\'Mínimo 4 dígitos\',\'var(--red)\')">Cambiar</button></div><button class="btn btn-x btn-s btn-w mt-8" onclick="if(confirm(\'¿Eliminar PIN? La app quedará sin protección.\'))savePin(\'\')">Quitar PIN</button>';}else{return '<div class="txxs mb-10 tc3">Sin PIN configurado — cualquiera con el link puede acceder.</div><div class="flex gap-6"><input class="fi" id="cfg_pin_new" type="password" inputmode="numeric" maxlength="8" placeholder="Nuevo PIN (mín. 4 dígitos)" style="flex:1;margin:0"><button class="btn btn-s" style="background:#6366f1;color:#fff;white-space:nowrap" onclick="var v=$(\'cfg_pin_new\').value.trim();if(v.length>=4)savePin(v);else toast(\'Mínimo 4 dígitos\',\'var(--red)\')">Activar PIN</button></div>';}})()}</div><div class="card mb-12" style="background:var(--red-bg);border:1px solid var(--red-mid)"><div class="ts fw7 mb-8" style="color:var(--red)">Zona peligrosa</div><button class="btn btn-x btn-s btn-w" onclick="deleteProj()">Eliminar obra</button></div><div class="card mb-12" style="border-left:4px solid var(--cyan);padding:12px"><div class="ts fw7 mb-6">&#x1F4BE; Almacenamiento local</div><div style="background:var(--gray-ll);border-radius:6px;height:8px;margin-bottom:6px"><div style="background:${_lsColor};border-radius:6px;height:8px;width:${_lsPct}%"></div></div><div class="txxs tc3">${_lsUsed} KB usados de ~5120 KB disponibles</div>${_lsPct>80?'<div class="txxs mt-4" style="color:var(--orange)">&#x26A0; Almacenamiento casi lleno. Conectá Drive para liberar espacio.</div>':''}</div><div class="tac mt-20 txxs tc3"><div class="fw7">ObraControl Pro v9.0</div><div class="mt-4">Visita-centric | PDF | Materiales+Ingresos | Comentarios vinculados</div></div><div class="mo" id="editProjM"><div class="mo-c"><div class="mo-h"><h3>Editar Obra</h3><button class="tbtn" onclick="closeM('editProjM')">${I.x}</button></div><div class="fg"><label class="fl">Nombre *</label><input class="fi" id="ep_n" value="${p.name||''}"></div><div class="fg"><label class="fl">Cliente</label><input class="fi" id="ep_cl" value="${p.client||''}"></div><div class="fg"><label class="fl">Ubicacion</label><input class="fi" id="ep_loc" value="${p.location||''}"></div><div class="fr"><div class="fg"><label class="fl">Director</label><input class="fi" id="ep_dir" value="${p.director||''}"></div><div class="fg"><label class="fl">Capataz</label><input class="fi" id="ep_cap" value="${p.capataz||''}"></div></div><div class="fr"><div class="fg"><label class="fl">Inicio</label><input class="fi" id="ep_st" type="date" value="${p.startDate||''}"></div><div class="fg"><label class="fl">Fin</label><input class="fi" id="ep_en" type="date" value="${p.endDate||''}"></div></div><div class="fg"><label class="fl">Estado</label><select class="fs" id="ep_sta">${['En curso','Pausada','Finalizada','Por iniciar'].map(s=>`<option${s===p.status?' selected':''}>${s}</option>`).join('')}</select></div><button class="btn btn-p btn-w mt-8" onclick="saveEP()">Guardar</button></div></div>`;
+mc.innerHTML=`${modHeader('config','Configuracion')}<div class="card mb-12"><div class="flex justify-between items-center mb-8"><div class="ts fw7">Datos de la obra</div><button class="btn btn-sec btn-s" onclick="openM('editProjM')">${I.edit} Editar</button></div><div class="ts tc3 lh18"><strong>Nombre:</strong> ${p.name}<br><strong>Cliente:</strong> ${p.client||'-'}<br><strong>Ubicacion:</strong> ${p.location||'-'}<br><strong>Director:</strong> ${p.director||'-'}<br><strong>Capataz:</strong> ${p.capataz||'-'}<br><strong>Inicio:</strong> ${fmts(p.startDate)||'-'}<br><strong>Fin:</strong> ${fmts(p.endDate)||'-'}<br><strong>Estado:</strong> ${p.status}</div></div><div class="card mb-12"><div class="ts fw7 mb-8">Estadisticas</div><div class="ts tc3 lh18">Visitas: ${pf('visitas').length} | Tareas: ${pf('tareas').length} | Materiales: ${pf('materiales').length} | Ingresos: ${pf('matIngresos').length} | Alertas: ${pf('alertas').length} | Comentarios: ${pf('comentarios').length} | Docs: ${pf('documentos').length} | Enlaces: ${pf('enlaces').length}</div></div><div class="card mb-12" style="border-left:4px solid #0d9488"><div class="ts fw7 mb-8" style="color:#0d9488">&#x1F4F1; Informes de campo</div><div class="txxs tc3 mb-12">Cuando compartís el link con un colaborador, los informes te llegan por los canales que tengas activos.</div><div class="flex items-center gap-8 mb-10"><div class="flex-1"><label class="fl">Tu WhatsApp</label><input class="fi" id="cfg_arch_tel" type="tel" value="${SYNC.archTel||''}" placeholder="+549..." onblur="saveArchContact('tel',this.value)"></div><button class="btn btn-s" style="margin-top:18px;min-width:80px;font-size:11px;background:${SYNC.sendWA?'var(--green)':'var(--gray-ll)'};color:${SYNC.sendWA?'#fff':'var(--text2)'}" onclick="toggleSendChannel('wa')">${SYNC.sendWA?'&#x2713; Activo':'Inactivo'}</button></div><div class="flex items-center gap-8 mb-12"><div class="flex-1"><label class="fl">Tu email</label><input class="fi" id="cfg_arch_mail" type="email" value="${SYNC.archEmail||''}" placeholder="tu@email.com" onblur="saveArchContact('mail',this.value)"></div><button class="btn btn-s" style="margin-top:18px;min-width:80px;font-size:11px;background:${SYNC.sendEmail?'var(--green)':'var(--gray-ll)'};color:${SYNC.sendEmail?'#fff':'var(--text2)'}" onclick="toggleSendChannel('email')">${SYNC.sendEmail?'&#x2713; Activo':'Inactivo'}</button></div><div class="txxs tc3">Los envíos llegan como un link. Al tocarlo la app muestra los datos en la Bandeja de entrada.</div></div><div class="card mb-12" style="border-left:4px solid var(--green)"><div class="ts fw7 mb-8" style="color:var(--green)">&#x1F680; Servidor propio (recomendado)</div><div class="txxs tc3 mb-12">Con esto los informes y las fotos te llegan solos, sin depender de WhatsApp. Se guardan en tu Google Drive. Instrucciones en el archivo INSTALAR_BACKEND.md.</div><div class="fg"><label class="fl">URL del Apps Script (termina en /exec)</label><input class="fi" id="cfg_api_url" value="${SYNC.apiUrl||''}" placeholder="https://script.google.com/macros/s/..../exec" onblur="saveApiCfg('url',this.value)"></div><div class="fg"><label class="fl">Clave secreta (la misma del script)</label><input class="fi" id="cfg_api_sec" value="${SYNC.apiSecret||''}" placeholder="tu clave" onblur="saveApiCfg('sec',this.value)"></div><div class="flex gap-6"><button class="btn btn-sec btn-s" style="flex:1" onclick="probarServidor()">&#x1F50C; Probar conexión</button><button class="btn btn-s" style="flex:1;background:var(--green);color:#fff" onclick="revisarServidor(true)">&#x1F4E5; Buscar informes</button></div>${SYNC.apiUrl&&SYNC.apiSecret?'<div class="txxs mt-8" style="color:var(--green);font-weight:700">&#x2713; Activo — se revisa solo al abrir la app</div>':'<div class="txxs mt-8 tc3">Sin configurar: los informes siguen dependiendo de WhatsApp.</div>'}</div>v><div class="card mb-12" style="border-left:4px solid #6366f1"><div class="ts fw7 mb-8" style="color:#6366f1">🔒 Protección con PIN</div><div class="txxs tc3 mb-12">Solo vos podés acceder a la app. Al abrir desde cualquier dispositivo se pedirá el PIN.</div>${(function(){var _p=localStorage.getItem('oc_pin');if(_p){return '<div class="txxs mb-10" style="color:var(--green);font-weight:700">✓ PIN activo ('+_p.length+' dígitos)</div><div class="flex gap-6"><input class="fi" id="cfg_pin_new" type="password" inputmode="numeric" maxlength="8" placeholder="Nuevo PIN" style="flex:1;margin:0"><button class="btn btn-s" style="background:#6366f1;color:#fff;white-space:nowrap" onclick="var v=$(\'cfg_pin_new\').value.trim();if(v.length>=4)savePin(v);else toast(\'Mínimo 4 dígitos\',\'var(--red)\')">Cambiar</button></div><button class="btn btn-x btn-s btn-w mt-8" onclick="if(confirm(\'¿Eliminar PIN? La app quedará sin protección.\'))savePin(\'\')">Quitar PIN</button>';}else{return '<div class="txxs mb-10 tc3">Sin PIN configurado — cualquiera con el link puede acceder.</div><div class="flex gap-6"><input class="fi" id="cfg_pin_new" type="password" inputmode="numeric" maxlength="8" placeholder="Nuevo PIN (mín. 4 dígitos)" style="flex:1;margin:0"><button class="btn btn-s" style="background:#6366f1;color:#fff;white-space:nowrap" onclick="var v=$(\'cfg_pin_new\').value.trim();if(v.length>=4)savePin(v);else toast(\'Mínimo 4 dígitos\',\'var(--red)\')">Activar PIN</button></div>';}})()}</div><div class="card mb-12" style="background:var(--red-bg);border:1px solid var(--red-mid)"><div class="ts fw7 mb-8" style="color:var(--red)">Zona peligrosa</div><button class="btn btn-x btn-s btn-w" onclick="deleteProj()">Eliminar obra</button></div><div class="card mb-12" style="border-left:4px solid var(--cyan);padding:12px"><div class="ts fw7 mb-6">&#x1F4BE; Almacenamiento local</div><div style="background:var(--gray-ll);border-radius:6px;height:8px;margin-bottom:6px"><div style="background:${_lsColor};border-radius:6px;height:8px;width:${_lsPct}%"></div></div><div class="txxs tc3">${_lsUsed} KB usados de ~5120 KB disponibles</div>${_lsPct>80?'<div class="txxs mt-4" style="color:var(--orange)">&#x26A0; Almacenamiento casi lleno. Conectá Drive para liberar espacio.</div>':''}</div><div class="tac mt-20 txxs tc3"><div class="fw7">ObraControl Pro v9.0</div><div class="mt-4">Visita-centric | PDF | Materiales+Ingresos | Comentarios vinculados</div></div><div class="mo" id="editProjM"><div class="mo-c"><div class="mo-h"><h3>Editar Obra</h3><button class="tbtn" onclick="closeM('editProjM')">${I.x}</button></div><div class="fg"><label class="fl">Nombre *</label><input class="fi" id="ep_n" value="${p.name||''}"></div><div class="fg"><label class="fl">Cliente</label><input class="fi" id="ep_cl" value="${p.client||''}"></div><div class="fg"><label class="fl">Ubicacion</label><input class="fi" id="ep_loc" value="${p.location||''}"></div><div class="fr"><div class="fg"><label class="fl">Director</label><input class="fi" id="ep_dir" value="${p.director||''}"></div><div class="fg"><label class="fl">Capataz</label><input class="fi" id="ep_cap" value="${p.capataz||''}"></div></div><div class="fr"><div class="fg"><label class="fl">Inicio</label><input class="fi" id="ep_st" type="date" value="${p.startDate||''}"></div><div class="fg"><label class="fl">Fin</label><input class="fi" id="ep_en" type="date" value="${p.endDate||''}"></div></div><div class="fg"><label class="fl">Estado</label><select class="fs" id="ep_sta">${['En curso','Pausada','Finalizada','Por iniciar'].map(s=>`<option${s===p.status?' selected':''}>${s}</option>`).join('')}</select></div><button class="btn btn-p btn-w mt-8" onclick="saveEP()">Guardar</button></div></div>`;
 }
 
 function renderConfigSize(){
@@ -7647,7 +7653,7 @@ function shareCarpetaUrl(colabId){
   if(!co.phone){toast('Agregá un teléfono al colaborador primero','var(--orange)');return;}
   var p=(D.projects||[]).find(function(x){return x.id===S.proj;});
   var base=window.location.origin+window.location.pathname.replace(/\/[^/]*$/,'/form.html');
-  var url=base+'?mode=carpeta&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p&&p.name||'')+'&token='+encodeURIComponent(colabId)+(SYNC.archTel?'&tel='+encodeURIComponent(SYNC.archTel):'');
+  var url=base+'?mode=carpeta&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p&&p.name||'')+'&token='+encodeURIComponent(colabId)+(SYNC.archTel?'&tel='+encodeURIComponent(SYNC.archTel):'')+_apiUrlParams();
   var msg='Hola '+esc(co.name||'')+'! Podés subir fotos y archivos a la carpeta compartida de la obra '+(p?p.name:'')+' desde este link: '+url;
   window.open('whatsapp://send?phone='+co.phone.replace(/[^0-9]/g,'')+'&text='+encodeURIComponent(msg),'_blank');
 }
@@ -8098,6 +8104,17 @@ if(!_isPinLocked())render();
     _repairEcoMatLinks();
     if(!_isPinLocked())render();
   }
+  // Revisar el servidor de informes: es el canal que no depende de WhatsApp.
+  // Va sin await para no demorar el arranque de la app.
+  if(SYNC.apiUrl&&SYNC.apiSecret){
+    setTimeout(function(){revisarServidor(false);},1200);
+    // Y cada 3 minutos mientras la app esté abierta
+    setInterval(function(){if(!document.hidden)revisarServidor(false);},180000);
+    document.addEventListener('visibilitychange',function(){
+      if(!document.hidden)revisarServidor(false);
+    });
+  }
+
   // Initialize Google Auth library
   await initGoogleAuth();
 
@@ -8273,7 +8290,7 @@ function rBandeja(mc,p){
       +'</div>'
       +'</div>';
   }).join('');
-  mc.innerHTML=modHeader('bandeja','Bandeja')
+  mc.innerHTML=modHeader('bandeja','Bandeja',(SYNC.apiUrl&&SYNC.apiSecret)?'<button class="btn btn-sec btn-s" onclick="revisarServidor(true)">&#x1F4E5; Buscar informes</button>':'')
     +'<div class="flex gap-6 mb-12">'
     +'<button class="btn btn-s" style="'+(tab==='pendientes'?'background:'+c2+';color:#fff':'background:var(--gray-ll);color:var(--text2)')+'" onclick="S.bandejaTab=\'pendientes\';render()">'+I.bell+' Pendientes'+pendBdg+'</button>'
     +'<button class="btn btn-s" style="'+(tab==='log'?'background:'+c2+';color:#fff':'background:var(--gray-ll);color:var(--text2)')+'" onclick="S.bandejaTab=\'log\';render()">📋 Log ('+procesados.length+')</button>'
@@ -8735,10 +8752,10 @@ function shareFormColaborador(colId){
   if(!co)return;
   if(co.estado==='revocado'){toast('Este colaborador fue dado de baja. Reactivalo antes de compartir.','var(--orange)');return;}
   if(!co.phone){toast('Agregá un teléfono al colaborador primero','var(--orange)');return;}
-  if(!SYNC.archTel&&!SYNC.archEmail){toast('Configurá tu WhatsApp o email en Configuración → Informes de campo','var(--orange)');return;}
+  if(!SYNC.archTel&&!SYNC.archEmail&&!(SYNC.apiUrl&&SYNC.apiSecret)){toast('Configurá el servidor (o tu WhatsApp) en Configuración → Informes de campo','var(--orange)',4000);return;}
   var p=D.projects.find(function(x){return x.id===S.proj;});
   var baseUrl=window.location.href.replace(/\/[^/]*(\?.*)?$/,'/form.html');
-  var formUrl=baseUrl+'?token='+encodeURIComponent(co.id)+'&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p&&p.name||'')+(SYNC.archTel?'&tel='+encodeURIComponent(SYNC.archTel):'')+(SYNC.archEmail?'&mail='+encodeURIComponent(SYNC.archEmail):'')+'&sw=1&se='+(SYNC.sendEmail?'1':'0');
+  var formUrl=baseUrl+'?token='+encodeURIComponent(co.id)+'&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p&&p.name||'')+(SYNC.archTel?'&tel='+encodeURIComponent(SYNC.archTel):'')+(SYNC.archEmail?'&mail='+encodeURIComponent(SYNC.archEmail):'')+'&sw=1&se='+(SYNC.sendEmail?'1':'0')+_apiUrlParams();
   var isAcept=co.estado==='aceptado'||co.estado==='activo';
   var msg=isAcept
     ?encodeURIComponent('📋 '+(co.name||'')+', recordatorio de informe — obra '+((p&&p.name)||'')+':\n'+formUrl)
@@ -8765,7 +8782,7 @@ function notificarColabWA(colabId){
     }catch(_e){return m;}
   });
   var msgsParam=enrichedMsgs.length?'&msgs='+encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(enrichedMsgs))))):'';
-  var url=baseUrl+'?token='+encodeURIComponent(co.id)+'&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p&&p.name||'')+'&colName='+encodeURIComponent(co.name||'')+(SYNC.archTel?'&tel='+encodeURIComponent(SYNC.archTel):'')+'&sw=1&se='+(SYNC.sendEmail?'1':'0')+msgsParam;
+  var url=baseUrl+'?token='+encodeURIComponent(co.id)+'&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p&&p.name||'')+'&colName='+encodeURIComponent(co.name||'')+(SYNC.archTel?'&tel='+encodeURIComponent(SYNC.archTel):'')+'&sw=1&se='+(SYNC.sendEmail?'1':'0')+_apiUrlParams()+msgsParam;
   var pendMsgs=msgs.filter(function(m){return m.estadoColab==='nuevo';});
   var resumen=pendMsgs.map(function(m){return '• '+esc(m.titulo);}).slice(0,5).join('\n');
   var texto='Hola '+(co.name||'')+' 👋 Tenés '+(pendMsgs.length)+' notificación'+(pendMsgs.length>1?'es':'')+' nueva'+(pendMsgs.length>1?'s':'')+' en ObraControl — obra '+(p?p.name:'')+':'+(resumen?'\n'+resumen:'')+'\n\nIngresá con este link:\n'+url;
@@ -8789,9 +8806,136 @@ function openColabPortal(colId){
     }catch(_e){return m;}
   });
   var msgsParam=enrichedMsgs.length?'&msgs='+encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(enrichedMsgs))))):'';
-  var url=baseUrl+'?token='+encodeURIComponent(co.id)+'&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p&&p.name||'')+'&colName='+encodeURIComponent(co.name||'')+(SYNC.archTel?'&tel='+encodeURIComponent(SYNC.archTel):'')+(SYNC.archEmail?'&mail='+encodeURIComponent(SYNC.archEmail):'')+'&sw=1&se='+(SYNC.sendEmail?'1':'0')+msgsParam;
+  var url=baseUrl+'?token='+encodeURIComponent(co.id)+'&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p&&p.name||'')+'&colName='+encodeURIComponent(co.name||'')+(SYNC.archTel?'&tel='+encodeURIComponent(SYNC.archTel):'')+(SYNC.archEmail?'&mail='+encodeURIComponent(SYNC.archEmail):'')+'&sw=1&se='+(SYNC.sendEmail?'1':'0')+_apiUrlParams()+msgsParam;
   window.open(url,'_blank');
 }
+// ═══════ SERVIDOR DE INFORMES (Apps Script) ═══════
+// Trae los informes que los colaboradores enviaron sin depender de WhatsApp.
+// Params que viajan en el link del colaborador para que pueda enviar al servidor
+function _apiUrlParams(){
+  if(!SYNC.apiUrl||!SYNC.apiSecret)return '';
+  return '&api='+encodeURIComponent(SYNC.apiUrl)+'&sec='+encodeURIComponent(SYNC.apiSecret);
+}
+function _apiCfg(){
+  if(!SYNC.apiUrl||!SYNC.apiSecret)return null;
+  return {url:SYNC.apiUrl.replace(/\?.*$/,''),sec:SYNC.apiSecret};
+}
+function _apiGet(accion,extra,timeoutMs){
+  var c=_apiCfg();
+  if(!c)return Promise.reject(new Error('Servidor no configurado'));
+  var u=c.url+'?action='+encodeURIComponent(accion)+'&secreto='+encodeURIComponent(c.sec)+(extra||'');
+  var ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
+  var timer=setTimeout(function(){if(ctrl)ctrl.abort();},timeoutMs||45000);
+  return fetch(u,{method:'GET',redirect:'follow',signal:ctrl?ctrl.signal:undefined})
+    .then(function(r){return r.json();})
+    .then(function(j){clearTimeout(timer);return j;})
+    .catch(function(e){clearTimeout(timer);throw e;});
+}
+
+// Ingesta un informe del servidor reusando exactamente la misma lógica
+// que el deep link, así todo lo que ya funciona sigue funcionando igual.
+function _ingestarDelServidor(payload){
+  if(!payload)return false;
+  var co=(D.colaboradores||[]).find(function(c){return c.id===payload.token;});
+  if(co&&co.estado==='revocado')return false;
+  if(!payload.ayudante&&co)payload.ayudante=co.name||'Colaborador';
+  if(!payload.ayudante)payload.ayudante='Colaborador';
+  // Al enviar un informe el colaborador confirma que aceptó la invitación
+  if(co&&co.estado==='pendiente'){co.estado='aceptado';co.updatedAt=nw();}
+
+  if(payload.mode==='carpeta'){
+    if(!D.carpetas)D.carpetas=[];
+    var _cp=D.carpetas.find(function(c){return c.colabId===payload.token&&c.projectId===payload.obraId;});
+    if(!_cp){_cp={id:Date.now().toString(36)+Math.random().toString(36).slice(2,5),projectId:payload.obraId,colabId:payload.token,archivos:[]};D.carpetas.push(_cp);}
+    (payload.archivos||[]).forEach(function(f){
+      f.id=f.id||(Date.now().toString(36)+Math.random().toString(36).slice(2,6));
+      f.fecha=f.fecha||new Date().toISOString();f.subidoPor='col';f.visto=false;
+      if(!_cp.archivos.some(function(x){return x.id===f.id;}))_cp.archivos.push(f);
+    });
+    return true;
+  }
+  if(payload.mode==='bandeja_resp'){
+    if(!D.mensajesColab)D.mensajesColab=[];
+    (payload.respuestas||[]).forEach(function(r){
+      var m=D.mensajesColab.find(function(x){return x.id===r.msgId;});
+      if(m){m.estadoColab='completado';m.respuesta=r.respuesta||'';m.fechaRespuesta=nw();if(r.itemStates)m.itemStates=r.itemStates;}
+    });
+    return true;
+  }
+  // Informe normal → bandeja de entrada
+  if(!payload.token&&!payload.obraId)return false;
+  payload.receivedAt=new Date().toISOString();
+  payload.estado='pendiente';
+  payload.viaServidor=true;
+  if(!payload.id)payload.id=Date.now().toString(36);
+  D.formulariosPendientes=D.formulariosPendientes||[];
+  if(D.formulariosPendientes.find(function(x){return x.id===payload.id;}))return false;
+  D.formulariosPendientes.push(payload);
+  return true;
+}
+
+var _revisandoServidor=false;
+async function revisarServidor(manual){
+  if(_revisandoServidor)return;
+  var c=_apiCfg();
+  if(!c){if(manual)toast('Configurá el servidor en Configuración → Informes de campo','var(--orange)',4000);return;}
+  _revisandoServidor=true;
+  if(manual)toast('Buscando informes...','var(--pri)',1500);
+  try{
+    var lista=await _apiGet('list');
+    if(!lista||!lista.ok)throw new Error((lista&&lista.error)||'respuesta inválida');
+    var pend=lista.informes||[];
+    if(!pend.length){if(manual)toast('No hay informes nuevos','var(--text3)',2500);return;}
+
+    var nuevos=0,fallidos=0;
+    for(var i=0;i<pend.length;i++){
+      var meta=pend[i];
+      try{
+        var det=await _apiGet('get','&id='+encodeURIComponent(meta.id),60000);
+        if(!det||!det.ok||!det.payload){fallidos++;continue;}
+        if(_ingestarDelServidor(det.payload))nuevos++;
+        // Sólo se saca de la bandeja del servidor si se guardó bien de este lado
+        sv();
+        await _apiGet('ack','&id='+encodeURIComponent(meta.id),20000).catch(function(){});
+      }catch(e){fallidos++;}
+    }
+
+    if(nuevos){
+      sv();
+      if(GD.idbReady) saveToIDB().catch(function(){});
+      var _p0=pend[0];
+      if(_p0&&_p0.obraId&&(D.projects||[]).find(function(p){return p.id===_p0.obraId;}))S.proj=_p0.obraId;
+      S.mod='bandeja';
+      render();
+      toast('📥 '+nuevos+' informe'+(nuevos>1?'s':'')+' recibido'+(nuevos>1?'s':'')+' del servidor','#0d9488',5000);
+    } else if(manual){
+      toast(fallidos?'No se pudo bajar '+fallidos+' informe(s)':'Sin novedades','var(--orange)',3000);
+    }
+  }catch(e){
+    if(manual)toast('Error consultando el servidor: '+(e.message||e),'var(--red)',5000);
+  }finally{_revisandoServidor=false;}
+}
+
+async function probarServidor(){
+  var c=_apiCfg();
+  if(!c){toast('Cargá primero la URL y la clave','var(--orange)',3500);return;}
+  toast('Probando conexión...','var(--pri)',1500);
+  try{
+    var r=await _apiGet('ping',null,20000);
+    if(r&&r.ok)toast('✓ Servidor conectado correctamente','var(--green)',4000);
+    else toast('El servidor respondió: '+((r&&r.error)||'error desconocido'),'var(--red)',6000);
+  }catch(e){
+    toast('No se pudo conectar. Revisá que la URL termine en /exec y que el acceso sea "Cualquier persona".','var(--red)',7000);
+  }
+}
+function saveApiCfg(campo,val){
+  val=(val||'').trim();
+  if(campo==='url')SYNC.apiUrl=val||null;
+  else SYNC.apiSecret=val||null;
+  saveSyncConfig();
+  toast('Guardado','var(--green)',1500);
+}
+
 function shareToInbox(tipo,entidadId,titulo){
   if(!titulo){
     if(tipo==='checklist'){var _ch=(D.checklists||[]).find(function(x){return x.id===entidadId;});titulo=_ch?_ch.title:'';}
@@ -8887,14 +9031,14 @@ function confirmarShareToInbox(tipo,entidadId,titulo){
   },400);
 }
 function shareFormContextual(categoria,entidadId,titulo){
-  if(!SYNC.archTel&&!SYNC.archEmail){toast('Configurá tu WhatsApp o email en Configuración → Informes de campo','var(--orange)');return;}
+  if(!SYNC.archTel&&!SYNC.archEmail&&!(SYNC.apiUrl&&SYNC.apiSecret)){toast('Configurá el servidor (o tu WhatsApp) en Configuración → Informes de campo','var(--orange)',4000);return;}
   var colabs=(D.colaboradores||[]).filter(function(c){return c.projectId===S.proj&&c.phone&&c.estado!=='revocado';});
   if(!colabs.length){toast('No hay colaboradores activos con teléfono cargado','var(--orange)');return;}
   var p=D.projects.find(function(x){return x.id===S.proj;});
   var baseUrl=window.location.href.replace(/\/[^/]*(\?.*)?$/,'/form.html');
   window._sfcUrls=[];
   colabs.forEach(function(co){
-    var formUrl=baseUrl+'?token='+encodeURIComponent(co.id)+'&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p&&p.name||'')+(SYNC.archTel?'&tel='+encodeURIComponent(SYNC.archTel):'')+(SYNC.archEmail?'&mail='+encodeURIComponent(SYNC.archEmail):'')+'&sw=1&se='+(SYNC.sendEmail?'1':'0');
+    var formUrl=baseUrl+'?token='+encodeURIComponent(co.id)+'&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p&&p.name||'')+(SYNC.archTel?'&tel='+encodeURIComponent(SYNC.archTel):'')+(SYNC.archEmail?'&mail='+encodeURIComponent(SYNC.archEmail):'')+'&sw=1&se='+(SYNC.sendEmail?'1':'0')+_apiUrlParams();
     var msg='Hola '+(co.name||'')+', necesito que completes el informe de '+categoria+(titulo?' — '+titulo:'')+' en la obra '+((p&&p.name)||'')+':\n'+formUrl;
     window._sfcUrls.push('whatsapp://send?phone='+co.phone.replace(/[^0-9]/g,'')+'&text='+encodeURIComponent(msg));
   });
