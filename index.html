@@ -8907,6 +8907,11 @@ async function revisarServidor(manual){
         var _res=_ingestarDelServidor(det.payload);
         if(_res==='visto')vistos++;
         else if(_res){nuevos++;if(!_primerInforme)_primerInforme=det.payload;}
+        else{
+          // No se pudo incorporar (obra desconocida, colaborador dado de baja, etc.).
+          // NO se hace ack: se deja en el servidor para no perderlo en silencio.
+          fallidos++;continue;
+        }
         // Sólo se saca de la bandeja del servidor si se guardó bien de este lado
         sv();
         await _apiGet('ack','&id='+encodeURIComponent(meta.id),20000).catch(function(){});
@@ -8923,8 +8928,12 @@ async function revisarServidor(manual){
       render();
       if(nuevos)toast('📥 '+nuevos+' informe'+(nuevos>1?'s':'')+' recibido'+(nuevos>1?'s':'')+' del servidor','#0d9488',5000);
       else toast('✓ '+vistos+' colaborador'+(vistos>1?'es':'')+' aceptó la invitación','var(--green)',4000);
+      // Avisar igual si además quedó alguno sin poder incorporarse
+      if(fallidos)setTimeout(function(){toast('⚠️ '+fallidos+' envío(s) no se pudieron incorporar — siguen guardados en el servidor','var(--orange)',6000);},1500);
+    } else if(fallidos){
+      toast('⚠️ Hay '+fallidos+' envío(s) que no se pudieron incorporar. Suelen ser de otra obra o de un colaborador dado de baja. Quedaron guardados en tu Drive, no se perdieron.','var(--orange)',7000);
     } else if(manual){
-      toast(fallidos?'No se pudo bajar '+fallidos+' informe(s)':'Sin novedades','var(--orange)',3000);
+      toast('No hay informes nuevos','var(--text3)',2500);
     }
   }catch(e){
     if(manual)toast('Error consultando el servidor: '+(e.message||e),'var(--red)',5000);
