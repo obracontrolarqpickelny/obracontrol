@@ -2322,7 +2322,63 @@ function closeM(id){$(id)?.classList.remove('open');}
 function badge(txt,cls,sm){return `<span class="bg${sm?' bg-s':''} ${cls}">${txt}</span>`;}
 function priBadge(p,s){return badge(p,'pri-'+(p||'media'),s);}
 function stBadge(st,s){return badge(st,st==='pendiente'?'st-pendiente':st==='en curso'?'st-encurso':st==='completada'?'st-completada':'st-cancelada',s);}
-function _getEnvBadge(entId,tipo){var _ms=(D.mensajesColab||[]).filter(function(m){return m.entidadId===entId&&(!tipo||m.tipo===tipo)&&m.estadoColab!=='aceptado'&&m.estadoColab!=='rechazado';});if(!_ms.length)return '';var _co=(D.colaboradores||[]).find(function(c){return c.id===_ms[0].colabId;});return '<span style="font-size:9px;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:9px;padding:1px 6px;font-weight:700;margin-left:3px">📤 '+(_co?esc(_co.name):'Col.')+'</span>';}
+// Vista previa de lo que el colaborador propone cambiar en un checklist.
+// Sin esto el arquitecto tendría que aprobar a ciegas.
+function _previewCambiosChecklist(m){
+  if(m.tipo!=='checklist'||!m.entidadId)return '';
+  var chk=(D.checklists||[]).find(function(c){return c.id===m.entidadId;});
+  if(!chk||!(chk.items||[]).length)return '';
+  var st=m.itemStates||{};
+  var h='<div style="background:var(--gray-ll);border-radius:8px;padding:8px 10px;margin-bottom:8px">';
+  h+='<div class="txxs fw7 tc3 mb-4">Propuesta del colaborador:</div>';
+  var cambios=0;
+  chk.items.forEach(function(it,i){
+    var prop=st.hasOwnProperty(i)?!!st[i]:!!it.done;
+    var actual=!!it.done;
+    var cambia=prop!==actual;
+    if(cambia)cambios++;
+    h+='<div style="display:flex;align-items:flex-start;gap:6px;padding:3px 0;font-size:12px;'+(cambia?'background:#fef9c3;border-radius:4px;padding-left:4px':'')+'">';
+    h+='<span style="flex-shrink:0;color:'+(prop?'var(--green)':'var(--gray-l)')+'">'+(prop?'☑':'☐')+'</span>';
+    h+='<span style="flex:1;color:'+(prop?'var(--text3)':'var(--text)')+';text-decoration:'+(prop?'line-through':'none')+'">'+esc(it.text||'')+'</span>';
+    if(cambia)h+='<span style="flex-shrink:0;font-size:9px;font-weight:700;color:#a16207;white-space:nowrap">'+(prop?'marca':'desmarca')+'</span>';
+    h+='</div>';
+  });
+  h+='<div class="txxs mt-4" style="color:'+(cambios?'#a16207':'var(--text3)')+';font-weight:700">'+(cambios?cambios+' cambio'+(cambios>1?'s':'')+' respecto de lo que tenés':'Sin cambios respecto de lo que tenés')+'</div>';
+  h+='</div>';
+  return h;
+}
+
+// Cancela el compartir: el ítem deja de estar en la bandeja del colaborador.
+function dejarDeCompartir(entId,tipo){
+  var msgs=(D.mensajesColab||[]).filter(function(m){
+    return m.entidadId===entId&&(!tipo||m.tipo===tipo)&&m.estadoColab!=='aceptado'&&m.estadoColab!=='rechazado';
+  });
+  if(!msgs.length){toast('No está compartido','var(--orange)');return;}
+  var co=(D.colaboradores||[]).find(function(c){return c.id===msgs[0].colabId;});
+  var _resp=msgs.filter(function(m){return m.estadoColab==='completado';}).length;
+  var aviso='¿Dejar de compartir con '+((co&&co.name)||'el colaborador')+'?';
+  if(_resp)aviso+='\n\n⚠️ Ya te respondió. Si cancelás, se descarta su respuesta sin aplicarla.';
+  if(!confirm(aviso))return;
+  var ids={};msgs.forEach(function(m){ids[m.id]=true;});
+  D.mensajesColab=(D.mensajesColab||[]).filter(function(m){return !ids[m.id];});
+  sv();render();
+  toast('Dejaste de compartirlo ✓','var(--green)',2500);
+}
+
+function _getEnvBadge(entId,tipo){
+  var _ms=(D.mensajesColab||[]).filter(function(m){return m.entidadId===entId&&(!tipo||m.tipo===tipo)&&m.estadoColab!=='aceptado'&&m.estadoColab!=='rechazado';});
+  if(!_ms.length)return '';
+  var _co=(D.colaboradores||[]).find(function(c){return c.id===_ms[0].colabId;});
+  var _resp=_ms.some(function(m){return m.estadoColab==='completado';});
+  var _nom=_co?esc(_co.name):'Col.';
+  // Verde si ya respondió (hay algo para revisar), azul si sigue esperando
+  var _bg=_resp?'#f0fdf4':'#eff6ff',_bd=_resp?'#bbf7d0':'#bfdbfe',_fg=_resp?'#16a34a':'#1d4ed8';
+  var _txt=_resp?'✅ '+_nom+' respondió':'📤 '+_nom;
+  return '<span style="display:inline-flex;align-items:center;gap:3px;font-size:9px;background:'+_bg+';color:'+_fg+';border:1px solid '+_bd+';border-radius:9px;padding:1px 3px 1px 6px;font-weight:700;margin-left:3px;vertical-align:middle">'
+    +(_resp?'<span style="cursor:pointer" onclick="event.stopPropagation();S.mod=\'bandeja\';render()" title="Ir a la Bandeja a revisarlo">'+_txt+'</span>':_txt)
+    +'<button onclick="event.stopPropagation();dejarDeCompartir(\''+entId+'\',\''+(tipo||'')+'\')" title="Dejar de compartir" style="border:none;background:transparent;color:'+_fg+';cursor:pointer;font-size:10px;line-height:1;padding:0 2px;font-weight:700">✕</button>'
+    +'</span>';
+}
 function colBadge(txt,col,s){return `<span class="bg${s?' bg-s':''}" style="background:${col}18;color:${col};border:1px solid ${col}30">${txt}</span>`;}
 function modHeader(mod,title,rHTML){const c=MC[mod]||'#64748b';const bg=MCBG[mod]||'#f8fafc';const icMap={dashboard:'dash',visitas:'clip',tareas:'list',alertas:'bell',materiales:'pkg',checklist:'chklist',documentos:'file',comentarios:'msg',informes:'dl',config:'gear',colaboradores:'share',economia:'eco'};return `<div class="mod-hdr"><h2><span class="mod-icon" style="background:${bg};color:${c}">${I[icMap[mod]]||I.dash}</span>${title}</h2>${rHTML||''}</div>`;}
 function progress(v,mx,col){const p=mx>0?Math.min(v/mx*100,100):0;return `<div class="prog"><div class="prog-bar" style="width:${p}%;background:${col||'var(--pri)'}"></div></div>`;}
@@ -2407,7 +2463,7 @@ function renderShell(){
   <div class="ov${S.menu?' open':''}" onclick="S.menu=false;render();"><div class="smenu" onclick="event.stopPropagation()"><div class="smenu-hdr"><div class="flex items-center gap-10 mb-4"><span style="color:var(--pri)">${I.building}</span><span style="font-size:15px;font-weight:800">${p.name}</span></div><div class="txxs tc3">${p.client||''} ${p.location?'| '+p.location:''}</div></div><div style="flex:1;overflow-y:auto;padding:4px 0">${mi}</div><div style="padding:12px 16px;border-top:1px solid var(--gray-ll)"><button class="btn btn-g btn-s btn-w" style="color:var(--red)" onclick="D.user=null;sv();render();">${I.out} Cerrar sesion</button></div></div></div>
   <div class="mo${S.searchOpen?' open':''}" onclick="S.searchOpen=false;render();"><div class="mo-c" style="max-width:600px" onclick="event.stopPropagation()"><div class="mo-h"><h3>${I.search} Buscador</h3><button class="tbtn" onclick="S.searchOpen=false;render();">${I.x}</button></div><div class="searchbar"><span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--gray-l)">${I.search}</span><input class="fi" style="padding-left:38px" id="searchInput" placeholder="Buscar..." value="${S.searchQ||''}" oninput="S.searchQ=this.value;renderSR();"></div><div id="searchResults"></div></div></div>
   <div class="content" id="mc"></div>
-  <div class="bottomnav" ontouchstart="window._bnTX=event.changedTouches[0].clientX" ontouchend="var _dx=event.changedTouches[0].clientX-(window._bnTX||0);if(Math.abs(_dx)>40){navStep(_dx<0?1:-1)}"><button class="bnav" style="max-width:32px;min-width:32px;font-size:16px;opacity:${_bnavIdx<=0?'0.3':'1'}" onclick="navStep(-1)" title="Anterior">&#x276E;</button>${bnav.map(t=>{const act=S.mod===t.id;const c=act?MC[t.id]:'var(--gray-l)';return `<button class="bnav${act?' active':''}" style="color:${c}" onclick="S.mod='${t.id}';S.visitaDetail=null;S.matDetail=null;render();">${I[t.ic]}<span>${t.l}</span>${t.id==='alertas'&&actAl>0?'<span class="ndot"></span>':t.id==='bandeja'&&(pendForms+pendCarpeta)>0?'<span class="nbadge">'+(pendForms+pendCarpeta)+'</span>':''}</button>`;}).join('')}<button class="bnav" style="max-width:32px;min-width:32px;font-size:16px;opacity:${_bnavIdx>=_allNavIds.length-1?'0.3':'1'}" onclick="navStep(1)" title="Siguiente">&#x276F;</button></div>`);
+  <div class="bottomnav" ontouchstart="window._bnTX=event.changedTouches[0].clientX" ontouchend="var _dx=event.changedTouches[0].clientX-(window._bnTX||0);if(Math.abs(_dx)>40){navStep(_dx<0?1:-1)}"><button class="bnav" style="max-width:32px;min-width:32px;font-size:16px;opacity:${_bnavIdx<=0?'0.3':'1'}" onclick="navStep(-1)" title="Anterior">&#x276E;</button>${bnav.map(t=>{const act=S.mod===t.id;const c=act?MC[t.id]:'var(--gray-l)';return `<button class="bnav${act?' active':''}" style="color:${c}" onclick="S.mod='${t.id}';S.visitaDetail=null;S.matDetail=null;render();">${I[t.ic]}<span>${t.l}</span>${t.id==='alertas'&&actAl>0?'<span class="ndot"></span>':t.id==='bandeja'&&(pendForms+pendCarpeta+pendMsgsColab)>0?'<span class="nbadge">'+(pendForms+pendCarpeta+pendMsgsColab)+'</span>':''}</button>`;}).join('')}<button class="bnav" style="max-width:32px;min-width:32px;font-size:16px;opacity:${_bnavIdx>=_allNavIds.length-1?'0.3':'1'}" onclick="navStep(1)" title="Siguiente">&#x276F;</button></div>`);
   renderModule(S.mod,p);
 }
 function renderModule(mod,p){const mc=$('mc');if(!mc)return;if(S.visitaDetail){var _vck=(D.visitas||[]).find(function(x){return x.id===S.visitaDetail;});if(!_vck||_vck.projectId!==S.proj){S.visitaDetail=null;}else{rVisitaDetail(mc,S.visitaDetail);return;}}if(S.matDetail){rMatDetail(mc,S.matDetail);return;}switch(mod){case 'dashboard':rDash(mc,p);break;case 'visitas':rVisitas(mc);break;case 'tareas':rTareas(mc);break;case 'materiales':rMat(mc);break;case 'alertas':rAlertas(mc);break;case 'checklist':rChecklist(mc);break;case 'documentos':rDocs(mc);break;case 'comentarios':rComentarios(mc);break;case 'informes':rInformes(mc,p);break;case 'colaboradores':rColaboradores(mc,p);break;case 'bandeja':rBandeja(mc,p);break;case 'economia':rEconomia(mc,p);break;case 'config':rConfig(mc,p);break;}if(S.searchOpen)setTimeout(()=>{const si=$('searchInput');if(si)si.focus();},100);}
@@ -7432,6 +7488,7 @@ function openPerfilColab(colabId,tab){
         }
         // Collaborator response
         if(m.respuesta)h+='<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:12px"><span class="fw7" style="color:var(--green)">✅ Respuesta del colaborador:</span><div class="mt-4">'+esc(m.respuesta)+'</div><div class="txxs tc3 mt-4">'+fmts(m.fechaRespuesta||'')+'</div></div>';
+        if(m.estadoColab==='completado')h+=_previewCambiosChecklist(m);
         if(m.notaRechazo)h+='<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:12px"><span class="fw7" style="color:var(--red)">❌ Motivo de rechazo:</span><div class="mt-4">'+esc(m.notaRechazo)+'</div></div>';
         // Footer actions
         h+='<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">';
@@ -8347,9 +8404,10 @@ function rBandeja(mc,p){
       +'</div>'
       +'<span style="background:#dcfce7;color:#16a34a;border-radius:8px;padding:2px 8px;font-size:10px;font-weight:700;flex-shrink:0;white-space:nowrap">✅ Respondido</span>'
       +'</div>'
-      +(m.respuesta?'<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:12px">'+esc(m.respuesta)+'</div>':'')
+      +(m.respuesta?'<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:12px"><span class="fw7" style="color:var(--green)">💬 </span>'+esc(m.respuesta)+'</div>':'')
+      +_previewCambiosChecklist(m)
       +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
-      +'<button onclick="aceptarMsgColab(\''+m.id+'\',\''+m.colabId+'\')" style="border:none;background:var(--green);color:#fff;border-radius:6px;padding:5px 12px;font-size:11px;cursor:pointer;font-weight:700">✅ Aceptar</button>'
+      +'<button onclick="aceptarMsgColab(\''+m.id+'\',\''+m.colabId+'\')" style="border:none;background:var(--green);color:#fff;border-radius:6px;padding:5px 12px;font-size:11px;cursor:pointer;font-weight:700">✅ Aceptar y aplicar</button>'
       +(m.entidadId?'<button onclick="editarEntidadDesdeColab(\''+m.tipo+'\',\''+m.entidadId+'\')" style="border:none;background:var(--cyan);color:#fff;border-radius:6px;padding:5px 12px;font-size:11px;cursor:pointer;font-weight:700">✏️ Editar</button>':'')
       +'<button onclick="rechazarMsgColab(\''+m.id+'\',\''+m.colabId+'\')" style="border:none;background:var(--red);color:#fff;border-radius:6px;padding:5px 12px;font-size:11px;cursor:pointer;font-weight:700">❌ Rechazar</button>'
       +'</div>'
@@ -8361,7 +8419,9 @@ function rBandeja(mc,p){
     +'<button class="btn btn-s" style="'+(tab==='log'?'background:'+c2+';color:#fff':'background:var(--gray-ll);color:var(--text2)')+'" onclick="S.bandejaTab=\'log\';render()">📋 Log ('+procesados.length+')</button>'
     +'</div>'
     +(tab==='pendientes'
-      ?(completedMsgsHtml+newCarpetaGroups.map(function(g){
+      ?((completedMsgs.length?'<div class="txs fw7 mb-8" style="color:var(--green)">✅ Respuestas para revisar ('+completedMsgs.length+')</div>':'')+completedMsgsHtml
+        +((completedMsgs.length&&(pendientes.length||newCarpetaGroups.length))?'<div class="txs fw7 mb-8 mt-12" style="color:#0d9488">📥 Informes y archivos recibidos</div>':'')
+        +newCarpetaGroups.map(function(g){
           return '<div class="card" style="border-left:3px solid #16a34a;padding:12px;margin-bottom:8px"><div class="flex justify-between items-center gap-8"><div><div class="ts fw7">📁 '+esc(g.coName)+'</div><div class="txxs tc3 mt-2">'+g.count+' archivo'+(g.count>1?'s':'')+' nuevo'+(g.count>1?'s':'')+(g.imgs?' · '+g.imgs+' foto'+(g.imgs>1?'s':''):'')+'</div></div><button class="btn btn-s" style="background:#16a34a;color:#fff;white-space:nowrap;flex-shrink:0" onclick="S.mod=\'colaboradores\';render();setTimeout(function(){openPerfilColab(\''+g.colabId+'\',\'carpeta\');},100)">📁 Ver</button></div></div>';
         }).join('')+(pendientes.length?pendientes.map(renderCard).join(''):'')+(completedMsgs.length===0&&newCarpetaGroups.length===0&&!pendientes.length?'<div class="empty">'+I.checkc+'<div class="ts mt-8">Bandeja vacía</div><div class="txxs tc3 mt-4">Cuando un colaborador envíe su informe o suba archivos, aparecerá aquí.</div></div>':''))
       :(procesados.length?procesados.map(renderCard).join(''):'<div class="empty"><div class="ts mt-8">Sin informes procesados aún</div></div>'));
