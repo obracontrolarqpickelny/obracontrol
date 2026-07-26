@@ -1494,6 +1494,11 @@ function _silentMerge(driveData){
   var allTombs=Array.from(tombMap.values());
   var tombIds=new Set(allTombs.map(function(t){return t.id;}));
   var changed=false;
+  // Config del servidor de informes: gana la más reciente. Viaja por Drive para
+  // que todos los dispositivos del arquitecto queden configurados solos.
+  if(driveData.serverCfg&&driveData.serverCfg.url&&(!D.serverCfg||(driveData.serverCfg.updatedAt||'')>(D.serverCfg.updatedAt||''))){
+    D.serverCfg=driveData.serverCfg;changed=true;
+  }
   arrKeys.forEach(function(k){
     var dArr=(driveData[k]&&Array.isArray(driveData[k]))?driveData[k]:[];
     var lArr=D[k]||[];
@@ -1637,6 +1642,8 @@ async function loadFromDriveAndMerge(silent){
     const driveData = await loadFromDrive();
     if(!driveData){updateSyncIndicator('noauth');return;}
     _silentMerge(driveData);
+    // Si otro dispositivo configuró el servidor de informes, adoptarlo acá
+    if(_adoptServerCfg())toast('🚀 Servidor de informes configurado desde otro dispositivo','var(--green)',4000);
     D.lastSync=nw();
     await saveToIDB();
     _lsSave();
@@ -7995,6 +8002,7 @@ function _mcsP(selId,id,label,unit,name){
 // ═══════ INIT ═══════
 // 1. Sync bootstrap from localStorage (immediate render)
 load();
+_adoptServerCfg();
 _pinCheck();
 if(!_isPinLocked())render();
 // 2b. Deep-link incoming report (#r=BASE64)
@@ -8098,6 +8106,8 @@ if(!_isPinLocked())render();
       idbData[k].forEach(function(item){if(item.id&&!currIds[item.id]){curr.push(item);currIds[item.id]=true;}});
       D[k]=curr;
     });
+    // Config del servidor de informes: gana la más reciente
+    if(idbData.serverCfg&&idbData.serverCfg.url&&(!D.serverCfg||(idbData.serverCfg.updatedAt||'')>(D.serverCfg.updatedAt||'')))D.serverCfg=idbData.serverCfg;
     // Preserve live session state — never overwrite
     if(idbData.driveConfig)D.driveConfig={...D.driveConfig,...idbData.driveConfig};
     if(idbData.lastSync)D.lastSync=idbData.lastSync;
@@ -8107,6 +8117,12 @@ if(!_isPinLocked())render();
     _repairEcoMatLinks();
     if(!_isPinLocked())render();
   }
+  // Si la config del servidor llegó desde otro dispositivo (IDB/Drive), adoptarla
+  if(_adoptServerCfg()){
+    if(!_isPinLocked())render();
+    toast('🚀 Servidor de informes configurado desde otro dispositivo','var(--green)',4000);
+  }
+
   // Revisar el servidor de informes: es el canal que no depende de WhatsApp.
   // Va sin await para no demorar el arranque de la app.
   if(SYNC.apiUrl&&SYNC.apiSecret){
@@ -8755,6 +8771,11 @@ function shareFormColaborador(colId){
   if(!co)return;
   if(co.estado==='revocado'){toast('Este colaborador fue dado de baja. Reactivalo antes de compartir.','var(--orange)');return;}
   if(!co.phone){toast('Agregá un teléfono al colaborador primero','var(--orange)');return;}
+  // Aviso clave: un link generado sin servidor obliga al colaborador a mandar
+  // todo por WhatsApp y las fotos no viajan. Es el error más fácil de cometer.
+  if(!(SYNC.apiUrl&&SYNC.apiSecret)){
+    if(!confirm('⚠️ Este dispositivo no tiene el servidor configurado.\n\nEl link va a salir SIN servidor: el informe dependerá de que el colaborador lo mande por WhatsApp y las fotos no van a llegar.\n\nConfiguralo en Configuración → Servidor propio, o compartí el link desde el dispositivo donde ya lo tenés.\n\n¿Compartir igual?'))return;
+  }
   if(!SYNC.archTel&&!SYNC.archEmail&&!(SYNC.apiUrl&&SYNC.apiSecret)){toast('Configurá el servidor (o tu WhatsApp) en Configuración → Informes de campo','var(--orange)',4000);return;}
   var p=D.projects.find(function(x){return x.id===S.proj;});
   var baseUrl=window.location.href.replace(/\/[^/]*(\?.*)?$/,'/form.html');
@@ -8957,7 +8978,25 @@ function saveApiCfg(campo,val){
   if(campo==='url')SYNC.apiUrl=val||null;
   else SYNC.apiSecret=val||null;
   saveSyncConfig();
+  // Guardar también dentro de los datos: así viaja por Drive al resto de los
+  // dispositivos. Sin esto la config queda encerrada en un solo aparato y los
+  // links generados desde otro salen sin servidor.
+  if(SYNC.apiUrl&&SYNC.apiSecret){
+    D.serverCfg={url:SYNC.apiUrl,secret:SYNC.apiSecret,updatedAt:nw()};
+    sv();
+    if(GD.idbReady) saveToIDB().catch(function(){});
+  }
   toast('Guardado','var(--green)',1500);
+}
+
+// Toma la config del servidor que llegó por Drive si este dispositivo no la tiene.
+function _adoptServerCfg(){
+  var c=D&&D.serverCfg;
+  if(!c||!c.url||!c.secret)return false;
+  if(SYNC.apiUrl&&SYNC.apiSecret)return false; // ya configurado acá
+  SYNC.apiUrl=c.url;SYNC.apiSecret=c.secret;
+  saveSyncConfig();
+  return true;
 }
 
 function shareToInbox(tipo,entidadId,titulo){
