@@ -145,6 +145,7 @@ function doPost(e) {
 /** Texto corto describiendo el informe, para la lista. */
 function _resumir(p) {
   var t = [];
+  if (p.mode === 'visto') return 'Abrió el link (aceptó la invitación)';
   if (p.mode === 'carpeta') {
     t.push((p.archivos || []).length + ' archivo(s)');
     return t.join(' · ');

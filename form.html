@@ -379,7 +379,8 @@ function init(){
     $('screenCarpeta').classList.add('active');
     $('carpetaObraName').textContent=OBRA_NAME||'Obra';
     var storedName=TOKEN?localStorage.getItem('oc_n_'+TOKEN):'';
-    if(storedName)$('carpetaColabSub').textContent='Hola, '+storedName+' 👋';
+    if(storedName){$('carpetaColabSub').textContent='Hola, '+storedName+' 👋';colabName=storedName;}
+    _avisarAcceso();
     return;
   }
   // Use name from URL param (architect sets it), or from localStorage, or ask
@@ -545,9 +546,31 @@ function saveName(){
   showFormScreen();
 }
 
+// Avisa al arquitecto que el colaborador abrió el link y entró a su perfil.
+// Esto es lo que hace que pase de "pendiente" a "aceptado".
+function _avisarAcceso(){
+  if(!API_URL||!TOKEN)return;
+  try{
+    var _k='oc_visto_'+TOKEN;
+    if(localStorage.getItem(_k))return; // una sola vez por colaborador
+    _postServidor({
+      id:'visto_'+TOKEN,
+      mode:'visto',
+      token:TOKEN,
+      obraId:OBRA_ID,
+      obraName:OBRA_NAME,
+      ayudante:colabName||'Colaborador',
+      fecha:new Date().toISOString()
+    }).then(function(r){
+      if(r&&r.ok)localStorage.setItem(_k,'1');
+    }).catch(function(){});
+  }catch(_){}
+}
+
 function showFormScreen(){
   $('screenName').classList.remove('active');
   $('screenForm').classList.add('active');
+  _avisarAcceso();
   $('hdrObra').textContent=OBRA_NAME||'Obra';
   $('hdrCollab').textContent='Hola, '+colabName+' 👋';
   sendCount=parseInt(TOKEN?localStorage.getItem('oc_v_'+TOKEN)||'0':'0');

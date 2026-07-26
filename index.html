@@ -7007,6 +7007,9 @@ function rColaboradores(mc,p){
   var colabs=pf('colaboradores');
   var colG='#16a34a';
   mc.innerHTML=modHeader('colaboradores','👷 Colaboradores','<button class="btn btn-s" style="background:'+colG+';color:#fff" onclick="openM(\'newColabM\')">'+ I.plus+' Agregar</button>')
+  +((SYNC.apiUrl&&SYNC.apiSecret)
+    ?'<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px 10px;margin-bottom:10px;display:flex;align-items:center;gap:8px"><span style="font-size:14px">🚀</span><div style="flex:1;font-size:11px;color:#15803d"><strong>Servidor activo.</strong> Los informes llegan solos.</div><button class="btn btn-s" style="background:var(--green);color:#fff;flex-shrink:0;font-size:10px" onclick="revisarServidor(true)">📥 Buscar</button></div>'
+    :'<div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:8px;padding:10px 12px;margin-bottom:10px;display:flex;align-items:center;gap:10px"><span style="font-size:18px">⚠️</span><div style="flex:1;font-size:11px;color:#92400e"><strong>Servidor sin configurar.</strong> Los informes dependen de que el colaborador los mande por WhatsApp, y las fotos no van a llegar. Configuralo en Configuración → Servidor propio.</div><button class="btn btn-s" style="background:#d97706;color:#fff;flex-shrink:0;font-size:10px" onclick="S.mod=\'config\';render()">Ir</button></div>')
   +(colabs.length?colabs.map(function(co){
     var _rev=co.estado==='revocado';
     var stCol=co.estado==='aceptado'?'var(--green)':_rev?'var(--red)':'var(--orange)';
@@ -7026,7 +7029,7 @@ function rColaboradores(mc,p){
     var btnEdit='<button class="btn btn-sec btn-s" onclick="editColab(\''+ co.id +'\')">'+I.edit+'</button>';
     var btnBaja='<button class="btn btn-s" style="font-size:10px;'+ (_rev?'background:var(--green);color:#fff':'background:var(--gray-ll);color:var(--red)')+'" onclick="'+ (_rev?'reactivateColab(\''+ co.id +'\')':'revokeColab(\''+ co.id +'\')') +'">'+(_rev?'Reactivar':'Dar de baja')+'</button>';
     var btnDel='<button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delI(\'colaboradores\',\''+ co.id +'\')">'+I.trash+'</button>';
-    return '<div class="card" style="padding:12px;margin-bottom:8px'+ (_rev?';opacity:.65':'')+'"><div class="flex justify-between items-start gap-8"><div style="flex:1;min-width:0"><div class="ts fw7" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="openPerfilColab(\''+co.id+'\')">'+esc(co.name||co.email||'Sin nombre')+'</div><div class="txxs tc3 mt-4">'+( co.phone?'📱 '+co.phone:'Sin teléfono')+(co.email?' · '+co.email:'')+(co.role?' · <strong>'+co.role+'</strong>':'')+'</div><div class="mt-4">'+colBadge(_rev?'Dado de baja':(co.estado||'pendiente'),stCol,true)+'</div></div><div class="flex gap-4 flex-wrap" style="flex-shrink:0">'+btnCarpeta+btnForm+btnEdit+btnBaja+btnDel+'</div></div></div>';
+    return '<div class="card" style="padding:12px;margin-bottom:8px'+ (_rev?';opacity:.65':'')+'"><div class="flex justify-between items-start gap-8"><div style="flex:1;min-width:0"><div class="ts fw7" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="openPerfilColab(\''+co.id+'\')">'+esc(co.name||co.email||'Sin nombre')+'</div><div class="txxs tc3 mt-4">'+( co.phone?'📱 '+co.phone:'Sin teléfono')+(co.email?' · '+co.email:'')+(co.role?' · <strong>'+co.role+'</strong>':'')+'</div><div class="mt-4">'+colBadge(_rev?'Dado de baja':(co.estado||'pendiente'),stCol,true)+(co.ultimoAcceso?'<span class="txxs" style="color:var(--green);margin-left:6px">👁 abrió el link '+fmts(co.ultimoAcceso)+'</span>':'')+'</div></div><div class="flex gap-4 flex-wrap" style="flex-shrink:0">'+btnCarpeta+btnForm+btnEdit+btnBaja+btnDel+'</div></div></div>';
   }).join(''): '<div class="empty">'+I.share+'<div class="ts mt-8">Sin colaboradores</div><div class="txxs tc3 mt-4">Agregá personas para que carguen datos de campo.</div></div>')
   +'<div class="mo" id="newColabM"><div class="mo-c"><div class="mo-h"><h3 style="color:'+colG+'">Agregar Colaborador</h3><button class="tbtn" onclick="closeM(\'newColabM\')">'+ I.x+'</button></div>'
   +'<div class="fg"><label class="fl">Nombre *</label><input class="fi" id="nc_name" placeholder="Nombre"></div>'
@@ -8843,6 +8846,14 @@ function _ingestarDelServidor(payload){
   // Al enviar un informe el colaborador confirma que aceptó la invitación
   if(co&&co.estado==='pendiente'){co.estado='aceptado';co.updatedAt=nw();}
 
+  // Aviso de que abrió el link y entró a su perfil → aceptó la invitación
+  if(payload.mode==='visto'){
+    if(!co)return false;
+    co.ultimoAcceso=payload.fecha||nw();
+    co.updatedAt=nw();
+    return 'visto';
+  }
+
   if(payload.mode==='carpeta'){
     if(!D.carpetas)D.carpetas=[];
     var _cp=D.carpetas.find(function(c){return c.colabId===payload.token&&c.projectId===payload.obraId;});
@@ -8887,27 +8898,31 @@ async function revisarServidor(manual){
     var pend=lista.informes||[];
     if(!pend.length){if(manual)toast('No hay informes nuevos','var(--text3)',2500);return;}
 
-    var nuevos=0,fallidos=0;
+    var nuevos=0,vistos=0,fallidos=0,_primerInforme=null;
     for(var i=0;i<pend.length;i++){
       var meta=pend[i];
       try{
         var det=await _apiGet('get','&id='+encodeURIComponent(meta.id),60000);
         if(!det||!det.ok||!det.payload){fallidos++;continue;}
-        if(_ingestarDelServidor(det.payload))nuevos++;
+        var _res=_ingestarDelServidor(det.payload);
+        if(_res==='visto')vistos++;
+        else if(_res){nuevos++;if(!_primerInforme)_primerInforme=det.payload;}
         // Sólo se saca de la bandeja del servidor si se guardó bien de este lado
         sv();
         await _apiGet('ack','&id='+encodeURIComponent(meta.id),20000).catch(function(){});
       }catch(e){fallidos++;}
     }
 
-    if(nuevos){
+    if(nuevos||vistos){
       sv();
       if(GD.idbReady) saveToIDB().catch(function(){});
-      var _p0=pend[0];
-      if(_p0&&_p0.obraId&&(D.projects||[]).find(function(p){return p.id===_p0.obraId;}))S.proj=_p0.obraId;
-      S.mod='bandeja';
+      if(nuevos){
+        if(_primerInforme&&_primerInforme.obraId&&(D.projects||[]).find(function(p){return p.id===_primerInforme.obraId;}))S.proj=_primerInforme.obraId;
+        S.mod='bandeja';
+      }
       render();
-      toast('📥 '+nuevos+' informe'+(nuevos>1?'s':'')+' recibido'+(nuevos>1?'s':'')+' del servidor','#0d9488',5000);
+      if(nuevos)toast('📥 '+nuevos+' informe'+(nuevos>1?'s':'')+' recibido'+(nuevos>1?'s':'')+' del servidor','#0d9488',5000);
+      else toast('✓ '+vistos+' colaborador'+(vistos>1?'es':'')+' aceptó la invitación','var(--green)',4000);
     } else if(manual){
       toast(fallidos?'No se pudo bajar '+fallidos+' informe(s)':'Sin novedades','var(--orange)',3000);
     }
