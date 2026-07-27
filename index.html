@@ -2359,9 +2359,11 @@ function dejarDeCompartir(entId,tipo){
   var aviso='¿Dejar de compartir con '+((co&&co.name)||'el colaborador')+'?';
   if(_resp)aviso+='\n\n⚠️ Ya te respondió. Si cancelás, se descarta su respuesta sin aplicarla.';
   if(!confirm(aviso))return;
-  var ids={};msgs.forEach(function(m){ids[m.id]=true;});
+  var ids={};msgs.forEach(function(m){ids[m.id]=true;addTombstone('mensajesColab',m.id);});
   D.mensajesColab=(D.mensajesColab||[]).filter(function(m){return !ids[m.id];});
-  sv();render();
+  sv();
+  if(GD.idbReady) saveToIDB().catch(function(){});
+  render();
   toast('Dejaste de compartirlo ✓','var(--green)',2500);
 }
 
@@ -7557,8 +7559,12 @@ function colabSendFromPerfil(colabId,sendWA){
   openPerfilColab(colabId,'mensajes');
 }
 function borrarMsgColab(msgId,colabId){
+  // Sin tombstone, Drive lo vuelve a agregar en la próxima sincronización
+  addTombstone('mensajesColab',msgId);
   D.mensajesColab=(D.mensajesColab||[]).filter(function(m){return m.id!==msgId;});
-  sv();openPerfilColab(colabId,'bandeja');
+  sv();
+  if(GD.idbReady) saveToIDB().catch(function(){});
+  openPerfilColab(colabId,'bandeja');
 }
 function aceptarMsgColab(msgId,colabId){
   var m=(D.mensajesColab||[]).find(function(x){return x.id===msgId;});
@@ -7710,7 +7716,7 @@ async function uploadArqCarpeta(colabId,input){
       id:uid(),proyectoId:S.proj,colabId:colabId,tipo:'nota',entidadId:null,
       titulo:'📁 '+added+' archivo'+(added>1?'s':'')+' nuevo'+(added>1?'s':'')+' en tu carpeta',
       nota:nombres.slice(0,3).join(', ')+(nombres.length>3?' y '+(nombres.length-3)+' más':''),
-      urgencia:'baja',fechaEnvio:nw(),estadoColab:'nuevo',respuesta:null,fechaRespuesta:null
+      urgencia:'baja',fechaEnvio:nw(),updatedAt:nw(),estadoColab:'nuevo',respuesta:null,fechaRespuesta:null
     });
   }
   sv();render();
@@ -8049,7 +8055,7 @@ function _pcF(selId){
   var filtered=q?opts.filter(function(o){return o.toLowerCase().includes(q);}):opts;
   if(!filtered.length){drop.style.display='none';return;}
   drop.innerHTML=filtered.slice(0,25).map(function(o){
-    return '<div class="mcs-opt" onmousedown="_pcP(\''+selId+'\','+JSON.stringify(o)+')">'+esc(o)+'</div>';
+    return '<div class="mcs-opt" onmousedown="_pcP(\''+selId+'\','+_argAttr(o)+')">'+esc(o)+'</div>';
   }).join('');
   drop.style.display='block';
 }
@@ -8062,6 +8068,15 @@ function _pcP(selId,val){
 
 // ═══════ MATERIAL COMBO SEARCH ═══════
 var _mcsOpts={};
+// Serializa un valor para usarlo como argumento dentro de un atributo HTML.
+// JSON.stringify solo devuelve comillas dobles, que cortaban el atributo
+// onmousedown="..." y dejaban el handler roto: la lista se abría pero al tocar
+// una opción no pasaba nada.
+function _argAttr(v){
+  return JSON.stringify(String(v==null?'':v))
+    .replace(/&/g,'&amp;').replace(/"/g,'&quot;')
+    .replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
 function _mcsHtml(selId,items,placeholder,emptyLabel){
   _mcsOpts[selId]=items.map(function(m){return{id:m.id,label:m.name+' ('+(m.category||'General')+')',unit:m.unit||'u',name:m.name};});
   var empty=emptyLabel?'<div class="mcs-opt" style="color:var(--text3)" onmousedown="_mcsP(\''+selId+'\',\'\',\'\',\'\',\'\')">'+emptyLabel+'</div>':'';
@@ -8081,7 +8096,7 @@ function _mcsF(selId){
   var empty=selId==='np_mat'||selId==='nap_mat'||selId==='nex_mat'?'<div class="mcs-opt" style="color:var(--text3)" onmousedown="_mcsP(\''+selId+'\',\'\',\'\',\'\',\'\')">— Ninguno —</div>':'';
   if(!filtered.length&&!empty){drop.style.display='none';return;}
   drop.innerHTML=empty+filtered.slice(0,35).map(function(o){
-    return '<div class="mcs-opt" onmousedown="_mcsP(\''+selId+'\','+JSON.stringify(o.id)+','+JSON.stringify(o.label)+','+JSON.stringify(o.unit)+','+JSON.stringify(o.name)+')">'+esc(o.label)+'</div>';
+    return '<div class="mcs-opt" onmousedown="_mcsP(\''+selId+'\','+_argAttr(o.id)+','+_argAttr(o.label)+','+_argAttr(o.unit)+','+_argAttr(o.name)+')">'+esc(o.label)+'</div>';
   }).join('');
   drop.style.display='block';
 }
@@ -8148,7 +8163,7 @@ if(!_isPinLocked())render();
       var _resp=sub.respuestas||[];var _n=0;
       _resp.forEach(function(r){
         var msg=D.mensajesColab.find(function(m){return m.id===r.msgId;});
-        if(msg){msg.estadoColab='completado';msg.respuesta=r.respuesta||'';msg.fechaRespuesta=nw();if(r.itemStates)msg.itemStates=r.itemStates;_n++;}
+        if(msg){msg.estadoColab='completado';msg.respuesta=r.respuesta||'';msg.fechaRespuesta=nw();msg.updatedAt=nw();if(r.itemStates)msg.itemStates=r.itemStates;_n++;}
       });
       if(_co2&&_co2.estado==='pendiente'){_co2.estado='aceptado';_co2.updatedAt=nw();}
       if(_n){sv();if(sub.obraId)S.proj=sub.obraId;S.mod='colaboradores';render();
@@ -8996,7 +9011,7 @@ function _ingestarDelServidor(payload){
     if(!D.mensajesColab)D.mensajesColab=[];
     (payload.respuestas||[]).forEach(function(r){
       var m=D.mensajesColab.find(function(x){return x.id===r.msgId;});
-      if(m){m.estadoColab='completado';m.respuesta=r.respuesta||'';m.fechaRespuesta=nw();if(r.itemStates)m.itemStates=r.itemStates;}
+      if(m){m.estadoColab='completado';m.respuesta=r.respuesta||'';m.fechaRespuesta=nw();m.updatedAt=nw();if(r.itemStates)m.itemStates=r.itemStates;}
     });
     return true;
   }
@@ -9216,7 +9231,7 @@ function confirmarAsignar(colId){
     var titulo='';
     if(tipo==='chk'){var ch=(D.checklists||[]).find(function(x){return x.id===entId;});titulo=ch?ch.title:'';}
     else if(tipo==='tarea'){var t=(D.tareas||[]).find(function(x){return x.id===entId;});titulo=t?t.title:'';}
-    D.mensajesColab.push({id:uid(),proyectoId:S.proj,colabId:colId,tipo:tipo==='chk'?'checklist':'tarea',entidadId:entId,titulo:titulo,nota:nota,urgencia:urg,fechaEnvio:nw(),estadoColab:'nuevo',respuesta:null,fechaRespuesta:null});
+    D.mensajesColab.push({id:uid(),proyectoId:S.proj,colabId:colId,tipo:tipo==='chk'?'checklist':'tarea',entidadId:entId,titulo:titulo,nota:nota,urgencia:urg,fechaEnvio:nw(),updatedAt:nw(),estadoColab:'nuevo',respuesta:null,fechaRespuesta:null});
   });
   sv();
   document.getElementById('asignarMod')?.remove();
@@ -9234,7 +9249,7 @@ function confirmarShareToInbox(tipo,entidadId,titulo){
   var nota=document.getElementById('sti_nota')?.value.trim()||'';
   if(!colId)return;
   if(!D.mensajesColab)D.mensajesColab=[];
-  D.mensajesColab.push({id:uid(),proyectoId:S.proj,colabId:colId,tipo:tipo,entidadId:entidadId,titulo:titulo,nota:nota,urgencia:urg,fechaEnvio:nw(),estadoColab:'nuevo',respuesta:null,fechaRespuesta:null});
+  D.mensajesColab.push({id:uid(),proyectoId:S.proj,colabId:colId,tipo:tipo,entidadId:entidadId,titulo:titulo,nota:nota,urgencia:urg,fechaEnvio:nw(),updatedAt:nw(),estadoColab:'nuevo',respuesta:null,fechaRespuesta:null});
   sv();
   document.getElementById('stiMod')?.remove();
   var co=(D.colaboradores||[]).find(function(c){return c.id===colId;});
