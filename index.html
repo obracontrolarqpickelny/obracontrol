@@ -67,6 +67,10 @@ a{color:var(--blue);text-decoration:none}
 .pri-media{background:#FEF9C3;color:#854D0E;border:1px solid #FDE68A}
 .pri-baja{background:#F0FDF4;color:#166534;border:1px solid #BBF7D0}
 .st-pendiente{background:#FEF3C7;color:#92400E;border:1px solid #FDE68A}
+/* Zócalo de alertas: latido suave para que llame la atención sin molestar */
+@keyframes zocPulse{0%,100%{box-shadow:0 3px 12px #dc262650}50%{box-shadow:0 3px 20px #dc2626aa}}
+.zocalo-alerta{animation:zocPulse 2.4s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){.zocalo-alerta{animation:none}}
 .st-encurso{background:#DBEAFE;color:#1E40AF;border:1px solid #BFDBFE}
 .st-completada{background:#DCFCE7;color:#166534;border:1px solid #BBF7D0}
 .st-cancelada{background:#F1F5F9;color:#475569;border:1px solid #E2E8F0}
@@ -2322,6 +2326,111 @@ function closeM(id){$(id)?.classList.remove('open');}
 function badge(txt,cls,sm){return `<span class="bg${sm?' bg-s':''} ${cls}">${txt}</span>`;}
 function priBadge(p,s){return badge(p,'pri-'+(p||'media'),s);}
 function stBadge(st,s){return badge(st,st==='pendiente'?'st-pendiente':st==='en curso'?'st-encurso':st==='completada'?'st-completada':'st-cancelada',s);}
+// ═══════ ALERTAS TRANSVERSALES ═══════
+// Cualquier ítem de estas pestañas puede marcarse como alerta. No es un módulo
+// aparte: es una marca sobre lo que ya existe, para juntar en un solo lugar todo
+// lo que requiere acción inmediata.
+var ALERT_TBLS=['tareas','matIngresos','materiales','checklists','comentarios'];
+var ALERT_META={
+  tareas:{ic:'📋',lbl:'Tarea',mod:'tareas'},
+  matIngresos:{ic:'📦',lbl:'Material',mod:'materiales'},
+  materiales:{ic:'📦',lbl:'Material',mod:'materiales'},
+  checklists:{ic:'✅',lbl:'Checklist',mod:'checklist'},
+  comentarios:{ic:'💬',lbl:'Comentario',mod:'comentarios'}
+};
+
+function toggleAlerta(tbl,id){
+  var it=(D[tbl]||[]).find(function(x){return x.id===id;});
+  if(!it)return;
+  it.alerta=!it.alerta;
+  it.alertaAt=it.alerta?nw():null;
+  it.updatedAt=nw();
+  sv();render();
+  toast(it.alerta?'🚨 Marcado como alerta':'Alerta quitada',it.alerta?'var(--red)':'var(--text3)',2000);
+}
+
+function _alertaItems(){
+  var out=[];
+  ALERT_TBLS.forEach(function(tbl){
+    (D[tbl]||[]).forEach(function(it){
+      if(!it||!it.alerta)return;
+      if((it.projectId||it.obraId)!==S.proj)return;
+      out.push({tbl:tbl,item:it});
+    });
+  });
+  out.sort(function(a,b){return new Date(b.item.alertaAt||0)-new Date(a.item.alertaAt||0);});
+  return out;
+}
+function _alertaCount(){return _alertaItems().length;}
+
+// Botón para marcar/desmarcar, se agrega a cada tarjeta
+function _alertBtn(tbl,id,on){
+  return '<button class="btn btn-g btn-s" title="'+(on?'Quitar de alertas':'Marcar como alerta — aparece en la Bandeja')+'"'
+    +' onclick="event.stopPropagation();toggleAlerta(\''+tbl+'\',\''+id+'\')"'
+    +' style="'+(on?'color:var(--red);background:#fef2f2':'color:var(--gray-l)')+'">&#x1F6A8;</button>';
+}
+// Etiqueta que se muestra junto al título cuando está en alerta
+function _alertTag(it){
+  return (it&&it.alerta)?'<span style="font-size:9px;background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:9px;padding:1px 6px;font-weight:700;margin-left:3px;white-space:nowrap">&#x1F6A8; ALERTA</span>':'';
+}
+
+// Zócalo del panel: franja llamativa con el total de alertas activas
+function _zocaloAlertas(){
+  var n=_alertaCount();
+  if(!n)return '';
+  return '<div onclick="S.mod=\'bandeja\';S.bandejaTab=\'alertas\';render()" class="zocalo-alerta" style="cursor:pointer;background:linear-gradient(90deg,#dc2626,#f87171);color:#fff;border-radius:10px;padding:11px 14px;margin-bottom:12px;display:flex;align-items:center;gap:11px;box-shadow:0 3px 12px #dc262650">'
+    +'<span style="font-size:21px;line-height:1">&#x1F6A8;</span>'
+    +'<div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:800;line-height:1.2">'+n+' alerta'+(n>1?'s':'')+' activa'+(n>1?'s':'')+'</div>'
+    +'<div style="font-size:11px;opacity:.92;margin-top:1px">Requieren atención inmediata — tocá para verlas</div></div>'
+    +'<span style="font-size:20px;opacity:.85">&#x203A;</span></div>';
+}
+
+// Resolver una alerta desde la propia bandeja, sin ir a buscar el ítem.
+// Marca el ítem como hecho según su tipo y le quita la alerta.
+function resolverAlerta(tbl,id){
+  var it=(D[tbl]||[]).find(function(x){return x.id===id;});
+  if(!it)return;
+  if(tbl==='tareas')it.status='completada';
+  else if(tbl==='comentarios')it.cumplido=true;
+  else if(tbl==='checklists')(it.items||[]).forEach(function(i){i.done=true;});
+  else if(tbl==='matIngresos'&&it.estado==='a_pedir')it.estado='pedido';
+  it.alerta=false;it.alertaAt=null;it.updatedAt=nw();
+  sv();render();
+  toast('✓ Resuelto y quitado de alertas','var(--green)',2500);
+}
+
+// Lista de alertas para la pestaña de la Bandeja
+function _renderAlertasBandeja(){
+  var lista=_alertaItems();
+  if(!lista.length){
+    return '<div class="empty">'+I.checkc+'<div class="ts mt-8">Sin alertas activas</div>'
+      +'<div class="txxs tc3 mt-4">Marcá con 🚨 cualquier tarea, material, checklist o comentario que necesite acción inmediata y aparecerá acá.</div></div>';
+  }
+  return lista.map(function(e){
+    var it=e.item,tbl=e.tbl,meta=ALERT_META[tbl]||{ic:'•',lbl:tbl,mod:'dashboard'};
+    var titulo=it.title||it.matNombre||it.text||it.name||it.concepto||'(sin título)';
+    var sub=[];
+    if(tbl==='tareas'){sub.push(it.status||'pendiente');if(it.encargado)sub.push('👤 '+it.encargado);}
+    else if(tbl==='matIngresos'){sub.push(it.estado==='a_pedir'?'A pedir':it.estado==='pedido'?'Pedido':'Ingresado');if(it.qty)sub.push(it.qty+' '+(it.unit||''));}
+    else if(tbl==='checklists'){var _d=(it.items||[]).filter(function(i){return i.done;}).length;sub.push(_d+'/'+(it.items||[]).length+' completados');}
+    else if(tbl==='comentarios'){sub.push(it.rubro||'General');if(it.cumplido)sub.push('✓ realizado');}
+    var _hecho=(tbl==='tareas'&&it.status==='completada')||(tbl==='comentarios'&&it.cumplido);
+    return '<div class="card" style="border-left:3px solid var(--red);padding:12px;margin-bottom:8px">'
+      +'<div class="flex justify-between items-start gap-8 mb-6">'
+      +'<div style="flex:1;min-width:0">'
+      +'<div class="ts fw7" style="'+(_hecho?'text-decoration:line-through;color:var(--gray-l)':'')+'">'+meta.ic+' '+esc(String(titulo).slice(0,80))+'</div>'
+      +'<div class="txxs tc3 mt-2">'+meta.lbl+(sub.length?' · '+esc(sub.join(' · ')):'')+(it.alertaAt?' · 🚨 '+fmts(it.alertaAt):'')+'</div>'
+      +'</div>'
+      +'<span style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:8px;padding:2px 8px;font-size:10px;font-weight:700;flex-shrink:0;white-space:nowrap">🚨 Alerta</span>'
+      +'</div>'
+      +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
+      +(_hecho?'':'<button onclick="resolverAlerta(\''+tbl+'\',\''+it.id+'\')" style="border:none;background:var(--green);color:#fff;border-radius:6px;padding:5px 12px;font-size:11px;cursor:pointer;font-weight:700">✓ Resolver</button>')
+      +'<button onclick="toggleAlerta(\''+tbl+'\',\''+it.id+'\')" style="border:none;background:var(--gray-ll);color:var(--text2);border-radius:6px;padding:5px 12px;font-size:11px;cursor:pointer;font-weight:700">Quitar alerta</button>'
+      +'<button onclick="S.mod=\''+meta.mod+'\';render()" style="border:none;background:var(--cyan);color:#fff;border-radius:6px;padding:5px 12px;font-size:11px;cursor:pointer;font-weight:700">Ir a '+meta.lbl+'</button>'
+      +'</div></div>';
+  }).join('');
+}
+
 // Vista previa de lo que el colaborador propone cambiar en un checklist.
 // Sin esto el arquitecto tendría que aprobar a ciegas.
 function _previewCambiosChecklist(m){
@@ -2429,10 +2538,10 @@ function createProj(){const n=$('pN').value.trim();if(!n){toast('Nombre obligato
 // ═══════ SHELL ═══════
 function renderShell(){
   const p=D.projects.find(x=>x.id===S.proj);if(!p){S.proj=null;render();return;}
-  const pT=pf('tareas');const pA=pf('alertas');const pendT=pT.filter(t=>t.status==='pendiente'||t.status==='en curso').length;const actAl=pA.filter(a=>!a.resolved).length;const pendForms=(D.formulariosPendientes||[]).filter(x=>(x.projectId||x.obraId)===S.proj&&x.estado==='pendiente').length;const pendCarpeta=(D.carpetas||[]).filter(function(cp){return cp.projectId===S.proj;}).reduce(function(sum,cp){return sum+(cp.archivos||[]).filter(function(f){return f.subidoPor==='col'&&f.visto===false;}).length;},0);const pendMsgsColab=(D.mensajesColab||[]).filter(function(m){return m.proyectoId===S.proj&&m.estadoColab==='completado';}).length;
+  const pT=pf('tareas');const pA=pf('alertas');const pendT=pT.filter(t=>t.status==='pendiente'||t.status==='en curso').length;const actAl=pA.filter(a=>!a.resolved).length;const pendForms=(D.formulariosPendientes||[]).filter(x=>(x.projectId||x.obraId)===S.proj&&x.estado==='pendiente').length;const pendCarpeta=(D.carpetas||[]).filter(function(cp){return cp.projectId===S.proj;}).reduce(function(sum,cp){return sum+(cp.archivos||[]).filter(function(f){return f.subidoPor==='col'&&f.visto===false;}).length;},0);const pendMsgsColab=(D.mensajesColab||[]).filter(function(m){return m.proyectoId===S.proj&&m.estadoColab==='completado';}).length;const _nAlert=_alertaCount();
   const drv=D.driveConfig?.[S.proj];const cloudCol=drv?'var(--green)':'var(--pri)';
   const _pendAlerts=pA.filter(a=>!a.resolved).length; // mantener badge en tareas si hay alertas legacy
-  const mods=[{id:'dashboard',label:'Panel',ic:'dash'},{id:'visitas',label:'Visitas',ic:'clip'},{id:'tareas',label:'Tareas',ic:'list',badge:pendT+_pendAlerts},{id:'materiales',label:'Materiales',ic:'pkg'},{id:'checklist',label:'Checklist',ic:'chklist'},{id:'documentos',label:'Documentos',ic:'file'},{id:'comentarios',label:'Comentarios',ic:'msg'},{id:'colaboradores',label:'Colaboradores',ic:'share'},{id:'bandeja',label:'Bandeja',ic:'inbox',badge:pendForms+pendCarpeta+pendMsgsColab},{id:'economia',label:'Economía',ic:'eco'},{id:'informes',label:'Informes',ic:'dl'},{id:'config',label:'Config',ic:'gear'}];
+  const mods=[{id:'dashboard',label:'Panel',ic:'dash'},{id:'visitas',label:'Visitas',ic:'clip'},{id:'tareas',label:'Tareas',ic:'list',badge:pendT+_pendAlerts},{id:'materiales',label:'Materiales',ic:'pkg'},{id:'checklist',label:'Checklist',ic:'chklist'},{id:'documentos',label:'Documentos',ic:'file'},{id:'comentarios',label:'Comentarios',ic:'msg'},{id:'colaboradores',label:'Colaboradores',ic:'share'},{id:'bandeja',label:'Bandeja',ic:'inbox',badge:pendForms+pendCarpeta+pendMsgsColab+_nAlert},{id:'economia',label:'Economía',ic:'eco'},{id:'informes',label:'Informes',ic:'dl'},{id:'config',label:'Config',ic:'gear'}];
   const mi=mods.map(m=>{const c=MC[m.id];const act=S.mod===m.id;return `<button class="smi${act?' act':''}" style="${act?'background:'+c+'08;color:'+c+';border-left-color:'+c:''}" onclick="S.mod='${m.id}';S.menu=false;S.visitaDetail=null;S.matDetail=null;render();"><span style="color:${act?c:'var(--text3)'}">${I[m.ic]||''}</span><span style="flex:1;text-align:left">${m.label}</span>${m.badge>0?`<span class="sbadge">${m.badge}</span>`:''}</button>`;}).join('');
   const allBnav=[
     {id:'dashboard',ic:'dash',l:'Panel'},
@@ -2465,7 +2574,7 @@ function renderShell(){
   <div class="ov${S.menu?' open':''}" onclick="S.menu=false;render();"><div class="smenu" onclick="event.stopPropagation()"><div class="smenu-hdr"><div class="flex items-center gap-10 mb-4"><span style="color:var(--pri)">${I.building}</span><span style="font-size:15px;font-weight:800">${p.name}</span></div><div class="txxs tc3">${p.client||''} ${p.location?'| '+p.location:''}</div></div><div style="flex:1;overflow-y:auto;padding:4px 0">${mi}</div><div style="padding:12px 16px;border-top:1px solid var(--gray-ll)"><button class="btn btn-g btn-s btn-w" style="color:var(--red)" onclick="D.user=null;sv();render();">${I.out} Cerrar sesion</button></div></div></div>
   <div class="mo${S.searchOpen?' open':''}" onclick="S.searchOpen=false;render();"><div class="mo-c" style="max-width:600px" onclick="event.stopPropagation()"><div class="mo-h"><h3>${I.search} Buscador</h3><button class="tbtn" onclick="S.searchOpen=false;render();">${I.x}</button></div><div class="searchbar"><span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--gray-l)">${I.search}</span><input class="fi" style="padding-left:38px" id="searchInput" placeholder="Buscar..." value="${S.searchQ||''}" oninput="S.searchQ=this.value;renderSR();"></div><div id="searchResults"></div></div></div>
   <div class="content" id="mc"></div>
-  <div class="bottomnav" ontouchstart="window._bnTX=event.changedTouches[0].clientX" ontouchend="var _dx=event.changedTouches[0].clientX-(window._bnTX||0);if(Math.abs(_dx)>40){navStep(_dx<0?1:-1)}"><button class="bnav" style="max-width:32px;min-width:32px;font-size:16px;opacity:${_bnavIdx<=0?'0.3':'1'}" onclick="navStep(-1)" title="Anterior">&#x276E;</button>${bnav.map(t=>{const act=S.mod===t.id;const c=act?MC[t.id]:'var(--gray-l)';return `<button class="bnav${act?' active':''}" style="color:${c}" onclick="S.mod='${t.id}';S.visitaDetail=null;S.matDetail=null;render();">${I[t.ic]}<span>${t.l}</span>${t.id==='alertas'&&actAl>0?'<span class="ndot"></span>':t.id==='bandeja'&&(pendForms+pendCarpeta+pendMsgsColab)>0?'<span class="nbadge">'+(pendForms+pendCarpeta+pendMsgsColab)+'</span>':''}</button>`;}).join('')}<button class="bnav" style="max-width:32px;min-width:32px;font-size:16px;opacity:${_bnavIdx>=_allNavIds.length-1?'0.3':'1'}" onclick="navStep(1)" title="Siguiente">&#x276F;</button></div>`);
+  <div class="bottomnav" ontouchstart="window._bnTX=event.changedTouches[0].clientX" ontouchend="var _dx=event.changedTouches[0].clientX-(window._bnTX||0);if(Math.abs(_dx)>40){navStep(_dx<0?1:-1)}"><button class="bnav" style="max-width:32px;min-width:32px;font-size:16px;opacity:${_bnavIdx<=0?'0.3':'1'}" onclick="navStep(-1)" title="Anterior">&#x276E;</button>${bnav.map(t=>{const act=S.mod===t.id;const c=act?MC[t.id]:'var(--gray-l)';return `<button class="bnav${act?' active':''}" style="color:${c}" onclick="S.mod='${t.id}';S.visitaDetail=null;S.matDetail=null;render();">${I[t.ic]}<span>${t.l}</span>${t.id==='alertas'&&actAl>0?'<span class="ndot"></span>':t.id==='bandeja'&&(pendForms+pendCarpeta+pendMsgsColab+_nAlert)>0?'<span class="nbadge" style="'+(_nAlert?'background:#dc2626':'')+'">'+(pendForms+pendCarpeta+pendMsgsColab+_nAlert)+'</span>':''}</button>`;}).join('')}<button class="bnav" style="max-width:32px;min-width:32px;font-size:16px;opacity:${_bnavIdx>=_allNavIds.length-1?'0.3':'1'}" onclick="navStep(1)" title="Siguiente">&#x276F;</button></div>`);
   renderModule(S.mod,p);
 }
 function renderModule(mod,p){const mc=$('mc');if(!mc)return;if(S.visitaDetail){var _vck=(D.visitas||[]).find(function(x){return x.id===S.visitaDetail;});if(!_vck||_vck.projectId!==S.proj){S.visitaDetail=null;}else{rVisitaDetail(mc,S.visitaDetail);return;}}if(S.matDetail){rMatDetail(mc,S.matDetail);return;}switch(mod){case 'dashboard':rDash(mc,p);break;case 'visitas':rVisitas(mc);break;case 'tareas':rTareas(mc);break;case 'materiales':rMat(mc);break;case 'alertas':rAlertas(mc);break;case 'checklist':rChecklist(mc);break;case 'documentos':rDocs(mc);break;case 'comentarios':rComentarios(mc);break;case 'informes':rInformes(mc,p);break;case 'colaboradores':rColaboradores(mc,p);break;case 'bandeja':rBandeja(mc,p);break;case 'economia':rEconomia(mc,p);break;case 'config':rConfig(mc,p);break;}if(S.searchOpen)setTimeout(()=>{const si=$('searchInput');if(si)si.focus();},100);}
@@ -2836,6 +2945,7 @@ function rDash(mc,p){
   const over=pT.filter(t=>(t.status==='pendiente'||t.status==='en curso')&&t.dueDate&&dd(td(),t.dueDate)<0).length;
   const lastV=pV.length?[...pV].sort((a,b)=>(b.date||'').localeCompare(a.date||''))[0]:null;
   mc.innerHTML=`
+  ${_zocaloAlertas()}
   <div class="card hero mb-12"><div class="flex justify-between items-start"><div><div class="hero-sm">Obra activa</div><div class="hero-lg">${p.name}</div></div>${colBadge(p.status,SC[p.status]||'#94a3b8')}</div><div class="flex gap-10 mt-8 ts tc3 wrap">${p.client?`<span>${I.user} ${p.client}</span>`:''}${p.location?`<span>${I.pin} ${p.location}</span>`:''}${p.startDate?`<span>${I.cal} ${fmts(p.startDate)}</span>`:''}</div></div>
   <div class="g2 mb-12">
     <div class="card stat card-click" onclick="S.mod='visitas';render()"><div class="stico" style="background:var(--blue-bg);color:var(--blue)">${I.clip}</div><div><div class="stval" style="color:var(--blue)">${pV.length}</div><div class="stlbl">Visitas</div></div></div>
@@ -3574,7 +3684,7 @@ function rTareas(mc){
   <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px"><span class="txxs fw6 tc3" style="white-space:nowrap">Ordenar:</span><select class="fs" style="font-size:12px;padding:4px 8px 4px 6px;min-width:150px;max-width:100%" onchange="S.taskSort=this.value;render()"><option value="" ${(!S.taskSort||S.taskSort==='pri_asc')?'selected':''}>&#x26A1; Mayor prioridad</option><option value="pri_desc" ${S.taskSort==='pri_desc'?'selected':''}>&#x26A1; Menor prioridad</option><option value="fecha_desc" ${S.taskSort==='fecha_desc'?'selected':''}>&#x1F4C5; Más reciente</option><option value="fecha_asc" ${S.taskSort==='fecha_asc'?'selected':''}>&#x1F4C5; Más antiguo</option></select><span class="txxs tc3">${sorted.length} tarea${sorted.length!==1?'s':''}</span></div>
   ${_encChip}${!sorted.length?`<div class="empty"><span style="color:${c}">${I.list}</span><div class="ts mt-8">${S.taskEncFilter?`Sin tareas para "${S.taskEncFilter}"<br><button class="btn btn-sec btn-s mt-8" onclick="S.taskEncFilter='';render()">Ver todas</button>`:'Sin tareas'}</div></div>`:sorted.map(t=>{
     const over=t.dueDate&&(t.status==='pendiente'||t.status==='en curso')&&dd(td(),t.dueDate)<0;const vN=t.visitaId?D.visitas.find(v=>v.id===t.visitaId)?.title:null;
-    const _tcl=!!(S.taskCollapsed&&S.taskCollapsed[t.id]);return `<div class="card" style="border-left:3px solid ${over?'var(--red)':({urgente:'var(--red)',alta:'var(--orange)',media:'var(--pri)',baja:'var(--green)'}[t.priority]||c)}"><div style="display:flex;align-items:flex-start;gap:6px;cursor:pointer" onclick="toggleTaskCollapsed('${t.id}')"><div class="ts fw6 flex-1" style="${t.status==='completada'?'text-decoration:line-through;color:var(--gray-l)':''}">${t.title}${t.pdfGenerado?' <span style="font-size:9px;background:#f1f5f9;border-radius:3px;padding:1px 4px;color:#64748b">PDF</span>':''}${t.sourceType==='formulario'&&t.cargadoPor?' <span style="font-size:9px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:1px 6px;color:#16a34a;font-weight:700">&#x1F464; '+esc(t.cargadoPor)+'</span>':''}${_getEnvBadge(t.id,'tarea')}</div><span style="font-size:12px;color:var(--gray-l);padding:0 2px;user-select:none;flex-shrink:0">${_tcl?'&#x25BC;':'&#x25B2;'}</span></div>${_tcl?'':(`${t.description?`<div class="ts tc3 mt-4" style="white-space:pre-wrap">${t.description}</div>`:''}${_taskChkHtml(t)}<div class="flex gap-4 mt-6 wrap items-center">${priBadge(t.priority||'media',true)} ${stBadge(t.status||'pendiente',true)}${t.dueDate?`<span class="txxs" style="color:${over?'var(--red)':'var(--gray-l)'}">${fmts(t.dueDate)}${over?' VENCIDA':''}</span>`:''}${t.encargado?`<span class="txxs" style="color:var(--cyan)">👤 ${t.encargado}</span>`:''}${vN?`<span class="link-tag" onclick="event.stopPropagation();S.visitaDetail='${t.visitaId}';S.mod='visitas';render();">${I.link} ${vN}</span>`:!vN&&t.date?`<span class="txxs tc3">📅 Creado: ${fmts(t.date)}</span>`:''}</div>${t.photos&&t.photos.length?photoGrid(t.photos,'tareas',t.id):''} ${t.archivos&&t.archivos.length?`<div class="mt-4">${t.archivos.map(f=>`<div class="flex items-center gap-6 txxs tc3"><span>${I.file}</span><span style="color:var(--slate);flex:1">${f.name}</span><button class="btn btn-sec btn-s" onclick="event.stopPropagation();viewArchivo('tareas','${t.id}','${f.id||f.name||''}')">👁</button><button class="btn btn-sec btn-s" onclick="event.stopPropagation();delArchivo('tareas','${t.id}','${f.id||f.name||''}')" style="color:var(--red)">${I.trash}</button></div>`).join('')}</div>`:''}<div class="flex gap-4 mt-8 wrap">${t.status!=='completada'?`<button class="btn btn-ok btn-s" onclick="updT('${t.id}','completada')">${I.check}</button>`:''}<button class="btn btn-sec btn-s" onclick="editTarea('${t.id}')">${I.edit} Editar</button><button class="btn btn-g btn-s" title="Agregar al calendario" onclick="exportTareaGCal('${t.id}')">&#128197;</button><button class="btn btn-sec btn-s" title="Enviar a bandeja del colaborador" onclick="shareToInbox('tarea','${t.id}')">${I.share}</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delI('tareas','${t.id}')">${I.trash}</button></div>`)}</div>`;
+    const _tcl=!!(S.taskCollapsed&&S.taskCollapsed[t.id]);return `<div class="card" style="border-left:3px solid ${over?'var(--red)':({urgente:'var(--red)',alta:'var(--orange)',media:'var(--pri)',baja:'var(--green)'}[t.priority]||c)}"><div style="display:flex;align-items:flex-start;gap:6px;cursor:pointer" onclick="toggleTaskCollapsed('${t.id}')"><div class="ts fw6 flex-1" style="${t.status==='completada'?'text-decoration:line-through;color:var(--gray-l)':''}">${t.title}${t.pdfGenerado?' <span style="font-size:9px;background:#f1f5f9;border-radius:3px;padding:1px 4px;color:#64748b">PDF</span>':''}${t.sourceType==='formulario'&&t.cargadoPor?' <span style="font-size:9px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:1px 6px;color:#16a34a;font-weight:700">&#x1F464; '+esc(t.cargadoPor)+'</span>':''}${_getEnvBadge(t.id,'tarea')}${_alertTag(t)}</div><span style="font-size:12px;color:var(--gray-l);padding:0 2px;user-select:none;flex-shrink:0">${_tcl?'&#x25BC;':'&#x25B2;'}</span></div>${_tcl?'':(`${t.description?`<div class="ts tc3 mt-4" style="white-space:pre-wrap">${t.description}</div>`:''}${_taskChkHtml(t)}<div class="flex gap-4 mt-6 wrap items-center">${priBadge(t.priority||'media',true)} ${stBadge(t.status||'pendiente',true)}${t.dueDate?`<span class="txxs" style="color:${over?'var(--red)':'var(--gray-l)'}">${fmts(t.dueDate)}${over?' VENCIDA':''}</span>`:''}${t.encargado?`<span class="txxs" style="color:var(--cyan)">👤 ${t.encargado}</span>`:''}${vN?`<span class="link-tag" onclick="event.stopPropagation();S.visitaDetail='${t.visitaId}';S.mod='visitas';render();">${I.link} ${vN}</span>`:!vN&&t.date?`<span class="txxs tc3">📅 Creado: ${fmts(t.date)}</span>`:''}</div>${t.photos&&t.photos.length?photoGrid(t.photos,'tareas',t.id):''} ${t.archivos&&t.archivos.length?`<div class="mt-4">${t.archivos.map(f=>`<div class="flex items-center gap-6 txxs tc3"><span>${I.file}</span><span style="color:var(--slate);flex:1">${f.name}</span><button class="btn btn-sec btn-s" onclick="event.stopPropagation();viewArchivo('tareas','${t.id}','${f.id||f.name||''}')">👁</button><button class="btn btn-sec btn-s" onclick="event.stopPropagation();delArchivo('tareas','${t.id}','${f.id||f.name||''}')" style="color:var(--red)">${I.trash}</button></div>`).join('')}</div>`:''}<div class="flex gap-4 mt-8 wrap">${t.status!=='completada'?`<button class="btn btn-ok btn-s" onclick="updT('${t.id}','completada')">${I.check}</button>`:''}<button class="btn btn-sec btn-s" onclick="editTarea('${t.id}')">${I.edit} Editar</button><button class="btn btn-g btn-s" title="Agregar al calendario" onclick="exportTareaGCal('${t.id}')">&#128197;</button><button class="btn btn-sec btn-s" title="Enviar a bandeja del colaborador" onclick="shareToInbox('tarea','${t.id}')">${I.share}</button>${_alertBtn('tareas',t.id,t.alerta)}<button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delI('tareas','${t.id}')">${I.trash}</button></div>`)}</div>`;
   }).join('')}
   <div class="mo" id="newTareaM"><div class="mo-c"><div class="mo-h"><h3 style="color:${c}">Nueva Tarea</h3><button class="tbtn" onclick="closeM('newTareaM')">${I.x}</button></div><div class="fg"><label class="fl">Titulo *</label><input class="fi" id="nt_t"></div><div class="fg"><label class="fl">Descripcion</label><textarea class="ft" id="nt_de"></textarea></div>${priSelector('nt_p','media')}<div class="fr"><div class="fg"><label class="fl">Rubro</label><select class="fs" id="nt_r"><option value="">-</option>${RUB.map(r=>`<option>${r}</option>`).join('')}</select></div><div class="fg"><label class="fl">Vencimiento</label><input class="fi" id="nt_d" type="date"></div></div><div class="fg"><label class="fl">Encargado</label><div class="ac-wrap"><input class="fi" id="nt_enc" placeholder="Nombre o rol del encargado" autocomplete="off" oninput="_renderEncChips('nt_enc','nt_enc_chips')"></div><div id="nt_enc_chips" class="flex gap-4 wrap mt-4"></div></div><div class="fg"><label class="fl">Fotos</label><input type="file" accept="image/*" multiple id="nt_ph" class="fi" style="padding:6px"></div><div class="fg"><label class="fl">Archivos adjuntos</label><input type="file" multiple id="nt_af" class="fi" style="padding:6px"></div><div class="fg"><label class="fl">Vincular checklist (opcional)</label><select class="fs" id="nt_chk"><option value="">Sin checklist</option>${pf('checklists').map(ch=>`<option value="${ch.id}">${ch.title}</option>`).join('')}</select></div><button class="btn btn-w mt-8" style="background:${c};color:#fff" onclick="saveTarea()">Crear</button></div></div>`;
   setTimeout(function(){_renderEncChips('nt_enc','nt_enc_chips');},80);
@@ -4075,12 +4185,13 @@ function renderMatItems(){
     if(!S.matAPedirMin) _apedir.forEach(function(p){
       var mn=p.materialId?D.materiales.find(function(m){return m.id===p.materialId;}):null;
       _apedirH+='<div style="padding:8px 0;border-bottom:1px solid var(--gray-ll)"><div class="flex items-start justify-between gap-8">';
-      _apedirH+='<div class="flex-1"><div class="ts fw6">'+(p.matNombre||'Sin nombre')+'</div>';
+      _apedirH+='<div class="flex-1"><div class="ts fw6">'+(p.matNombre||'Sin nombre')+_alertTag(p)+'</div>';
       _apedirH+='<div class="txxs tc3 mt-2">'+(p.qty?p.qty+' '+(p.unit||''):'-')+(p.proveedor?' | '+p.proveedor:'')+(p.fecha?' | '+fmts(p.fecha):'')+'</div>';
       if(mn)_apedirH+='<div class="txxs mt-2" style="color:var(--purple)">&#x1F4E6; '+mn.name+'</div>';
       if(p.sourceType==='formulario'&&p.cargadoPor)_apedirH+='<div class="txxs mt-1" style="color:#16a34a;font-weight:700">&#x1F464; '+esc(p.cargadoPor||p.sourceName||'')+(p.date?' · '+fmts(p.date):'')+'</div>';
       if(p.visitaId){var _vn=D.visitas.find(function(v){return v.id===p.visitaId;});_apedirH+='<div class="txxs mt-1" style="color:var(--blue)">&#x1F4CB; '+'<button class="link-tag" style="font-size:10px" onclick="S.visitaDetail=\''+p.visitaId+'\';;S.mod=\'visitas\';render();">'+(_vn?_vn.title:'Visita')+'</button></div>';}
       _apedirH+='</div><div class="flex gap-4 flex-shrink-0">';
+      _apedirH+=_alertBtn('matIngresos',p.id,p.alerta);
       _apedirH+='<button class="btn btn-sec btn-s" style="font-size:10px" onclick="editAPedir(\''+p.id+'\')">'+I.edit+'</button>';
       _apedirH+='<button class="btn btn-s" style="background:var(--orange);color:#fff;font-size:10px" onclick="pasarAPedido(\''+p.id+'\')">&rarr; Pedido</button>';
       _apedirH+='<button class="btn btn-sec btn-s" style="font-size:10px;color:var(--red)" onclick="delMatItem(\''+p.id+'\')">' +I.trash+'</button>';
@@ -4100,13 +4211,14 @@ function renderMatItems(){
       var mn=p.materialId?D.materiales.find(function(m){return m.id===p.materialId;}):null;
       _pedH+='<div style="padding:8px 0;border-bottom:1px solid var(--gray-ll)">';
       _pedH+='<div class="flex items-start justify-between gap-8">';
-      _pedH+='<div class="flex-1"><div class="ts fw6">'+(p.matNombre||'Sin nombre')+'</div>';
+      _pedH+='<div class="flex-1"><div class="ts fw6">'+(p.matNombre||'Sin nombre')+_alertTag(p)+'</div>';
       _pedH+='<div class="txxs tc3 mt-2">'+p.qty+' '+(p.unit||'')+(p.proveedor?' | '+p.proveedor:'')+(p.fecha?' | '+fmts(p.fecha):'')+'</div>';
       if(p.observations) _pedH+='<div class="txxs tc3 mt-1">'+p.observations+'</div>';
       if(mn) _pedH+='<div class="txxs mt-2" style="color:var(--purple)">&#x1F4E6; '+mn.name+'</div>';
       if(p.sourceType==='formulario'&&p.cargadoPor)_pedH+='<div class="txxs mt-1" style="color:#16a34a;font-weight:700">&#x1F464; '+esc(p.cargadoPor||p.sourceName||'')+(p.date?' · '+fmts(p.date):'')+'</div>';
       if(p.visitaId){var _pvn=D.visitas.find(function(v){return v.id===p.visitaId;});_pedH+='<div class="txxs mt-1" style="color:var(--blue)">&#x1F4CB; '+'<button class="link-tag" style="font-size:10px" onclick="S.visitaDetail=\''+p.visitaId+'\';;S.mod=\'visitas\';render();">'+(_pvn?_pvn.title:'Visita')+'</button></div>';}
       _pedH+='</div><div class="flex gap-4 flex-shrink-0">';
+      _pedH+=_alertBtn('matIngresos',p.id,p.alerta);
       _pedH+='<button class="btn btn-sec btn-s" style="font-size:10px" onclick="editPedidoRegistrado(\''+p.id+'\')">'+ I.edit +'</button>';
       _pedH+='<button class="btn btn-ok btn-s" style="font-size:10px;white-space:nowrap" onclick="confirmarPedido(\''+p.id+'\')">&#x2713; Ingresado</button>';
       _pedH+='<button class="btn btn-sec btn-s" style="font-size:10px;color:#8b5cf6;white-space:nowrap" onclick="retrocederAPedir(\''+p.id+'\')" title="Retroceder a A pedir">&larr; A pedir</button>';
@@ -4987,7 +5099,7 @@ function rChecklist(mc){const items=pf('checklists');const c=MC.checklist;const 
   mc.innerHTML=`${modHeader('checklist','Checklists',`<div class="flex gap-4"><button class="btn btn-s" style="background:${c};color:#fff" onclick="openM('newChkM')">${I.plus} Nueva</button><button class="btn btn-sec btn-s" onclick="showChkHistorial()">&#x1F4CB; Historial</button></div>`)}
   <div style="display:flex;align-items:center;gap:6px;margin:8px 0 12px"><span class="txxs fw6 tc3" style="white-space:nowrap">Ordenar:</span><select class="fs" style="font-size:12px;padding:4px 8px 4px 6px;min-width:150px;max-width:100%" onchange="S.chkSort=this.value;render()"><option value="" ${!S.chkSort||S.chkSort==='pri_asc'?'selected':''}>&#x26A1; Mayor prioridad</option><option value="pri_desc" ${S.chkSort==='pri_desc'?'selected':''}>&#x26A1; Menor prioridad</option><option value="fecha_desc" ${S.chkSort==='fecha_desc'?'selected':''}>&#x1F4C5; M&aacute;s reciente</option><option value="fecha_asc" ${S.chkSort==='fecha_asc'?'selected':''}>&#x1F4C5; M&aacute;s antiguo</option></select></div>
   ${visitItems.length?`<div class="alrt alrt-y mb-8">${I.clip}<div class="ts fw6 flex-1">Checklists de visitas (${visitItems.length})</div></div>`:''}
-  ${!genItems.length?`<div class="empty"><span style="color:${c}">${I.chklist}</span><div class="ts mt-8">Sin checklists</div></div>`:sortedChk.map(ch=>{const dn=ch.items.filter(i=>i.done).length;const tot=ch.items.length;const _cl=!!(S.chkCollapsed&&S.chkCollapsed[ch.id]);const _prog=dn===tot&&tot>0?'var(--green)':dn>0?'#f0a500':'#e02020';const _envBdg=_getEnvBadge(ch.id,'checklist');return `<div class="card" style="border-left:3px solid ${c}"><div class="flex justify-between items-center" style="cursor:pointer" onclick="toggleChkCollapsed('${ch.id}')"><div style="flex:1;min-width:0"><div class="ts fw7">${ch.title}${_envBdg}</div><div class="txxs tc3 mt-2" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">${priBadge(ch.priority||'media',true)}<span>&#x1F4C5; ${fmts(ch.date||ch.updatedAt)}</span><span data-chk-score="${ch.id}" style="color:${_prog};font-weight:700">${dn}/${tot}</span></div>${ch.note?`<div style="font-size:11px;color:var(--text2);font-style:italic;margin-top:4px;white-space:pre-wrap">📝 ${ch.note}</div>`:''}</div><span style="font-size:14px;color:var(--gray-l);padding:0 6px;user-select:none">${_cl?'&#x25BC;':'&#x25B2;'}</span></div>${_cl?'':(`<div onclick="event.stopPropagation()"><textarea class="ft" style="font-size:11px;color:var(--gray-l);background:var(--gray-ll);border:1px solid var(--brd);resize:vertical;min-height:34px;margin-top:10px;padding:5px 8px" placeholder="Agregar nota..." onblur="saveChkNote('${ch.id}',this.value)">${(ch.note||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea><div class="mb-6 mt-8">${progress(dn,tot,c)}<div data-chk-score="${ch.id}" class="txxs mt-4" style="color:${_prog};font-weight:700">${dn}/${tot}</div></div>${ch.items.map(it=>`<div class="chk-item"><div class="chk-box${it.done?' checked':''}" onclick="togC('${ch.id}','${it.id}',this)">${it.done?I.check:''}</div><div class="chk-text${it.done?' done':''} flex-1">${it.text}</div><button class="btn btn-g btn-s" onclick="editChkItem('${ch.id}','${it.id}')">${I.edit}</button><button class="btn btn-g btn-s" onclick="if(confirmDel())dCI('${ch.id}','${it.id}')">${I.trash}</button></div>`).join('')}<div class="flex gap-4 mt-8"><input class="fi" id="ac_${ch.id}" placeholder="Agregar..." style="flex:1" onkeydown="if(event.key==='Enter')aCI('${ch.id}')"><button class="btn btn-s" style="background:${c};color:#fff" onclick="aCI('${ch.id}')">${I.plus}</button></div><div class="flex gap-6 mt-6"><button class="btn btn-sec btn-s" onclick="editChk('${ch.id}')">${I.edit} Editar</button><button class="btn btn-sec btn-s" title="Enviar a bandeja del colaborador" onclick="shareToInbox('checklist','${ch.id}')">${I.share}</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delI('checklists','${ch.id}')">${I.trash} Eliminar</button></div></div>`)}</div>`;}).join('')}<div class="mo" id="newChkM"><div class="mo-c"><div class="mo-h"><h3 style="color:${c}">Nueva Checklist</h3><button class="tbtn" onclick="closeM('newChkM')">${I.x}</button></div><div class="fg"><label class="fl">Titulo *</label><input class="fi" id="ck_t"></div>${priSelector('ck_p','media')}<div class="fg"><label class="fl">Items (uno por linea)</label><textarea class="ft" id="ck_i" placeholder="Verificar estribos&#10;Revisar recubrimiento"></textarea></div><button class="btn btn-w mt-8" style="background:${c};color:#fff" onclick="saveCk()">Crear</button></div></div>`;}
+  ${!genItems.length?`<div class="empty"><span style="color:${c}">${I.chklist}</span><div class="ts mt-8">Sin checklists</div></div>`:sortedChk.map(ch=>{const dn=ch.items.filter(i=>i.done).length;const tot=ch.items.length;const _cl=!!(S.chkCollapsed&&S.chkCollapsed[ch.id]);const _prog=dn===tot&&tot>0?'var(--green)':dn>0?'#f0a500':'#e02020';const _envBdg=_getEnvBadge(ch.id,'checklist');return `<div class="card" style="border-left:3px solid ${c}"><div class="flex justify-between items-center" style="cursor:pointer" onclick="toggleChkCollapsed('${ch.id}')"><div style="flex:1;min-width:0"><div class="ts fw7">${ch.title}${_envBdg}${_alertTag(ch)}</div><div class="txxs tc3 mt-2" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">${priBadge(ch.priority||'media',true)}<span>&#x1F4C5; ${fmts(ch.date||ch.updatedAt)}</span><span data-chk-score="${ch.id}" style="color:${_prog};font-weight:700">${dn}/${tot}</span></div>${ch.note?`<div style="font-size:11px;color:var(--text2);font-style:italic;margin-top:4px;white-space:pre-wrap">📝 ${ch.note}</div>`:''}</div><span style="font-size:14px;color:var(--gray-l);padding:0 6px;user-select:none">${_cl?'&#x25BC;':'&#x25B2;'}</span></div>${_cl?'':(`<div onclick="event.stopPropagation()"><textarea class="ft" style="font-size:11px;color:var(--gray-l);background:var(--gray-ll);border:1px solid var(--brd);resize:vertical;min-height:34px;margin-top:10px;padding:5px 8px" placeholder="Agregar nota..." onblur="saveChkNote('${ch.id}',this.value)">${(ch.note||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea><div class="mb-6 mt-8">${progress(dn,tot,c)}<div data-chk-score="${ch.id}" class="txxs mt-4" style="color:${_prog};font-weight:700">${dn}/${tot}</div></div>${ch.items.map(it=>`<div class="chk-item"><div class="chk-box${it.done?' checked':''}" onclick="togC('${ch.id}','${it.id}',this)">${it.done?I.check:''}</div><div class="chk-text${it.done?' done':''} flex-1">${it.text}</div><button class="btn btn-g btn-s" onclick="editChkItem('${ch.id}','${it.id}')">${I.edit}</button><button class="btn btn-g btn-s" onclick="if(confirmDel())dCI('${ch.id}','${it.id}')">${I.trash}</button></div>`).join('')}<div class="flex gap-4 mt-8"><input class="fi" id="ac_${ch.id}" placeholder="Agregar..." style="flex:1" onkeydown="if(event.key==='Enter')aCI('${ch.id}')"><button class="btn btn-s" style="background:${c};color:#fff" onclick="aCI('${ch.id}')">${I.plus}</button></div><div class="flex gap-6 mt-6"><button class="btn btn-sec btn-s" onclick="editChk('${ch.id}')">${I.edit} Editar</button><button class="btn btn-sec btn-s" title="Enviar a bandeja del colaborador" onclick="shareToInbox('checklist','${ch.id}')">${I.share}</button>${_alertBtn('checklists',ch.id,ch.alerta)}<button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delI('checklists','${ch.id}')">${I.trash} Eliminar</button></div></div>`)}</div>`;}).join('')}<div class="mo" id="newChkM"><div class="mo-c"><div class="mo-h"><h3 style="color:${c}">Nueva Checklist</h3><button class="tbtn" onclick="closeM('newChkM')">${I.x}</button></div><div class="fg"><label class="fl">Titulo *</label><input class="fi" id="ck_t"></div>${priSelector('ck_p','media')}<div class="fg"><label class="fl">Items (uno por linea)</label><textarea class="ft" id="ck_i" placeholder="Verificar estribos&#10;Revisar recubrimiento"></textarea></div><button class="btn btn-w mt-8" style="background:${c};color:#fff" onclick="saveCk()">Crear</button></div></div>`;}
 function closeChkHist(){var el=document.getElementById('chkHistM');if(el)el.remove();}
 
 function showChkHistorial(){
@@ -5348,6 +5460,7 @@ function renderCmtItems(){
     h+=colBadge(cm.rubro||'General','var(--slate)',true);
     if(cm.etapa)h+=colBadge(cm.etapa,'var(--blue)',true);
     if(done)h+='<span style="background:#16a34a;color:#fff;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px">✓ Realizado</span>';
+    h+=_alertTag(cm);
     h+='</div><span class="txxs tc3" style="flex-shrink:0">'+fmts(cm.date)+'</span></div>';
     // Texto
     h+='<div class="ts mb-6" style="'+(done?'text-decoration:line-through;color:#94a3b8':'')+'">'+cm.text+'</div>';
@@ -5361,6 +5474,7 @@ function renderCmtItems(){
     h+='<button class="btn btn-sec btn-s" onclick="addCmtMedia(\''+cm.id+'\',\'photo\')">📷</button>';
     h+='<button class="btn btn-sec btn-s" onclick="addCmtMedia(\''+cm.id+'\',\'file\')">📎</button>';
     h+='<button class="btn btn-sec btn-s" onclick="editCmt(\''+cm.id+'\')">'+I.edit+'</button>';
+    h+=_alertBtn('comentarios',cm.id,cm.alerta);
     h+='<button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delI(\'comentarios\',\''+cm.id+'\')">'+I.trash+'</button>';
     h+='</div></div>';
     return h;
@@ -8431,6 +8545,7 @@ function rBandeja(mc,p){
   mc.innerHTML=modHeader('bandeja','Bandeja',(SYNC.apiUrl&&SYNC.apiSecret)?'<button class="btn btn-sec btn-s" onclick="revisarServidor(true)">&#x1F4E5; Buscar informes</button>':'')
     +'<div class="flex gap-6 mb-12">'
     +'<button class="btn btn-s" style="'+(tab==='pendientes'?'background:'+c2+';color:#fff':'background:var(--gray-ll);color:var(--text2)')+'" onclick="S.bandejaTab=\'pendientes\';render()">'+I.bell+' Pendientes'+pendBdg+'</button>'
+    +(function(){var _na=_alertaCount();return '<button class="btn btn-s" style="'+(tab==='alertas'?'background:#dc2626;color:#fff':(_na?'background:#fef2f2;color:#dc2626;border:1px solid #fecaca':'background:var(--gray-ll);color:var(--text2)'))+'" onclick="S.bandejaTab=\'alertas\';render()">🚨 Alertas'+(_na?' <span style="background:'+(tab==='alertas'?'rgba(255,255,255,.3)':'#dc2626')+';color:#fff;border-radius:10px;padding:0 6px;font-size:10px;font-weight:700;margin-left:2px">'+_na+'</span>':'')+'</button>';})()
     +'<button class="btn btn-s" style="'+(tab==='log'?'background:'+c2+';color:#fff':'background:var(--gray-ll);color:var(--text2)')+'" onclick="S.bandejaTab=\'log\';render()">📋 Log ('+procesados.length+')</button>'
     +'</div>'
     +(tab==='pendientes'
@@ -8439,6 +8554,8 @@ function rBandeja(mc,p){
         +newCarpetaGroups.map(function(g){
           return '<div class="card" style="border-left:3px solid #16a34a;padding:12px;margin-bottom:8px"><div class="flex justify-between items-center gap-8"><div><div class="ts fw7">📁 '+esc(g.coName)+'</div><div class="txxs tc3 mt-2">'+g.count+' archivo'+(g.count>1?'s':'')+' nuevo'+(g.count>1?'s':'')+(g.imgs?' · '+g.imgs+' foto'+(g.imgs>1?'s':''):'')+'</div></div><button class="btn btn-s" style="background:#16a34a;color:#fff;white-space:nowrap;flex-shrink:0" onclick="S.mod=\'colaboradores\';render();setTimeout(function(){openPerfilColab(\''+g.colabId+'\',\'carpeta\');},100)">📁 Ver</button></div></div>';
         }).join('')+(pendientes.length?pendientes.map(renderCard).join(''):'')+(completedMsgs.length===0&&newCarpetaGroups.length===0&&!pendientes.length?'<div class="empty">'+I.checkc+'<div class="ts mt-8">Bandeja vacía</div><div class="txxs tc3 mt-4">Cuando un colaborador envíe su informe o suba archivos, aparecerá aquí.</div></div>':''))
+      :tab==='alertas'
+      ?_renderAlertasBandeja()
       :(procesados.length?procesados.map(renderCard).join(''):'<div class="empty"><div class="ts mt-8">Sin informes procesados aún</div></div>'));
 }
 
