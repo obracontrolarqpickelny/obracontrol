@@ -67,6 +67,20 @@ a{color:var(--blue);text-decoration:none}
 .pri-media{background:#FEF9C3;color:#854D0E;border:1px solid #FDE68A}
 .pri-baja{background:#F0FDF4;color:#166534;border:1px solid #BBF7D0}
 .st-pendiente{background:#FEF3C7;color:#92400E;border:1px solid #FDE68A}
+/* ── Filas de materiales ──────────────────────────────────────────────
+   El nombre competía por el ancho con 5 botones y quedaba partido en dos
+   líneas, con hueco abajo a la derecha. En pantalla angosta el nombre pasa a
+   ocupar todo el ancho y los botones bajan a su propio renglón, alineados
+   a la derecha: filas parejas y sin espacio desperdiciado. */
+.matrow{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.matrow-txt{flex:1;min-width:0}
+.matrow-acts{display:flex;gap:4px;flex-shrink:0;align-items:center;flex-wrap:wrap}
+@media (max-width:600px){
+  .matrow{flex-wrap:wrap}
+  .matrow-txt{flex:1 1 100%}
+  .matrow-acts{width:100%;justify-content:flex-end;margin-top:6px;padding-top:2px}
+  .matrow-acts .btn{font-size:10px;padding:4px 8px}
+}
 /* Zócalo de alertas: latido suave para que llame la atención sin molestar */
 @keyframes zocPulse{0%,100%{box-shadow:0 3px 12px #dc262650}50%{box-shadow:0 3px 20px #dc2626aa}}
 .zocalo-alerta{animation:zocPulse 2.4s ease-in-out infinite}
@@ -926,7 +940,7 @@ function buildLogContent(){
   const ings=pf('matIngresos');
   c+='MATERIALES COMPUTO ('+mats.length+')'+NL+sep+NL;
   mats.forEach(function(m){
-    const tot=ings.filter(function(i){return i.materialId===m.id;}).reduce(function(s,i){return s+(i.qty||0);},0);
+    const tot=ings.filter(function(i){return i.materialId===m.id;}).reduce(function(s,i){return s+_qtyEq(m,i);},0);
     const pct=m.computado>0?Math.round(tot/m.computado*100):0;
     c+=m.name+' ['+(m.category||'General')+']: Comp '+(m.computado||0)+' | Ing '+tot+' '+(m.unit||'')+' | '+pct+'%'+NL;
   });
@@ -2326,6 +2340,51 @@ function closeM(id){$(id)?.classList.remove('open');}
 function badge(txt,cls,sm){return `<span class="bg${sm?' bg-s':''} ${cls}">${txt}</span>`;}
 function priBadge(p,s){return badge(p,'pri-'+(p||'media'),s);}
 function stBadge(st,s){return badge(st,st==='pendiente'?'st-pendiente':st==='en curso'?'st-encurso':st==='completada'?'st-completada':'st-cancelada',s);}
+// ═══════ CAMBIO DE UNIDAD COMERCIAL ═══════
+// Un material puede cambiar de presentación en una fecha (la bolsa de cemento
+// pasó de 20kg a 25kg). El cómputo original queda en la unidad vieja, así que
+// los ingresos posteriores se cargan en la unidad nueva y se convierten para
+// calcular el porcentaje. Nada de esto altera el cómputo.
+function _matTieneCambio(m){
+  return !!(m&&m.unitChangeDate&&m.unitNew&&parseFloat(m.unitFactor)>0);
+}
+// Unidad que corresponde usar en una fecha dada
+function _matUnitAt(m,fecha){
+  if(!_matTieneCambio(m))return {unit:(m&&m.unit)||'u',factor:1,nueva:false};
+  var f=String(fecha||'').slice(0,10);
+  if(f&&f>=m.unitChangeDate)return {unit:m.unitNew,factor:parseFloat(m.unitFactor),nueva:true};
+  return {unit:m.unit||'u',factor:1,nueva:false};
+}
+// Cantidad de un ingreso expresada en la unidad ORIGINAL del cómputo
+function _qtyEq(m,i){
+  var q=parseFloat(i&&i.qty)||0;
+  if(!_matTieneCambio(m))return q;
+  var esNueva=(i&&i.unitEsNueva!==undefined)
+    ? !!i.unitEsNueva
+    : (String((i&&(i.fecha||i.date))||'').slice(0,10)>=m.unitChangeDate);
+  return esNueva?q*parseFloat(m.unitFactor):q;
+}
+// Texto para mostrar en cada ingreso: "4 bolsa 25kg (= 5 bolsa 20kg)"
+function _qtyLabel(m,i){
+  var q=parseFloat(i&&i.qty)||0;
+  if(!_matTieneCambio(m))return q+' '+((i&&i.unit)||m&&m.unit||'');
+  var eq=_qtyEq(m,i);
+  var u=_matUnitAt(m,(i&&(i.fecha||i.date))||'');
+  if(!u.nueva)return q+' '+(i&&i.unit||m.unit||'');
+  var _eqTxt=Math.round(eq*100)/100;
+  return q+' '+m.unitNew+' <span style="color:#8b5cf6;font-weight:700">(= '+_eqTxt+' '+(m.unit||'')+')</span>';
+}
+// Aviso que se muestra en la ficha del material
+function _matUnitBanner(m){
+  if(!_matTieneCambio(m))return '';
+  return '<div style="background:#f5f3ff;border:1px solid #ddd6fe;border-left:3px solid #8b5cf6;border-radius:8px;padding:9px 11px;margin-bottom:10px">'
+    +'<div style="font-size:11px;font-weight:800;color:#7c3aed;margin-bottom:3px">&#x1F504; Cambio de unidad comercial</div>'
+    +'<div style="font-size:12px;color:var(--text2);line-height:1.5">Cómputo en <strong>'+esc(m.unit||'')+'</strong>. '
+    +'Desde el <strong>'+fmts(m.unitChangeDate)+'</strong> se carga en <strong>'+esc(m.unitNew)+'</strong>'
+    +' (1 '+esc(m.unitNew)+' = '+(Math.round(parseFloat(m.unitFactor)*1000)/1000)+' '+esc(m.unit||'')+').<br>'
+    +'<span class="txxs tc3">Los ingresos posteriores se convierten solos para el porcentaje.</span></div></div>';
+}
+
 // ═══════ ALERTAS TRANSVERSALES ═══════
 // Cualquier ítem de estas pestañas puede marcarse como alerta. No es un módulo
 // aparte: es una marca sobre lo que ya existe, para juntar en un solo lugar todo
@@ -3584,7 +3643,7 @@ function exportMatPDF(){
   const items=pf('materiales');const ings=pf('matIngresos');
   const cats={};items.forEach(m=>{
     const cat=m.category||'General';if(!cats[cat])cats[cat]=[];
-    const totalIng=ings.filter(i=>i.materialId===m.id&&(i.estado==='ingresado'||!i.estado)).reduce((s,i)=>s+(i.qty||0),0);
+    const totalIng=ings.filter(i=>i.materialId===m.id&&(i.estado==='ingresado'||!i.estado)).reduce((s,i)=>s+_qtyEq(m,i),0);
     const comp=m.computado||0;const pct=comp>0?Math.round(totalIng/comp*100):0;
     cats[cat].push({...m,totalIng,pct});
   });
@@ -4033,7 +4092,7 @@ function rMat(mc){
   const cats={};
   items.forEach(m=>{
     const cat=m.category||'General';if(!cats[cat])cats[cat]=[];
-    const totalIng=ings.filter(i=>i.materialId===m.id&&(i.estado==='ingresado'||!i.estado)).reduce((s,i)=>s+(i.qty||0),0);
+    const totalIng=ings.filter(i=>i.materialId===m.id&&(i.estado==='ingresado'||!i.estado)).reduce((s,i)=>s+_qtyEq(m,i),0);
     const comp=m.computado||0;const pct=comp>0?Math.round(totalIng/comp*100):0;
     const status=comp===0?'':pct>=100?'ok':pct>=80?'limit':'under';
     cats[cat].push({...m,totalIng,pct,status});
@@ -4127,7 +4186,7 @@ function renderMatItems(){
   const cats={};
   // Build enriched items with pct before sorting
   const enriched=items.map(m=>{
-    const totalIng=ings.filter(i=>i.materialId===m.id&&(i.estado==='ingresado'||!i.estado)).reduce((s,i)=>s+(i.qty||0),0);
+    const totalIng=ings.filter(i=>i.materialId===m.id&&(i.estado==='ingresado'||!i.estado)).reduce((s,i)=>s+_qtyEq(m,i),0);
     const comp=m.computado||0;const pct=comp>0?Math.round(totalIng/comp*100):0;
     const status=comp===0?'':pct>=100?'ok':pct>=80?'limit':'under';
     return {...m,totalIng,pct,status};
@@ -4160,14 +4219,14 @@ function renderMatItems(){
     if(!S.matExistMin) _exist.forEach(function(e){
       var mn=e.materialId?D.materiales.find(function(m){return m.id===e.materialId;}):null;
       _existH+='<div style="padding:8px 0;border-bottom:1px solid var(--green-mid)">';
-      _existH+='<div class="flex items-start justify-between gap-8">';
-      _existH+='<div class="flex-1">';
+      _existH+='<div class="matrow">';
+      _existH+='<div class="matrow-txt">';
       _existH+='<div class="ts fw6">'+(e.matNombre||mn&&mn.name||'Sin nombre')+'</div>';
       _existH+='<div class="txxs tc3 mt-2">'+(e.qty?e.qty+' '+(e.unit||'u'):'-')+(e.fecha?' | '+fmts(e.fecha):'')+(e.proveedor?' | '+e.proveedor:'')+'</div>';
       if(mn&&mn.name!==e.matNombre)_existH+='<div class="txxs mt-1" style="color:var(--purple)">&#x1F4E6; '+mn.name+'</div>';
       if(e.visitaId){var _vn=D.visitas.find(function(v){return v.id===e.visitaId;});_existH+='<div class="txxs mt-1" style="color:var(--blue)">&#x26D3; <button class="link-tag" style="font-size:10px" onclick="S.visitaDetail=\''+e.visitaId+'\';S.mod=\'visitas\';render();">'+(_vn?_vn.title:'Visita')+'</button></div>';}
       if(e.observations)_existH+='<div class="txxs tc3 mt-1">'+e.observations+'</div>';
-      _existH+='</div><div class="flex gap-4 flex-shrink-0">';
+      _existH+='</div><div class="matrow-acts">';
       _existH+='<button class="btn btn-sec btn-s" style="font-size:10px" onclick="editExistente(\''+e.id+'\')">' +I.edit+'</button>';
       _existH+='<button class="btn btn-sec btn-s" style="font-size:10px;color:var(--red)" onclick="delMatItem(\''+e.id+'\')">' +I.trash+'</button>';
       _existH+='</div></div></div>';
@@ -4184,13 +4243,13 @@ function renderMatItems(){
     _apedirH+='<div class="flex gap-4"><button class="btn btn-s btn-sec" title="Agregar al calendario" onclick="exportMatItemsGCal(\'a_pedir\')">&#x1F4C5;</button><button class="btn btn-s btn-sec" onclick="openM(\'newAPedirM\')">'+ I.plus +' Nuevo</button></div></div>';
     if(!S.matAPedirMin) _apedir.forEach(function(p){
       var mn=p.materialId?D.materiales.find(function(m){return m.id===p.materialId;}):null;
-      _apedirH+='<div style="padding:8px 0;border-bottom:1px solid var(--gray-ll)"><div class="flex items-start justify-between gap-8">';
-      _apedirH+='<div class="flex-1"><div class="ts fw6">'+(p.matNombre||'Sin nombre')+_alertTag(p)+'</div>';
+      _apedirH+='<div style="padding:8px 0;border-bottom:1px solid var(--gray-ll)"><div class="matrow">';
+      _apedirH+='<div class="matrow-txt"><div class="ts fw6">'+(p.matNombre||'Sin nombre')+_alertTag(p)+'</div>';
       _apedirH+='<div class="txxs tc3 mt-2">'+(p.qty?p.qty+' '+(p.unit||''):'-')+(p.proveedor?' | '+p.proveedor:'')+(p.fecha?' | '+fmts(p.fecha):'')+'</div>';
       if(mn)_apedirH+='<div class="txxs mt-2" style="color:var(--purple)">&#x1F4E6; '+mn.name+'</div>';
       if(p.sourceType==='formulario'&&p.cargadoPor)_apedirH+='<div class="txxs mt-1" style="color:#16a34a;font-weight:700">&#x1F464; '+esc(p.cargadoPor||p.sourceName||'')+(p.date?' · '+fmts(p.date):'')+'</div>';
       if(p.visitaId){var _vn=D.visitas.find(function(v){return v.id===p.visitaId;});_apedirH+='<div class="txxs mt-1" style="color:var(--blue)">&#x1F4CB; '+'<button class="link-tag" style="font-size:10px" onclick="S.visitaDetail=\''+p.visitaId+'\';;S.mod=\'visitas\';render();">'+(_vn?_vn.title:'Visita')+'</button></div>';}
-      _apedirH+='</div><div class="flex gap-4 flex-shrink-0">';
+      _apedirH+='</div><div class="matrow-acts">';
       _apedirH+=_alertBtn('matIngresos',p.id,p.alerta);
       _apedirH+='<button class="btn btn-sec btn-s" style="font-size:10px" onclick="editAPedir(\''+p.id+'\')">'+I.edit+'</button>';
       _apedirH+='<button class="btn btn-s" style="background:var(--orange);color:#fff;font-size:10px" onclick="pasarAPedido(\''+p.id+'\')">&rarr; Pedido</button>';
@@ -4210,14 +4269,14 @@ function renderMatItems(){
     if(!S.matPedMin) _peds.forEach(function(p){
       var mn=p.materialId?D.materiales.find(function(m){return m.id===p.materialId;}):null;
       _pedH+='<div style="padding:8px 0;border-bottom:1px solid var(--gray-ll)">';
-      _pedH+='<div class="flex items-start justify-between gap-8">';
-      _pedH+='<div class="flex-1"><div class="ts fw6">'+(p.matNombre||'Sin nombre')+_alertTag(p)+'</div>';
+      _pedH+='<div class="matrow">';
+      _pedH+='<div class="matrow-txt"><div class="ts fw6">'+(p.matNombre||'Sin nombre')+_alertTag(p)+'</div>';
       _pedH+='<div class="txxs tc3 mt-2">'+p.qty+' '+(p.unit||'')+(p.proveedor?' | '+p.proveedor:'')+(p.fecha?' | '+fmts(p.fecha):'')+'</div>';
       if(p.observations) _pedH+='<div class="txxs tc3 mt-1">'+p.observations+'</div>';
       if(mn) _pedH+='<div class="txxs mt-2" style="color:var(--purple)">&#x1F4E6; '+mn.name+'</div>';
       if(p.sourceType==='formulario'&&p.cargadoPor)_pedH+='<div class="txxs mt-1" style="color:#16a34a;font-weight:700">&#x1F464; '+esc(p.cargadoPor||p.sourceName||'')+(p.date?' · '+fmts(p.date):'')+'</div>';
       if(p.visitaId){var _pvn=D.visitas.find(function(v){return v.id===p.visitaId;});_pedH+='<div class="txxs mt-1" style="color:var(--blue)">&#x1F4CB; '+'<button class="link-tag" style="font-size:10px" onclick="S.visitaDetail=\''+p.visitaId+'\';;S.mod=\'visitas\';render();">'+(_pvn?_pvn.title:'Visita')+'</button></div>';}
-      _pedH+='</div><div class="flex gap-4 flex-shrink-0">';
+      _pedH+='</div><div class="matrow-acts">';
       _pedH+=_alertBtn('matIngresos',p.id,p.alerta);
       _pedH+='<button class="btn btn-sec btn-s" style="font-size:10px" onclick="editPedidoRegistrado(\''+p.id+'\')">'+ I.edit +'</button>';
       _pedH+='<button class="btn btn-ok btn-s" style="font-size:10px;white-space:nowrap" onclick="confirmarPedido(\''+p.id+'\')">&#x2713; Ingresado</button>';
@@ -4242,14 +4301,14 @@ function renderMatItems(){
       +'</button>'
       +'</div>'
       +(S.matSinCompMin?'':_sinComp.map(function(i){
-        return '<div class="flex items-center gap-6" style="padding:8px 0;border-bottom:1px solid var(--gray-ll)">'
-          +'<div class="flex-1">'
+        return '<div class="matrow" style="padding:8px 0;border-bottom:1px solid var(--gray-ll)">'
+          +'<div class="matrow-txt">'
           +'<div class="ts fw6">'+(i.matNombre||'Sin nombre')+'</div>'
           +'<div class="txxs tc3 mt-2">'+i.qty+' '+(i.unit||'u')+(i.proveedor?' | '+i.proveedor:'')+(i.fecha?' | '+i.fecha:'')+'</div>'
           +(i.observations?'<div class="txxs tc3">'+i.observations+'</div>':'')
           +(i.sourceType==='formulario'&&i.cargadoPor?'<div class="txxs mt-1" style="color:#16a34a;font-weight:700">&#x1F464; '+(i.cargadoPor||i.sourceName||'')+(i.date?' · '+fmts(i.date):'')+'</div>':'')
           +'</div>'
-          +'<div class="flex gap-4">'
+          +'<div class="matrow-acts">'
           +'<button class="btn btn-g btn-s" onclick="editSinComp(\''+i.id+'\')" title="Editar">'+I.edit+'</button>'
           +'<button class="btn btn-g btn-s" onclick="vincularSinComp(\''+i.id+'\')" title="Vincular a material existente" style="font-size:10px">&#x1F517;</button>'
           +'<button class="btn btn-sec btn-s" style="font-size:10px;color:var(--orange)" onclick="retrocederAPedido(\''+i.id+'\')" title="Retroceder a Pedido">&larr; Pedido</button>'
@@ -4757,13 +4816,13 @@ function ejecutarConfirmarPedido(pedidoId){
 
 async function saveMat(){
   if(!requireWrite())return;const n=$('nm_n').value.trim();if(!n){toast('Nombre obligatorio','var(--red)');return;}const pu=await readPhotos('nm_ph','materiales');D.materiales.push({id:uid(),projectId:S.proj,name:n,computado:parseFloat($('nm_comp').value)||0,qty:0,unit:$('nm_u').value,category:$('nm_c').value||'General',notes:$('nm_no').value,photos:pu.map(u=>mkPhoto(u,'')),date:td(),updatedAt:nw()});audit('materiales','create',n);sv();closeM('newMatM');render();toast('Material registrado');}
-async function saveIng(){const mid=$('ni_mat')?.value;const q=parseFloat($('ni_q').value);if(!mid){toast('Selecciona material','var(--red)');return;}if(!q||q<=0){toast('Cantidad invalida','var(--red)');return;}if(!D.matIngresos)D.matIngresos=[];const pu=await readPhotos('ni_ph','materiales');const _ingMat=(D.materiales||[]).find(function(m){return m.id===mid;});D.matIngresos.push({id:uid(),projectId:S.proj,materialId:mid,matNombre:_ingMat?_ingMat.name:'',qty:q,date:$('ni_d').value||td(),proveedor:$('ni_prov').value,remito:$('ni_rem').value,observations:$('ni_obs').value,photos:pu.map(u=>mkPhoto(u,'')),updatedAt:nw()});audit('matIngresos','create','+'+q);sv();closeM('newIngM');render();toast('Ingreso registrado');}
+async function saveIng(){const mid=$('ni_mat')?.value;const q=parseFloat($('ni_q').value);if(!mid){toast('Selecciona material','var(--red)');return;}if(!q||q<=0){toast('Cantidad invalida','var(--red)');return;}if(!D.matIngresos)D.matIngresos=[];const pu=await readPhotos('ni_ph','materiales');const _ingMat=(D.materiales||[]).find(function(m){return m.id===mid;});D.matIngresos.push({id:uid(),projectId:S.proj,materialId:mid,matNombre:_ingMat?_ingMat.name:'',qty:q,date:$('ni_d').value||td(),proveedor:$('ni_prov').value,remito:$('ni_rem').value,observations:$('ni_obs').value,photos:pu.map(u=>mkPhoto(u,'')),unitEsNueva:_matUnitAt(_ingMat,$('ni_d').value||td()).nueva,unit:_matUnitAt(_ingMat,$('ni_d').value||td()).unit,updatedAt:nw()});audit('matIngresos','create','+'+q);sv();closeM('newIngM');render();toast('Ingreso registrado');}
 // Material detail with history
 function exportMatDetailPDF(mid){
   try{
     var m=(D.materiales||[]).find(function(x){return x.id===mid;});if(!m)return;
     var ings=(D.matIngresos||[]).filter(function(i){return i.materialId===mid;});
-    var totalIng=ings.filter(function(i){return i.estado==='ingresado'||!i.estado;}).reduce(function(s,i){return s+(i.qty||0);},0);
+    var totalIng=ings.filter(function(i){return i.estado==='ingresado'||!i.estado;}).reduce(function(s,i){return s+_qtyEq(m,i);},0);
     var comp=m.computado||0;
     var pct=comp>0?Math.round(totalIng/comp*100):null;
     var p=D.projects.find(function(x){return x.id===S.proj;});
@@ -4852,7 +4911,7 @@ function rMatDetail(mc,mid){
   const existentes=allMI.filter(i=>i.estado==='existente').sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const ings=allMI.filter(i=>i.estado!=='pedido'&&i.estado!=='a_pedir'&&i.estado!=='existente').sort((a,b)=>{const fa=a.fecha||a.date||'';const fb=b.fecha||b.date||'';return S.matIngSort==='ant'?fa.localeCompare(fb):fb.localeCompare(fa);});
   const pedsMat=allMI.filter(i=>i.estado==='pedido').sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-  const totalIng=ings.reduce((s,i)=>s+(i.qty||0),0);const comp=m.computado||0;const pct=comp>0?Math.round(totalIng/comp*100):0;
+  const totalIng=ings.reduce((s,i)=>s+_qtyEq(m,i),0);const comp=m.computado||0;const pct=comp>0?Math.round(totalIng/comp*100):0;
   const col=comp===0?'var(--gray-l)':pct>=100?'var(--green)':pct>=80?'var(--orange)':'var(--blue)';
   mc.innerHTML=`
   <div class="flex items-center gap-8 mb-12">
@@ -4867,6 +4926,7 @@ function rMatDetail(mc,mid){
     ${m.notes?`<div class="mt-8 ts tc3">${m.notes}</div>`:''}
     ${m.photos?.length?photoGrid(m.photos,'materiales',m.id):''}
   </div>
+  ${_matUnitBanner(m)}
   <div class="card mb-12" style="border-left:3px solid var(--orange)">
     <div class="flex justify-between items-center mb-8">
       <span class="ts fw7" style="color:var(--orange)">&#x1F4DD; Nota</span>
@@ -4892,7 +4952,7 @@ function rMatDetail(mc,mid){
     <div style="padding:10px 0;border-bottom:1px solid var(--gray-ll)">
       <div class="flex justify-between items-start">
         <div class="flex-1">
-          <div class="ts fw6">+${i.qty} ${m.unit||''}</div>
+          <div class="ts fw6">+${_qtyLabel(m,i)}</div>
           <div class="txxs tc3 mt-2">${fmts(i.fecha||i.date)}${i.proveedor?' | Prov: '+i.proveedor:''}${i.remito?' | Remito: '+i.remito:''}</div>
           ${i.observations?`<div class="txxs tc3 mt-1">${i.observations}</div>`:''}
           ${(()=>{const _eid=i.ecoId||((D.economia||[]).find(function(e){return e.matIngresoId===i.id;})||{}).id;return _eid?`<div class="txxs mt-2" style="color:var(--cyan)">&#x1F4B0; <button class="link-tag" style="font-size:11px;color:var(--cyan)" onclick="irAMovimiento('${_eid}')">Ver en Economía &#x2192;</button></div>`:'';})()}
@@ -4945,6 +5005,17 @@ function editMat(mid){
       <div class="fg"><label class="fl">Unidad</label><select class="fs" id="em_unit">${UNI.map(u=>`<option${u===m.unit?' selected':''}>${u}</option>`).join('')}</select></div>
     </div>
     <div class="fg"><label class="fl">Categor\u00eda</label><select class="fs" id="em_cat">${MATCAT.map(c=>`<option${c===(m.category||'General')?' selected':''}>${c}</option>`).join('')}</select></div>
+    <div class="fg" style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;padding:10px">
+      <div style="font-size:12px;font-weight:800;color:#7c3aed;margin-bottom:2px">&#x1F504; Cambio de unidad comercial (opcional)</div>
+      <div class="txxs tc3 mb-8">Si el material cambi\u00f3 de presentaci\u00f3n (ej: la bolsa pas\u00f3 de 20kg a 25kg), indic\u00e1 desde cu\u00e1ndo. El c\u00f3mputo no se toca: los ingresos posteriores se convierten solos.</div>
+      <div class="fr">
+        <div class="fg"><label class="fl">Desde la fecha</label><input class="fi" id="em_uchg" type="date" value="${m.unitChangeDate||''}"></div>
+        <div class="fg"><label class="fl">Unidad nueva</label><select class="fs" id="em_unew"><option value="">\u2014 sin cambio \u2014</option>${UNI.map(u=>`<option${u===m.unitNew?' selected':''}>${u}</option>`).join('')}</select></div>
+      </div>
+      <div class="fg"><label class="fl">Equivalencia: 1 unidad nueva = ? unidades del c\u00f3mputo</label>
+        <input class="fi" id="em_ufac" type="number" min="0" step="0.001" placeholder="Ej: 25kg \u00f7 20kg = 1.25" value="${m.unitFactor||''}"></div>
+      <div class="txxs tc3">Ejemplo: compr\u00e1s 4 bolsas de 25kg \u2192 se computan como 5 bolsas de 20kg.</div>
+    </div>
     <div class="fg"><label class="fl">Notas</label><textarea class="ft" id="em_notes">${m.notes||''}</textarea></div>
     <div class="fg"><label class="fl">Fotos (agregar m\u00e1s)</label><input type="file" accept="image/*" multiple id="em_ph" class="fi" style="padding:6px"></div>
     ${m.photos&&m.photos.length?`<div class="fg"><div class="txxs tc3 mb-4">Fotos actuales (${m.photos.length})</div>${photoGrid(m.photos,'materiales',mid)}</div>`:''}
@@ -4963,6 +5034,16 @@ async function saveEditMat(mid){
   m.computado=parseFloat(document.getElementById('em_comp')?.value)||0;
   m.unit=document.getElementById('em_unit')?.value||'u';
   m.category=document.getElementById('em_cat')?.value||'General';
+  // Cambio de unidad comercial: sólo vale si están los tres datos
+  const _uChg=document.getElementById('em_uchg')?.value||'';
+  const _uNew=document.getElementById('em_unew')?.value||'';
+  const _uFac=parseFloat(document.getElementById('em_ufac')?.value)||0;
+  if(_uChg&&_uNew&&_uFac>0){
+    m.unitChangeDate=_uChg;m.unitNew=_uNew;m.unitFactor=_uFac;
+  } else {
+    if(_uNew&&(!_uChg||!_uFac)){toast('Para el cambio de unidad faltan la fecha o la equivalencia','var(--orange)',4500);return;}
+    m.unitChangeDate=null;m.unitNew=null;m.unitFactor=null;
+  }
   m.notes=document.getElementById('em_notes')?.value||'';
   if(nuevasFotos.length){
     if(!m.photos)m.photos=[];
@@ -5900,7 +5981,7 @@ function generarInformeMixto(){
       body+='<h2>Resumen de Materiales</h2>';
       body+='<table style="width:100%;border-collapse:collapse;font-size:9px;margin-bottom:8px"><tr><th style="background:#7c3aed;color:#fff;padding:4px 5px;text-align:left">Material</th><th style="background:#7c3aed;color:#fff;padding:4px 5px;text-align:center">Computado</th><th style="background:#7c3aed;color:#fff;padding:4px 5px;text-align:center">Ingresado</th><th style="background:#7c3aed;color:#fff;padding:4px 5px;text-align:center">Falta</th><th style="background:#7c3aed;color:#fff;padding:4px 5px;text-align:center">Avance</th></tr>';
       mats.forEach(function(m){
-        var totalIng=ings.filter(function(i){return i.materialId===m.id&&(i.estado==='ingresado'||!i.estado);}).reduce(function(s,i){return s+(i.qty||0);},0);
+        var totalIng=ings.filter(function(i){return i.materialId===m.id&&(i.estado==='ingresado'||!i.estado);}).reduce(function(s,i){return s+_qtyEq(m,i);},0);
         var comp=m.computado||0;var pct=comp>0?Math.round(totalIng/comp*100):null;
         var col=pct===null?'#64748b':pct>=100?'#16a34a':pct>=80?'#ea580c':'#3b82f6';
         body+='<tr><td style="padding:3px 5px;border-bottom:1px solid #eee">'+esc(m.name)+'</td><td style="padding:3px 5px;border-bottom:1px solid #eee;text-align:center">'+comp+' '+(m.unit||'')+'</td><td style="padding:3px 5px;border-bottom:1px solid #eee;text-align:center;color:#3b82f6">'+totalIng+'</td><td style="padding:3px 5px;border-bottom:1px solid #eee;text-align:center;color:#ea580c">'+Math.max(comp-totalIng,0)+'</td><td style="padding:3px 5px;border-bottom:1px solid #eee;text-align:center;font-weight:700;color:'+col+'">'+(pct!==null?pct+'%':'-')+'</td></tr>';
