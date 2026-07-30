@@ -4114,11 +4114,11 @@ function rMat(mc){
   <div id="mat_items_list"><div class="txxs tc3 tac" style="padding:16px">Cargando...</div></div>
   
   <div class="mo" id="newMatM"><div class="mo-c"><div class="mo-h"><h3 style="color:${c}">Nuevo Material</h3><button class="tbtn" onclick="closeM('newMatM')">${I.x}</button></div><div class="fg"><label class="fl">Material *</label><input class="fi" id="nm_n"></div><div class="fr"><div class="fg"><label class="fl">Computado</label><input class="fi" id="nm_comp" type="number" min="0" placeholder="Cantidad prevista"></div><div class="fg"><label class="fl">Unidad</label><select class="fs" id="nm_u">${UNI.map(u=>`<option>${u}</option>`).join('')}</select></div></div><div class="fg"><label class="fl">Categoría</label><select class="fs" id="nm_c">${MATCAT.map(c=>`<option>${c}</option>`).join('')}</select></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="nm_no"></textarea></div><div class="fg"><label class="fl">Fotos</label><input type="file" accept="image/*" multiple id="nm_ph" class="fi" style="padding:6px"></div><button class="btn btn-w mt-8" style="background:${c};color:#fff" onclick="saveMat()">Guardar</button></div></div>
-  <div class="mo" id="newIngM"><div class="mo-c"><div class="mo-h"><h3 style="color:${c}">Ingreso de Material</h3><button class="tbtn" onclick="closeM('newIngM')">${I.x}</button></div>${allItems.length?`<div class="fg"><label class="fl">Material *</label>${_mcsHtml('ni_mat',allItems,'Buscar material...',null)}</div>`:'<div class="ts tc3 mb-12">Primero carga materiales en el cómputo</div>'}<div class="fr"><div class="fg"><label class="fl">Cantidad *</label><input class="fi" id="ni_q" type="number" min="0"></div><div class="fg"><label class="fl">Fecha</label><input class="fi" id="ni_d" type="date" value="${td()}"></div></div><div class="fg"><label class="fl">Proveedor</label>${_pcHtml('ni_prov',_provList,'Buscar o escribir proveedor...')}</div><div class="fg"><label class="fl">Remito</label><input class="fi" id="ni_rem"></div><div class="fg"><label class="fl">Observaciones</label><textarea class="ft" id="ni_obs"></textarea></div><div class="fg"><label class="fl">Fotos del ingreso</label><input type="file" accept="image/*" multiple id="ni_ph" class="fi" style="padding:6px"></div><button class="btn btn-w mt-8" style="background:${c};color:#fff" onclick="saveIng()">Registrar</button>
+  <div class="mo" id="newIngM"><div class="mo-c"><div class="mo-h"><h3 style="color:${c}">Ingreso de Material</h3><button class="tbtn" onclick="closeM('newIngM')">${I.x}</button></div>${allItems.length?`<div class="fg"><label class="fl">Material *</label>${_mcsHtml('ni_mat',allItems,'Buscar material...',null)}<div id="ni_uinfo" style="display:none"></div></div>`:'<div class="ts tc3 mb-12">Primero carga materiales en el cómputo</div>'}<div class="fr"><div class="fg"><label class="fl">Cantidad *</label><input class="fi" id="ni_q" type="number" min="0" oninput="_unidadInfo('ni')"></div><div class="fg"><label class="fl">Fecha</label><input class="fi" id="ni_d" type="date" value="${td()}" onchange="_unidadInfo('ni')"></div></div><div class="fg"><label class="fl">Proveedor</label>${_pcHtml('ni_prov',_provList,'Buscar o escribir proveedor...')}</div><div class="fg"><label class="fl">Remito</label><input class="fi" id="ni_rem"></div><div class="fg"><label class="fl">Observaciones</label><textarea class="ft" id="ni_obs"></textarea></div><div class="fg"><label class="fl">Fotos del ingreso</label><input type="file" accept="image/*" multiple id="ni_ph" class="fi" style="padding:6px"></div><button class="btn btn-w mt-8" style="background:${c};color:#fff" onclick="saveIng()">Registrar</button>
 </div></div>
-  <div class="mo" id="newPedidoM"><div class="mo-c"><div class="mo-h"><h3 style="color:var(--orange)">&#x1F4CB; Nuevo Pedido</h3><button class="tbtn" onclick="closeM('newPedidoM')">${I.x}</button></div><div style="background:#fff7ed;border-left:3px solid var(--orange);border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px">Los pedidos <strong>no computan</strong> como ingresados. Se convierten en ingreso con un clic cuando lleguen.</div><div class="fg"><label class="fl">Material del c&oacute;mputo (opcional)</label>${_mcsHtml('np_mat',allItems,'Buscar o dejar vacío...','— Ninguno —')}</div><div class="fg"><label class="fl">Nombre libre</label><input class="fi" id="np_nombre" placeholder="Si no est&aacute; en el c&oacute;mputo..."></div><div class="fr"><div class="fg"><label class="fl">Cantidad *</label><input class="fi" id="np_q" type="number" min="0" step="0.01"></div><div class="fg"><label class="fl">Unidad</label><select class="fs" id="np_u">${UNI.map(u=>`<option>${u}</option>`).join('')}</select></div></div><div class="fg"><label class="fl">Proveedor</label>${_pcHtml('np_prov',_provList,'Buscar o escribir proveedor...')}</div><div class="fg"><label class="fl">Fecha pedido</label><input class="fi" id="np_fecha" type="date" value="${td()}"></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="np_obs"></textarea></div><button class="btn btn-w mt-8" style="background:var(--orange);color:#fff" onclick="savePedido()">Registrar Pedido</button></div></div>
-  <div class="mo" id="newAPedirM"><div class="mo-c"><div class="mo-h"><h3 style="color:#8b5cf6">&#x1F4DD; A pedir</h3><button class="tbtn" onclick="closeM('newAPedirM')">${I.x}</button></div><div style="background:#f5f3ff;border-left:3px solid #8b5cf6;border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px">Material pendiente de pedido. Pas&aacute;lo a Pedido cuando se solicite.</div><div class="fg"><label class="fl">Material del c&oacute;mputo (opcional)</label>${_mcsHtml('nap_mat',allItems,'Buscar o dejar vacío...','— Ninguno —')}</div><div class="fg"><label class="fl">Nombre</label><input class="fi" id="nap_nombre" placeholder="Nombre del material"></div><div class="fr"><div class="fg"><label class="fl">Cantidad</label><input class="fi" id="nap_q" type="number" min="0" step="0.01"></div><div class="fg"><label class="fl">Unidad</label><select class="fs" id="nap_u">${UNI.map(u=>`<option>${u}</option>`).join('')}</select></div></div><div class="fg"><label class="fl">Proveedor sugerido</label>${_pcHtml('nap_prov',_provList,'Buscar o escribir proveedor...')}</div><div class="fg"><label class="fl">Fecha estimada</label><input class="fi" id="nap_fecha" type="date" value="${td()}"></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="nap_obs"></textarea></div><button class="btn btn-w mt-8" style="background:#8b5cf6;color:#fff" onclick="saveAPedir()">Registrar A pedir</button></div></div>
-  <div class="mo" id="newExistenteM"><div class="mo-c"><div class="mo-h"><h3 style="color:var(--green)">&#x2713; Registrar Existente</h3><button class="tbtn" onclick="closeM('newExistenteM')">${I.x}</button></div><div style="background:var(--green-bg);border-left:3px solid var(--green);border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px">Material ya disponible en obra — no genera pedido ni ingreso.</div><div class="fg"><label class="fl">Material del c&oacute;mputo (opcional)</label>${_mcsHtml('nex_mat',allItems,'Buscar o dejar vacío...','— Ninguno —')}</div><div class="fg"><label class="fl">Nombre</label><input class="fi" id="nex_nombre" placeholder="Nombre del material existente"></div><div class="fr"><div class="fg"><label class="fl">Cantidad</label><input class="fi" id="nex_q" type="number" min="0" step="0.01"></div><div class="fg"><label class="fl">Unidad</label><select class="fs" id="nex_u">${UNI.map(u=>`<option>${u}</option>`).join('')}</select></div></div><div class="fg"><label class="fl">Fecha</label><input class="fi" id="nex_fecha" type="date" value="${td()}"></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="nex_obs"></textarea></div><button class="btn btn-w mt-8" style="background:var(--green);color:#fff" onclick="saveExistente()">Registrar Existente</button></div></div>`;
+  <div class="mo" id="newPedidoM"><div class="mo-c"><div class="mo-h"><h3 style="color:var(--orange)">&#x1F4CB; Nuevo Pedido</h3><button class="tbtn" onclick="closeM('newPedidoM')">${I.x}</button></div><div style="background:#fff7ed;border-left:3px solid var(--orange);border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px">Los pedidos <strong>no computan</strong> como ingresados. Se convierten en ingreso con un clic cuando lleguen.</div><div class="fg"><label class="fl">Material del c&oacute;mputo (opcional)</label>${_mcsHtml('np_mat',allItems,'Buscar o dejar vacío...','— Ninguno —')}<div id="np_uinfo" style="display:none"></div></div><div class="fg"><label class="fl">Nombre libre</label><input class="fi" id="np_nombre" placeholder="Si no est&aacute; en el c&oacute;mputo..."></div><div class="fr"><div class="fg"><label class="fl">Cantidad *</label><input class="fi" id="np_q" type="number" min="0" step="0.01" oninput="_unidadInfo('np')"></div><div class="fg"><label class="fl">Unidad</label><select class="fs" id="np_u">${UNI.map(u=>`<option>${u}</option>`).join('')}</select></div></div><div class="fg"><label class="fl">Proveedor</label>${_pcHtml('np_prov',_provList,'Buscar o escribir proveedor...')}</div><div class="fg"><label class="fl">Fecha pedido</label><input class="fi" id="np_fecha" type="date" value="${td()}" onchange="_unidadInfo('np')"></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="np_obs"></textarea></div><button class="btn btn-w mt-8" style="background:var(--orange);color:#fff" onclick="savePedido()">Registrar Pedido</button></div></div>
+  <div class="mo" id="newAPedirM"><div class="mo-c"><div class="mo-h"><h3 style="color:#8b5cf6">&#x1F4DD; A pedir</h3><button class="tbtn" onclick="closeM('newAPedirM')">${I.x}</button></div><div style="background:#f5f3ff;border-left:3px solid #8b5cf6;border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px">Material pendiente de pedido. Pas&aacute;lo a Pedido cuando se solicite.</div><div class="fg"><label class="fl">Material del c&oacute;mputo (opcional)</label>${_mcsHtml('nap_mat',allItems,'Buscar o dejar vacío...','— Ninguno —')}<div id="nap_uinfo" style="display:none"></div></div><div class="fg"><label class="fl">Nombre</label><input class="fi" id="nap_nombre" placeholder="Nombre del material"></div><div class="fr"><div class="fg"><label class="fl">Cantidad</label><input class="fi" id="nap_q" type="number" min="0" step="0.01" oninput="_unidadInfo('nap')"></div><div class="fg"><label class="fl">Unidad</label><select class="fs" id="nap_u">${UNI.map(u=>`<option>${u}</option>`).join('')}</select></div></div><div class="fg"><label class="fl">Proveedor sugerido</label>${_pcHtml('nap_prov',_provList,'Buscar o escribir proveedor...')}</div><div class="fg"><label class="fl">Fecha estimada</label><input class="fi" id="nap_fecha" type="date" value="${td()}" onchange="_unidadInfo('nap')"></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="nap_obs"></textarea></div><button class="btn btn-w mt-8" style="background:#8b5cf6;color:#fff" onclick="saveAPedir()">Registrar A pedir</button></div></div>
+  <div class="mo" id="newExistenteM"><div class="mo-c"><div class="mo-h"><h3 style="color:var(--green)">&#x2713; Registrar Existente</h3><button class="tbtn" onclick="closeM('newExistenteM')">${I.x}</button></div><div style="background:var(--green-bg);border-left:3px solid var(--green);border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px">Material ya disponible en obra — no genera pedido ni ingreso.</div><div class="fg"><label class="fl">Material del c&oacute;mputo (opcional)</label>${_mcsHtml('nex_mat',allItems,'Buscar o dejar vacío...','— Ninguno —')}<div id="nex_uinfo" style="display:none"></div></div><div class="fg"><label class="fl">Nombre</label><input class="fi" id="nex_nombre" placeholder="Nombre del material existente"></div><div class="fr"><div class="fg"><label class="fl">Cantidad</label><input class="fi" id="nex_q" type="number" min="0" step="0.01" oninput="_unidadInfo('nex')"></div><div class="fg"><label class="fl">Unidad</label><select class="fs" id="nex_u">${UNI.map(u=>`<option>${u}</option>`).join('')}</select></div></div><div class="fg"><label class="fl">Fecha</label><input class="fi" id="nex_fecha" type="date" value="${td()}" onchange="_unidadInfo('nex')"></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="nex_obs"></textarea></div><button class="btn btn-w mt-8" style="background:var(--green);color:#fff" onclick="saveExistente()">Registrar Existente</button></div></div>`;
   setTimeout(renderMatItems,0);
 }
 function editSinComp(id){
@@ -4528,7 +4528,7 @@ async function saveAPedir(){
   if(!D.matIngresos)D.matIngresos=[];
   if(mid){var mm=D.materiales.find(function(m){return m.id===mid;});if(mm)nombre=nombre||mm.name;}
   D.matIngresos.push({id:uid(),projectId:S.proj,materialId:mid||null,
-    matNombre:nombre,qty:q||0,unit:unit,proveedor:prov,
+    matNombre:nombre,qty:q||0,unit:unit,unitEsNueva:_matUnitAt((D.materiales||[]).find(function(_m){return _m.id===mid;}),(document.getElementById('nap_fecha')||{}).value||td()).nueva,proveedor:prov,
     fecha:fecha,observations:obs,estado:'a_pedir',date:td(),updatedAt:nw()});
   audit('matIngresos','a_pedir',nombre);
   sv();closeM('newAPedirM');render();
@@ -4658,6 +4658,7 @@ function saveExistente(){
   if(mid){var mm=D.materiales.find(function(m){return m.id===mid;});if(mm)nombre=nombre||mm.name;}
   D.matIngresos.push({id:uid(),projectId:S.proj,materialId:mid||null,
     matNombre:nombre,qty:q||0,unit:unit,
+    unitEsNueva:_matUnitAt((D.materiales||[]).find(function(_m){return _m.id===mid;}),fecha||td()).nueva,
     fecha:fecha,observations:obs,estado:'existente',date:nw(),updatedAt:nw()});
   audit('matIngresos','existente',nombre);
   sv();closeM('newExistenteM');renderMatItems();
@@ -4760,7 +4761,7 @@ async function savePedido(){
   if(mid){ var mat=D.materiales.find(function(m){return m.id===mid;}); if(mat) matNombre=matNombre||mat.name; }
   D.matIngresos.push({
     id:uid(), projectId:S.proj, materialId:mid||null,
-    matNombre:matNombre, qty:q, unit:unit, proveedor:prov,
+    matNombre:matNombre, qty:q, unit:unit, unitEsNueva:_matUnitAt((D.materiales||[]).find(function(_m){return _m.id===mid;}),(document.getElementById('np_fecha')||{}).value||td()).nueva, proveedor:prov,
     fecha:fecha, observations:obs, estado:'pedido', date:td(), updatedAt:nw()
   });
   audit('matIngresos','pedido',matNombre);
@@ -8301,11 +8302,44 @@ function _mcsP(selId,id,label,unit,name){
   if(inp)inp.value=id?label:'';
   if(hid)hid.value=id||'';
   if(drop)drop.style.display='none';
+  var sfx=selId==='ni_mat'?'ni':selId==='np_mat'?'np':selId==='nap_mat'?'nap':selId==='nex_mat'?'nex':'';
   if(id){
-    var sfx=selId==='ni_mat'?'ni':selId==='np_mat'?'np':selId==='nap_mat'?'nap':selId==='nex_mat'?'nex':'';
     var uSel=sfx?$(sfx+'_u'):null;if(uSel&&unit)uSel.value=unit;
     var nInp=(sfx&&sfx!=='ni')?$(sfx+'_nombre'):null;if(nInp&&!nInp.value)nInp.value=name;
   }
+  if(sfx)_unidadInfo(sfx);
+}
+
+// Ajusta la unidad del formulario según la fecha y avisa la equivalencia.
+// Sin esto se cargaba en la unidad vieja aunque la fecha ya estuviera pasada
+// el cambio, y el descuento del cómputo salía mal.
+var _FECHA_ID={ni:'ni_d',np:'np_fecha',nap:'nap_fecha',nex:'nex_fecha'};
+function _unidadInfo(sfx){
+  var info=$(sfx+'_uinfo');if(!info)return;
+  var hid=$(sfx+'_mat');
+  var mid=hid?hid.value:'';
+  var m=mid?(D.materiales||[]).find(function(x){return x.id===mid;}):null;
+  if(!m||!_matTieneCambio(m)){info.innerHTML='';info.style.display='none';return;}
+  var fId=_FECHA_ID[sfx];
+  var fecha=(fId&&$(fId)&&$(fId).value)||td();
+  var u=_matUnitAt(m,fecha);
+  // Fijar la unidad que corresponde a esa fecha
+  var uSel=$(sfx+'_u');
+  if(uSel&&Array.prototype.some.call(uSel.options,function(o){return o.value===u.unit;}))uSel.value=u.unit;
+  var q=parseFloat(($(sfx+'_q')||{}).value)||0;
+  var h;
+  if(u.nueva){
+    var _eq=Math.round(q*parseFloat(m.unitFactor)*100)/100;
+    h='<div style="background:#f5f3ff;border:1px solid #ddd6fe;border-left:3px solid #8b5cf6;border-radius:8px;padding:8px 10px;margin-bottom:10px">'
+      +'<div style="font-size:11px;font-weight:800;color:#7c3aed">&#x1F504; Unidad nueva desde '+fmts(m.unitChangeDate)+'</div>'
+      +'<div style="font-size:12px;color:var(--text2);margin-top:2px;line-height:1.5">Se carga en <strong>'+esc(m.unitNew)+'</strong>.'
+      +(q>0?'<br><span style="color:#7c3aed;font-weight:700">'+q+' '+esc(m.unitNew)+' = '+_eq+' '+esc(m.unit||'')+'</span> a descontar del cómputo.':'')
+      +'</div></div>';
+  } else {
+    h='<div style="background:#f8fafc;border:1px solid var(--brd);border-radius:8px;padding:7px 10px;margin-bottom:10px;font-size:11px;color:var(--text3);line-height:1.5">'
+      +'Esta fecha es anterior al cambio: se carga en <strong>'+esc(m.unit||'')+'</strong>.<br>Desde el '+fmts(m.unitChangeDate)+' pasa a <strong>'+esc(m.unitNew)+'</strong>.</div>';
+  }
+  info.innerHTML=h;info.style.display='block';
 }
 
 // ═══════ INIT ═══════
