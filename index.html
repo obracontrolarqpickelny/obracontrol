@@ -1414,8 +1414,35 @@ try{S.chkCollapsed=JSON.parse(localStorage.getItem('_cc')||'{}')}catch(e){}
 try{S.taskCollapsed=JSON.parse(localStorage.getItem('_tc')||'{}')}catch(e){}
 // Restore UI state (collapsed sections, filters, tab selections)
 const _SK_UI=SK+'_s';
-try{var _sui=localStorage.getItem(_SK_UI);if(_sui){var _sp=JSON.parse(_sui);['taskFilter','taskEncFilter','taskSort','matFilter','matCatFilter','matSort','matExistMin','matAPedirMin','matPedMin','matSinCompMin','bandejaTab','ecoFilter','ecoTipoFilter','ecoSort','matIngSort'].forEach(function(k){if(_sp[k]!==undefined)S[k]=_sp[k];});}}catch(e){}
-function saveUIState(){try{var _u={taskFilter:S.taskFilter,taskEncFilter:S.taskEncFilter,taskSort:S.taskSort,matFilter:S.matFilter,matCatFilter:S.matCatFilter,matSort:S.matSort,matExistMin:S.matExistMin,matAPedirMin:S.matAPedirMin,matPedMin:S.matPedMin,matSinCompMin:S.matSinCompMin,bandejaTab:S.bandejaTab,ecoFilter:S.ecoFilter,ecoTipoFilter:S.ecoTipoFilter,ecoSort:S.ecoSort,matIngSort:S.matIngSort};localStorage.setItem(_SK_UI,JSON.stringify(_u));}catch(e){}}
+// Una sola lista para guardar y restaurar. Antes había dos listas separadas y
+// se desincronizaron: los filtros de Comentarios existían en S pero nadie los
+// guardaba, así que al cerrar la app se perdían.
+const _UI_KEYS=[
+  // Tareas
+  'taskFilter','taskEncFilter','taskSort',
+  // Materiales (filtros, orden y secciones plegadas)
+  'matFilter','matCatFilter','matSort','matIngSort',
+  'matExistMin','matAPedirMin','matPedMin','matSinCompMin',
+  // Checklists y documentos
+  'chkSort','docSort',
+  // Comentarios
+  'cmtFilter','cmtSearch','cmtTipoFilter','cmtSort','cmtState',
+  // Economía
+  'ecoFilter','ecoTipoFilter','ecoSort','ecoMetrosOpen',
+  // Bandeja y carpeta de colaboradores
+  'bandejaTab','carpetaSort','carpetaFilter'
+];
+try{
+  var _sui=localStorage.getItem(_SK_UI);
+  if(_sui){var _sp=JSON.parse(_sui);_UI_KEYS.forEach(function(k){if(_sp[k]!==undefined)S[k]=_sp[k];});}
+}catch(e){}
+function saveUIState(){
+  try{
+    var _u={};
+    _UI_KEYS.forEach(function(k){if(S[k]!==undefined)_u[k]=S[k];});
+    localStorage.setItem(_SK_UI,JSON.stringify(_u));
+  }catch(e){}
+}
 
 async function loadAll(){
   // Step 1: Initialize IndexedDB
@@ -4175,7 +4202,7 @@ function setMatSort(val){
   });
   renderMatItems();
 }
-function renderMatItems(){
+function renderMatItems(){saveUIState();
   saveUIState();
   const allItems=pf('materiales').filter(m=>!m.visitaId);
   const ings=pf('matIngresos');const c=MC.materiales;
@@ -5492,7 +5519,7 @@ function rComentarios(mc){
   <button class="btn btn-w mt-8" style="background:${c};color:#fff" onclick="saveCmt()">Guardar</button></div></div>`;
   renderCmtItems();
 }
-function renderCmtItems(){
+function renderCmtItems(){saveUIState();
   const el=$('cmt_items_list');if(!el)return;
   // Actualizar estados visuales de los botones de orden/estado
   var _sb=function(id,active){var b=$(id);if(b)b.className='btn btn-s '+(active?'btn-p':'btn-sec');};
@@ -6535,7 +6562,7 @@ function _ecoSortItems(arr){
     return (b.fecha||b.date||'').localeCompare(a.fecha||a.date||'');
   });
 }
-function renderEcoItems(){
+function renderEcoItems(){saveUIState();
   // Re-render only the items list, keeping the filter input focused
   const all=pf('economia');
   let items=all;
