@@ -1594,13 +1594,17 @@ function _silentMerge(driveData){
             // dp.localUrl puede ser '[foto-local-no-sincronizada]' (truthy pero inútil) — restaurar igual
             var _localUrlOk=lp&&typeof lp==='object'&&lp.localUrl&&lp.localUrl.startsWith('data:');
             var _driveNoLocal=typeof dp==='object'&&(!dp.localUrl||dp.localUrl.startsWith('[foto-local'));
-            if(_localUrlOk&&_driveNoLocal){dp=Object.assign({},dp,{localUrl:lp.localUrl});}
+            // Estas restauraciones cambian lo que se ve, así que tienen que
+            // contar como cambio: si no, el redibujado no se dispara y la foto
+            // recuperada no aparecería hasta la próxima acción del usuario.
+            if(_localUrlOk&&_driveNoLocal){dp=Object.assign({},dp,{localUrl:lp.localUrl});changed=true;}
             if(du.startsWith('[foto')){
               if(lp){var lu=typeof lp==='string'?lp:(lp&&lp.url)||'';
                 if(lu&&!lu.startsWith('[foto')){
                   var _llu=(typeof lp==='object'&&lp.localUrl)||null;
                   var _merged=typeof dp==='string'?lu:Object.assign({},dp,{url:lu});
                   if(_llu&&typeof _merged==='object')_merged.localUrl=_llu;
+                  changed=true;
                   return _merged;
                 }
               }
@@ -1633,17 +1637,17 @@ function _silentMerge(driveData){
           di.archivos=di.archivos.map(function(da){
             if(da.data&&da.data.startsWith('[foto-local')){
               var la=(li.archivos||[]).find(function(x){return x.id===da.id;});
-              if(la&&la.data&&!la.data.startsWith('[foto-local'))da.data=la.data;
+              if(la&&la.data&&!la.data.startsWith('[foto-local')){da.data=la.data;changed=true;}
             }
             return da;
           });
         }
         // Preserve ecoId / materialId / matIngresoId links — never overwrite a live link with null from Drive
-        if(!di.ecoId&&li.ecoId)di.ecoId=li.ecoId;
-        if(!di.materialId&&li.materialId)di.materialId=li.materialId;
-        if(!di.matIngresoId&&li.matIngresoId)di.matIngresoId=li.matIngresoId;
+        if(!di.ecoId&&li.ecoId){di.ecoId=li.ecoId;changed=true;}
+        if(!di.materialId&&li.materialId){di.materialId=li.materialId;changed=true;}
+        if(!di.matIngresoId&&li.matIngresoId){di.matIngresoId=li.matIngresoId;changed=true;}
         // Preserve matNombre / nombre when local has value and Drive doesn't
-        if(!di.matNombre&&li.matNombre)di.matNombre=li.matNombre;
+        if(!di.matNombre&&li.matNombre){di.matNombre=li.matNombre;changed=true;}
       }
     });
     if(merged.length!==D[k].length)changed=true;
@@ -1690,15 +1694,16 @@ async function loadFromDriveAndMerge(silent){
     if(!silent)updateSyncIndicator('syncing');
     const driveData = await loadFromDrive();
     if(!driveData){updateSyncIndicator('noauth');return;}
-    _silentMerge(driveData);
+    var _cambio=_silentMerge(driveData);
     // Si otro dispositivo configuró el servidor de informes, adoptarlo acá
-    if(_adoptServerCfg())toast('🚀 Servidor de informes configurado desde otro dispositivo','var(--green)',4000);
+    if(_adoptServerCfg()){toast('🚀 Servidor de informes configurado desde otro dispositivo','var(--green)',4000);_cambio=true;}
     D.lastSync=nw();
     await saveToIDB();
     _lsSave();
     updateSyncIndicator('ok');
-    // No re-renderizar si hay un modal abierto o si el PIN está bloqueando
-    if(!_isPinLocked()&&!document.querySelector('.mo.open')&&!_isUserTyping())render();
+    // Redibujar SÓLO si algo cambió de verdad. Antes se redibujaba en cada ciclo
+    // aunque no hubiera novedades, y eso movía la pantalla mientras se trabajaba.
+    if(_cambio&&!_isPinLocked()&&!document.querySelector('.mo.open')&&!_isUserTyping())render();
     if(!silent)toast('Datos sincronizados con Drive','var(--green)',2500);
     fetchFormulariosPending();
   }catch(e){
@@ -2615,7 +2620,27 @@ function patchHTML(el,html){
   }
   while(ac){var nx=ac.nextSibling;el.removeChild(ac);ac=nx;}
 }
-function render(){const sy=window.scrollY;if(!D.user){renderAuth();return;}if(!S.proj){renderProjects();return;}saveUIState();renderShell();requestAnimationFrame(()=>window.scrollTo(0,sy));}
+// Mantiene la posición de la pantalla al redibujar. Un solo requestAnimationFrame
+// no alcanzaba: al reemplazar el contenido la página se queda momentáneamente
+// corta y el navegador recorta el scroll a 0, así que hay que reintentar hasta
+// que el contenido vuelva a tener altura.
+function _keepScroll(fn){
+  const sy=window.scrollY||document.documentElement.scrollTop||0;
+  fn();
+  if(sy<=0)return;
+  let intentos=0;
+  (function reponer(){
+    window.scrollTo(0,sy);
+    if(++intentos<8&&Math.abs((window.scrollY||0)-sy)>2)requestAnimationFrame(reponer);
+  })();
+  setTimeout(function(){if(Math.abs((window.scrollY||0)-sy)>2)window.scrollTo(0,sy);},80);
+}
+function render(){
+  if(!D.user){renderAuth();return;}
+  if(!S.proj){renderProjects();return;}
+  saveUIState();
+  _keepScroll(renderShell);
+}
 function renderAuth(){app.innerHTML=`<div style="background:linear-gradient(160deg,var(--pri-bg),var(--pri-mid) 40%,#fff);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px"><div style="width:100%;max-width:400px"><div class="tac" style="margin-bottom:32px"><div style="width:68px;height:68px;border-radius:18px;background:linear-gradient(135deg,#D97706,#F59E0B);display:inline-flex;align-items:center;justify-content:center;color:#fff;margin-bottom:16px;box-shadow:0 8px 28px #D9770630">${I.building}</div><div style="font-size:28px;font-weight:800">ObraControl</div><div class="tc3 mt-4">Gestion integral de obras — v9.0</div></div><div class="card" style="padding:24px"><div class="tac fw7 mb-16" style="font-size:16px">Iniciar sesion</div><div class="fg"><label class="fl">Email</label><input class="fi" id="aEmail" type="email" placeholder="tu@email.com"></div><div class="fg"><label class="fl">Nombre</label><input class="fi" id="aName" placeholder="Tu nombre"></div><button class="btn btn-p btn-w mt-8" onclick="doLogin()">Ingresar</button></div></div></div>`;}
 function doLogin(){const e=$('aEmail')?.value?.trim()||'';const n=$('aName')?.value?.trim()||'';D.user={id:uid(),name:n||e.split('@')[0]||'Usuario',email:e||'demo@obra.com',rol:'director',createdAt:nw()};sv();render();}
 function renderProjects(){const pjs=D.projects;let h='';if(!pjs.length){h=`<div class="empty">${I.building}<div style="font-size:14px;margin:16px 0">No hay obras</div><button class="btn btn-p" onclick="openM('newProjM')">${I.plus} Crear obra</button></div>`;}else{h=pjs.map(p=>{const v=D.visitas.filter(x=>x.projectId===p.id);const t=D.tareas.filter(x=>x.projectId===p.id);const pe=t.filter(x=>x.status!=='completada'&&x.status!=='cancelada').length;return `<div class="card card-click" onclick="S.proj='${p.id}';S.mod='dashboard';S.visitaDetail=null;S.matDetail=null;render();"><div class="flex justify-between items-center mb-6"><div class="fw7" style="font-size:15px">${p.name}</div>${colBadge(p.status,SC[p.status]||'#94a3b8',true)}</div><div class="flex gap-8 ts tc3 mb-8 wrap">${p.client?`<span>${I.user} ${p.client}</span>`:''}${p.location?`<span>${I.pin} ${p.location}</span>`:''}</div><div class="flex gap-12 txxs tc3 items-center"><span>${v.length} visitas</span><span>${t.length} tareas</span>${pe?`<span style="color:var(--pri)">${pe} pend</span>`:''}<a href="https://obracontrolarqpickelny.github.io/obragestion/?obra=${encodeURIComponent(p.name)}" target="_blank" onclick="event.stopPropagation()" style="margin-left:auto;font-size:10px;color:#d97706;text-decoration:none;padding:2px 8px;border:1px solid #d9770644;border-radius:4px;background:#d977060d;font-weight:600">ObraGestión ↗</a></div></div>`;}).join('');}app.innerHTML=`<div style="min-height:100vh;padding:16px;background:var(--bg)"><div style="max-width:600px;margin:0 auto"><div class="flex items-center justify-between mb-16" style="padding-top:16px"><div class="flex items-center gap-12"><div style="width:46px;height:46px;border-radius:14px;background:linear-gradient(135deg,#D97706,#F59E0B);display:flex;align-items:center;justify-content:center;color:#fff;box-shadow:0 4px 14px #D9770630">${I.building}</div><div><div style="font-size:22px;font-weight:800">ObraControl</div><div class="ts tc3">Hola, ${D.user?.name||''}</div></div></div><div style="display:flex;gap:4px;align-items:center"><span id="syncIndicator" class="sync-dot" onclick="showDrivePanel()" title="Estado sincronización" style="cursor:pointer">○</span><button class="tbtn" onclick="showDrivePanel()" style="color:${SYNC.method?"var(--green)":"var(--pri)"}" title="Sincronización Drive">${I.cloud}</button><button class="tbtn" onclick="D.user=null;sv();render();" style="color:var(--gray-l)">${I.out}</button></div></div><div class="flex justify-between items-center mb-12"><h2 style="font-size:16px;font-weight:700">Mis Obras</h2><button class="btn btn-p btn-s" onclick="openM('newProjM')">${I.plus} Nueva</button></div>${h}</div></div><div class="mo" id="newProjM"><div class="mo-c"><div class="mo-h"><h3>Nueva Obra</h3><button class="tbtn" onclick="closeM('newProjM')">${I.x}</button></div><div class="fg"><label class="fl">Nombre *</label><input class="fi" id="pN" placeholder="Ej: Casa Gomez"></div><div class="fg"><label class="fl">Cliente</label><input class="fi" id="pCl"></div><div class="fg"><label class="fl">Ubicacion</label><input class="fi" id="pLoc"></div><div class="fr"><div class="fg"><label class="fl">Director</label><input class="fi" id="pDir"></div><div class="fg"><label class="fl">Capataz</label><input class="fi" id="pCap"></div></div><div class="fr"><div class="fg"><label class="fl">Inicio</label><input class="fi" id="pSt" type="date" value="${td()}"></div><div class="fg"><label class="fl">Fin</label><input class="fi" id="pEn" type="date"></div></div><div class="fg"><label class="fl">Estado</label><select class="fs" id="pSta"><option>En curso</option><option>Pausada</option><option>Finalizada</option><option>Por iniciar</option></select></div><button class="btn btn-p btn-w mt-8" onclick="createProj()">Crear Obra</button></div></div>`;}
