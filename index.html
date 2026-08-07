@@ -587,12 +587,12 @@ async function ensureAuth(forcePrompt = false) {
       const refreshIn = Math.max((expiresIn - 300) * 1000, 60000);
       setTimeout(() => {
         GD.accessToken = null;
-        // Auto-refresh silencioso en background
-        if (SYNC.method === 'oauth' || GD.rootId) {
-          ensureAuth(false).then(ok => {
-            if (ok && GD.pendingSync) cloudSave();
-          }).catch(() => {});
-        }
+        // No se renueva solo: requestAccessToken abre una ventana de Google
+        // aunque se le pida modo silencioso, y aparecía de golpe mientras se
+        // estaba trabajando. Los datos siguen guardándose localmente; se avisa
+        // con el indicador y el cartel de reconectar, y sube al reconectar.
+        updateSyncIndicator('noauth');
+        showDriveReconnectBanner();
       }, refreshIn);
       resolve(true);
     };
@@ -1286,10 +1286,11 @@ window.addEventListener('online', async () => {
     await processPendingImages();
     await saveToDrive();
   } else {
-    // Intentar auth silenciosa al reconectarse
-    ensureAuth(false).then(ok => { if(ok) { saveToDrive(); } }).catch(()=>{});
+    // Sin token no se pide uno solo: abriría una ventana de Google de golpe.
+    // Los datos quedan guardados localmente y suben cuando se reconecte Drive.
+    updateSyncIndicator('noauth');
   }
-  toast('Conexión restaurada — sincronizando...', 'var(--green)', 2500);
+  toast(GD.accessToken?'Conexión restaurada — sincronizando...':'Conexión restaurada','var(--green)',2500);
 });
 
 window.addEventListener('offline', () => {
@@ -8314,6 +8315,12 @@ function _pinSubmit(){
     var ov=document.getElementById('pin-overlay');
     if(ov)ov.style.display='none';
     render();
+    // Recién ahora se conecta con Drive: quedó diferido para no mover nada
+    // mientras estaba la pantalla del PIN.
+    if(window._driveDiferido){
+      window._driveDiferido=false;
+      if(typeof window._arranqueDrive==='function')setTimeout(window._arranqueDrive,150);
+    }
   } else {
     if(err)err.textContent='PIN incorrecto. Intentá de nuevo.';
     inp.value='';
@@ -8583,34 +8590,27 @@ if(!_isPinLocked())render();
   // Initialize Google Auth library
   await initGoogleAuth();
 
-  // En producción (Netlify): intentar auth silenciosa si ya hay token guardado
-  // o si ya dio consentimiento antes (sin mostrar popup)
-  if (window.location.protocol === 'https:' && window.google?.accounts?.oauth2) {
-    const tokenRestored = loadGToken();
-    if (tokenRestored) {
-      // Token guardado y vigente → marcar conectado
-      updateSyncIndicator('ok');
-      toast('Drive conectado ✓', 'var(--green)', 2000);
-      if (GD.online) {
-        // Activar sync si estaba configurado como OAuth
-        if (!SYNC.method) { SYNC.method = 'oauth'; saveSyncConfig(); }
-        loadFromDriveAndMerge().catch(() => {});
-      }
-    } else {
-      // Sin token guardado → intentar silent (no muestra popup)
-      ensureAuth(false).then(ok => {
-        if (ok) {
-          updateSyncIndicator('ok');
-          if (!SYNC.method) { SYNC.method = 'oauth'; saveSyncConfig(); }
-          loadFromDriveAndMerge().catch(() => {});
-        } else {
-          updateSyncIndicator('noauth');
-        }
-      }).catch(() => updateSyncIndicator('noauth'));
+  // Conexión con Drive al arrancar. Se hace SIN abrir ninguna ventana de Google:
+  // requestAccessToken siempre abre un popup —aunque se le pida modo silencioso—
+  // y eso era el destello de "buscar la cuenta" que aparecía sobre el PIN.
+  // Si no hay token guardado, simplemente queda desconectado y el usuario lo
+  // conecta cuando quiere desde el ícono de la nube.
+  window._arranqueDrive=function(){
+    if (window.location.protocol !== 'https:' || !window.google?.accounts?.oauth2) {
+      updateSyncIndicator('noauth');return;
     }
-  } else {
-    updateSyncIndicator('noauth');
-  }
+    if (!loadGToken()) { updateSyncIndicator('noauth'); return; }
+    updateSyncIndicator('ok');
+    if (GD.online) {
+      if (!SYNC.method) { SYNC.method = 'oauth'; saveSyncConfig(); }
+      // silent=false → al terminar avisa con el cartel "Datos sincronizados con Drive"
+      loadFromDriveAndMerge().catch(() => {});
+    }
+  };
+  // Con el PIN puesto no se toca Drive: se espera a que entre, así no hay
+  // movimiento de ningún tipo detrás de la pantalla del PIN.
+  if(_isPinLocked()) window._driveDiferido=true;
+  else window._arranqueDrive();
 
   // Process any pending image uploads
   if(navigator.onLine&&GD.accessToken){
