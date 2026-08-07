@@ -204,7 +204,7 @@ a{color:var(--blue);text-decoration:none}
 </style>
 </head>
 <body>
-<div id="pin-overlay" style="display:none">
+<div id="pin-overlay" style="display:flex">
   <div class="pin-box">
     <div class="pin-logo">🏗️</div>
     <div class="pin-title">ObraControl Pro</div>
@@ -214,6 +214,21 @@ a{color:var(--blue);text-decoration:none}
     <button class="pin-btn" onclick="_pinSubmit()">Ingresar</button>
   </div>
 </div>
+<script>
+// El PIN se decide ACÁ, antes de que el navegador pinte nada. Antes el overlay
+// arrancaba oculto y se mostraba por JS recién al final del arranque, así que
+// alcanzaba a verse un destello de la app antes de que apareciera el PIN.
+(function(){
+  var ov=document.getElementById('pin-overlay');
+  if(!ov)return;
+  try{
+    var pin=localStorage.getItem('oc_pin');
+    var libre=sessionStorage.getItem('oc_pin_ok')==='1';
+    if(!pin||libre)ov.style.display='none';
+    else{var i=document.getElementById('pin-input');if(i)setTimeout(function(){i.focus();},80);}
+  }catch(e){ov.style.display='none';}
+})();
+</script>
 <div id="app"></div>
 <script>
 /* ╔══════════════════════════════════════════════════════════════╗
@@ -2626,14 +2641,25 @@ function patchHTML(el,html){
 // que el contenido vuelva a tener altura.
 function _keepScroll(fn){
   const sy=window.scrollY||document.documentElement.scrollTop||0;
+  // El contenido del módulo se reemplaza entero: por un instante la página
+  // queda sin altura, el navegador recorta el scroll a 0 y se ve el pestañeo.
+  // Reservando la altura previa, la página nunca colapsa.
+  const mc=document.getElementById('mc');
+  const alto=mc?mc.offsetHeight:0;
+  if(mc&&alto)mc.style.minHeight=alto+'px';
+  const soltar=function(){const el=document.getElementById('mc');if(el)el.style.minHeight='';};
   fn();
-  if(sy<=0)return;
+  if(sy<=0){requestAnimationFrame(soltar);return;}
   let intentos=0;
   (function reponer(){
     window.scrollTo(0,sy);
     if(++intentos<8&&Math.abs((window.scrollY||0)-sy)>2)requestAnimationFrame(reponer);
+    else soltar();
   })();
-  setTimeout(function(){if(Math.abs((window.scrollY||0)-sy)>2)window.scrollTo(0,sy);},80);
+  setTimeout(function(){
+    if(Math.abs((window.scrollY||0)-sy)>2)window.scrollTo(0,sy);
+    soltar();
+  },80);
 }
 function render(){
   if(!D.user){renderAuth();return;}
@@ -4157,8 +4183,8 @@ function rMat(mc){
       ${S.matFilter?`<button class="btn btn-sec btn-s" onclick="S.matFilter='';if($('mat_search'))$('mat_search').value='';renderMatItems()">✕</button>`:''}
     </div>
     ${cats_all.length>1?`<div class="flex gap-4 wrap mb-8">
-      <button class="btn btn-s ${!S.matCatFilter?'btn-p':'btn-sec'}" style="${!S.matCatFilter?'background:var(--orange);color:#fff;border-color:var(--orange)':''}" onclick="S.matCatFilter='';renderMatItems()">Todas</button>
-      ${cats_all.map(cat=>`<button class="btn btn-s ${S.matCatFilter===cat?'btn-p':'btn-sec'}" style="font-size:11px;${S.matCatFilter===cat?'background:var(--orange);color:#fff;border-color:var(--orange)':''}" onclick="S.matCatFilter=S.matCatFilter==='${cat.replace(/'/g,"\\'")}'?'':'${cat.replace(/'/g,"\\'")}';renderMatItems()">${cat}</button>`).join('')}
+      <button data-matcat="" class="btn btn-s ${!S.matCatFilter?'btn-p':'btn-sec'}" style="${!S.matCatFilter?'background:var(--orange);color:#fff;border-color:var(--orange)':''}" onclick="setMatCat('')">Todas</button>
+      ${cats_all.map(cat=>`<button data-matcat="${cat.replace(/"/g,'&quot;')}" class="btn btn-s ${S.matCatFilter===cat?'btn-p':'btn-sec'}" style="font-size:11px;${S.matCatFilter===cat?'background:var(--orange);color:#fff;border-color:var(--orange)':''}" onclick="setMatCat(this.dataset.matcat)">${cat}</button>`).join('')}
     </div>`:''}
     <div class="flex gap-6 items-center wrap" style="border-top:1px solid var(--gray-ll);padding-top:8px;padding-bottom:4px"><span class="txxs tc3" style="white-space:nowrap">Ordenar:</span><button data-matsort="" class="btn btn-s ${!S.matSort?'btn-p':'btn-sec'}" style="${!S.matSort?'background:var(--orange);color:#fff':''}" onclick="setMatSort('')">Por defecto</button><button data-matsort="az" class="btn btn-s ${S.matSort==='az'?'btn-p':'btn-sec'}" style="${S.matSort==='az'?'background:var(--orange);color:#fff':''}" onclick="setMatSort('az')">A → Z</button><button data-matsort="za" class="btn btn-s ${S.matSort==='za'?'btn-p':'btn-sec'}" style="${S.matSort==='za'?'background:var(--orange);color:#fff':''}" onclick="setMatSort('za')">Z → A</button><button data-matsort="pct_desc" class="btn btn-s ${S.matSort==='pct_desc'?'btn-p':'btn-sec'}" style="${S.matSort==='pct_desc'?'background:var(--orange);color:#fff':''}" onclick="setMatSort('pct_desc')">% ↓ mayor</button><button data-matsort="pct_asc" class="btn btn-s ${S.matSort==='pct_asc'?'btn-p':'btn-sec'}" style="${S.matSort==='pct_asc'?'background:var(--orange);color:#fff':''}" onclick="setMatSort('pct_asc')">% ↑ menor</button></div>
   </div>
@@ -4227,7 +4253,20 @@ function setMatSort(val){
   });
   renderMatItems();
 }
-function renderMatItems(){saveUIState();
+// Los botones de categoría los dibuja rMat(), pero el clic solo redibujaba la
+// lista: quedaban con el resaltado viejo aunque el filtro sí se aplicara.
+function setMatCat(val){
+  S.matCatFilter=(S.matCatFilter===val)?'':(val||'');
+  document.querySelectorAll('[data-matcat]').forEach(function(b){
+    var active=(b.dataset.matcat||'')===S.matCatFilter;
+    b.style.background=active?'var(--orange)':'';
+    b.style.color=active?'#fff':'';
+    b.style.borderColor=active?'var(--orange)':'';
+    b.className='btn btn-s '+(active?'btn-p':'btn-sec');
+  });
+  renderMatItems();
+}
+function renderMatItems(){
   saveUIState();
   const allItems=pf('materiales').filter(m=>!m.visitaId);
   const ings=pf('matIngresos');const c=MC.materiales;
@@ -6587,7 +6626,15 @@ function _ecoSortItems(arr){
     return (b.fecha||b.date||'').localeCompare(a.fecha||a.date||'');
   });
 }
-function renderEcoItems(){saveUIState();
+function renderEcoItems(){
+  saveUIState();
+  // Estos botones los dibuja rEconomia(), no este render parcial: sin esto
+  // el filtro se aplicaba pero el resaltado quedaba en el botón anterior.
+  (function(){
+    var t=S.ecoTipoFilter||'';
+    var mapa=[['eco_btn_all',!t,'btn-p'],['eco_btn_ing',t==='ingreso','btn-ok'],['eco_btn_egr',t==='egreso','btn-x']];
+    mapa.forEach(function(x){var b=$(x[0]);if(b)b.className='btn btn-s '+(x[1]?x[2]:'btn-sec');});
+  })();
   // Re-render only the items list, keeping the filter input focused
   const all=pf('economia');
   let items=all;
