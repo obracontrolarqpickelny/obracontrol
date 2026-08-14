@@ -587,12 +587,21 @@ async function ensureAuth(forcePrompt = false) {
       const refreshIn = Math.max((expiresIn - 300) * 1000, 60000);
       setTimeout(() => {
         GD.accessToken = null;
-        // No se renueva solo: requestAccessToken abre una ventana de Google
-        // aunque se le pida modo silencioso, y aparecía de golpe mientras se
-        // estaba trabajando. Los datos siguen guardándose localmente; se avisa
-        // con el indicador y el cartel de reconectar, y sube al reconectar.
-        updateSyncIndicator('noauth');
-        showDriveReconnectBanner();
+        // Renovar solo, para no tener que reconectar a mano cada hora.
+        // Si no se puede, queda el cartel de reconectar como respaldo.
+        if (SYNC.method === 'oauth' || GD.rootId) {
+          ensureAuth(false).then(function(ok){
+            if(ok){
+              updateSyncIndicator('ok');
+              if(GD.pendingSync)cloudSave();
+              processPendingImages().catch(function(){});
+            } else {
+              updateSyncIndicator('noauth');showDriveReconnectBanner();
+            }
+          }).catch(function(){updateSyncIndicator('noauth');showDriveReconnectBanner();});
+        } else {
+          updateSyncIndicator('noauth');
+        }
       }, refreshIn);
       resolve(true);
     };
@@ -813,7 +822,14 @@ function showDriveReconnectBanner(){
 async function _reconnectDrive(){
   toast('Reconectando con Google...','var(--orange)',3000);
   const ok=await ensureAuth(true);
-  if(ok){toast('Reconectado ✓ — sincronizando...','var(--green)',2500);await saveToDrive();}
+  if(ok){
+    toast('Reconectado ✓ — sincronizando...','var(--green)',2500);
+    updateSyncIndicator('ok');
+    await saveToDrive();
+    // Subir también las fotos que quedaron en cola mientras estuvo desconectado
+    await processPendingImages().catch(function(){});
+    await loadFromDriveAndMerge().catch(function(){});
+  }
   else{toast('No se pudo reconectar — tocá el ícono ☁️ para intentar de nuevo','var(--orange)',5000);}
 }
 async function saveToDrive() {
@@ -1285,12 +1301,16 @@ window.addEventListener('online', async () => {
   if (GD.accessToken) {
     await processPendingImages();
     await saveToDrive();
+  } else if (SYNC.method === 'oauth' || localStorage.getItem('obracontrol-gaccount')) {
+    // Ya había conectado antes: se reconecta solo al volver la red
+    ensureAuth(false).then(function(ok){
+      if(ok){updateSyncIndicator('ok');saveToDrive().catch(function(){});processPendingImages().catch(function(){});}
+      else{updateSyncIndicator('noauth');showDriveReconnectBanner();}
+    }).catch(function(){updateSyncIndicator('noauth');});
   } else {
-    // Sin token no se pide uno solo: abriría una ventana de Google de golpe.
-    // Los datos quedan guardados localmente y suben cuando se reconecte Drive.
     updateSyncIndicator('noauth');
   }
-  toast(GD.accessToken?'Conexión restaurada — sincronizando...':'Conexión restaurada','var(--green)',2500);
+  toast('Conexión restaurada — sincronizando...','var(--green)',2500);
 });
 
 window.addEventListener('offline', () => {
@@ -8629,18 +8649,36 @@ if(!_isPinLocked())render();
   // y eso era el destello de "buscar la cuenta" que aparecía sobre el PIN.
   // Si no hay token guardado, simplemente queda desconectado y el usuario lo
   // conecta cuando quiere desde el ícono de la nube.
+  // Se ejecuta una sola vez al abrir (y después del PIN, nunca detrás de él).
+  // El destello que molestaba era el de esta ventana apareciendo SOBRE la
+  // pantalla del PIN; corriéndola para después, la reconexión automática
+  // vuelve a estar sin que se vea nada raro.
   window._arranqueDrive=function(){
     if (window.location.protocol !== 'https:' || !window.google?.accounts?.oauth2) {
       updateSyncIndicator('noauth');return;
     }
-    if (!loadGToken()) { updateSyncIndicator('noauth'); return; }
-    updateSyncIndicator('ok');
-    if (GD.online) {
-      if (!SYNC.method) { SYNC.method = 'oauth'; saveSyncConfig(); }
-      // silent=false → al terminar avisa con el cartel "Datos sincronizados con Drive"
-      loadFromDriveAndMerge().catch(() => {});
+    if (loadGToken()) { _drivePost(); return; }             // token vigente: sin ventana
+    if (SYNC.method==='oauth' || localStorage.getItem('obracontrol-gaccount')) {
+      // Ya conectó antes: se reconecta solo, sin que tenga que tocar nada
+      updateSyncIndicator('syncing');
+      ensureAuth(false).then(function(ok){
+        if(ok)_drivePost();
+        else{updateSyncIndicator('noauth');showDriveReconnectBanner();}
+      }).catch(function(){updateSyncIndicator('noauth');showDriveReconnectBanner();});
+    } else {
+      updateSyncIndicator('noauth');
     }
   };
+  // Qué hacer apenas hay conexión: bajar lo de Drive y subir lo que quedó pendiente
+  function _drivePost(){
+    updateSyncIndicator('ok');
+    if(!GD.online)return;
+    if(!SYNC.method){SYNC.method='oauth';saveSyncConfig();}
+    loadFromDriveAndMerge().catch(function(){});
+    processPendingImages().catch(function(){});
+    saveToDrive().catch(function(){});
+  }
+  window._drivePost=_drivePost;
   // Con el PIN puesto no se toca Drive: se espera a que entre, así no hay
   // movimiento de ningún tipo detrás de la pantalla del PIN.
   if(_isPinLocked()) window._driveDiferido=true;
