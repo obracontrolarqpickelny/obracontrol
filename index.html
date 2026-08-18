@@ -1607,19 +1607,38 @@ function _silentMerge(driveData){
         // sin esto el registro entero se reemplaza y se pierden archivos de un lado)
         var _diArch=Array.isArray(di.archivos)?di.archivos.slice():null;
         if(ld>dd){Object.assign(di,li);changed=true;}
-        // Unir archivos de ambos lados por id, y restaurar base64 que Drive haya strippeado
-        if(_diArch||Array.isArray(li.archivos)){
-          var _union=[],_seenA={};
-          [].concat(_diArch||[],li.archivos||[]).forEach(function(a){
-            if(!a||!a.id)return;
-            var _prev=_seenA[a.id];
-            if(!_prev){_seenA[a.id]=a;_union.push(a);return;}
-            // mismo archivo en ambos → conservar el que tenga el base64 real
-            var _pd=(_prev.data||'')+'',_ad=(a.data||'')+'';
-            if(_pd.startsWith('[')&&_ad.startsWith('data:')){_prev.data=a.data;changed=true;}
+        if(k==='carpetas'){
+          // Carpetas de colaboradores: sin updatedAt confiable por archivo, así que
+          // se unen ambos lados por id para no perder subidas de ningún lado.
+          // Los borrados explícitos (archivosBorrados) tienen prioridad sobre la unión.
+          var _borr={};(li.archivosBorrados||[]).concat(di.archivosBorrados||[]).forEach(function(id){_borr[id]=true;});
+          if(_diArch||Array.isArray(li.archivos)){
+            var _union=[],_seenA={};
+            [].concat(_diArch||[],li.archivos||[]).forEach(function(a){
+              if(!a||!a.id||_borr[a.id])return;
+              var _prev=_seenA[a.id];
+              if(!_prev){_seenA[a.id]=a;_union.push(a);return;}
+              var _pd=(_prev.data||'')+'',_ad=(a.data||'')+'';
+              if(_pd.startsWith('[')&&_ad.startsWith('data:')){_prev.data=a.data;changed=true;}
+            });
+            if(_union.length!==(_diArch||[]).length)changed=true;
+            di.archivos=_union;
+          }
+          var _borrUnion=Object.keys(_borr);
+          if(_borrUnion.length!==(di.archivosBorrados||[]).length){di.archivosBorrados=_borrUnion;changed=true;}
+        } else if(_diArch&&Array.isArray(di.archivos)){
+          // Resto de tablas: el lado más reciente (ya asignado en di.archivos) manda.
+          // Si alguien borró un archivo a propósito, ese borrado tiene que quedar firme.
+          // Lo único que se repara acá es un base64 perdido (stripeado) en un archivo
+          // que SIGUE existiendo en el lado ganador — nunca se resucita uno eliminado.
+          var _byId={};_diArch.forEach(function(a){if(a&&a.id)_byId[a.id]=a;});
+          di.archivos=di.archivos.map(function(a){
+            if(!a||!a.id)return a;
+            var _old=_byId[a.id];if(!_old)return a;
+            var _ad=(a.data||'')+'',_od=(_old.data||'')+'';
+            if(_ad.startsWith('[')&&_od.startsWith('data:')){changed=true;return Object.assign({},a,{data:_old.data});}
+            return a;
           });
-          if(_union.length!==(_diArch||[]).length)changed=true;
-          if(_union.length)di.archivos=_union;
         }
         // Restaurar fotos locales si Drive tiene placeholders (stripped base64)
         if(li.photos&&di.photos&&di.photos.length){
@@ -1915,6 +1934,7 @@ function delArchivo(tbl,itemId,archId){
     }).catch(function(){});
   }
   item.archivos=item.archivos.filter(function(f){return f.id!==archId&&f.name!==archId;});
+  item.updatedAt=nw(); // sin esto el merge podía no ver el borrado como "más reciente" y lo revertía
   sv();render();toast('Archivo eliminado');
 }
 function viewDoc(docId){
@@ -1935,6 +1955,7 @@ function delArchivoCmt(cmId,archId){
     }).catch(function(){});
   }
   cm.archivos=cm.archivos.filter(function(f){return f.id!==archId&&f.name!==archId;});
+  cm.updatedAt=nw(); // sin esto el merge podía no ver el borrado como "más reciente" y lo revertía
   sv();render();toast('Archivo eliminado');
 }
 
@@ -8076,6 +8097,11 @@ async function uploadArqCarpeta(colabId,input){
 function deleteCarpetaFile(colabId,fileId){
   var cp=getCarpeta(colabId);
   cp.archivos=(cp.archivos||[]).filter(function(f){return f.id!==fileId;});
+  // Carpetas se mergean por unión (sin esto se pierden subidas de colaboradores
+  // sin updatedAt confiable), así que un borrado normal no alcanza: la próxima
+  // sincronización lo trae de vuelta desde Drive. Se guarda aparte la marca.
+  if(!cp.archivosBorrados)cp.archivosBorrados=[];
+  if(cp.archivosBorrados.indexOf(fileId)<0)cp.archivosBorrados.push(fileId);
   sv();render();openPerfilColab(colabId,'carpeta');toast('Eliminado','var(--green)');
 }
 function downloadCarpetaAll(colabId){
