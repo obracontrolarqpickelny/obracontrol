@@ -1810,7 +1810,7 @@ function audit(tbl,act,sum){
     user:D.user?.name||'',timestamp:nw(),projectId:S.proj});
   if(D.auditLog.length>500)D.auditLog=D.auditLog.slice(-300);
 }
-const $=id=>document.getElementById(id);
+const $=id=>{var el=document.getElementById(id);if(el)_installMorph(el);return el;};
 const pf=t=>S.proj?(D[t]||[]).filter(r=>r.projectId===S.proj):(D[t]||[]).filter(r=>!r.projectId);
 function esc(s){return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
@@ -2424,7 +2424,26 @@ function requireWrite(){
 
 
 /* ===== MÓDULO: RENDER / SHELL / NAVEGACIÓN ===== */
-function openM(id){$(id)?.classList.add('open');}
+// Los 4 formularios de "un solo uso" (A pedir / Pedido / Existente / Ingreso)
+// comparten prefijo de ids. El morphing que evita el pestañeo conserva a
+// propósito el valor de los inputs entre renders, así que sin este reseteo
+// explícito el segundo material que cargás arranca con los datos del primero.
+var _MATM_PREFIX={newAPedirM:'nap',newPedidoM:'np',newExistenteM:'nex',newIngM:'ni'};
+function _resetMatModal(prefix){
+  ['_mat','_nombre','_q','_prov','_fecha','_d','_obs','_rem'].forEach(function(suf){
+    var el=$(prefix+suf);if(el)el.value='';
+  });
+  var qEl=$(prefix+'_mat_q');if(qEl)qEl.value=''; // texto visible del buscador de material
+  var uEl=$(prefix+'_u');if(uEl)uEl.selectedIndex=0;
+  var fEl=$(prefix+'_fecha')||$(prefix+'_d');if(fEl)fEl.value=td();
+  var info=$(prefix+'_uinfo');if(info){info.innerHTML='';info.style.display='none';}
+  var ph=$(prefix+'_ph');if(ph)ph.value='';
+}
+function openM(id){
+  var pfx=_MATM_PREFIX[id];
+  if(pfx)_resetMatModal(pfx);
+  $(id)?.classList.add('open');
+}
 function closeM(id){$(id)?.classList.remove('open');}
 function badge(txt,cls,sm){return `<span class="bg${sm?' bg-s':''} ${cls}">${txt}</span>`;}
 function priBadge(p,s){return badge(p,'pri-'+(p||'media'),s);}
@@ -2755,6 +2774,31 @@ function renderShell(){
   <div class="content" id="mc"></div>
   <div class="bottomnav" ontouchstart="window._bnTX=event.changedTouches[0].clientX" ontouchend="var _dx=event.changedTouches[0].clientX-(window._bnTX||0);if(Math.abs(_dx)>40){navStep(_dx<0?1:-1)}"><button class="bnav" style="max-width:32px;min-width:32px;font-size:16px;opacity:${_bnavIdx<=0?'0.3':'1'}" onclick="navStep(-1)" title="Anterior">&#x276E;</button>${bnav.map(t=>{const act=S.mod===t.id;const c=act?MC[t.id]:'var(--gray-l)';return `<button class="bnav${act?' active':''}" style="color:${c}" onclick="S.mod='${t.id}';S.visitaDetail=null;S.matDetail=null;render();">${I[t.ic]}<span>${t.l}</span>${t.id==='alertas'&&actAl>0?'<span class="ndot"></span>':t.id==='bandeja'&&(pendForms+pendCarpeta+pendMsgsColab+_nAlert)>0?'<span class="nbadge" style="'+(_nAlert?'background:#dc2626':'')+'">'+(pendForms+pendCarpeta+pendMsgsColab+_nAlert)+'</span>':''}</button>`;}).join('')}<button class="bnav" style="max-width:32px;min-width:32px;font-size:16px;opacity:${_bnavIdx>=_allNavIds.length-1?'0.3':'1'}" onclick="navStep(1)" title="Siguiente">&#x276F;</button></div>`);
   renderModule(S.mod,p);
+}
+// Las pestañas (rTareas, rMat, rChecklist...) y sus refrescos parciales
+// (renderMatItems, renderCmtItems, renderEcoItems...) llenan su contenedor con
+// contenedor.innerHTML=..., un reemplazo total en cada render. Eso es lo que se
+// ve como titileo: el navegador destruye y vuelve a crear todas las tarjetas y
+// fotos aunque solo haya cambiado un número. Acá se intercepta esa asignación
+// para que use el mismo morphing ya probado en el resto de la app (patchHTML),
+// sin tocar ninguno de esos renderers: siguen escribiendo x.innerHTML=... tal
+// cual, pero ahora eso actualiza el DOM existente en vez de tirarlo y rehacerlo.
+// Se instala sobre CUALQUIER elemento que pase por $(id) — así cubre todos los
+// contenedores parciales sin tener que salir a buscarlos uno por uno.
+var _MORPH_NATIVE_SET=null,_MORPH_NATIVE_GET=null;
+function _installMorph(el){
+  if(!el||el.__morphed)return;
+  if(!_MORPH_NATIVE_SET){
+    var desc=Object.getOwnPropertyDescriptor(Element.prototype,'innerHTML');
+    if(!desc||!desc.set)return; // navegador raro: no tocar, queda el comportamiento normal
+    _MORPH_NATIVE_SET=desc.set;_MORPH_NATIVE_GET=desc.get;
+  }
+  el.__morphed=true;
+  Object.defineProperty(el,'innerHTML',{
+    configurable:true,
+    get:function(){return _MORPH_NATIVE_GET.call(this);},
+    set:function(html){patchHTML(this,html);}
+  });
 }
 function renderModule(mod,p){const mc=$('mc');if(!mc)return;if(S.visitaDetail){var _vck=(D.visitas||[]).find(function(x){return x.id===S.visitaDetail;});if(!_vck||_vck.projectId!==S.proj){S.visitaDetail=null;}else{rVisitaDetail(mc,S.visitaDetail);return;}}if(S.matDetail){rMatDetail(mc,S.matDetail);return;}switch(mod){case 'dashboard':rDash(mc,p);break;case 'visitas':rVisitas(mc);break;case 'tareas':rTareas(mc);break;case 'materiales':rMat(mc);break;case 'alertas':rAlertas(mc);break;case 'checklist':rChecklist(mc);break;case 'documentos':rDocs(mc);break;case 'comentarios':rComentarios(mc);break;case 'informes':rInformes(mc,p);break;case 'colaboradores':rColaboradores(mc,p);break;case 'bandeja':rBandeja(mc,p);break;case 'economia':rEconomia(mc,p);break;case 'config':rConfig(mc,p);break;}if(S.searchOpen)setTimeout(()=>{const si=$('searchInput');if(si)si.focus();},100);}
 
