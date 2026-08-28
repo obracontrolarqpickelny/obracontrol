@@ -1018,7 +1018,7 @@ function buildLogContent(){
   c+='Egresos: $'+tEgr.toLocaleString('es-AR')+NL;
   c+='SALDO: $'+(tIng-tEgr).toLocaleString('es-AR')+NL+NL;
   eco.sort(function(a,b){return (b.fecha||'').localeCompare(a.fecha||'');}).forEach(function(e){
-    c+=(e.tipo==='ingreso'?'+':'-')+'$'+(parseFloat(e.monto)||0).toLocaleString('es-AR')+' | '+fmt(e.fecha||e.date)+' | '+(e.medioPago||'')+' | '+e.concepto+(e.proveedor?' | '+e.proveedor:'')+(e.rubro?' | ['+e.rubro+(e.item?' / '+e.item:'')+']':'')+NL;
+    c+=(e.tipo==='ingreso'?'+':'-')+'$'+(parseFloat(e.monto)||0).toLocaleString('es-AR')+' | '+fmt(e.fecha||e.date)+' | '+(e.medioPago||'')+' | '+e.concepto+(e.proveedor?' | '+e.proveedor:'')+(e.rubro?' | ['+e.rubro+(e.item?' / '+e.item:'')+']':'')+(e.detalle?' — '+e.detalle:'')+NL;
   });
   // Distribución de egresos por rubro
   var _txtEgrs=eco.filter(function(e){return e.tipo==='egreso';});
@@ -2430,7 +2430,7 @@ function requireWrite(){
 // explícito el segundo material que cargás arranca con los datos del primero.
 var _MATM_PREFIX={newAPedirM:'nap',newPedidoM:'np',newExistenteM:'nex',newIngM:'ni'};
 function _resetMatModal(prefix){
-  ['_mat','_nombre','_q','_prov','_fecha','_d','_obs','_rem'].forEach(function(suf){
+  ['_mat','_nombre','_q','_prov','_fecha','_d','_obs','_rem','_grupo'].forEach(function(suf){
     var el=$(prefix+suf);if(el)el.value='';
   });
   var qEl=$(prefix+'_mat_q');if(qEl)qEl.value=''; // texto visible del buscador de material
@@ -2531,6 +2531,110 @@ function _alertaItems(){
 function _alertaCount(){return _alertaItems().length;}
 
 // Botón para marcar/desmarcar, se agrega a cada tarjeta
+// ═══════ NOTA / DETALLE COMO ICONO ═══════
+// Un ícono pequeño en vez de mostrar siempre el texto completo: evita que un
+// detalle largo (ej. el desglose de un pedido) ensucie el listado. Se toca
+// para ver el texto entero. Se busca el ítem en D en el momento del click, no
+// se pasa el texto por el atributo — así funciona con notas de cualquier largo
+// sin problemas de comillas/escapado.
+function _notaBadge(tbl,id,campo){
+  var it=(D[tbl]||[]).find(function(x){return x.id===id;});
+  if(!it||!it[campo])return '';
+  return '<button onclick="event.stopPropagation();verNota(\''+tbl+'\',\''+id+'\',\''+campo+'\')" title="Ver nota completa" '
+    +'style="border:none;background:#fef9c3;color:#a16207;border-radius:9px;padding:1px 7px;font-size:10px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:2px;margin-left:4px;vertical-align:middle">&#x1F4DD;</button>';
+}
+function verNota(tbl,id,campo){
+  var it=(D[tbl]||[]).find(function(x){return x.id===id;});
+  if(!it||!it[campo])return;
+  var d=document.createElement('div');d.className='mo open';d.id='verNotaM';
+  d.innerHTML='<div class="mo-c"><div class="mo-h"><h3 style="color:#a16207">&#x1F4DD; Nota</h3>'
+    +'<button class="tbtn" onclick="document.getElementById(\'verNotaM\').remove()">'+I.x+'</button></div>'
+    +'<div class="ts" style="white-space:pre-wrap;line-height:1.6;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px">'+esc(it[campo])+'</div>'
+    +'</div>';
+  document.body.appendChild(d);
+}
+
+// ═══════ GRUPOS DE MATERIALES (A pedir / Pedido) ═══════
+// Agrupar por nombre en vez de crear una colección aparte: cada material sigue
+// siendo un registro individual de matIngresos (edición, alertas y borrado por
+// ítem siguen funcionando igual), solo se le agrega un campo "grupo" y la
+// lista los junta bajo un encabezado plegable con acciones en conjunto.
+function _buildMatGroups(items){
+  var groups={},ungrouped=[];
+  items.forEach(function(it){
+    var g=(it.grupo||'').trim();
+    if(!g){ungrouped.push(it);return;}
+    var key=g.toLowerCase();
+    if(!groups[key])groups[key]={label:g,items:[]};
+    groups[key].items.push(it);
+  });
+  return {ungrouped:ungrouped,groups:groups};
+}
+function toggleMatGrupo(estado,key){
+  if(!S.matGrupoCollapsed)S.matGrupoCollapsed={};
+  var k=estado+'|'+key;
+  S.matGrupoCollapsed[k]=!S.matGrupoCollapsed[k];
+  renderMatItems();
+}
+function _renderMatGroupCard(key,group,estado){
+  var color=estado==='a_pedir'?'#8b5cf6':'var(--orange)';
+  var editFn=estado==='a_pedir'?'editAPedir':'editPedidoRegistrado';
+  var collapsed=!!(S.matGrupoCollapsed&&S.matGrupoCollapsed[estado+'|'+key]);
+  var h='<div class="card mb-8" style="border-left:3px solid '+color+';padding:10px 12px">';
+  h+='<div class="flex justify-between items-center" style="cursor:pointer" onclick="toggleMatGrupo(\''+estado+'\',\''+key+'\')">';
+  h+='<span class="ts fw7" style="color:'+color+'">&#x1F3D7; '+esc(group.label)+' ('+group.items.length+')</span>';
+  h+='<span class="txxs tc3">'+(collapsed?'&#x25B6;':'&#x25BC;')+'</span>';
+  h+='</div>';
+  if(!collapsed){
+    h+='<div class="mt-8">';
+    group.items.forEach(function(p){
+      h+='<div style="padding:6px 0;border-bottom:1px solid var(--gray-ll)"><div class="matrow">';
+      h+='<div class="matrow-txt"><div class="ts fw6">'+(p.matNombre||'Sin nombre')+_alertTag(p)+_notaBadge('matIngresos',p.id,'observations')+'</div>';
+      h+='<div class="txxs tc3 mt-2">'+(p.qty?p.qty+' '+(p.unit||''):'-')+(p.proveedor?' | '+esc(p.proveedor):'')+(p.fecha?' | '+fmts(p.fecha):'')+'</div>';
+      h+='</div><div class="matrow-acts">';
+      h+=_alertBtn('matIngresos',p.id,p.alerta);
+      h+='<button class="btn btn-sec btn-s" style="font-size:10px" onclick="'+editFn+'(\''+p.id+'\')">'+I.edit+'</button>';
+      h+='<button class="btn btn-sec btn-s" style="font-size:10px;color:var(--red)" onclick="delMatItem(\''+p.id+'\')">'+I.trash+'</button>';
+      h+='</div></div></div>';
+    });
+    h+='</div><div class="flex gap-6 mt-8">';
+    if(estado==='a_pedir')h+='<button class="btn btn-s" style="background:var(--orange);color:#fff;flex:1" onclick="pasarGrupoAPedido(\''+key+'\')">&rarr; Todos a Pedido</button>';
+    else h+='<button class="btn btn-ok btn-s" style="flex:1" onclick="confirmarGrupoIngresado(\''+key+'\')">&#x2713; Todos Ingresados</button>';
+    h+='<button class="btn btn-sec btn-s" style="color:var(--red)" onclick="eliminarGrupoMat(\''+estado+'\',\''+key+'\')">'+I.trash+' Grupo</button>';
+    h+='</div>';
+  }
+  h+='</div>';
+  return h;
+}
+function _itemsDeGrupo(estado,key){
+  return (D.matIngresos||[]).filter(function(i){return i.projectId===S.proj&&i.estado===estado&&(i.grupo||'').trim().toLowerCase()===key;});
+}
+function pasarGrupoAPedido(key){
+  var items=_itemsDeGrupo('a_pedir',key);if(!items.length)return;
+  if(!confirm('¿Pasar los '+items.length+' materiales de este grupo a Pedido?'))return;
+  items.forEach(function(item){item.estado='pedido';item.fechaPedido=td();item.updatedAt=nw();});
+  audit('matIngresos','grupo_pedido',key);
+  sv();render();
+  toast(items.length+' materiales pasados a Pedido','var(--orange)');
+}
+function confirmarGrupoIngresado(key){
+  var items=_itemsDeGrupo('pedido',key);if(!items.length)return;
+  if(!confirm('¿Confirmar el ingreso de los '+items.length+' materiales de este grupo, tal como fueron pedidos?\n\nSi alguna cantidad llegó distinta, editala aparte después.'))return;
+  items.forEach(function(item){item.estado='ingresado';item.fechaIngreso=td();item.updatedAt=nw();});
+  audit('matIngresos','grupo_ingresado',key);
+  sv();render();
+  toast(items.length+' materiales marcados como Ingresados','var(--green)');
+}
+function eliminarGrupoMat(estado,key){
+  var items=_itemsDeGrupo(estado,key);if(!items.length)return;
+  if(!confirm('¿Eliminar el grupo completo? Se van a borrar los '+items.length+' materiales que contiene. Esta acción no se puede deshacer.'))return;
+  var ids={};items.forEach(function(i){ids[i.id]=true;addTombstone('matIngresos',i.id);});
+  D.matIngresos=(D.matIngresos||[]).filter(function(i){return !ids[i.id];});
+  audit('matIngresos','grupo_eliminado',key);
+  sv();render();
+  toast('Grupo eliminado','var(--green)');
+}
+
 function _alertBtn(tbl,id,on){
   return '<button class="btn btn-g btn-s" title="'+(on?'Quitar de alertas':'Marcar como alerta — aparece en la Bandeja')+'"'
     +' onclick="event.stopPropagation();toggleAlerta(\''+tbl+'\',\''+id+'\')"'
@@ -4242,6 +4346,8 @@ function rMat(mc){
   const allItems=pf('materiales').filter(m=>!m.visitaId);
   const ings=pf('matIngresos');const c=MC.materiales;
   const _provList=[...new Set((D.matIngresos||[]).filter(function(i){return i.projectId===S.proj&&i.proveedor;}).map(function(i){return i.proveedor;}))].sort();
+  const _grupoNames=[...new Set((D.matIngresos||[]).filter(function(i){return i.projectId===S.proj&&i.grupo;}).map(function(i){return i.grupo.trim();}))].sort();
+  const _grupoListHtml='<datalist id="matGrupoList">'+_grupoNames.map(function(g){return '<option value="'+esc(g)+'">';}).join('')+'</datalist>';
   // Build category list
   const cats_all=[...new Set(allItems.map(m=>m.category||'General'))].sort();
   // Apply filters
@@ -4280,8 +4386,8 @@ function rMat(mc){
   <div class="mo" id="newMatM"><div class="mo-c"><div class="mo-h"><h3 style="color:${c}">Nuevo Material</h3><button class="tbtn" onclick="closeM('newMatM')">${I.x}</button></div><div class="fg"><label class="fl">Material *</label><input class="fi" id="nm_n"></div><div class="fr"><div class="fg"><label class="fl">Computado</label><input class="fi" id="nm_comp" type="number" min="0" placeholder="Cantidad prevista"></div><div class="fg"><label class="fl">Unidad</label><select class="fs" id="nm_u">${UNI.map(u=>`<option>${u}</option>`).join('')}</select></div></div><div class="fg"><label class="fl">Categoría</label><select class="fs" id="nm_c">${MATCAT.map(c=>`<option>${c}</option>`).join('')}</select></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="nm_no"></textarea></div><div class="fg"><label class="fl">Fotos</label><input type="file" accept="image/*" multiple id="nm_ph" class="fi" style="padding:6px"></div><button class="btn btn-w mt-8" style="background:${c};color:#fff" onclick="saveMat()">Guardar</button></div></div>
   <div class="mo" id="newIngM"><div class="mo-c"><div class="mo-h"><h3 style="color:${c}">Ingreso de Material</h3><button class="tbtn" onclick="closeM('newIngM')">${I.x}</button></div>${allItems.length?`<div class="fg"><label class="fl">Material *</label>${_mcsHtml('ni_mat',allItems,'Buscar material...',null)}<div id="ni_uinfo" style="display:none"></div></div>`:'<div class="ts tc3 mb-12">Primero carga materiales en el cómputo</div>'}<div class="fr"><div class="fg"><label class="fl">Cantidad *</label><input class="fi" id="ni_q" type="number" min="0" oninput="_unidadInfo('ni')"></div><div class="fg"><label class="fl">Fecha</label><input class="fi" id="ni_d" type="date" value="${td()}" onchange="_unidadInfo('ni')"></div></div><div class="fg"><label class="fl">Proveedor</label>${_pcHtml('ni_prov',_provList,'Buscar o escribir proveedor...')}</div><div class="fg"><label class="fl">Remito</label><input class="fi" id="ni_rem"></div><div class="fg"><label class="fl">Observaciones</label><textarea class="ft" id="ni_obs"></textarea></div><div class="fg"><label class="fl">Fotos del ingreso</label><input type="file" accept="image/*" multiple id="ni_ph" class="fi" style="padding:6px"></div><button class="btn btn-w mt-8" style="background:${c};color:#fff" onclick="saveIng()">Registrar</button>
 </div></div>
-  <div class="mo" id="newPedidoM"><div class="mo-c"><div class="mo-h"><h3 style="color:var(--orange)">&#x1F4CB; Nuevo Pedido</h3><button class="tbtn" onclick="closeM('newPedidoM')">${I.x}</button></div><div style="background:#fff7ed;border-left:3px solid var(--orange);border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px">Los pedidos <strong>no computan</strong> como ingresados. Se convierten en ingreso con un clic cuando lleguen.</div><div class="fg"><label class="fl">Material del c&oacute;mputo (opcional)</label>${_mcsHtml('np_mat',allItems,'Buscar o dejar vacío...','— Ninguno —')}<div id="np_uinfo" style="display:none"></div></div><div class="fg"><label class="fl">Nombre libre</label><input class="fi" id="np_nombre" placeholder="Si no est&aacute; en el c&oacute;mputo..."></div><div class="fr"><div class="fg"><label class="fl">Cantidad *</label><input class="fi" id="np_q" type="number" min="0" step="0.01" oninput="_unidadInfo('np')"></div><div class="fg"><label class="fl">Unidad</label><select class="fs" id="np_u">${UNI.map(u=>`<option>${u}</option>`).join('')}</select></div></div><div class="fg"><label class="fl">Proveedor</label>${_pcHtml('np_prov',_provList,'Buscar o escribir proveedor...')}</div><div class="fg"><label class="fl">Fecha pedido</label><input class="fi" id="np_fecha" type="date" value="${td()}" onchange="_unidadInfo('np')"></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="np_obs"></textarea></div><button class="btn btn-w mt-8" style="background:var(--orange);color:#fff" onclick="savePedido()">Registrar Pedido</button></div></div>
-  <div class="mo" id="newAPedirM"><div class="mo-c"><div class="mo-h"><h3 style="color:#8b5cf6">&#x1F4DD; A pedir</h3><button class="tbtn" onclick="closeM('newAPedirM')">${I.x}</button></div><div style="background:#f5f3ff;border-left:3px solid #8b5cf6;border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px">Material pendiente de pedido. Pas&aacute;lo a Pedido cuando se solicite.</div><div class="fg"><label class="fl">Material del c&oacute;mputo (opcional)</label>${_mcsHtml('nap_mat',allItems,'Buscar o dejar vacío...','— Ninguno —')}<div id="nap_uinfo" style="display:none"></div></div><div class="fg"><label class="fl">Nombre</label><input class="fi" id="nap_nombre" placeholder="Nombre del material"></div><div class="fr"><div class="fg"><label class="fl">Cantidad</label><input class="fi" id="nap_q" type="number" min="0" step="0.01" oninput="_unidadInfo('nap')"></div><div class="fg"><label class="fl">Unidad</label><select class="fs" id="nap_u">${UNI.map(u=>`<option>${u}</option>`).join('')}</select></div></div><div class="fg"><label class="fl">Proveedor sugerido</label>${_pcHtml('nap_prov',_provList,'Buscar o escribir proveedor...')}</div><div class="fg"><label class="fl">Fecha estimada</label><input class="fi" id="nap_fecha" type="date" value="${td()}" onchange="_unidadInfo('nap')"></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="nap_obs"></textarea></div><button class="btn btn-w mt-8" style="background:#8b5cf6;color:#fff" onclick="saveAPedir()">Registrar A pedir</button></div></div>
+  <div class="mo" id="newPedidoM"><div class="mo-c"><div class="mo-h"><h3 style="color:var(--orange)">&#x1F4CB; Nuevo Pedido</h3><button class="tbtn" onclick="closeM('newPedidoM')">${I.x}</button></div><div style="background:#fff7ed;border-left:3px solid var(--orange);border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px">Los pedidos <strong>no computan</strong> como ingresados. Se convierten en ingreso con un clic cuando lleguen.</div><div class="fg"><label class="fl">Material del c&oacute;mputo (opcional)</label>${_mcsHtml('np_mat',allItems,'Buscar o dejar vacío...','— Ninguno —')}<div id="np_uinfo" style="display:none"></div></div><div class="fg"><label class="fl">Nombre libre</label><input class="fi" id="np_nombre" placeholder="Si no est&aacute; en el c&oacute;mputo..."></div><div class="fr"><div class="fg"><label class="fl">Cantidad *</label><input class="fi" id="np_q" type="number" min="0" step="0.01" oninput="_unidadInfo('np')"></div><div class="fg"><label class="fl">Unidad</label><select class="fs" id="np_u">${UNI.map(u=>`<option>${u}</option>`).join('')}</select></div></div><div class="fg"><label class="fl">Proveedor</label>${_pcHtml('np_prov',_provList,'Buscar o escribir proveedor...')}</div><div class="fg"><label class="fl">Fecha pedido</label><input class="fi" id="np_fecha" type="date" value="${td()}" onchange="_unidadInfo('np')"></div><div class="fg"><label class="fl">Grupo (opcional)</label><input class="fi" id="np_grupo" list="matGrupoList" placeholder="Ej: Materiales techo metálico"><div class="txxs tc3 mt-2">Agrupá varios materiales bajo el mismo nombre para no ver un listado tan largo.</div></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="np_obs"></textarea></div><button class="btn btn-w mt-8" style="background:var(--orange);color:#fff" onclick="savePedido()">Registrar Pedido</button></div></div>
+  <div class="mo" id="newAPedirM"><div class="mo-c"><div class="mo-h"><h3 style="color:#8b5cf6">&#x1F4DD; A pedir</h3><button class="tbtn" onclick="closeM('newAPedirM')">${I.x}</button></div><div style="background:#f5f3ff;border-left:3px solid #8b5cf6;border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px">Material pendiente de pedido. Pas&aacute;lo a Pedido cuando se solicite.</div><div class="fg"><label class="fl">Material del c&oacute;mputo (opcional)</label>${_mcsHtml('nap_mat',allItems,'Buscar o dejar vacío...','— Ninguno —')}<div id="nap_uinfo" style="display:none"></div></div><div class="fg"><label class="fl">Nombre</label><input class="fi" id="nap_nombre" placeholder="Nombre del material"></div><div class="fr"><div class="fg"><label class="fl">Cantidad</label><input class="fi" id="nap_q" type="number" min="0" step="0.01" oninput="_unidadInfo('nap')"></div><div class="fg"><label class="fl">Unidad</label><select class="fs" id="nap_u">${UNI.map(u=>`<option>${u}</option>`).join('')}</select></div></div><div class="fg"><label class="fl">Proveedor sugerido</label>${_pcHtml('nap_prov',_provList,'Buscar o escribir proveedor...')}</div><div class="fg"><label class="fl">Fecha estimada</label><input class="fi" id="nap_fecha" type="date" value="${td()}" onchange="_unidadInfo('nap')"></div><div class="fg"><label class="fl">Grupo (opcional)</label><input class="fi" id="nap_grupo" list="matGrupoList" placeholder="Ej: Materiales techo metálico"><div class="txxs tc3 mt-2">Agrupá varios materiales bajo el mismo nombre para no ver un listado tan largo.</div></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="nap_obs"></textarea></div><button class="btn btn-w mt-8" style="background:#8b5cf6;color:#fff" onclick="saveAPedir()">Registrar A pedir</button></div></div>${_grupoListHtml}
   <div class="mo" id="newExistenteM"><div class="mo-c"><div class="mo-h"><h3 style="color:var(--green)">&#x2713; Registrar Existente</h3><button class="tbtn" onclick="closeM('newExistenteM')">${I.x}</button></div><div style="background:var(--green-bg);border-left:3px solid var(--green);border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px">Material ya disponible en obra — no genera pedido ni ingreso.</div><div class="fg"><label class="fl">Material del c&oacute;mputo (opcional)</label>${_mcsHtml('nex_mat',allItems,'Buscar o dejar vacío...','— Ninguno —')}<div id="nex_uinfo" style="display:none"></div></div><div class="fg"><label class="fl">Nombre</label><input class="fi" id="nex_nombre" placeholder="Nombre del material existente"></div><div class="fr"><div class="fg"><label class="fl">Cantidad</label><input class="fi" id="nex_q" type="number" min="0" step="0.01" oninput="_unidadInfo('nex')"></div><div class="fg"><label class="fl">Unidad</label><select class="fs" id="nex_u">${UNI.map(u=>`<option>${u}</option>`).join('')}</select></div></div><div class="fg"><label class="fl">Fecha</label><input class="fi" id="nex_fecha" type="date" value="${td()}" onchange="_unidadInfo('nex')"></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="nex_obs"></textarea></div><button class="btn btn-w mt-8" style="background:var(--green);color:#fff" onclick="saveExistente()">Registrar Existente</button></div></div>`;
   setTimeout(renderMatItems,0);
 }
@@ -4398,11 +4504,10 @@ function renderMatItems(){
       _existH+='<div style="padding:8px 0;border-bottom:1px solid var(--green-mid)">';
       _existH+='<div class="matrow">';
       _existH+='<div class="matrow-txt">';
-      _existH+='<div class="ts fw6">'+(e.matNombre||mn&&mn.name||'Sin nombre')+'</div>';
+      _existH+='<div class="ts fw6">'+(e.matNombre||mn&&mn.name||'Sin nombre')+_notaBadge('matIngresos',e.id,'observations')+'</div>';
       _existH+='<div class="txxs tc3 mt-2">'+(e.qty?e.qty+' '+(e.unit||'u'):'-')+(e.fecha?' | '+fmts(e.fecha):'')+(e.proveedor?' | '+e.proveedor:'')+'</div>';
       if(mn&&mn.name!==e.matNombre)_existH+='<div class="txxs mt-1" style="color:var(--purple)">&#x1F4E6; '+mn.name+'</div>';
       if(e.visitaId){var _vn=D.visitas.find(function(v){return v.id===e.visitaId;});_existH+='<div class="txxs mt-1" style="color:var(--blue)">&#x26D3; <button class="link-tag" style="font-size:10px" onclick="S.visitaDetail=\''+e.visitaId+'\';S.mod=\'visitas\';render();">'+(_vn?_vn.title:'Visita')+'</button></div>';}
-      if(e.observations)_existH+='<div class="txxs tc3 mt-1">'+e.observations+'</div>';
       _existH+='</div><div class="matrow-acts">';
       _existH+='<button class="btn btn-sec btn-s" style="font-size:10px" onclick="editExistente(\''+e.id+'\')">' +I.edit+'</button>';
       _existH+='<button class="btn btn-sec btn-s" style="font-size:10px;color:var(--red)" onclick="delMatItem(\''+e.id+'\')">' +I.trash+'</button>';
@@ -4418,10 +4523,12 @@ function renderMatItems(){
     _apedirH+='<div class="flex justify-between items-center mb-4">';
     _apedirH+='<button class="link-tag fw7" style="color:#8b5cf6;font-size:13px" onclick="S.matAPedirMin=!S.matAPedirMin;renderMatItems()">&#x1F4DD; A pedir ('+_apedir.length+')'+(S.matAPedirMin?' &#x25B6;':' &#x25BC;')+'</button>';
     _apedirH+='<div class="flex gap-4"><button class="btn btn-s btn-sec" title="Agregar al calendario" onclick="exportMatItemsGCal(\'a_pedir\')">&#x1F4C5;</button><button class="btn btn-s btn-sec" onclick="openM(\'newAPedirM\')">'+ I.plus +' Nuevo</button></div></div>';
-    if(!S.matAPedirMin) _apedir.forEach(function(p){
+    if(!S.matAPedirMin){
+      var _apGrp=_buildMatGroups(_apedir);
+      _apGrp.ungrouped.forEach(function(p){
       var mn=p.materialId?D.materiales.find(function(m){return m.id===p.materialId;}):null;
       _apedirH+='<div style="padding:8px 0;border-bottom:1px solid var(--gray-ll)"><div class="matrow">';
-      _apedirH+='<div class="matrow-txt"><div class="ts fw6">'+(p.matNombre||'Sin nombre')+_alertTag(p)+'</div>';
+      _apedirH+='<div class="matrow-txt"><div class="ts fw6">'+(p.matNombre||'Sin nombre')+_alertTag(p)+_notaBadge('matIngresos',p.id,'observations')+'</div>';
       _apedirH+='<div class="txxs tc3 mt-2">'+(p.qty?p.qty+' '+(p.unit||''):'-')+(p.proveedor?' | '+p.proveedor:'')+(p.fecha?' | '+fmts(p.fecha):'')+'</div>';
       if(mn)_apedirH+='<div class="txxs mt-2" style="color:var(--purple)">&#x1F4E6; '+mn.name+'</div>';
       if(p.sourceType==='formulario'&&p.cargadoPor)_apedirH+='<div class="txxs mt-1" style="color:#16a34a;font-weight:700">&#x1F464; '+esc(p.cargadoPor||p.sourceName||'')+(p.date?' · '+fmts(p.date):'')+'</div>';
@@ -4432,7 +4539,9 @@ function renderMatItems(){
       _apedirH+='<button class="btn btn-s" style="background:var(--orange);color:#fff;font-size:10px" onclick="pasarAPedido(\''+p.id+'\')">&rarr; Pedido</button>';
       _apedirH+='<button class="btn btn-sec btn-s" style="font-size:10px;color:var(--red)" onclick="delMatItem(\''+p.id+'\')">' +I.trash+'</button>';
       _apedirH+='</div></div></div>';
-    });
+      });
+      Object.keys(_apGrp.groups).forEach(function(key){_apedirH+=_renderMatGroupCard(key,_apGrp.groups[key],'a_pedir');});
+    }
     _apedirH+='</div>';
   }
   var _peds=(D.matIngresos||[]).filter(function(i){return i.projectId===S.proj&&i.estado==='pedido';});
@@ -4443,13 +4552,14 @@ function renderMatItems(){
     _pedH+='<div class="flex justify-between items-center mb-4">';
     _pedH+='<button class="link-tag fw7" style="color:var(--orange);font-size:13px" onclick="S.matPedMin=!S.matPedMin;renderMatItems()">&#x1F4CB; Pedidos pendientes ('+_peds.length+')'+(S.matPedMin?' &#x25B6;':' &#x25BC;')+'</button>';
     _pedH+='<div class="flex gap-4"><button class="btn btn-s btn-sec" title="Agregar al calendario" onclick="exportMatItemsGCal(\'pedido\')">&#x1F4C5;</button><button class="btn btn-s btn-sec" onclick="openM(\'newPedidoM\')">' +I.plus+' Nuevo</button></div></div>';
-    if(!S.matPedMin) _peds.forEach(function(p){
+    if(!S.matPedMin){
+      var _pedGrp=_buildMatGroups(_peds);
+      _pedGrp.ungrouped.forEach(function(p){
       var mn=p.materialId?D.materiales.find(function(m){return m.id===p.materialId;}):null;
       _pedH+='<div style="padding:8px 0;border-bottom:1px solid var(--gray-ll)">';
       _pedH+='<div class="matrow">';
-      _pedH+='<div class="matrow-txt"><div class="ts fw6">'+(p.matNombre||'Sin nombre')+_alertTag(p)+'</div>';
+      _pedH+='<div class="matrow-txt"><div class="ts fw6">'+(p.matNombre||'Sin nombre')+_alertTag(p)+_notaBadge('matIngresos',p.id,'observations')+'</div>';
       _pedH+='<div class="txxs tc3 mt-2">'+p.qty+' '+(p.unit||'')+(p.proveedor?' | '+p.proveedor:'')+(p.fecha?' | '+fmts(p.fecha):'')+'</div>';
-      if(p.observations) _pedH+='<div class="txxs tc3 mt-1">'+p.observations+'</div>';
       if(mn) _pedH+='<div class="txxs mt-2" style="color:var(--purple)">&#x1F4E6; '+mn.name+'</div>';
       if(p.sourceType==='formulario'&&p.cargadoPor)_pedH+='<div class="txxs mt-1" style="color:#16a34a;font-weight:700">&#x1F464; '+esc(p.cargadoPor||p.sourceName||'')+(p.date?' · '+fmts(p.date):'')+'</div>';
       if(p.visitaId){var _pvn=D.visitas.find(function(v){return v.id===p.visitaId;});_pedH+='<div class="txxs mt-1" style="color:var(--blue)">&#x1F4CB; '+'<button class="link-tag" style="font-size:10px" onclick="S.visitaDetail=\''+p.visitaId+'\';;S.mod=\'visitas\';render();">'+(_pvn?_pvn.title:'Visita')+'</button></div>';}
@@ -4460,7 +4570,9 @@ function renderMatItems(){
       _pedH+='<button class="btn btn-sec btn-s" style="font-size:10px;color:#8b5cf6;white-space:nowrap" onclick="retrocederAPedir(\''+p.id+'\')" title="Retroceder a A pedir">&larr; A pedir</button>';
       _pedH+='<button class="btn btn-sec btn-s" style="font-size:10px;color:var(--red)" onclick="delMatItem(\''+p.id+'\')">' +I.trash+'</button>';
       _pedH+='</div></div></div>';
-    });
+      });
+      Object.keys(_pedGrp.groups).forEach(function(key){_pedH+=_renderMatGroupCard(key,_pedGrp.groups[key],'pedido');});
+    }
     _pedH+='</div>';
   }
   // Ingresados sin cómputo — SIEMPRE calcular, no solo cuando items.length==0
@@ -4701,11 +4813,12 @@ async function saveAPedir(){
   var prov=(document.getElementById('nap_prov')||{}).value||'';
   var fecha=(document.getElementById('nap_fecha')||{}).value||td();
   var obs=(document.getElementById('nap_obs')||{}).value||'';
+  var grupo=((document.getElementById('nap_grupo')||{}).value||'').trim();
   if(!mid&&!nombre){toast('Nombre o material obligatorio','var(--red)');return;}
   if(!D.matIngresos)D.matIngresos=[];
   if(mid){var mm=D.materiales.find(function(m){return m.id===mid;});if(mm)nombre=nombre||mm.name;}
   D.matIngresos.push({id:uid(),projectId:S.proj,materialId:mid||null,
-    matNombre:nombre,qty:q||0,unit:unit,unitEsNueva:_matUnitAt((D.materiales||[]).find(function(_m){return _m.id===mid;}),(document.getElementById('nap_fecha')||{}).value||td()).nueva,proveedor:prov,
+    matNombre:nombre,qty:q||0,unit:unit,unitEsNueva:_matUnitAt((D.materiales||[]).find(function(_m){return _m.id===mid;}),(document.getElementById('nap_fecha')||{}).value||td()).nueva,proveedor:prov,grupo:grupo||null,
     fecha:fecha,observations:obs,estado:'a_pedir',date:td(),updatedAt:nw()});
   audit('matIngresos','a_pedir',nombre);
   sv();closeM('newAPedirM');render();
@@ -4871,6 +4984,7 @@ function editAPedir(itemId){
     +'<div class="fg"><label class="fl">Unidad</label><select class="fs" id="eap_u">'+UNI.map(function(u){return '<option'+(u===item.unit?' selected':'')+'>'+u+'</option>';}).join('')+'</select></div></div>'
     +'<div class="fg"><label class="fl">Proveedor</label><input class="fi" id="eap_prov" value="'+(item.proveedor||'')+'"></div>'
     +'<div class="fg"><label class="fl">Fecha</label><input class="fi" id="eap_fecha" type="date" value="'+(item.fecha||td())+'"></div>'
+    +'<div class="fg"><label class="fl">Grupo (opcional)</label><input class="fi" id="eap_grupo" list="matGrupoList" value="'+esc(item.grupo||'')+'" placeholder="Ej: Materiales techo metálico"></div>'
     +'<div class="fg"><label class="fl">Notas</label><textarea class="ft" id="eap_obs">'+(item.observations||'')+'</textarea></div>'
     +'<div class="flex gap-6 mt-8">'
     +'<button class="btn btn-w" style="background:#8b5cf6;color:#fff;flex:1" onclick="saveEditAPedir(\''+itemId+'\')" >Guardar</button>'
@@ -4888,6 +5002,7 @@ function saveEditAPedir(itemId){
   item.proveedor=(document.getElementById('eap_prov')||{}).value||'';
   item.fecha=(document.getElementById('eap_fecha')||{}).value||td();
   item.observations=(document.getElementById('eap_obs')||{}).value||'';
+  item.grupo=((document.getElementById('eap_grupo')||{}).value||'').trim()||null;
   item.updatedAt=nw();
   sv();document.getElementById('editAPedirM').remove();render();toast('A pedir actualizado');
 }
@@ -4902,6 +5017,7 @@ function editPedidoRegistrado(itemId){
     +'<div class="fg"><label class="fl">Unidad</label><select class="fs" id="epr_u">'+UNI.map(function(u){return '<option'+(u===item.unit?' selected':'')+'>'+u+'</option>';}).join('')+'</select></div></div>'
     +'<div class="fg"><label class="fl">Proveedor</label><input class="fi" id="epr_prov" value="'+(item.proveedor||'')+'"></div>'
     +'<div class="fg"><label class="fl">Fecha pedido</label><input class="fi" id="epr_fecha" type="date" value="'+(item.fecha||td())+'"></div>'
+    +'<div class="fg"><label class="fl">Grupo (opcional)</label><input class="fi" id="epr_grupo" list="matGrupoList" value="'+esc(item.grupo||'')+'" placeholder="Ej: Materiales techo metálico"></div>'
     +'<div class="fg"><label class="fl">Notas</label><textarea class="ft" id="epr_obs">'+(item.observations||'')+'</textarea></div>'
     +'<div class="flex gap-6 mt-8">'
     +'<button class="btn btn-w" style="background:var(--orange);color:#fff;flex:1" onclick="saveEditPedReg(\''+itemId+'\')" >Guardar</button>'
@@ -4919,6 +5035,7 @@ function saveEditPedReg(itemId){
   item.proveedor=(document.getElementById('epr_prov')||{}).value||'';
   item.fecha=(document.getElementById('epr_fecha')||{}).value||td();
   item.observations=(document.getElementById('epr_obs')||{}).value||'';
+  item.grupo=((document.getElementById('epr_grupo')||{}).value||'').trim()||null;
   item.updatedAt=nw();
   sv();document.getElementById('editPedRegM').remove();render();toast('Pedido actualizado');
 }
@@ -4931,6 +5048,7 @@ async function savePedido(){
   var prov  = (document.getElementById('np_prov')   ||{}).value   || '';
   var fecha = (document.getElementById('np_fecha')  ||{}).value   || td();
   var obs   = (document.getElementById('np_obs')    ||{}).value   || '';
+  var grupo = ((document.getElementById('np_grupo')||{}).value||'').trim();
   if(!mid && !nombre){ toast('Seleccion\u00e1 un material o escrib\u00ed el nombre','var(--red)'); return; }
   if(!q || q<=0)     { toast('Cantidad obligatoria','var(--red)'); return; }
   if(!D.matIngresos) D.matIngresos=[];
@@ -4938,7 +5056,7 @@ async function savePedido(){
   if(mid){ var mat=D.materiales.find(function(m){return m.id===mid;}); if(mat) matNombre=matNombre||mat.name; }
   D.matIngresos.push({
     id:uid(), projectId:S.proj, materialId:mid||null,
-    matNombre:matNombre, qty:q, unit:unit, unitEsNueva:_matUnitAt((D.materiales||[]).find(function(_m){return _m.id===mid;}),(document.getElementById('np_fecha')||{}).value||td()).nueva, proveedor:prov,
+    matNombre:matNombre, qty:q, unit:unit, unitEsNueva:_matUnitAt((D.materiales||[]).find(function(_m){return _m.id===mid;}),(document.getElementById('np_fecha')||{}).value||td()).nueva, proveedor:prov,grupo:grupo||null,
     fecha:fecha, observations:obs, estado:'pedido', date:td(), updatedAt:nw()
   });
   audit('matIngresos','pedido',matNombre);
@@ -6699,7 +6817,7 @@ function rEconomia(mc,p){
     return `<div class="card" id="eco_item_${item.id}" style="padding:12px;border-left:3px solid ${col};${item.id===S.ecoResalt?'outline:2px solid var(--cyan);':''}">
       <div class="flex justify-between items-start mb-4">
         <div class="flex-1">
-          <div class="ts fw6">${item.concepto||'Sin concepto'}${item.interno?' <span style="font-size:9px;background:#f1f5f9;border-radius:3px;padding:1px 4px;color:#64748b">&#x1F512; Priv.</span>':''}${item.sourceType==='formulario'?' <span style="font-size:9px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:1px 6px;color:#16a34a">&#x1F464; '+(item.cargadoPor||item.sourceName||'')+'</span>':''}</div>
+          <div class="ts fw6">${item.concepto||'Sin concepto'}${_notaBadge('economia',item.id,'detalle')}${item.interno?' <span style="font-size:9px;background:#f1f5f9;border-radius:3px;padding:1px 4px;color:#64748b">&#x1F512; Priv.</span>':''}${item.sourceType==='formulario'?' <span style="font-size:9px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:1px 6px;color:#16a34a">&#x1F464; '+(item.cargadoPor||item.sourceName||'')+'</span>':''}</div>
           <div class="txxs tc3 mt-2">${fmts(item.fecha||item.date)} | ${item.medioPago||''} ${item.proveedor?`| <strong>${item.proveedor}</strong>`:''} ${item.rubro?`<span style="background:#f1f5f9;border-radius:3px;padding:1px 5px;margin-left:2px;color:#475569">${item.rubro}${item.item?' / '+item.item:''}</span>`:''}</div>
         </div>
         <div class="fw8" style="color:${col};font-size:15px;flex-shrink:0;margin-left:8px">${sign}$${(parseFloat(item.monto)||0).toLocaleString('es-AR')}</div>
@@ -6716,6 +6834,7 @@ function rEconomia(mc,p){
   <div class="fg"><label class="fl">Tipo *</label><div class="flex gap-6"><button type="button" class="tipo-btn inactive" id="eco_tipo_ing" onclick="selEcoTipo('ingreso')">↑ Ingreso</button><button type="button" class="tipo-btn active-egr" id="eco_tipo_egr" onclick="selEcoTipo('egreso')">↓ Egreso</button></div><input type="hidden" id="eco_tipo" value="egreso"></div>
   <div class="fg"><label class="fl">Fecha *</label><input class="fi" id="eco_fecha" type="date" value="${td()}"></div>
   <div class="fg"><label class="fl">Concepto *</label><div class="ac-wrap"><input class="fi" id="eco_concepto" placeholder="Pago albañilería, compra cemento..." autocomplete="off"></div></div>
+  <div class="fg"><label class="fl">Detalle (opcional)</label><textarea class="ft" id="eco_detalle" rows="3" placeholder="Ej: 12 perfiles, 6 planchuelas, 8 latas de pintura, 5 pinceles..."></textarea><div class="txxs tc3 mt-2">Se ve como un ícono de nota junto al concepto — mantiene el listado corto y el detalle a mano.</div></div>
   <div class="fr"><div class="fg"><label class="fl">Monto *</label><input class="fi" id="eco_monto" type="number" min="0" step="0.01" placeholder="0.00"></div><div class="fg"><label class="fl">Medio de pago</label><select class="fs" id="eco_medio">${MEDIOS.map(m=>`<option>${m}</option>`).join('')}</select></div></div>
   <div class="fg"><label class="fl">Proveedor / Pagador</label><div class="ac-wrap"><input class="fi" id="eco_prov" placeholder="Nombre..." autocomplete="off"></div></div>
   <div class="fr"><div class="fg"><label class="fl">Rubro</label><div class="ac-wrap"><input class="fi" id="eco_rubro" placeholder="Ej: Materiales, Mano de obra..." autocomplete="off" oninput="setTimeout(function(){setupAC('eco_item',_acItems($('eco_rubro')?.value));},100)"></div></div><div class="fg"><label class="fl">Ítem</label><div class="ac-wrap"><input class="fi" id="eco_item" placeholder="Ej: Cemento, Pintura..." autocomplete="off"></div></div></div>
@@ -6826,7 +6945,7 @@ function renderEcoItems(){
     return `<div class="card" id="eco_item_${item.id}" style="padding:12px;border-left:3px solid ${col};${item.id===S.ecoResalt?'outline:2px solid var(--cyan);':''  }">
       <div class="flex justify-between items-start mb-4">
         <div class="flex-1">
-          <div class="ts fw6">${item.concepto||'Sin concepto'}${item.interno?' <span style="font-size:9px;background:#f1f5f9;border-radius:3px;padding:1px 4px;color:#64748b">&#x1F512; Priv.</span>':''}${item.sourceType==='formulario'?' <span style="font-size:9px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:1px 6px;color:#16a34a">&#x1F464; '+(item.cargadoPor||item.sourceName||'')+'</span>':''}</div>
+          <div class="ts fw6">${item.concepto||'Sin concepto'}${_notaBadge('economia',item.id,'detalle')}${item.interno?' <span style="font-size:9px;background:#f1f5f9;border-radius:3px;padding:1px 4px;color:#64748b">&#x1F512; Priv.</span>':''}${item.sourceType==='formulario'?' <span style="font-size:9px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:1px 6px;color:#16a34a">&#x1F464; '+(item.cargadoPor||item.sourceName||'')+'</span>':''}</div>
           <div class="txxs tc3 mt-2">${fmts(item.fecha||item.date)} | ${item.medioPago||''} ${item.proveedor?`| <strong>${item.proveedor}</strong>`:''} ${item.rubro?`<span style="background:#f1f5f9;border-radius:3px;padding:1px 5px;margin-left:2px;color:#475569">${item.rubro}${item.item?' / '+item.item:''}</span>`:''}</div>
         </div>
         <div class="fw8" style="color:${col};font-size:15px;flex-shrink:0;margin-left:8px">${sign}$${(parseFloat(item.monto)||0).toLocaleString('es-AR')}</div>
@@ -7244,7 +7363,7 @@ async function saveEco(){
   const _eitem=($('eco_item')?.value||'').trim();
   D.economia.push({id:_eid,projectId:S.proj,tipo:_etipo,fecha:_efecha,concepto,
     monto:parseFloat(monto),medioPago:$('eco_medio')?.value||'',proveedor:_eprov,
-    rubro:_erubro,item:_eitem,
+    rubro:_erubro,item:_eitem,detalle:($('eco_detalle')?.value||'').trim()||null,
     imagen:img,interno:!!($('eco_interno')?.checked),date:nw(),updatedAt:nw()});
   if($('eco_es_mat')?.checked && _etipo==='egreso'){
     if(!D.matIngresos)D.matIngresos=[];
@@ -7420,6 +7539,7 @@ function editEco(id){
   <div class="fg"><label class="fl">Tipo</label><div class="flex gap-6"><button type="button" class="tipo-btn${item.tipo==='ingreso'?' active-exist':' inactive'}" id="eeq_ing" onclick="selEEcoTipo('ingreso')">↑ Ingreso</button><button type="button" class="tipo-btn${item.tipo==='egreso'?' active-pedir':' inactive'}" id="eeq_egr" onclick="selEEcoTipo('egreso')">↓ Egreso</button></div><input type="hidden" id="eeq_tipo" value="${item.tipo||'egreso'}"></div>
   <div class="fg"><label class="fl">Fecha</label><input class="fi" id="eeq_fecha" type="date" value="${item.fecha||item.date||''}"></div>
   <div class="fg"><label class="fl">Concepto *</label><div class="ac-wrap"><input class="fi" id="eeq_concepto" value="${item.concepto||''}" autocomplete="off"></div></div>
+  <div class="fg"><label class="fl">Detalle (opcional)</label><textarea class="ft" id="eeq_detalle" rows="3" placeholder="Ej: 12 perfiles, 6 planchuelas...">${esc(item.detalle||'')}</textarea></div>
   <div class="fr"><div class="fg"><label class="fl">Monto *</label><input class="fi" id="eeq_monto" type="number" value="${item.monto||0}"></div><div class="fg"><label class="fl">Medio</label><select class="fs" id="eeq_medio">${MEDIOS.map(m=>`<option${m===item.medioPago?' selected':''}>${m}</option>`).join('')}</select></div></div>
   <div class="fg"><label class="fl">Proveedor</label><div class="ac-wrap"><input class="fi" id="eeq_prov" value="${item.proveedor||''}" autocomplete="off"></div></div>
   <div class="fr"><div class="fg"><label class="fl">Rubro</label><div class="ac-wrap"><input class="fi" id="eeq_rubro" value="${item.rubro||''}" placeholder="Ej: Materiales, Mano de obra..." autocomplete="off" oninput="setTimeout(function(){setupAC('eeq_item',_acItems($('eeq_rubro')?.value));},100)"></div></div><div class="fg"><label class="fl">Ítem</label><div class="ac-wrap"><input class="fi" id="eeq_item" value="${item.item||''}" placeholder="Ej: Cemento, Pintura..." autocomplete="off"></div></div></div>
@@ -7451,7 +7571,8 @@ async function saveEEco(id){
   var _eeVals={concepto,monto:parseFloat(monto)||0,tipo:$('eeq_tipo')?.value||'egreso',
     fecha:$('eeq_fecha')?.value||td(),interno:!!($('eeq_interno')?.checked),
     medioPago:$('eeq_medio')?.value||'',proveedor:$('eeq_prov')?.value||'',
-    rubro:($('eeq_rubro')?.value||'').trim(),item:($('eeq_item')?.value||'').trim()};
+    rubro:($('eeq_rubro')?.value||'').trim(),item:($('eeq_item')?.value||'').trim(),
+    detalle:($('eeq_detalle')?.value||'').trim()||null};
   var _eeImagen=null; // will be set if image selected
   const imgF=$('eeq_img');
   if(imgF&&imgF.files&&imgF.files.length){
@@ -7490,7 +7611,7 @@ async function saveEEco(id){
   item.concepto=_eeVals.concepto;item.monto=_eeVals.monto;
   item.tipo=_eeVals.tipo;item.fecha=_eeVals.fecha;item.interno=_eeVals.interno;
   item.medioPago=_eeVals.medioPago;item.proveedor=_eeVals.proveedor;
-  item.rubro=_eeVals.rubro;item.item=_eeVals.item;
+  item.rubro=_eeVals.rubro;item.item=_eeVals.item;item.detalle=_eeVals.detalle;
   if(_eeImagen){item.imagen=_eeImagen.url;item.imagenDeletedAt=_eeImagen.deletedAt;}
   item.updatedAt=nw();
   // Propagar cambios al matIngreso vinculado
