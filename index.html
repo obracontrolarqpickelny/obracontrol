@@ -2800,31 +2800,23 @@ function patchHTML(el,html){
   }
   while(ac){var nx=ac.nextSibling;el.removeChild(ac);ac=nx;}
 }
-// Mantiene la posición de la pantalla al redibujar. Un solo requestAnimationFrame
-// no alcanzaba: al reemplazar el contenido la página se queda momentáneamente
-// corta y el navegador recorta el scroll a 0, así que hay que reintentar hasta
-// que el contenido vuelva a tener altura.
+// Esto era un parche para cuando #mc se reemplazaba entero en cada render (la
+// página quedaba un instante sin altura y el navegador recortaba el scroll a
+// 0). Ya no hace falta: desde que $(id) instala el morphing (_installMorph),
+// contenedor.innerHTML=... actualiza el DOM existente en vez de tirarlo, así
+// que la altura casi no cambia entre renders y el scroll ya no se mueve solo.
+// Ese parche forzaba una lectura de layout (offsetHeight), escribía y
+// borraba un min-height, y reintentaba scrollTo hasta 8 veces por cada
+// render — eso era en sí mismo el "movimiento raro" que quedaba después del
+// fix del titileo. Ahora solo se corrige si el scroll de verdad se desvió,
+// sin forzar nada de eso.
 function _keepScroll(fn){
   const sy=window.scrollY||document.documentElement.scrollTop||0;
-  // El contenido del módulo se reemplaza entero: por un instante la página
-  // queda sin altura, el navegador recorta el scroll a 0 y se ve el pestañeo.
-  // Reservando la altura previa, la página nunca colapsa.
-  const mc=document.getElementById('mc');
-  const alto=mc?mc.offsetHeight:0;
-  if(mc&&alto)mc.style.minHeight=alto+'px';
-  const soltar=function(){const el=document.getElementById('mc');if(el)el.style.minHeight='';};
   fn();
-  if(sy<=0){requestAnimationFrame(soltar);return;}
-  let intentos=0;
-  (function reponer(){
-    window.scrollTo(0,sy);
-    if(++intentos<8&&Math.abs((window.scrollY||0)-sy)>2)requestAnimationFrame(reponer);
-    else soltar();
-  })();
-  setTimeout(function(){
+  if(sy<=2)return;
+  requestAnimationFrame(function(){
     if(Math.abs((window.scrollY||0)-sy)>2)window.scrollTo(0,sy);
-    soltar();
-  },80);
+  });
 }
 function render(){
   if(!D.user){renderAuth();return;}
@@ -4346,8 +4338,7 @@ function rMat(mc){
   const allItems=pf('materiales').filter(m=>!m.visitaId);
   const ings=pf('matIngresos');const c=MC.materiales;
   const _provList=[...new Set((D.matIngresos||[]).filter(function(i){return i.projectId===S.proj&&i.proveedor;}).map(function(i){return i.proveedor;}))].sort();
-  const _grupoNames=[...new Set((D.matIngresos||[]).filter(function(i){return i.projectId===S.proj&&i.grupo;}).map(function(i){return i.grupo.trim();}))].sort();
-  const _grupoListHtml='<datalist id="matGrupoList">'+_grupoNames.map(function(g){return '<option value="'+esc(g)+'">';}).join('')+'</datalist>';
+  const _grupoNames=_matGrupoNames();
   // Build category list
   const cats_all=[...new Set(allItems.map(m=>m.category||'General'))].sort();
   // Apply filters
@@ -4386,8 +4377,8 @@ function rMat(mc){
   <div class="mo" id="newMatM"><div class="mo-c"><div class="mo-h"><h3 style="color:${c}">Nuevo Material</h3><button class="tbtn" onclick="closeM('newMatM')">${I.x}</button></div><div class="fg"><label class="fl">Material *</label><input class="fi" id="nm_n"></div><div class="fr"><div class="fg"><label class="fl">Computado</label><input class="fi" id="nm_comp" type="number" min="0" placeholder="Cantidad prevista"></div><div class="fg"><label class="fl">Unidad</label><select class="fs" id="nm_u">${UNI.map(u=>`<option>${u}</option>`).join('')}</select></div></div><div class="fg"><label class="fl">Categoría</label><select class="fs" id="nm_c">${MATCAT.map(c=>`<option>${c}</option>`).join('')}</select></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="nm_no"></textarea></div><div class="fg"><label class="fl">Fotos</label><input type="file" accept="image/*" multiple id="nm_ph" class="fi" style="padding:6px"></div><button class="btn btn-w mt-8" style="background:${c};color:#fff" onclick="saveMat()">Guardar</button></div></div>
   <div class="mo" id="newIngM"><div class="mo-c"><div class="mo-h"><h3 style="color:${c}">Ingreso de Material</h3><button class="tbtn" onclick="closeM('newIngM')">${I.x}</button></div>${allItems.length?`<div class="fg"><label class="fl">Material *</label>${_mcsHtml('ni_mat',allItems,'Buscar material...',null)}<div id="ni_uinfo" style="display:none"></div></div>`:'<div class="ts tc3 mb-12">Primero carga materiales en el cómputo</div>'}<div class="fr"><div class="fg"><label class="fl">Cantidad *</label><input class="fi" id="ni_q" type="number" min="0" oninput="_unidadInfo('ni')"></div><div class="fg"><label class="fl">Fecha</label><input class="fi" id="ni_d" type="date" value="${td()}" onchange="_unidadInfo('ni')"></div></div><div class="fg"><label class="fl">Proveedor</label>${_pcHtml('ni_prov',_provList,'Buscar o escribir proveedor...')}</div><div class="fg"><label class="fl">Remito</label><input class="fi" id="ni_rem"></div><div class="fg"><label class="fl">Observaciones</label><textarea class="ft" id="ni_obs"></textarea></div><div class="fg"><label class="fl">Fotos del ingreso</label><input type="file" accept="image/*" multiple id="ni_ph" class="fi" style="padding:6px"></div><button class="btn btn-w mt-8" style="background:${c};color:#fff" onclick="saveIng()">Registrar</button>
 </div></div>
-  <div class="mo" id="newPedidoM"><div class="mo-c"><div class="mo-h"><h3 style="color:var(--orange)">&#x1F4CB; Nuevo Pedido</h3><button class="tbtn" onclick="closeM('newPedidoM')">${I.x}</button></div><div style="background:#fff7ed;border-left:3px solid var(--orange);border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px">Los pedidos <strong>no computan</strong> como ingresados. Se convierten en ingreso con un clic cuando lleguen.</div><div class="fg"><label class="fl">Material del c&oacute;mputo (opcional)</label>${_mcsHtml('np_mat',allItems,'Buscar o dejar vacío...','— Ninguno —')}<div id="np_uinfo" style="display:none"></div></div><div class="fg"><label class="fl">Nombre libre</label><input class="fi" id="np_nombre" placeholder="Si no est&aacute; en el c&oacute;mputo..."></div><div class="fr"><div class="fg"><label class="fl">Cantidad *</label><input class="fi" id="np_q" type="number" min="0" step="0.01" oninput="_unidadInfo('np')"></div><div class="fg"><label class="fl">Unidad</label><select class="fs" id="np_u">${UNI.map(u=>`<option>${u}</option>`).join('')}</select></div></div><div class="fg"><label class="fl">Proveedor</label>${_pcHtml('np_prov',_provList,'Buscar o escribir proveedor...')}</div><div class="fg"><label class="fl">Fecha pedido</label><input class="fi" id="np_fecha" type="date" value="${td()}" onchange="_unidadInfo('np')"></div><div class="fg"><label class="fl">Grupo (opcional)</label><input class="fi" id="np_grupo" list="matGrupoList" placeholder="Ej: Materiales techo metálico"><div class="txxs tc3 mt-2">Agrupá varios materiales bajo el mismo nombre para no ver un listado tan largo.</div></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="np_obs"></textarea></div><button class="btn btn-w mt-8" style="background:var(--orange);color:#fff" onclick="savePedido()">Registrar Pedido</button></div></div>
-  <div class="mo" id="newAPedirM"><div class="mo-c"><div class="mo-h"><h3 style="color:#8b5cf6">&#x1F4DD; A pedir</h3><button class="tbtn" onclick="closeM('newAPedirM')">${I.x}</button></div><div style="background:#f5f3ff;border-left:3px solid #8b5cf6;border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px">Material pendiente de pedido. Pas&aacute;lo a Pedido cuando se solicite.</div><div class="fg"><label class="fl">Material del c&oacute;mputo (opcional)</label>${_mcsHtml('nap_mat',allItems,'Buscar o dejar vacío...','— Ninguno —')}<div id="nap_uinfo" style="display:none"></div></div><div class="fg"><label class="fl">Nombre</label><input class="fi" id="nap_nombre" placeholder="Nombre del material"></div><div class="fr"><div class="fg"><label class="fl">Cantidad</label><input class="fi" id="nap_q" type="number" min="0" step="0.01" oninput="_unidadInfo('nap')"></div><div class="fg"><label class="fl">Unidad</label><select class="fs" id="nap_u">${UNI.map(u=>`<option>${u}</option>`).join('')}</select></div></div><div class="fg"><label class="fl">Proveedor sugerido</label>${_pcHtml('nap_prov',_provList,'Buscar o escribir proveedor...')}</div><div class="fg"><label class="fl">Fecha estimada</label><input class="fi" id="nap_fecha" type="date" value="${td()}" onchange="_unidadInfo('nap')"></div><div class="fg"><label class="fl">Grupo (opcional)</label><input class="fi" id="nap_grupo" list="matGrupoList" placeholder="Ej: Materiales techo metálico"><div class="txxs tc3 mt-2">Agrupá varios materiales bajo el mismo nombre para no ver un listado tan largo.</div></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="nap_obs"></textarea></div><button class="btn btn-w mt-8" style="background:#8b5cf6;color:#fff" onclick="saveAPedir()">Registrar A pedir</button></div></div>${_grupoListHtml}
+  <div class="mo" id="newPedidoM"><div class="mo-c"><div class="mo-h"><h3 style="color:var(--orange)">&#x1F4CB; Nuevo Pedido</h3><button class="tbtn" onclick="closeM('newPedidoM')">${I.x}</button></div><div style="background:#fff7ed;border-left:3px solid var(--orange);border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px">Los pedidos <strong>no computan</strong> como ingresados. Se convierten en ingreso con un clic cuando lleguen.</div><div class="fg"><label class="fl">Material del c&oacute;mputo (opcional)</label>${_mcsHtml('np_mat',allItems,'Buscar o dejar vacío...','— Ninguno —')}<div id="np_uinfo" style="display:none"></div></div><div class="fg"><label class="fl">Nombre libre</label><input class="fi" id="np_nombre" placeholder="Si no est&aacute; en el c&oacute;mputo..."></div><div class="fr"><div class="fg"><label class="fl">Cantidad *</label><input class="fi" id="np_q" type="number" min="0" step="0.01" oninput="_unidadInfo('np')"></div><div class="fg"><label class="fl">Unidad</label><select class="fs" id="np_u">${UNI.map(u=>`<option>${u}</option>`).join('')}</select></div></div><div class="fg"><label class="fl">Proveedor</label>${_pcHtml('np_prov',_provList,'Buscar o escribir proveedor...')}</div><div class="fg"><label class="fl">Fecha pedido</label><input class="fi" id="np_fecha" type="date" value="${td()}" onchange="_unidadInfo('np')"></div><div class="fg"><label class="fl">Grupo (opcional)</label>${_pcHtml('np_grupo',_grupoNames,'Buscar o crear un grupo...')}<div class="txxs tc3 mt-2">Agrupá varios materiales bajo el mismo nombre para no ver un listado tan largo.</div></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="np_obs"></textarea></div><button class="btn btn-w mt-8" style="background:var(--orange);color:#fff" onclick="savePedido()">Registrar Pedido</button></div></div>
+  <div class="mo" id="newAPedirM"><div class="mo-c"><div class="mo-h"><h3 style="color:#8b5cf6">&#x1F4DD; A pedir</h3><button class="tbtn" onclick="closeM('newAPedirM')">${I.x}</button></div><div style="background:#f5f3ff;border-left:3px solid #8b5cf6;border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px">Material pendiente de pedido. Pas&aacute;lo a Pedido cuando se solicite.</div><div class="fg"><label class="fl">Material del c&oacute;mputo (opcional)</label>${_mcsHtml('nap_mat',allItems,'Buscar o dejar vacío...','— Ninguno —')}<div id="nap_uinfo" style="display:none"></div></div><div class="fg"><label class="fl">Nombre</label><input class="fi" id="nap_nombre" placeholder="Nombre del material"></div><div class="fr"><div class="fg"><label class="fl">Cantidad</label><input class="fi" id="nap_q" type="number" min="0" step="0.01" oninput="_unidadInfo('nap')"></div><div class="fg"><label class="fl">Unidad</label><select class="fs" id="nap_u">${UNI.map(u=>`<option>${u}</option>`).join('')}</select></div></div><div class="fg"><label class="fl">Proveedor sugerido</label>${_pcHtml('nap_prov',_provList,'Buscar o escribir proveedor...')}</div><div class="fg"><label class="fl">Fecha estimada</label><input class="fi" id="nap_fecha" type="date" value="${td()}" onchange="_unidadInfo('nap')"></div><div class="fg"><label class="fl">Grupo (opcional)</label>${_pcHtml('nap_grupo',_grupoNames,'Buscar o crear un grupo...')}<div class="txxs tc3 mt-2">Agrupá varios materiales bajo el mismo nombre para no ver un listado tan largo.</div></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="nap_obs"></textarea></div><button class="btn btn-w mt-8" style="background:#8b5cf6;color:#fff" onclick="saveAPedir()">Registrar A pedir</button></div></div>
   <div class="mo" id="newExistenteM"><div class="mo-c"><div class="mo-h"><h3 style="color:var(--green)">&#x2713; Registrar Existente</h3><button class="tbtn" onclick="closeM('newExistenteM')">${I.x}</button></div><div style="background:var(--green-bg);border-left:3px solid var(--green);border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px">Material ya disponible en obra — no genera pedido ni ingreso.</div><div class="fg"><label class="fl">Material del c&oacute;mputo (opcional)</label>${_mcsHtml('nex_mat',allItems,'Buscar o dejar vacío...','— Ninguno —')}<div id="nex_uinfo" style="display:none"></div></div><div class="fg"><label class="fl">Nombre</label><input class="fi" id="nex_nombre" placeholder="Nombre del material existente"></div><div class="fr"><div class="fg"><label class="fl">Cantidad</label><input class="fi" id="nex_q" type="number" min="0" step="0.01" oninput="_unidadInfo('nex')"></div><div class="fg"><label class="fl">Unidad</label><select class="fs" id="nex_u">${UNI.map(u=>`<option>${u}</option>`).join('')}</select></div></div><div class="fg"><label class="fl">Fecha</label><input class="fi" id="nex_fecha" type="date" value="${td()}" onchange="_unidadInfo('nex')"></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="nex_obs"></textarea></div><button class="btn btn-w mt-8" style="background:var(--green);color:#fff" onclick="saveExistente()">Registrar Existente</button></div></div>`;
   setTimeout(renderMatItems,0);
 }
@@ -4984,7 +4975,7 @@ function editAPedir(itemId){
     +'<div class="fg"><label class="fl">Unidad</label><select class="fs" id="eap_u">'+UNI.map(function(u){return '<option'+(u===item.unit?' selected':'')+'>'+u+'</option>';}).join('')+'</select></div></div>'
     +'<div class="fg"><label class="fl">Proveedor</label><input class="fi" id="eap_prov" value="'+(item.proveedor||'')+'"></div>'
     +'<div class="fg"><label class="fl">Fecha</label><input class="fi" id="eap_fecha" type="date" value="'+(item.fecha||td())+'"></div>'
-    +'<div class="fg"><label class="fl">Grupo (opcional)</label><input class="fi" id="eap_grupo" list="matGrupoList" value="'+esc(item.grupo||'')+'" placeholder="Ej: Materiales techo metálico"></div>'
+    +'<div class="fg"><label class="fl">Grupo (opcional)</label>'+_pcHtml('eap_grupo',_matGrupoNames(),'Buscar o crear un grupo...',item.grupo||'')+'</div>'
     +'<div class="fg"><label class="fl">Notas</label><textarea class="ft" id="eap_obs">'+(item.observations||'')+'</textarea></div>'
     +'<div class="flex gap-6 mt-8">'
     +'<button class="btn btn-w" style="background:#8b5cf6;color:#fff;flex:1" onclick="saveEditAPedir(\''+itemId+'\')" >Guardar</button>'
@@ -5017,7 +5008,7 @@ function editPedidoRegistrado(itemId){
     +'<div class="fg"><label class="fl">Unidad</label><select class="fs" id="epr_u">'+UNI.map(function(u){return '<option'+(u===item.unit?' selected':'')+'>'+u+'</option>';}).join('')+'</select></div></div>'
     +'<div class="fg"><label class="fl">Proveedor</label><input class="fi" id="epr_prov" value="'+(item.proveedor||'')+'"></div>'
     +'<div class="fg"><label class="fl">Fecha pedido</label><input class="fi" id="epr_fecha" type="date" value="'+(item.fecha||td())+'"></div>'
-    +'<div class="fg"><label class="fl">Grupo (opcional)</label><input class="fi" id="epr_grupo" list="matGrupoList" value="'+esc(item.grupo||'')+'" placeholder="Ej: Materiales techo metálico"></div>'
+    +'<div class="fg"><label class="fl">Grupo (opcional)</label>'+_pcHtml('epr_grupo',_matGrupoNames(),'Buscar o crear un grupo...',item.grupo||'')+'</div>'
     +'<div class="fg"><label class="fl">Notas</label><textarea class="ft" id="epr_obs">'+(item.observations||'')+'</textarea></div>'
     +'<div class="flex gap-6 mt-8">'
     +'<button class="btn btn-w" style="background:var(--orange);color:#fff;flex:1" onclick="saveEditPedReg(\''+itemId+'\')" >Guardar</button>'
@@ -6346,7 +6337,7 @@ function generarInformeMixto(){
       body+='<table style="width:100%;border-collapse:collapse;font-size:9px;margin-bottom:8px"><tr><th style="background:#0891b2;color:#fff;padding:4px 5px;text-align:left">Fecha</th><th style="background:#0891b2;color:#fff;padding:4px 5px;text-align:left">Concepto</th><th style="background:#0891b2;color:#fff;padding:4px 5px;text-align:left">Tipo</th><th style="background:#0891b2;color:#fff;padding:4px 5px;text-align:right">Monto</th></tr>';
       ecos.slice().sort(function(a,b){return (b.fecha||b.date||'').localeCompare(a.fecha||a.date||'');}).forEach(function(e){
         var col=e.tipo==='ingreso'?'#16a34a':'#dc2626';
-        body+='<tr><td style="padding:3px 5px;border-bottom:1px solid #eee">'+fmt(e.fecha||e.date||'')+'</td><td style="padding:3px 5px;border-bottom:1px solid #eee">'+esc(e.concepto||'')+'</td><td style="padding:3px 5px;border-bottom:1px solid #eee;color:'+col+'">'+esc(e.tipo)+'</td><td style="padding:3px 5px;border-bottom:1px solid #eee;text-align:right;font-weight:700;color:'+col+'">$'+(parseFloat(e.monto)||0).toLocaleString('es-AR')+'</td></tr>';
+        body+='<tr><td style="padding:3px 5px;border-bottom:1px solid #eee">'+fmt(e.fecha||e.date||'')+'</td><td style="padding:3px 5px;border-bottom:1px solid #eee">'+esc(e.concepto||'')+(e.detalle?'<br><span style="color:#94a3b8;font-size:0.9em">'+esc(e.detalle)+'</span>':'')+'</td><td style="padding:3px 5px;border-bottom:1px solid #eee;color:'+col+'">'+esc(e.tipo)+'</td><td style="padding:3px 5px;border-bottom:1px solid #eee;text-align:right;font-weight:700;color:'+col+'">$'+(parseFloat(e.monto)||0).toLocaleString('es-AR')+'</td></tr>';
       });
       body+='</table>';
     }
@@ -8379,7 +8370,7 @@ function exportEcoPDF(includeDistrib,includeRubroCol,includeMetros){
     var rubroTd=includeRubroCol?'<td style="padding:3px 4px;border-bottom:1px solid #eee;font-size:7pt;color:#475569">'+(e.rubro||'')+(e.item?'<br><span style="color:#94a3b8">'+e.item+'</span>':'')+'</td>':'';
     return '<tr>'
       +'<td style="padding:3px 4px;border-bottom:1px solid #eee;font-size:7.5pt">'+fmt(e.fecha||e.date)+'</td>'
-      +'<td style="padding:3px 4px;border-bottom:1px solid #eee;font-size:7.5pt">'+(e.concepto||'')+'</td>'
+      +'<td style="padding:3px 4px;border-bottom:1px solid #eee;font-size:7.5pt">'+(e.concepto||'')+(e.detalle?'<br><span style="color:#94a3b8;font-size:6.5pt">'+e.detalle+'</span>':'')+'</td>'
       +'<td style="padding:3px 4px;border-bottom:1px solid #eee;font-size:7.5pt">'+(e.medioPago||'')+'</td>'
       +'<td style="padding:3px 4px;border-bottom:1px solid #eee;font-size:7.5pt">'+(e.proveedor||'')+'</td>'
       +rubroTd
@@ -8523,10 +8514,10 @@ function exportEcoCSV(){
   if(S.ecoFechaHasta)items=items.filter(e=>(e.fecha||e.date||'')<=S.ecoFechaHasta);
   items=_ecoSortItems(items);
   const bom='\uFEFF';
-  let csv=bom+'Fecha,Tipo,Concepto,Medio de pago,Proveedor,Rubro,\u00CDtem,Monto\n';
+  let csv=bom+'Fecha,Tipo,Concepto,Detalle,Medio de pago,Proveedor,Rubro,\u00CDtem,Monto\n';
   items.forEach(e=>{
     const monto=(e.tipo==='egreso'?-1:1)*(parseFloat(e.monto)||0);
-    csv+='"'+fmt(e.fecha||e.date)+'","'+e.tipo+'","'+(e.concepto||'').replace(/"/g,"''")+'","'+(e.medioPago||'')+'","'+(e.proveedor||'').replace(/"/g,"''")+'","'+(e.rubro||'').replace(/"/g,"''")+'","'+(e.item||'').replace(/"/g,"''")+'","'+monto+'"\n';
+    csv+='"'+fmt(e.fecha||e.date)+'","'+e.tipo+'","'+(e.concepto||'').replace(/"/g,"''")+'","'+(e.detalle||'').replace(/"/g,"''")+'","'+(e.medioPago||'')+'","'+(e.proveedor||'').replace(/"/g,"''")+'","'+(e.rubro||'').replace(/"/g,"''")+'","'+(e.item||'').replace(/"/g,"''")+'","'+monto+'"\n';
   });
   const tIng=items.filter(i=>i.tipo==='ingreso').reduce((s,i)=>s+(parseFloat(i.monto)||0),0);
   const tEgr=items.filter(i=>i.tipo==='egreso').reduce((s,i)=>s+(parseFloat(i.monto)||0),0);
@@ -8586,13 +8577,19 @@ function savePin(newPin){
 
 // ═══════ PROVEEDOR COMBO ═══════
 var _pcOpts={};
-function _pcHtml(selId,items,placeholder){
+function _pcHtml(selId,items,placeholder,value){
   _pcOpts[selId]=items;
   return '<div class="mcs" id="'+selId+'_w">'
-    +'<input class="fi" id="'+selId+'" type="text" placeholder="'+placeholder+'" autocomplete="off" style="margin:0;width:100%" '
+    +'<input class="fi" id="'+selId+'" type="text" placeholder="'+placeholder+'" autocomplete="off" style="margin:0;width:100%" value="'+esc(value||'')+'" '
     +'oninput="_pcF(\''+selId+'\')" onfocus="_pcF(\''+selId+'\')" onblur="setTimeout(function(){_pcCl(\''+selId+'\')},220)">'
     +'<div class="mcs-drop" id="'+selId+'_d"></div>'
     +'</div>';
+}
+// Nombres de grupo ya usados en A pedir/Pedido de esta obra, para el buscador.
+// Funcion global (no local a rMat) para poder usarla tambien desde los modales
+// de edicion, que son funciones aparte.
+function _matGrupoNames(){
+  return [...new Set((D.matIngresos||[]).filter(function(i){return i.projectId===S.proj&&i.grupo;}).map(function(i){return i.grupo.trim();}))].sort();
 }
 function _pcF(selId){
   var inp=$(selId),drop=$(selId+'_d');
