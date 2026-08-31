@@ -1676,11 +1676,18 @@ function _silentMerge(driveData){
         var _diDA=di.imagenDeletedAt?new Date(di.imagenDeletedAt).getTime():0;
         if(_liDA>0||_diDA>0){
           var _bestDelAt=Math.max(_liDA,_diDA);
+          var _prevDA=di.imagenDeletedAt;
           di.imagenDeletedAt=(_liDA>=_diDA?(li.imagenDeletedAt):di.imagenDeletedAt)||null;
+          if(_prevDA!==di.imagenDeletedAt)changed=true;
           // Verificar si alguna parte tiene una imagen explícitamente subida DESPUÉS del borrado
           var _liNewImg=li.imagen&&li.imagen.startsWith('http')&&!li.imagenDeletedAt&&li.updatedAt&&new Date(li.updatedAt).getTime()>_bestDelAt;
           var _diNewImg=di.imagen&&di.imagen.startsWith('http')&&!di.imagenDeletedAt&&di.updatedAt&&new Date(di.updatedAt||di.date||0).getTime()>_bestDelAt;
-          if(!_liNewImg&&!_diNewImg){di.imagen='';changed=true;} // borrado gana
+          // Antes se marcaba "cambio" acá sin fijarse si di.imagen ya era ''. Un
+          // ítem con una foto borrada hace tiempo disparaba esto en CADA ciclo de
+          // sincronización para siempre, forzando un render de más en cada sync
+          // aunque nada hubiera cambiado — eso era el salto de pantalla que
+          // coincidía justo con el momento en que el tilde de sincronizado aparece.
+          if(!_liNewImg&&!_diNewImg){if(di.imagen!=='')changed=true;di.imagen='';} // borrado gana
         }
         // 2. _imgPri: upgrading de placeholder → URL real.
         //    SOLO se aplica cuando di tiene un placeholder (nunca sobreescribir un vacío intencional).
