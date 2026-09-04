@@ -1968,7 +1968,10 @@ function Incidencia({tc,rec,rubros,grupos,moItems,setMoItems,proyecto,prof,nota=
     const init={};
     tc.forEach(t=>{
       const ex=moItems[t.id];
-      init[t.id]=ex?{fuente:"real",...ex}:{tipo:"total",valor:"",fuente:"real"};
+      // Versiones viejas del asistente guardaban tipo:'unitario', que no existe como
+      // opción del desplegable y lo dejaba en blanco. Se normaliza al abrir.
+      init[t.id]=ex?{fuente:"real",...ex,tipo:ex.tipo==="total"?"total":"unidad"}
+                   :{tipo:"total",valor:"",fuente:"real"};
     });
     setMoEdit(init);setMoModal(true);
   };
@@ -3150,7 +3153,8 @@ const _fhLoad=async()=>{try{const db=await _dbOpen();const tx=db.transaction('h'
    y completa rubros, ítems, cantidades, cuadrillas, predecesoras y fechas.
    ═══════════════════════════════════════════════════ */
 const AI_KEY_LS='obragestion_ai_key';
-const AI_MODEL='claude-sonnet-4-6';
+const AI_MODEL='claude-opus-5';
+const HIST_MAX=24;   // mensajes de ida y vuelta que se le reenvían (12 intercambios)
 const getAIKey=()=>{try{return localStorage.getItem(AI_KEY_LS)||'';}catch{return'';}};
 const setAIKey=k=>{try{k?localStorage.setItem(AI_KEY_LS,k):localStorage.removeItem(AI_KEY_LS);}catch{}};
 
@@ -3182,15 +3186,74 @@ TIPOS DE ACCIÓN
 {"tipo":"editar_tarea","item":"Revoque grueso","campos":{"qty":540,"nOf":3}}
 {"tipo":"borrar_tarea","item":"Pintura exterior"}
 {"tipo":"config","fechaInicio":"01/03/2026","hsDia":8,"sabado":false}
+{"tipo":"editar_grupo","nombre":"Obra Gruesa","campos":{"nombre":"Estructura","color":"#ef4444"}}
+{"tipo":"editar_rubro","nombre":"Revoques","campos":{"nombre":"Revoques y enlucidos","grupo":"Obra Fina"}}
+{"tipo":"borrar_rubro","nombre":"Cielorrasos"}
+{"tipo":"borrar_grupo","nombre":"Otros"}
+Sólo se puede borrar un rubro sin ítems y un grupo sin rubros. Si tiene contenido, avisale y ofrecé borrar primero lo de adentro.
 
-Unidades válidas típicas: m², m³, ml, un, gl, kg, hs, glb.
-fechaInicio siempre en formato DD/MM/AAAA.`;
+── CAMPOS ESPECIALES DE PLAN DE OBRA ──
+Van dentro de "tarea" o de los "campos" de "editar_tarea":
+- "dias": duración fija en días. SÓLO para ítems con und "gl" (global): esos no calculan por horas.
+- "solapa": true = arranca junto con su predecesora en vez de esperar a que termine.
+- "fIniManual": "DD/MM/AAAA" para clavar la fecha de inicio de ese ítem. "" la libera.
+Ejemplo: {"tipo":"tarea","rubro":"Instalaciones","item":"Tramitación de medidor","und":"gl","qty":1,"dias":15}
 
-function AsistenteChat({tareas,setTareas,rubros,setRubros,grupos,setGrupos,cfg,setCfg,moItems,setMoItems,proyecto}){
-  const [msgs,setMsgs]=useState([]);
+── NOMBRE DE OBRA Y DATOS DE LOS PDF ──
+{"tipo":"obra","nombre":"Vivienda Pickelny — Rivadavia"}
+{"tipo":"nota_pdf","texto":"Los valores son estimativos y no constituyen presupuesto."}
+{"tipo":"profesional","campos":{"nombre":"Arq. Federico Pickelny","titulo":"Arquitecto","matricula":"CASJ 1234"}}
+
+── PESTAÑA RECURSOS $ (materiales e insumos por ítem) ──
+{"tipo":"recurso","item":"Mamp. ladrillo hueco 18","rec":"Ladrillo hueco 18x18x33","und":"un","qty":3200,"pu":18}
+{"tipo":"editar_recurso","item":"Mamp. ladrillo hueco 18","rec":"Ladrillo hueco 18x18x33","campos":{"qty":3400,"pu":22}}
+{"tipo":"borrar_recurso","item":"Mamp. ladrillo hueco 18","rec":"Ladrillo hueco 18x18x33"}
+{"tipo":"imprevistos","pct":10}
+"incr" es el % de incremento de ESE material puntual (desperdicio, ajuste). Pisa al incremento del ítem:
+{"tipo":"recurso","item":"Cerámica piso","rec":"Cerámico 40x40","und":"m²","qty":95,"pu":8200,"incr":8}
+{"tipo":"editar_recurso","item":"Cerámica piso","rec":"Cerámico 40x40","campos":{"incr":12}}
+Para que vuelva a heredar el % del ítem, mandá "incr":"".
+En "editar_recurso" y "borrar_recurso" mandá SIEMPRE el "item": si el mismo material está en varios ítems y no lo aclarás, no se toca ninguno.
+Si el usuario da un ítem con su cómputo pero no los materiales, podés proponerle los insumos típicos con cantidades calculadas — pero SOLO cargalos si te los pide o te los confirma. Los precios unitarios (pu) NO los inventes: si no te los da, cargá pu 0 y avisale que faltan precios.
+
+── PESTAÑA INCIDENCIA (mano de obra $ por ítem) ──
+{"tipo":"mano_obra","item":"Revoque grueso","tipo_valor":"unidad","valor":3500,"fuente":"real"}
+tipo_valor: "unidad" (precio por unidad de cómputo) o "total" (monto global del ítem). Escribí exactamente "unidad", no "unitario".
+fuente: "real" (monto que pasó el capataz o contratista) o "estimado" (valor teórico o estimación propia). Si el usuario no aclara de dónde sale el número, poné "estimado".
+
+── INCREMENTO DE MATERIALES (% extra por desperdicio/ajuste, por ítem) ──
+{"tipo":"incremento_mat","item":"Cerámica piso","pct":8}
+{"tipo":"incremento_mat","item":"TODOS","pct":5}
+
+── CUADRILLAS POR GRUPO O RUBRO (pestaña Plan de Obra) ──
+{"tipo":"cuadrilla_grupo","grupo":"Obra Gruesa","nOf":3,"nAy":3,"global":true}
+{"tipo":"cuadrilla_rubro","rubro":"Revoques","nOf":2,"nAy":2,"global":true}
+{"tipo":"quitar_cuadrilla","rubro":"Revoques"}
+"global": true aplica esa cuadrilla a todos los ítems de ese grupo/rubro pisando lo individual.
+"quitar_cuadrilla" (con "grupo" o con "rubro") saca esa cuadrilla general y devuelve cada ítem a la suya.
+
+IMPORTANTE — NOMBRES EXACTOS
+Para editar o borrar, usá el nombre COMPLETO del ítem tal como figura en el estado que te paso.
+Si mandás un nombre parcial que coincide con más de uno, la app no toca nada y te lo avisa.
+Nunca mandes una acción de editar o borrar sin su campo de nombre.
+
+Unidades válidas típicas: m², m³, ml, un, gl, kg, hs, glb, bolsa, lt, viaje, hora.
+fechaInicio siempre en formato DD/MM/AAAA.
+Los montos van sin símbolo ni separadores de miles: 18500, no "$18.500".`;
+
+/* La base de rendimientos es fija: viaja en el system (que se cachea) y no en el
+   mensaje de cada turno, que cambia siempre y por eso no se puede cachear. */
+const AI_SYSTEM_FULL=AI_SYSTEM+`
+
+BASE DE RENDIMIENTOS DE REFERENCIA (cat|ítem|und|hs oficial|hs ayudante):
+`+REND_DB.map(r=>`${r.cat}|${r.item}|${r.und}|of ${r.of}|ay ${r.ay}`).join('\n');
+
+function AsistenteChat({tareas,setTareas,rubros,setRubros,grupos,setGrupos,cfg,setCfg,moItems,setMoItems,
+  rec,setRec,matIncr,setMatIncr,imprevistos,setImprevistos,cuadGrupos,setCuadGrupos,cuadRubros,setCuadRubros,
+  msgs,setMsgs,proyecto,setProyecto,prof,setProf,notaPDF,setNotaPDF}){
   const [input,setInput]=useState('');
   const [busy,setBusy]=useState(false);
-  const [rec,setRec]=useState(false);
+  const [grab,setGrab]=useState(false);
   const [key,setKey]=useState(getAIKey());
   const [showKey,setShowKey]=useState(!getAIKey());
   const [err,setErr]=useState('');
@@ -3200,12 +3263,13 @@ function AsistenteChat({tareas,setTareas,rubros,setRubros,grupos,setGrupos,cfg,s
   const baseRef=useRef('');
 
   useEffect(()=>{if(scRef.current)scRef.current.scrollTop=scRef.current.scrollHeight;},[msgs,busy]);
+  // El chat vive en el estado de la obra: se guarda en localStorage y sincroniza a Drive junto al plan.
 
   /* ── Dictado por voz (Web Speech API) ── */
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   const toggleVoz=()=>{
     if(!SR){setErr('Este navegador no soporta dictado por voz. Usá Chrome o Edge.');return;}
-    if(rec){try{recRef.current&&recRef.current.stop();}catch{} setRec(false);return;}
+    if(grab){try{recRef.current&&recRef.current.stop();}catch{} setGrab(false);return;}
     const r=new SR();
     r.lang='es-AR';r.continuous=true;r.interimResults=true;
     baseRef.current=input?input+' ':'';
@@ -3218,10 +3282,10 @@ function AsistenteChat({tareas,setTareas,rubros,setRubros,grupos,setGrupos,cfg,s
       if(fin)baseRef.current+=fin;
       setInput(baseRef.current+int);
     };
-    r.onerror=e=>{setErr('Dictado: '+e.error);setRec(false);};
-    r.onend=()=>setRec(false);
+    r.onerror=e=>{setErr('Dictado: '+e.error);setGrab(false);};
+    r.onend=()=>setGrab(false);
     recRef.current=r;
-    try{r.start();setRec(true);setErr('');}catch(e){setErr('No se pudo iniciar el dictado.');}
+    try{r.start();setGrab(true);setErr('');}catch(e){setErr('No se pudo iniciar el dictado.');}
   };
 
   /* ── Contexto actual de la obra para la IA ── */
@@ -3234,11 +3298,28 @@ function AsistenteChat({tareas,setTareas,rubros,setRubros,grupos,setGrupos,cfg,s
       const r=rubros.find(x=>x.id===t.rubroId);
       const pn=String(t.pred||'').split(',').filter(Boolean)
         .map(n=>{const p=tareas.find(x=>String(x.id)===n.trim());return p?p.item:n.trim();}).join(', ');
-      return `#${t.id} [${r?r.nombre:'?'}] ${t.item} — ${t.qty} ${t.und} | hsOf ${t.hsOf} hsAy ${t.hsAy} | ${t.nOf} of + ${t.nAy} ay${pn?` | tras: ${pn}`:''}${t.obs?` | obs: ${t.obs}`:''}`;
+      return `#${t.id} [${r?r.nombre:'?'}] ${t.item} — ${t.qty} ${t.und} | hsOf ${t.hsOf} hsAy ${t.hsAy} | ${t.nOf} of + ${t.nAy} ay${t.dias!=null?` | dias ${t.dias}`:''}${t.solapa?' | SOLAPA':''}${t.fIniManual?` | inicio fijado ${t.fIniManual}`:''}${pn?` | tras: ${pn}`:''}${t.obs?` | obs: ${t.obs}`:''}`;
     }).join('\n'):'(el plan está vacío)';
-    const rend=REND_DB.map(r=>`${r.cat}|${r.item}|${r.und}|of ${r.of}|ay ${r.ay}`).join('\n');
+    const tieneIncr=r=>r.incr!==undefined&&r.incr!==null&&r.incr!=='';
+    const recTxt=rec.length?rec.map(r=>`- [${r.item}] ${r.rec}: ${r.qty} ${r.und} x $${r.pu} = $${(+r.qty||0)*(+r.pu||0)}${tieneIncr(r)?` | incr propio ${+r.incr||0}%`:''}`).join('\n'):'(sin materiales cargados)';
+    const moTxt=Object.entries(moItems||{}).map(([id,v])=>{
+      const t=tareas.find(x=>String(x.id)===String(id));
+      return t&&v&&v.valor?`- ${t.item}: $${v.valor} ${v.tipo==='total'?'(total del ítem)':'(por unidad)'} [${v.fuente==='estimado'?'estimado':'real'}]`:null;
+    }).filter(Boolean).join('\n')||'(sin mano de obra valorizada)';
+    const incrTxt=Object.entries(matIncr||{}).map(([id,v])=>{
+      const t=tareas.find(x=>String(x.id)===String(id));
+      return t&&v?`- ${t.item}: +${v}%`:null;
+    }).filter(Boolean).join('\n')||'(sin incrementos)';
+    const cuadTxt=[
+      ...Object.entries(cuadGrupos||{}).map(([id,v])=>{const g=grupos.find(x=>x.id===id);
+        return g&&v.global?`- GRUPO ${g.nombre}: ${v.nOf} of + ${v.nAy} ay (aplica a todo el grupo)`:null;}),
+      ...Object.entries(cuadRubros||{}).map(([id,v])=>{const r=rubros.find(x=>x.id===id);
+        return r&&v.global?`- RUBRO ${r.nombre}: ${v.nOf} of + ${v.nAy} ay (aplica a todo el rubro)`:null;}),
+    ].filter(Boolean).join('\n')||'(cada ítem usa su propia cuadrilla)';
     return `OBRA: ${proyecto||'(sin nombre)'}
 CONFIG: inicio ${cfg.fechaInicio||'(sin definir)'} | ${cfg.hsDia} hs/día | sábados ${cfg.sabado?'sí':'no'}
+DATOS PROFESIONALES (pie de los PDF): ${[prof?.nombre,prof?.titulo,prof?.matricula].filter(Boolean).join(' · ')||'(sin cargar)'}
+NOTA LEGAL DE LOS PDF: ${notaPDF?`"${String(notaPDF).slice(0,120)}${String(notaPDF).length>120?'…':''}"`:'(sin nota)'}
 
 GRUPOS EXISTENTES:
 ${grupos.map(g=>'- '+g.nombre).join('\n')||'(ninguno)'}
@@ -3249,25 +3330,74 @@ ${rubrosTxt}
 ÍTEMS YA CARGADOS EN EL PLAN:
 ${tareasTxt}
 
-BASE DE RENDIMIENTOS DE REFERENCIA (cat|ítem|und|hs oficial|hs ayudante):
-${rend}`;
+MATERIALES / RECURSOS CARGADOS (pestaña Recursos $):
+${recTxt}
+Imprevistos actuales: ${imprevistos||0}%
+
+MANO DE OBRA VALORIZADA (pestaña Incidencia):
+${moTxt}
+
+INCREMENTOS DE MATERIAL POR ÍTEM:
+${incrTxt}
+
+CUADRILLAS GLOBALES POR GRUPO/RUBRO:
+${cuadTxt}`;
   };
 
   /* ── Aplicar acciones al estado ── */
   const aplicar=acciones=>{
-    if(!acciones||!acciones.length)return[];
-    const snap={tareas:JSON.parse(JSON.stringify(tareas)),rubros:JSON.parse(JSON.stringify(rubros)),
-      grupos:JSON.parse(JSON.stringify(grupos)),cfg:{...cfg},moItems:JSON.parse(JSON.stringify(moItems||{}))};
-    let G=[...grupos],R=[...rubros],T=tareas.map(toRaw),CF={...cfg};
+    if(!acciones||!acciones.length)return{log:[],fallos:[]};
+    const cp=o=>JSON.parse(JSON.stringify(o||{}));
+    const snap={tareas:cp(tareas),rubros:cp(rubros),grupos:cp(grupos),cfg:{...cfg},
+      moItems:cp(moItems),rec:cp(rec),matIncr:cp(matIncr),imprevistos:imprevistos,
+      cuadGrupos:cp(cuadGrupos),cuadRubros:cp(cuadRubros),
+      proyecto:proyecto,prof:cp(prof),notaPDF:notaPDF};
+    // cp() en grupos y rubros: editar_grupo / editar_rubro los modifican in situ y
+    // una copia superficial estaría tocando el estado de React directamente.
+    let G=cp(grupos),R=cp(rubros),T=tareas.map(toRaw),CF={...cfg};
+    let RC=cp(rec),MO={...(moItems||{})},MI={...(matIncr||{})},IMP=imprevistos;
+    let CG={...(cuadGrupos||{})},CR={...(cuadRubros||{})};
+    let OBRA=proyecto,NOTA=notaPDF,PRO={...(prof||{})};
     const log=[];
+    const fallos=[];  // acciones que NO se pudieron aplicar; se muestran al usuario
     let _tmpId=-1;   // ids provisorios de ítems nuevos; renumberTareas los reemplaza por 1..N
     const norm=s=>String(s||'').trim().toLowerCase();
-    const findG=n=>G.find(g=>norm(g.nombre)===norm(n));
-    const findR=n=>R.find(r=>norm(r.nombre)===norm(n));
-    const findT=n=>T.find(t=>norm(t.item)===norm(n))||T.find(t=>norm(t.item).includes(norm(n)));
+    const findG=n=>norm(n)?G.find(g=>norm(g.nombre)===norm(n)):null;
+    const findR=n=>norm(n)?R.find(r=>norm(r.nombre)===norm(n)):null;
+
+    /* Busca un ítem por nombre para editarlo o borrarlo.
+       Exige nombre no vacío y un único candidato: sin esto, un `item` faltante
+       hacía match con el primer ítem del plan (porque "x".includes("") es true)
+       y una acción mal formada borraba el ítem #1. Ante la duda no toca nada
+       y deja constancia en `fallos`. */
+    const buscarT=(n,accion)=>{
+      const q=norm(n);
+      if(!q){fallos.push(`${accion}: la acción vino sin nombre de ítem. No se aplicó.`);return null;}
+      const exacto=T.find(t=>norm(t.item)===q);
+      if(exacto)return exacto;
+      const parciales=T.filter(t=>norm(t.item).includes(q));
+      if(parciales.length===1)return parciales[0];
+      if(parciales.length>1){
+        fallos.push(`${accion}: «${n}» coincide con ${parciales.length} ítems (${parciales.map(t=>t.item).join(' · ')}). Repetímelo con el nombre completo.`);
+        return null;
+      }
+      fallos.push(`${accion}: no encontré el ítem «${n}».`);
+      return null;
+    };
     const PAL=['#ef4444','#f97316','#d97706','#16a34a','#0891b2','#2563eb','#7c3aed','#db2777','#64748b','#84cc16'];
 
-    acciones.forEach(a=>{
+    /* Orden de aplicación por dependencia, no por el orden en que las emitió el modelo.
+       Antes, una `cuadrilla_rubro` que llegaba antes que su `rubro` (o un `recurso`
+       antes que su `tarea`) no encontraba el destino y se perdía en silencio. */
+    const ORDEN={grupo:0,editar_grupo:0,rubro:1,editar_rubro:1,tarea:2,
+      editar_tarea:3,borrar_tarea:3,
+      recurso:4,editar_recurso:4,borrar_recurso:4,mano_obra:4,incremento_mat:4,
+      cuadrilla_grupo:5,cuadrilla_rubro:5,quitar_cuadrilla:5,
+      config:6,imprevistos:6,obra:6,nota_pdf:6,profesional:6,
+      borrar_rubro:7,borrar_grupo:7};
+    const ordenadas=[...acciones].sort((x,y)=>(ORDEN[norm(x.tipo)]??9)-(ORDEN[norm(y.tipo)]??9));
+
+    ordenadas.forEach(a=>{
       const tipo=norm(a.tipo);
       if(tipo==='grupo'){
         if(!a.nombre||findG(a.nombre))return;
@@ -3293,7 +3423,11 @@ ${rend}`;
         const nt={id:_tmpId--,rubroId:r.id,item:String(a.item).trim(),und:a.und||'un',
           qty:+a.qty||1,hsOf:+a.hsOf||0,hsAy:+a.hsAy||0,
           nOf:Math.max(1,+a.nOf||1),nAy:Math.max(0,a.nAy==null?1:+a.nAy),
-          _predNames:a.pred||'',pred:'',obs:a.obs||''};
+          _predNames:a.pred||'',pred:'',obs:a.obs||'',
+          // Campos de Plan de Obra que antes quedaban fuera del alcance del asistente
+          ...(a.dias!=null?{dias:Math.max(1,+a.dias||1)}:{}),
+          ...(a.solapa?{solapa:true}:{}),
+          ...(a.fIniManual?{fIniManual:String(a.fIniManual).trim()}:{})};
         // Insertar después del último ítem del mismo rubro (mantiene el orden por rubro)
         let idx=T.length;
         for(let i=T.length-1;i>=0;i--){if(T[i].rubroId===r.id){idx=i+1;break;}}
@@ -3301,18 +3435,28 @@ ${rend}`;
         log.push(`${nt.item} — ${nt.qty} ${nt.und} (${nt.nOf} of + ${nt.nAy} ay)`);
       }
       else if(tipo==='editar_tarea'){
-        const t=findT(a.item);
+        const t=buscarT(a.item,'Editar ítem');
         if(!t)return;
         const c=a.campos||{};
         ['qty','hsOf','hsAy','nOf','nAy'].forEach(k=>{if(c[k]!=null)t[k]=+c[k];});
         ['und','obs'].forEach(k=>{if(c[k]!=null)t[k]=c[k];});
         if(c.item)t.item=String(c.item).trim();
         if(c.pred!=null)t._predNames=c.pred;
-        if(c.rubro){const r2=findR(c.rubro);if(r2)t.rubroId=r2.id;}
+        if(c.rubro){
+          const r2=findR(c.rubro);
+          if(r2)t.rubroId=r2.id;
+          else fallos.push(`Editar ítem «${t.item}»: no existe el rubro «${c.rubro}», quedó en el suyo.`);
+        }
+        if(c.dias!=null)t.dias=Math.max(1,+c.dias||1);
+        if(c.solapa!=null){if(c.solapa)t.solapa=true;else delete t.solapa;}
+        if(c.fIniManual!=null){
+          const v=String(c.fIniManual).trim();
+          if(v)t.fIniManual=v;else delete t.fIniManual;
+        }
         log.push(`Editado: ${t.item}`);
       }
       else if(tipo==='borrar_tarea'){
-        const t=findT(a.item);
+        const t=buscarT(a.item,'Borrar ítem');
         if(!t)return;
         T=T.filter(x=>x!==t);
         log.push(`Eliminado: ${t.item}`);
@@ -3322,6 +3466,156 @@ ${rend}`;
         if(a.hsDia)CF.hsDia=Math.max(1,+a.hsDia);
         if(a.sabado!=null)CF.sabado=!!a.sabado;
         log.push(`Config: ${a.fechaInicio?'inicio '+a.fechaInicio+' ':''}${a.hsDia?a.hsDia+' hs/día ':''}${a.sabado!=null?'sábados '+(a.sabado?'sí':'no'):''}`.trim());
+      }
+      /* ── RECURSOS $ (materiales) ── */
+      else if(tipo==='recurso'){
+        if(!a.rec){fallos.push('Cargar material: la acción vino sin nombre de material.');return;}
+        const t=a.item?buscarT(a.item,`Cargar material «${a.rec}»`):null;
+        const itemName=t?t.item:'';
+        if(!itemName)return;
+        const ya=RC.find(x=>norm(x.item)===norm(itemName)&&norm(x.rec)===norm(a.rec));
+        if(ya){ya.qty=+a.qty||ya.qty;if(a.pu!=null)ya.pu=+a.pu;if(a.und)ya.und=a.und;
+          if(a.incr!=null)ya.incr=Math.max(0,+a.incr||0);
+          log.push(`Material actualizado: ${ya.rec} en ${itemName}`);return;}
+        RC.push({id:Math.max(0,...RC.map(x=>+x.id||0))+1,item:itemName,rec:String(a.rec).trim(),
+          und:a.und||'un',qty:+a.qty||1,pu:+a.pu||0,
+          ...(a.incr!=null?{incr:Math.max(0,+a.incr||0)}:{})});
+        log.push(`Material: ${a.rec} — ${+a.qty||1} ${a.und||'un'}${+a.pu?` × $${fN(+a.pu)}`:' (sin precio)'}${a.incr!=null?` +${+a.incr||0}%`:''} [${itemName}]`);
+      }
+      else if(tipo==='editar_recurso'){
+        if(!a.rec){fallos.push('Editar material: la acción vino sin nombre de material.');return;}
+        let x=RC.find(y=>norm(y.item)===norm(a.item)&&norm(y.rec)===norm(a.rec));
+        if(!x){
+          // Sin ítem no se adivina: si el mismo material está en varios ítems, no se toca ninguno.
+          const cand=RC.filter(y=>norm(y.rec)===norm(a.rec));
+          if(cand.length===1)x=cand[0];
+          else if(cand.length>1){
+            fallos.push(`Editar material «${a.rec}»: está en ${cand.length} ítems (${cand.map(y=>y.item).join(' · ')}). Decime en cuál.`);return;
+          }else{fallos.push(`Editar material: no encontré «${a.rec}».`);return;}
+        }
+        const c=a.campos||{};
+        ['qty','pu'].forEach(k=>{if(c[k]!=null)x[k]=+c[k];});
+        if(c.und)x.und=c.und;if(c.rec)x.rec=String(c.rec).trim();
+        if(c.incr!=null){
+          const v=String(c.incr).trim();
+          if(v==='')delete x.incr;else x.incr=Math.max(0,+c.incr||0);
+        }
+        log.push(`Material editado: ${x.rec}${c.incr!=null?` (incremento ${x.incr==null?'heredado del ítem':x.incr+'%'})`:''}`);
+      }
+      else if(tipo==='borrar_recurso'){
+        if(!a.rec){fallos.push('Borrar material: la acción vino sin nombre de material.');return;}
+        const before=RC.length;
+        RC=RC.filter(y=>!(norm(y.rec)===norm(a.rec)&&(!a.item||norm(y.item)===norm(a.item))));
+        if(RC.length<before)log.push(`Material eliminado: ${a.rec}`);
+        else fallos.push(`Borrar material: no encontré «${a.rec}»${a.item?` en «${a.item}»`:''}.`);
+      }
+      else if(tipo==='imprevistos'){
+        IMP=Math.max(0,+a.pct||0);
+        log.push(`Imprevistos: ${IMP}%`);
+      }
+      /* ── INCIDENCIA (mano de obra $) ── */
+      else if(tipo==='mano_obra'){
+        const t=buscarT(a.item,'Mano de obra');
+        if(!t)return;
+        if(a.valor==null){fallos.push(`Mano de obra «${t.item}»: vino sin valor.`);return;}
+        // 'unidad' — NO 'unitario': es el valor que espera el desplegable de Incidencia.
+        MO[t.id]={tipo:norm(a.tipo_valor)==='total'?'total':'unidad',valor:+a.valor,
+          fuente:norm(a.fuente)==='estimado'?'estimado':'real'};
+        log.push(`MO ${t.item}: $${fN(+a.valor)} ${MO[t.id].tipo==='total'?'total':'por '+t.und} (${MO[t.id].fuente})`);
+      }
+      /* ── INCREMENTO DE MATERIALES ── */
+      else if(tipo==='incremento_mat'){
+        const pct=+a.pct||0;
+        if(norm(a.item)==='todos'){
+          T.forEach(t=>{MI[t.id]=pct;});
+          log.push(`Incremento de material ${pct}% en todos los ítems`);
+        }else{
+          const t=buscarT(a.item,'Incremento de material');
+          if(!t)return;
+          MI[t.id]=pct;
+          log.push(`Incremento ${pct}% en ${t.item}`);
+        }
+      }
+      /* ── CUADRILLAS GLOBALES ── */
+      else if(tipo==='cuadrilla_grupo'){
+        const g=findG(a.grupo);
+        if(!g){fallos.push(`Cuadrilla: no encontré el grupo «${a.grupo||'(sin nombre)'}».`);return;}
+        CG[g.id]={nOf:Math.max(1,+a.nOf||2),nAy:Math.max(0,+a.nAy||2),global:a.global!==false};
+        log.push(`Cuadrilla grupo ${g.nombre}: ${CG[g.id].nOf} of + ${CG[g.id].nAy} ay`);
+      }
+      else if(tipo==='cuadrilla_rubro'){
+        const r=findR(a.rubro);
+        if(!r){fallos.push(`Cuadrilla: no encontré el rubro «${a.rubro||'(sin nombre)'}».`);return;}
+        CR[r.id]={nOf:Math.max(1,+a.nOf||1),nAy:Math.max(0,+a.nAy||1),global:a.global!==false};
+        log.push(`Cuadrilla rubro ${r.nombre}: ${CR[r.id].nOf} of + ${CR[r.id].nAy} ay`);
+      }
+      else if(tipo==='quitar_cuadrilla'){
+        const g=a.grupo?findG(a.grupo):null;
+        const r=a.rubro?findR(a.rubro):null;
+        if(g){delete CG[g.id];log.push(`Cuadrilla del grupo ${g.nombre}: vuelve a la de cada ítem`);}
+        else if(r){delete CR[r.id];log.push(`Cuadrilla del rubro ${r.nombre}: vuelve a la de cada ítem`);}
+        else fallos.push(`Quitar cuadrilla: no encontré «${a.grupo||a.rubro||'(sin nombre)'}».`);
+      }
+      /* ── EDITAR / BORRAR GRUPOS Y RUBROS ── */
+      else if(tipo==='editar_grupo'){
+        const g=findG(a.nombre);
+        if(!g){fallos.push(`Editar grupo: no encontré «${a.nombre||'(sin nombre)'}».`);return;}
+        const c=a.campos||{};
+        if(c.nombre)g.nombre=String(c.nombre).trim();
+        if(c.color)g.color=c.color;
+        log.push(`Grupo editado: ${g.nombre}`);
+      }
+      else if(tipo==='editar_rubro'){
+        const r=findR(a.nombre);
+        if(!r){fallos.push(`Editar rubro: no encontré «${a.nombre||'(sin nombre)'}».`);return;}
+        const c=a.campos||{};
+        if(c.nombre)r.nombre=String(c.nombre).trim();
+        if(c.color)r.color=c.color;
+        if(c.grupo){
+          const g2=findG(c.grupo);
+          if(g2)r.grupo=g2.id;
+          else fallos.push(`Editar rubro «${r.nombre}»: no existe el grupo «${c.grupo}».`);
+        }
+        log.push(`Rubro editado: ${r.nombre}`);
+      }
+      else if(tipo==='borrar_rubro'){
+        const r=findR(a.nombre);
+        if(!r){fallos.push(`Borrar rubro: no encontré «${a.nombre||'(sin nombre)'}».`);return;}
+        // Misma regla que la UI: no se borra un rubro con ítems adentro.
+        const conItems=T.filter(t=>t.rubroId===r.id);
+        if(conItems.length){
+          fallos.push(`Borrar rubro «${r.nombre}»: todavía tiene ${conItems.length} ítem(s). Borralos primero.`);return;
+        }
+        R=R.filter(x=>x!==r);delete CR[r.id];
+        log.push(`Rubro eliminado: ${r.nombre}`);
+      }
+      else if(tipo==='borrar_grupo'){
+        const g=findG(a.nombre);
+        if(!g){fallos.push(`Borrar grupo: no encontré «${a.nombre||'(sin nombre)'}».`);return;}
+        const conRubros=R.filter(x=>x.grupo===g.id);
+        if(conRubros.length){
+          fallos.push(`Borrar grupo «${g.nombre}»: todavía tiene ${conRubros.length} rubro(s). Borralos primero.`);return;
+        }
+        G=G.filter(x=>x!==g);delete CG[g.id];
+        log.push(`Grupo eliminado: ${g.nombre}`);
+      }
+      /* ── DATOS GENERALES DE LA OBRA ── */
+      else if(tipo==='obra'){
+        const n=String(a.nombre||'').trim();
+        if(!n){fallos.push('Nombre de obra: vino vacío.');return;}
+        OBRA=n;log.push(`Nombre de obra: ${n}`);
+      }
+      else if(tipo==='nota_pdf'){
+        NOTA=String(a.texto==null?'':a.texto);
+        log.push(NOTA?'Nota legal de los PDF actualizada':'Nota legal de los PDF borrada');
+      }
+      else if(tipo==='profesional'){
+        const c=a.campos||a;
+        ['nombre','titulo','matricula'].forEach(k=>{if(c[k]!=null)PRO[k]=String(c[k]);});
+        log.push(`Datos profesionales: ${[PRO.nombre,PRO.titulo,PRO.matricula].filter(Boolean).join(' · ')||'(vacíos)'}`);
+      }
+      else{
+        fallos.push(`Acción desconocida: «${a.tipo}». No se aplicó.`);
       }
     });
 
@@ -3340,16 +3634,33 @@ ${rend}`;
       delete t._predNames;
     });
 
-    const {tareas:rt,moItems:rmo}=renumberTareas(T,moItems);
-    setGrupos(G);setRubros(R);setTareas(rt);setMoItems(rmo);setCfg(CF);
+    // Si un ítem cambió de nombre, arrastrar sus materiales para que no queden huérfanos
+    T.forEach(t=>{
+      const prev=(tareas.find(x=>x.id===t.id)||{}).item;
+      if(prev&&t.item&&prev!==t.item)RC.forEach(r=>{if(norm(r.item)===norm(prev))r.item=t.item;});
+    });
+    // Reindexar moItems e incrementos junto con la renumeración de tareas
+    const idMap={};T.forEach((t,i)=>{idMap[t.id]=i+1;});
+    const MO2={};Object.entries(MO).forEach(([k,v])=>{if(idMap[k]!=null)MO2[idMap[k]]=v;});
+    const MI2={};Object.entries(MI).forEach(([k,v])=>{if(idMap[k]!=null)MI2[idMap[k]]=v;});
+    const {tareas:rt}=renumberTareas(T,{});
+    setGrupos(G);setRubros(R);setTareas(rt);setMoItems(MO2);setCfg(CF);
+    setRec(RC);setMatIncr(MI2);setImprevistos(IMP);setCuadGrupos(CG);setCuadRubros(CR);
+    if(OBRA!==proyecto&&setProyecto)setProyecto(OBRA);
+    if(NOTA!==notaPDF&&setNotaPDF)setNotaPDF(NOTA);
+    if(setProf)setProf(PRO);
     setUndo(snap);
-    return log;
+    return {log,fallos};
   };
 
   const deshacer=()=>{
     if(!undo)return;
     setTareas(undo.tareas);setRubros(undo.rubros);setGrupos(undo.grupos);
-    setCfg(undo.cfg);setMoItems(undo.moItems);
+    setCfg(undo.cfg);setMoItems(undo.moItems);setRec(undo.rec);setMatIncr(undo.matIncr);
+    setImprevistos(undo.imprevistos);setCuadGrupos(undo.cuadGrupos);setCuadRubros(undo.cuadRubros);
+    if(setProyecto&&undo.proyecto!=null)setProyecto(undo.proyecto);
+    if(setProf&&undo.prof)setProf(undo.prof);
+    if(setNotaPDF&&undo.notaPDF!=null)setNotaPDF(undo.notaPDF);
     setUndo(null);
     setMsgs(m=>[...m,{rol:'sys',txt:'↩ Se deshizo la última carga.'}]);
   };
@@ -3360,33 +3671,52 @@ ${rend}`;
     if(!txt||busy)return;
     const k=getAIKey();
     if(!k){setShowKey(true);setErr('Cargá tu API key de Anthropic para usar el asistente.');return;}
-    if(rec){try{recRef.current&&recRef.current.stop();}catch{} setRec(false);}
+    if(grab){try{recRef.current&&recRef.current.stop();}catch{} setGrab(false);}
     setErr('');setInput('');setBusy(true);
     const nuevos=[...msgs,{rol:'user',txt}];
     setMsgs(nuevos);
     try{
-      const hist=nuevos.filter(m=>m.rol==='user'||m.rol==='ai')
-        .map(m=>({role:m.rol==='user'?'user':'assistant',content:m.rol==='user'?m.txt:JSON.stringify({mensaje:m.txt,acciones:[]})}));
+      // Tope de historial: sin esto el contexto (y el costo) crecen sin límite dentro de la sesión.
+      const previos=nuevos.filter(m=>m.rol==='user'||m.rol==='ai').slice(-HIST_MAX);
+      const hist=previos.map(m=>({
+        role:m.rol==='user'?'user':'assistant',
+        // Se le devuelven las acciones que REALMENTE aplicó: antes se reserializaban
+        // como `acciones:[]` y el modelo no tenía registro de lo que ya había hecho.
+        content:m.rol==='user'?m.txt:JSON.stringify({mensaje:m.txt,acciones:m.acciones||[]})
+      }));
       hist[hist.length-1]={role:'user',content:`ESTADO ACTUAL DE LA OBRA\n${buildContext()}\n\n─────────\nEL USUARIO DICE:\n${txt}`};
       const r=await fetch('https://api.anthropic.com/v1/messages',{
         method:'POST',
         headers:{'Content-Type':'application/json','x-api-key':k,
           'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-        body:JSON.stringify({model:AI_MODEL,max_tokens:4000,system:AI_SYSTEM,messages:hist})
+        body:JSON.stringify({
+          model:AI_MODEL,
+          max_tokens:16000,               // 4000 truncaba las cargas masivas y se perdía todo
+          thinking:{type:'adaptive'},     // estimar rendimientos y encadenar tareas es trabajo de criterio
+          // El system es estático (instrucciones + base de rendimientos): se cachea y
+          // deja de pagarse completo en cada turno.
+          system:[{type:'text',text:AI_SYSTEM_FULL,cache_control:{type:'ephemeral'}}],
+          messages:hist
+        })
       });
       if(!r.ok){
         const e=await r.text();
         throw new Error(r.status===401?'API key inválida o sin crédito.':`Error ${r.status}: ${e.slice(0,180)}`);
       }
       const data=await r.json();
+      // Si la respuesta se cortó por límite de tokens, el JSON queda inválido: antes eso
+      // terminaba en "0 acciones" sin ningún aviso. Ahora se dice explícitamente.
+      if(data.stop_reason==='max_tokens')
+        throw new Error('La respuesta se cortó por ser demasiado larga y no se cargó nada. Pedímelo en tandas más chicas (por ejemplo, un rubro por vez).');
       let raw=(data.content||[]).filter(c=>c.type==='text').map(c=>c.text).join('\n').trim();
       raw=raw.replace(/^```(?:json)?/i,'').replace(/```$/,'').trim();
       const i0=raw.indexOf('{'),i1=raw.lastIndexOf('}');
       if(i0>=0&&i1>i0)raw=raw.slice(i0,i1+1);
-      let obj;
-      try{obj=JSON.parse(raw);}catch{obj={mensaje:raw,acciones:[]};}
-      const log=aplicar(obj.acciones);
-      setMsgs(m=>[...m,{rol:'ai',txt:obj.mensaje||'Listo.',log}]);
+      let obj,parseOk=true;
+      try{obj=JSON.parse(raw);}catch{parseOk=false;obj={mensaje:raw,acciones:[]};}
+      const {log,fallos}=aplicar(obj.acciones);
+      if(!parseOk)fallos.push('No pude interpretar la respuesta como JSON, así que no se aplicó ninguna acción.');
+      setMsgs(m=>[...m,{rol:'ai',txt:obj.mensaje||'Listo.',log,fallos,acciones:obj.acciones||[]}]);
     }catch(e){
       setMsgs(m=>[...m,{rol:'sys',txt:'⚠ '+e.message}]);
       setErr(e.message);
@@ -3405,8 +3735,8 @@ ${rend}`;
   const EJEMPLOS=[
     'La obra arranca el 15/03/2026, jornada de 8 horas, sin sábados.',
     'Vamos a hacer 320 m² de mampostería de ladrillo hueco con 2 oficiales y 2 ayudantes.',
-    'Sumá revoque grueso y fino, 500 m² cada uno, va después de la mampostería.',
-    'La cuadrilla de pintura son 4 personas, 500 m² interior y 200 exterior.',
+    'Al ladrillo hueco cargale 3200 unidades a $22 y 80 bolsas de cemento a $9500.',
+    'La mano de obra del revoque grueso va a $3500 el m², y poné 10% de imprevistos.',
   ];
 
   return(
@@ -3416,13 +3746,13 @@ ${rend}`;
       <div style={{display:'flex',alignItems:'center',gap:'10px',marginBottom:'10px',flexWrap:'wrap'}}>
         <div style={{fontSize:'13px',fontWeight:800,color:C.t1}}>🎙 Asistente de carga</div>
         <div style={{fontSize:'11px',color:C.t2,flex:1,minWidth:'200px'}}>
-          Contale la obra hablando o escribiendo. Él completa rubros, ítems, cantidades, cuadrillas y predecesoras.
+          Contale la obra hablando o escribiendo. Completa rubros, ítems, cuadrillas, materiales, precios de MO e imprevistos.
         </div>
         <button onClick={()=>setShowKey(s=>!s)} style={{...btnS(C.t2),fontSize:'10px'}}>
           {getAIKey()?'🔑 API key ✓':'🔑 Configurar API key'}
         </button>
         {undo&&<button onClick={deshacer} style={{...btnS(C.red),fontSize:'10px'}}>↩ Deshacer última carga</button>}
-        {msgs.length>0&&<button onClick={()=>{setMsgs([]);setUndo(null);}} style={{...btnS(C.t3),fontSize:'10px'}}>🗑 Limpiar chat</button>}
+        {msgs.length>0&&<button onClick={()=>{if(window.confirm('¿Borrar la conversación de esta obra? También se borra de Drive.')){setMsgs([]);setUndo(null);}}} style={{...btnS(C.t3),fontSize:'10px'}}>🗑 Limpiar chat</button>}
       </div>
 
       {/* API key */}
@@ -3478,6 +3808,17 @@ ${rend}`;
                 ))}
               </div>
             )}
+            {/* Lo que NO se pudo aplicar: sin esto el asistente decía "listo" y no había cargado nada */}
+            {m.fallos&&m.fallos.length>0&&(
+              <div style={{marginTop:'8px',paddingTop:'8px',borderTop:`1px dashed ${C.red}55`}}>
+                <div style={{fontSize:'9.5px',fontWeight:800,color:C.red,marginBottom:'4px',letterSpacing:'.3px'}}>
+                  ⚠ NO SE APLICÓ
+                </div>
+                {m.fallos.map((f,j)=>(
+                  <div key={j} style={{fontSize:'11px',color:C.red,padding:'1.5px 0'}}>• {f}</div>
+                ))}
+              </div>
+            )}
           </div>
         ))}
         {busy&&<div style={{...S.burbAI,color:C.t3,fontStyle:'italic'}}>Pensando…</div>}
@@ -3487,17 +3828,17 @@ ${rend}`;
 
       {/* Entrada */}
       <div style={{display:'flex',gap:'7px',marginTop:'10px',alignItems:'flex-end'}}>
-        <button onClick={toggleVoz} title={rec?'Detener dictado':'Dictar por voz'}
-          style={{background:rec?C.red:C.card,color:rec?'#fff':C.t2,border:`1.5px solid ${rec?C.red:C.border}`,
+        <button onClick={toggleVoz} title={grab?'Detener dictado':'Dictar por voz'}
+          style={{background:grab?C.red:C.card,color:grab?'#fff':C.t2,border:`1.5px solid ${grab?C.red:C.border}`,
             borderRadius:'8px',width:'44px',height:'44px',fontSize:'19px',cursor:'pointer',flexShrink:0,
-            animation:rec?'none':'none'}}>
-          {rec?'⏹':'🎤'}
+            animation:'none'}}>
+          {grab?'⏹':'🎤'}
         </button>
         <textarea value={input} onChange={e=>setInput(e.target.value)}
           onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();enviar();}}}
-          placeholder={rec?'Escuchando… hablá tranquilo':'Contame un ítem, o varios… (Enter para enviar, Shift+Enter salto de línea)'}
+          placeholder={grab?'Escuchando… hablá tranquilo':'Contame un ítem, o varios… (Enter para enviar, Shift+Enter salto de línea)'}
           rows={2}
-          style={{flex:1,padding:'10px 12px',border:`1.5px solid ${rec?C.red:C.border}`,borderRadius:'8px',
+          style={{flex:1,padding:'10px 12px',border:`1.5px solid ${grab?C.red:C.border}`,borderRadius:'8px',
             fontSize:'13px',fontFamily:'inherit',resize:'vertical',minHeight:'44px',lineHeight:1.45}}/>
         <button onClick={enviar} disabled={busy||!input.trim()}
           style={{background:busy||!input.trim()?C.border:C.blue,color:'#fff',border:'none',borderRadius:'8px',
@@ -3507,8 +3848,8 @@ ${rend}`;
         </button>
       </div>
       <div style={{fontSize:'10px',color:C.t3,marginTop:'6px'}}>
-        {rec?'🔴 Grabando — el texto aparece a medida que hablás. Revisalo y mandá.'
-            :'Todo lo que cargue queda en Rubros / Plan de Obra / Gantt. Podés corregir a mano en cualquier momento.'}
+        {grab?'🔴 Grabando — el texto aparece a medida que hablás. Revisalo y mandá.'
+            :'Escribe en todas las pestañas: Rubros, Plan, Gantt, Recursos $ e Incidencia. Corregís a mano cuando quieras.'}
       </div>
     </div>
   );
@@ -3539,6 +3880,7 @@ function App(){
   const [matIncr,setMatIncr]=useState(_saved?.matIncr||{});
   const [imprevistos,setImprevistos]=useState(_saved?.imprevistos||0);
   const [notaPDF,setNotaPDF]=useState(_saved?.notaPDF||NOTA_PDF_DEFAULT);
+  const [aiChat,setAiChat]=useState(_saved?.aiChat||[]);   // conversación del Asistente (viaja con la obra a Drive)
   const PROF_DEFAULT={nombre:'Federico Pickelny',titulo:'Arquitecto',matricula:'MP 2304',telefono:'264 4397772',email:'federicopickelny@gmail.com',direccion:'B. Rivadavia Oeste 114'};
   const [prof,setProf]=useState(_saved?.prof||PROF_DEFAULT);
   const [editProy,setEditProy]=useState(false);
@@ -3553,7 +3895,8 @@ function App(){
 
   // Auto-save local + Drive auto-sync (debounce 15s)
   useEffect(()=>{
-    const data={tareas,rec,grupos,rubros,cfg,proyecto,cuadGrupos,cuadRubros,moItems,matIncr,prof,imprevistos,notaPDF};
+    const data={tareas,rec,grupos,rubros,cfg,proyecto,cuadGrupos,cuadRubros,moItems,matIncr,prof,imprevistos,notaPDF,
+      aiChat:(aiChat||[]).slice(-40)};   // últimos 40 mensajes del Asistente: contexto suficiente sin inflar el JSON
     guardarStorage(data);
     setLastSaved(new Date());
     if(DRIVE_URL&&_initDone.current&&proyecto){
@@ -3566,7 +3909,7 @@ function App(){
         if(ok)setTimeout(()=>setDriveStatus('idle'),4000);
       },15000);
     }
-  },[tareas,rec,grupos,rubros,cfg,proyecto,cuadGrupos,cuadRubros,moItems,matIncr,prof,imprevistos,notaPDF]);
+  },[tareas,rec,grupos,rubros,cfg,proyecto,cuadGrupos,cuadRubros,moItems,matIncr,prof,imprevistos,notaPDF,aiChat]);
 
   // Título de la pestaña Chrome — se actualiza con el nombre del proyecto
   useEffect(()=>{
@@ -3592,6 +3935,7 @@ function App(){
       if(d.prof)setProf(d.prof);
       if(d.imprevistos!=null)setImprevistos(d.imprevistos);
       if(d.notaPDF)setNotaPDF(d.notaPDF);
+      if(d.aiChat)setAiChat(d.aiChat);
       setDriveStatus('saved');
       setTimeout(()=>setDriveStatus('idle'),3000);
     });
@@ -3605,7 +3949,8 @@ function App(){
 
   // Exportar JSON
   const exportarJSON=()=>{
-    const data={tareas,rec,grupos,rubros,cfg,proyecto,cuadGrupos,cuadRubros,moItems,matIncr,prof,imprevistos,notaPDF};
+    const data={tareas,rec,grupos,rubros,cfg,proyecto,cuadGrupos,cuadRubros,moItems,matIncr,prof,imprevistos,notaPDF,
+      aiChat:(aiChat||[]).slice(-40)};   // últimos 40 mensajes del Asistente: contexto suficiente sin inflar el JSON
     const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
     const url=URL.createObjectURL(blob);
     const a=document.createElement("a");
@@ -3641,6 +3986,8 @@ function App(){
         if(d.moItems)setMoItems(d.moItems);
         if(d.matIncr)setMatIncr(d.matIncr);
         if(d.prof)setProf(d.prof);
+        if(d.imprevistos!=null)setImprevistos(d.imprevistos);
+        if(d.aiChat)setAiChat(d.aiChat);
         setModified(false);
       }catch(err){alert('Archivo inválido:\n'+err.message);}
     };
@@ -3896,7 +4243,7 @@ function App(){
         {tab==="plan"      &&<PlanObra tc={tc} setTareas={setTareas} rec={rec} setRec={setRec} cfg={cfg} setCfg={setCfg} rubros={rubros} grupos={grupos} cuadGrupos={cuadGrupos} setCuadGrupos={setCuadGrupos} cuadRubros={cuadRubros} setCuadRubros={setCuadRubros} conflictos={conflictos} erroresMap={erroresMap} proyecto={proyecto} moItems={moItems} setMoItems={setMoItems} prof={prof} nota={notaPDF}/>}
         {tab==="gantt"     &&<GanttView tc={tc} cfg={cfg} rubros={rubros} conflictos={conflictos} proyecto={proyecto} prof={prof} nota={notaPDF} rec={rec} moItems={moItems} matIncr={matIncr}/>}
         {tab==="recursos"  &&<Recursos rec={rec} setRec={setRec} tareas={tareas} rubros={rubros} proyecto={proyecto} prof={prof} imprevistos={imprevistos} setImprevistos={setImprevistos} nota={notaPDF} matIncr={matIncr} setMatIncr={setMatIncr}/>}
-        {tab==="asistente" &&<AsistenteChat tareas={tareas} setTareas={setTareas} rubros={rubros} setRubros={setRubros} grupos={grupos} setGrupos={setGrupos} cfg={cfg} setCfg={setCfg} moItems={moItems} setMoItems={setMoItems} proyecto={proyecto}/>}
+        {tab==="asistente" &&<AsistenteChat tareas={tareas} setTareas={setTareas} rubros={rubros} setRubros={setRubros} grupos={grupos} setGrupos={setGrupos} cfg={cfg} setCfg={setCfg} moItems={moItems} setMoItems={setMoItems} rec={rec} setRec={setRec} matIncr={matIncr} setMatIncr={setMatIncr} imprevistos={imprevistos} setImprevistos={setImprevistos} cuadGrupos={cuadGrupos} setCuadGrupos={setCuadGrupos} cuadRubros={cuadRubros} setCuadRubros={setCuadRubros} msgs={aiChat} setMsgs={setAiChat} proyecto={proyecto} setProyecto={setProyecto} prof={prof} setProf={setProf} notaPDF={notaPDF} setNotaPDF={setNotaPDF}/>}
         {tab==="incidencia"&&<Incidencia tc={tc} rec={rec} rubros={rubros} grupos={grupos} moItems={moItems} setMoItems={setMoItems} proyecto={proyecto} prof={prof} nota={notaPDF}/>}
       </div>
 
