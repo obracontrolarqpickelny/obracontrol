@@ -43,10 +43,17 @@ poder importarse.
   borrar o reordenar tareas tienen que remapearse junto con ellas.
 
 ⚠️ **Ojo:** `renumberTareas(arr, moItems)` remapea únicamente `moItems`; devuelve
-`{tareas, moItems}`. **`matIncr` no lo remapea nadie** — ninguno de los ocho
-llamadores lo hace. Si agregás lógica que renumere tareas, remapeá `matIncr` a
-mano con el mismo criterio, o los porcentajes de incremento quedan pegados al ítem
-equivocado.
+`{tareas, moItems}`. **No toca `matIncr`.**
+
+- Los **ocho llamadores de la UI manual** (agregar / borrar / mover ítem en Plan
+  de Obra y en el Editor de Rubros) tampoco lo remapean: ahí los porcentajes de
+  incremento quedan pegados al ítem equivocado.
+- El **asistente sí lo hace bien**: `aplicarAcciones` arma su propio `idMap` y
+  reindexa `moItems` **y** `matIncr` antes de llamar a `renumberTareas`, además de
+  arrastrar los materiales de `rec` cuando un ítem cambia de nombre. Si tocás esa
+  función, mantené ese bloque.
+
+Si agregás lógica que renumere tareas, seguí el modelo del asistente.
 
 ### 3. Estado que persiste: hay que agregarlo en los cuatro lados
 
