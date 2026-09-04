@@ -41,6 +41,13 @@ input[type=number]::-webkit-inner-spin-button{opacity:.4}
     position:sticky;top:0;z-index:101;background:#f1f5f9;
     box-shadow:0 2px 8px rgba(0,0,0,.07)}
   .hdr-tabs button{height:38px!important;padding:0 10px!important}
+  /* iOS hace zoom al enfocar un campo de menos de 16px: sube sólo los campos
+     que se tipean de verdad en el celular, no los de las tablas densas. */
+  .chat-input{font-size:16px!important}
+  /* Área táctil mínima usable en los botones de acción del asistente */
+  .toque{min-height:36px!important;padding:8px 12px!important;font-size:11px!important}
+  /* El chat aprovecha más pantalla: en móvil el header ya no queda fijo */
+  .chat-scroll{height:58vh!important;min-height:260px!important}
   /* Filas de rubros/grupos/ítems: los botones bajan de línea en vez de recortarse */
   .rowflex{flex-wrap:wrap!important}
   /* Salto de línea forzado: el nombre queda arriba, los botones en la fila siguiente */
@@ -169,6 +176,13 @@ const SK='obracalc_pro_v4';
 
 // Parámetro URL ?obra=NombreObra — para navegación obra-a-obra desde ObraControl
 const _urlObra=new URLSearchParams(window.location.search).get('obra')||'';
+// ?proj=<id> lo agrega ObraControl al abrir esta app: sirve para volver a la MISMA obra.
+// Si no viene (se entró directo), se vuelve por nombre, que ObraControl también resuelve.
+const _urlProj=new URLSearchParams(window.location.search).get('proj')||'';
+const OBRACONTROL_URL='https://obracontrolarqpickelny.github.io/obracontrol/';
+const _linkObraControl=(nombre)=>OBRACONTROL_URL+(
+  _urlProj?`?proj=${encodeURIComponent(_urlProj)}`
+  :nombre?`?obra=${encodeURIComponent(nombre)}`:'');
 
 /* ══════════ DRIVE SYNC ══════════ */
 // Completar DRIVE_URL con la URL del Apps Script después del deploy
@@ -3748,11 +3762,11 @@ ${cuadTxt}`;
         <div style={{fontSize:'11px',color:C.t2,flex:1,minWidth:'200px'}}>
           Contale la obra hablando o escribiendo. Completa rubros, ítems, cuadrillas, materiales, precios de MO e imprevistos.
         </div>
-        <button onClick={()=>setShowKey(s=>!s)} style={{...btnS(C.t2),fontSize:'10px'}}>
+        <button onClick={()=>setShowKey(s=>!s)} className="toque" style={{...btnS(C.t2),fontSize:'10px'}}>
           {getAIKey()?'🔑 API key ✓':'🔑 Configurar API key'}
         </button>
-        {undo&&<button onClick={deshacer} style={{...btnS(C.red),fontSize:'10px'}}>↩ Deshacer última carga</button>}
-        {msgs.length>0&&<button onClick={()=>{if(window.confirm('¿Borrar la conversación de esta obra? También se borra de Drive.')){setMsgs([]);setUndo(null);}}} style={{...btnS(C.t3),fontSize:'10px'}}>🗑 Limpiar chat</button>}
+        {undo&&<button onClick={deshacer} className="toque" style={{...btnS(C.red),fontSize:'10px'}}>↩ Deshacer última carga</button>}
+        {msgs.length>0&&<button onClick={()=>{if(window.confirm('¿Borrar la conversación de esta obra? También se borra de Drive.')){setMsgs([]);setUndo(null);}}} className="toque" style={{...btnS(C.t3),fontSize:'10px'}}>🗑 Limpiar chat</button>}
       </div>
 
       {/* API key */}
@@ -3774,7 +3788,7 @@ ${cuadTxt}`;
       )}
 
       {/* Chat */}
-      <div ref={scRef} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:'10px',
+      <div ref={scRef} className="chat-scroll" style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:'10px',
         padding:'14px',height:'52vh',minHeight:'320px',overflowY:'auto',
         display:'flex',flexDirection:'column',gap:'10px'}}>
         {msgs.length===0&&(
@@ -3837,8 +3851,8 @@ ${cuadTxt}`;
         <textarea value={input} onChange={e=>setInput(e.target.value)}
           onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();enviar();}}}
           placeholder={grab?'Escuchando… hablá tranquilo':'Contame un ítem, o varios… (Enter para enviar, Shift+Enter salto de línea)'}
-          rows={2}
-          style={{flex:1,padding:'10px 12px',border:`1.5px solid ${grab?C.red:C.border}`,borderRadius:'8px',
+          rows={2} className="chat-input"
+          style={{flex:1,minWidth:0,padding:'10px 12px',border:`1.5px solid ${grab?C.red:C.border}`,borderRadius:'8px',
             fontSize:'13px',fontFamily:'inherit',resize:'vertical',minHeight:'44px',lineHeight:1.45}}/>
         <button onClick={enviar} disabled={busy||!input.trim()}
           style={{background:busy||!input.trim()?C.border:C.blue,color:'#fff',border:'none',borderRadius:'8px',
@@ -4210,6 +4224,16 @@ function App(){
               </span>
             )}
             <div style={{width:"1px",height:"20px",background:C.border,margin:"0 2px"}}/>
+            {/* Vuelta a la misma obra en ObraControl */}
+            <a href={_linkObraControl(proyecto)} target="_blank" rel="noopener"
+              title={`Abrir «${proyecto||'esta obra'}» en ObraControl`}
+              className="btn-link-oc"
+              style={{display:"inline-flex",alignItems:"center",gap:"5px",textDecoration:"none",
+                fontSize:"10px",fontWeight:800,padding:"4px 10px",borderRadius:"5px",
+                color:C.accent,background:`${C.accent}14`,border:`1px solid ${C.accent}55`,
+                whiteSpace:"nowrap"}}>
+              🔗 ObraControl
+            </a>
             <button onClick={()=>{setNewP(proyecto);setEditProy(true);}}
               style={{background:"transparent",border:`1px solid ${C.border}`,color:C.t2,
                 borderRadius:"5px",padding:"4px 9px",cursor:"pointer",fontSize:"10px",fontWeight:700,maxWidth:"140px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
