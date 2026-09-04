@@ -181,6 +181,11 @@ const _urlObra=new URLSearchParams(window.location.search).get('obra')||'';
 // ?proj=<id> lo agrega ObraControl al abrir esta app: sirve para volver a la MISMA obra.
 // Si no viene (se entró directo), se vuelve por nombre, que ObraControl también resuelve.
 const _urlProj=new URLSearchParams(window.location.search).get('proj')||'';
+/* Identidad de archivo de la obra. Se fija al abrir y NO cambia aunque después le
+   cambies el nombre: así se reescribe siempre el MISMO archivo en Drive y la misma
+   entrada de localStorage, en vez de duplicarse. Antes localStorage usaba este valor
+   y Drive usaba el nombre vivo, y al renombrar se bifurcaban. */
+const _obraArchivo=_urlObra||'';
 const OBRACONTROL_URL='https://obracontrolarqpickelny.github.io/obracontrol/';
 const _linkObraControl=(nombre)=>OBRACONTROL_URL+(
   _urlProj?`?proj=${encodeURIComponent(_urlProj)}`
@@ -1533,7 +1538,7 @@ function GanttView({tc,cfg,rubros,conflictos,proyecto,prof,nota='',rec=[],moItem
     const hxR=h=>{h=(h||'#646464').replace('#','');return[parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];};
     const fD=d=>d instanceof Date&&!isNaN(d)?d.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'}):'—';
 
-    const drawHdr=(pn,rangeLabel)=>{
+    const drawHdr=(pn,rangeLabel,cont)=>{
       doc.setFont('helvetica','bold');doc.setFontSize(14);doc.setTextColor(...DRK);
       doc.text('Cronograma',MG,31);
       doc.setFillColor(...ORG);doc.roundedRect(PW-MG-68,16,68,17,2.5,2.5,'F');
@@ -1542,9 +1547,12 @@ function GanttView({tc,cfg,rubros,conflictos,proyecto,prof,nota='',rec=[],moItem
       doc.setFillColor(...ORG);doc.rect(MG,40,PW-MG*2,2.5,'F');
       const dStr=new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
       doc.setFont('helvetica','normal');doc.setFontSize(7.5);doc.setTextColor(...GRY);
+      // En las páginas de continuación se repiten las MISMAS semanas (cambian los
+      // ítems, no el tramo de tiempo): se aclara para que no se lea como un reinicio.
+      const cnt=cont?'  ·  continuación (mismas semanas)':'';
       const sub=rangeLabel
-        ?`Secuencia y fechas de ejecución  ·  ${proyecto}  ·  ${rangeLabel}  ·  ${dStr}`
-        :`Secuencia y fechas de ejecución  ·  ${proyecto}  ·  ${dStr}`;
+        ?`Secuencia y fechas de ejecución  ·  ${proyecto}  ·  ${rangeLabel}${cnt}  ·  ${dStr}`
+        :`Secuencia y fechas de ejecución  ·  ${proyecto}${cnt}  ·  ${dStr}`;
       doc.text(sub,MG,52);
     };
     const hasProfData=prof&&prof.nombre;
@@ -1592,7 +1600,21 @@ function GanttView({tc,cfg,rubros,conflictos,proyecto,prof,nota='',rec=[],moItem
     };
 
     /* Layout — LABW ampliado para nombres completos */
-    const LABW=210,ROW_H=18,WH=42;
+    /* Ancho de la columna de rubros: se mide el texto real (helvetica 5.5, el mismo
+       cuerpo con que se dibuja) en vez de fijar 210pt. Sobraba muchísimo aire y le
+       quitaba ancho al cronograma. Queda acotado para que no se desarme con nombres
+       muy cortos ni muy largos. */
+    const LABW=(()=>{
+      doc.setFont('helvetica','normal');doc.setFontSize(5.5);
+      let max=0;
+      tc.forEach(t=>{
+        const rb=rubros.find(r=>r.id===t.rubroId);
+        const w=doc.getTextWidth(`#${t.id} ${rb?.nombre||'—'}`);
+        if(w>max)max=w;
+      });
+      return Math.min(210,Math.max(95,Math.ceil(max)+16));
+    })();
+    const ROW_H=18,WH=42;
     const TX=MG+LABW,TW=PW-MG-TX;
 
     const BOTTOM_LIMIT=BOTTOM_CONTENT; // no dibujar sobre el pie de página
@@ -1748,7 +1770,7 @@ function GanttView({tc,cfg,rubros,conflictos,proyecto,prof,nota='',rec=[],moItem
 
       // Nueva página dentro del mismo chunk (misma timeline)
       const newPageInChunk=()=>{
-        pn++;doc.addPage();drawHdr(pn,rangeLabel);sy=62;drawTLch(sy);sy+=WH;
+        pn++;doc.addPage();drawHdr(pn,rangeLabel,true);sy=62;drawTLch(sy);sy+=WH;
       };
 
       /* Filas de tareas para este chunk */
@@ -3289,14 +3311,17 @@ function AsistenteChat({tareas,setTareas,rubros,setRubros,grupos,setGrupos,cfg,s
     const r=new SR();
     r.lang='es-AR';r.continuous=true;r.interimResults=true;
     baseRef.current=input?input+' ':'';
+    /* Se rearma el texto completo desde el índice 0 en cada evento, en vez de ir
+       acumulando desde e.resultIndex. En Android, onresult suele reenviar tramos
+       ya dados por finales y esa acumulación los pegaba de nuevo: por eso repetía
+       palabras. Rearmar es idempotente — reenviar lo mismo da el mismo resultado. */
     r.onresult=e=>{
       let fin='',int='';
-      for(let i=e.resultIndex;i<e.results.length;i++){
+      for(let i=0;i<e.results.length;i++){
         const tx=e.results[i][0].transcript;
         if(e.results[i].isFinal)fin+=tx+' ';else int+=tx;
       }
-      if(fin)baseRef.current+=fin;
-      setInput(baseRef.current+int);
+      setInput((baseRef.current||'')+fin+int);
     };
     r.onerror=e=>{setErr('Dictado: '+e.error);setGrab(false);};
     r.onend=()=>setGrab(false);
@@ -3920,7 +3945,9 @@ function App(){
       setDriveStatus('pending');
       _driveTimer.current=setTimeout(async()=>{
         setDriveStatus('saving');
-        const ok=await _driveSave(proyecto,data);
+        // Se guarda bajo la identidad fija de la obra, no bajo el nombre vivo:
+        // renombrarla ya no crea un archivo nuevo en Drive.
+        const ok=await _driveSave(_obraArchivo||proyecto,data);
         setDriveStatus(ok?'saved':'error');
         if(ok)setTimeout(()=>setDriveStatus('idle'),4000);
       },15000);
@@ -4298,7 +4325,7 @@ function App(){
 
 function HomePanel(){
   const [obras,setObras]=React.useState(()=>{
-    const list=[];
+    let list=[];
     for(let i=0;i<localStorage.length;i++){
       const key=localStorage.key(i);
       if(key&&key.startsWith('obracalc_pro_v4_w_')){
@@ -4308,15 +4335,26 @@ function HomePanel(){
         }catch{}
       }
     }
+    // Una misma obra podía quedar guardada bajo dos claves (por ejemplo si se la
+    // renombró y después se la reabrió por el nombre nuevo). Se muestra una sola
+    // tarjeta, la de la copia más reciente, y se avisa cuántas hay.
+    const porNombre={};
+    list.forEach(o=>{
+      const k=o.name.trim().toLowerCase();
+      if(!porNombre[k]||o.ts>porNombre[k].ts)porNombre[k]={...o,claves:[]};
+    });
+    list.forEach(o=>{porNombre[o.name.trim().toLowerCase()].claves.push(o.key);});
+    list=Object.values(porNombre);
     list.sort((a,b)=>b.ts-a.ts);
     return list;
   });
   const [newName,setNewName]=React.useState('');
   const openObra=n=>{ window.location.href='?obra='+encodeURIComponent(n); };
-  const delObra=(key,name)=>{
-    if(!window.confirm(`¿Eliminar "${name}" de este dispositivo?\nNo afecta lo guardado en Drive.`))return;
-    localStorage.removeItem(key);
-    setObras(p=>p.filter(o=>o.key!==key));
+  const delObra=(o)=>{
+    const n=o.claves?o.claves.length:1;
+    if(!window.confirm(`¿Eliminar "${o.name}" de este dispositivo?${n>1?`\nSe borran las ${n} copias locales.`:''}\nNo afecta lo guardado en Drive.`))return;
+    (o.claves||[o.key]).forEach(k=>localStorage.removeItem(k));
+    setObras(p=>p.filter(x=>x.key!==o.key));
   };
   return(
     <div style={{minHeight:'100vh',background:C.bg,fontFamily:'system-ui,sans-serif'}}>
@@ -4361,6 +4399,9 @@ function HomePanel(){
               {o.ts>0&&<div style={{fontSize:'10px',color:C.t3}}>
                 Guardado: {new Date(o.ts).toLocaleString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'})}
               </div>}
+              {o.claves&&o.claves.length>1&&<div style={{fontSize:'9px',color:C.t3,fontStyle:'italic'}}>
+                {o.claves.length} copias en este dispositivo — se abre la más reciente
+              </div>}
               <div style={{display:'flex',gap:'6px',marginTop:'6px'}}>
                 <button onClick={()=>openObra(o.name)}
                   style={{flex:1,background:C.accent,color:'white',border:'none',
@@ -4368,7 +4409,7 @@ function HomePanel(){
                     cursor:'pointer'}}>
                   Abrir →
                 </button>
-                <button onClick={()=>delObra(o.key,o.name)}
+                <button onClick={()=>delObra(o)}
                   style={{background:'transparent',color:C.t3,border:`1px solid ${C.border}`,
                     borderRadius:'7px',padding:'8px 12px',fontWeight:600,fontSize:'13px',
                     cursor:'pointer'}}>✕</button>
