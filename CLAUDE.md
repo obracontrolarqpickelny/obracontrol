@@ -91,6 +91,31 @@ nombre sugiera "recording".
 
 ---
 
+## Lenguaje de color: dorado = editable
+
+Compartido con ObraCálculo (`computo_obra.html`). El dorado tiene **un solo
+significado**: esa celda se puede editar. Sirve para ver de un vistazo qué cargó el
+asistente y qué falta completar.
+
+| Color | Significa | Dónde |
+|---|---|---|
+| 🟡 Dorado | Editable | `--edit-bg` `#fef9c3`, borde `--edit-border` `#ca8a04` |
+| ⚪ Gris | Calculado o sólo lectura | `input[readonly]`, `:disabled` |
+| 🟠 Naranja | Resultado destacado (texto, no campo) | totales, KPIs |
+
+Es el estilo **por defecto** de `input[type=text|number|date]`, `select` y
+`textarea`, así que un campo nuevo nace marcado sin tener que acordarse de nada.
+
+Dos cosas para no romperlo:
+
+- Las reglas llevan `!important` porque los estilos de esta app son **en línea** y
+  si no, pierden por especificidad.
+- Lo que NO es dato de la obra queda fuera: el chat del asistente, el campo de la
+  API key y el buscador de Recursos usan `.chat-input` / `.no-edit-hl`. Esas clases
+  van **repetidas** en el selector (`.no-edit-hl.no-edit-hl`) para ganarle a
+  `input[type=…]`, que si no tiene más especificidad aunque ambas lleven
+  `!important`.
+
 ## Antes de commitear
 
 **Verificá que el JSX compila.** No hay build: un error de sintaxis rompe la app
