@@ -3222,6 +3222,21 @@ const AI_MODEL='claude-opus-5';
 const HIST_MAX=24;   // mensajes de ida y vuelta que se le reenvían (12 intercambios)
 const getAIKey=()=>{try{return localStorage.getItem(AI_KEY_LS)||'';}catch{return'';}};
 const setAIKey=k=>{try{k?localStorage.setItem(AI_KEY_LS,k):localStorage.removeItem(AI_KEY_LS);}catch{}};
+/* Al pegar la key desde el celular suelen colarse espacios, saltos de línea o
+   caracteres invisibles (espacio de ancho cero, BOM). Cualquiera de ellos rompe
+   la cabecera de autenticación y la API devuelve 401 como si la key fuera falsa. */
+const limpiarKey=k=>String(k||'').replace(/[\s ​-‍﻿]/g,'');
+/* Traduce el error de la API a algo accionable: "inválida" y "sin crédito" son
+   problemas distintos y antes se mostraban juntos en el mismo mensaje. */
+const _errAPI=(status,cuerpo)=>{
+  const txt=String(cuerpo||'');
+  if(status===401)return 'La API key no es válida o fue revocada. Generá una nueva en console.anthropic.com → API Keys.';
+  if(status===400&&/credit balance|insufficient|too low/i.test(txt))
+    return 'La key es válida pero la cuenta no tiene crédito. Cargá saldo en console.anthropic.com → Billing.';
+  if(status===429)return 'Demasiadas consultas seguidas. Esperá unos segundos y reintentá.';
+  if(status>=500)return 'El servicio de Anthropic no está respondiendo. Reintentá en un rato.';
+  return `Error ${status}: ${txt.slice(0,180)}`;
+};
 
 const AI_SYSTEM=`Sos un asistente experto en planificación de obra de construcción en Argentina. Trabajás dentro de la app ObraGestión del Arq. Federico Pickelny (San Juan). Hablás en español rioplatense, breve y de oficio.
 
@@ -3321,6 +3336,38 @@ function AsistenteChat({tareas,setTareas,rubros,setRubros,grupos,setGrupos,cfg,s
   const [grab,setGrab]=useState(false);
   const [key,setKey]=useState(getAIKey());
   const [showKey,setShowKey]=useState(!getAIKey());
+  const [probando,setProbando]=useState(false);
+  const [keyMsg,setKeyMsg]=useState(null);
+
+  /* Se prueba la key contra la API antes de darla por buena: así el error sale
+     acá y no más tarde, en medio de una carga. */
+  const probarYGuardar=async()=>{
+    const k=limpiarKey(key);
+    if(!k){setKeyMsg({ok:false,txt:'Pegá la API key primero.'});return;}
+    if(!/^sk-ant-/.test(k)){
+      setKeyMsg({ok:false,txt:'Eso no parece una API key de Anthropic: tienen que empezar con "sk-ant-". Fijate de no haber copiado el nombre de la key en vez del valor.'});
+      return;
+    }
+    setProbando(true);setKeyMsg(null);
+    try{
+      const r=await fetch('https://api.anthropic.com/v1/messages',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','x-api-key':k,
+          'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+        body:JSON.stringify({model:AI_MODEL,max_tokens:16,messages:[{role:'user',content:'ok'}]})
+      });
+      if(r.ok){
+        setAIKey(k);setKey(k);
+        setKeyMsg({ok:true,txt:'✓ La key funciona y quedó guardada en este navegador.'});
+        setTimeout(()=>{setShowKey(false);setKeyMsg(null);},1800);
+        setErr('');
+      }else{
+        setKeyMsg({ok:false,txt:_errAPI(r.status,await r.text())});
+      }
+    }catch(e){
+      setKeyMsg({ok:false,txt:'No se pudo contactar a la API: '+e.message+' (¿hay conexión?)'});
+    }finally{setProbando(false);}
+  };
   const [err,setErr]=useState('');
   const [undo,setUndo]=useState(null);
   const scRef=useRef();
@@ -3768,8 +3815,9 @@ ${cuadTxt}`;
         })
       });
       if(!r.ok){
-        const e=await r.text();
-        throw new Error(r.status===401?'API key inválida o sin crédito.':`Error ${r.status}: ${e.slice(0,180)}`);
+        const cuerpo=await r.text();
+        if(r.status===401)setShowKey(true);   // se abre el panel para recargarla
+        throw new Error(_errAPI(r.status,cuerpo));
       }
       const data=await r.json();
       // Si la respuesta se cortó por límite de tokens, el JSON queda inválido: antes eso
@@ -3833,10 +3881,19 @@ ${cuadTxt}`;
           </div>
           <div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>
             <input type="password" value={key} onChange={e=>setKey(e.target.value)} placeholder="sk-ant-api03-..."
+              className="chat-input"
               style={{flex:1,minWidth:'220px',padding:'7px 9px',border:`1px solid ${C.border}`,borderRadius:'5px',fontSize:'12px'}}/>
-            <button onClick={()=>{setAIKey(key.trim());setShowKey(false);setErr('');}}
-              style={{background:C.green,color:'#fff',border:'none',borderRadius:'5px',padding:'7px 16px',
-                fontSize:'12px',fontWeight:700,cursor:'pointer'}}>Guardar</button>
+            <button onClick={probarYGuardar} disabled={probando}
+              style={{background:probando?C.border:C.green,color:'#fff',border:'none',borderRadius:'5px',padding:'7px 16px',
+                fontSize:'12px',fontWeight:700,cursor:probando?'default':'pointer'}}>
+              {probando?'Probando…':'Probar y guardar'}
+            </button>
+          </div>
+          {keyMsg&&<div style={{marginTop:'8px',fontSize:'11px',fontWeight:700,lineHeight:1.5,
+            color:keyMsg.ok?C.green:C.red}}>{keyMsg.txt}</div>}
+          <div style={{marginTop:'8px',fontSize:'10px',color:'#78350f',lineHeight:1.5}}>
+            Queda guardada en este navegador y no vence. Se borra sólo si limpiás los
+            <b> datos de sitios</b> de Chrome (limpiar únicamente la caché no la toca).
           </div>
         </div>
       )}
