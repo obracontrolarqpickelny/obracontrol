@@ -54,6 +54,13 @@ input[type=number]::-webkit-inner-spin-button{opacity:.4}
   .chat-scroll{height:58vh!important;min-height:260px!important}
   /* El vínculo a ObraControl tiene que ser cómodo de tocar y bien visible */
   .btn-link-oc{min-height:34px;font-size:11px!important;padding:6px 12px!important}
+  /* El acceso al asistente se achica para no chocar con el indicador de Drive */
+  .fab-asistente{padding:10px 14px!important;font-size:12px!important}
+}
+/* En pantallas muy angostas queda sólo el casco */
+@media (max-width:360px){
+  .fab-asistente .fab-texto{display:none}
+  .fab-asistente{padding:12px!important;border-radius:50%!important}
   /* Filas de rubros/grupos/ítems: los botones bajan de línea en vez de recortarse */
   .rowflex{flex-wrap:wrap!important}
   /* Salto de línea forzado: el nombre queda arriba, los botones en la fila siguiente */
@@ -4185,7 +4192,9 @@ const TABS=[
   {id:"gantt",     label:"Gantt",          icon:"📊"},
   {id:"recursos",  label:"Recursos $",     icon:"💰"},
   {id:"incidencia",label:"Incidencia",     icon:"📈"},
-  {id:"asistente", label:"Asistente IA",  icon:"🎙"},
+  // 🎙 hablaba del dictado, que es sólo una forma de entrada. 👷 lo identifica
+  // por lo que es: el que sabe del oficio y te ayuda a cargar la obra.
+  {id:"asistente", label:"Asistente",     icon:"👷", destacado:true},
 ];
 
 function App(){
@@ -4476,12 +4485,15 @@ function App(){
           <div className="hdr-tabs" style={{display:"flex",overflowX:"auto",flex:1}}>
             {TABS.map(t=>(
               <button key={t.id} onClick={()=>setTab(t.id)}
-                style={{background:"transparent",border:"none",cursor:"pointer",padding:"0 13px",height:"45px",
-                  display:"flex",alignItems:"center",gap:"5px",fontWeight:700,fontSize:"10px",
-                  whiteSpace:"nowrap",color:tab===t.id?C.accent:C.t3,
+                style={{border:"none",cursor:"pointer",padding:"0 13px",height:"45px",
+                  display:"flex",alignItems:"center",gap:"5px",fontWeight:t.destacado?800:700,fontSize:"10px",
+                  whiteSpace:"nowrap",
+                  // El asistente se despega del resto: es la vía rápida para cargar la obra
+                  color:tab===t.id?C.accent:(t.destacado?C.accent:C.t3),
+                  background:t.destacado&&tab!==t.id?`${C.accent}12`:"transparent",
                   borderBottom:tab===t.id?`2px solid ${C.accent}`:"2px solid transparent",
                   position:"relative"}}>
-                <span style={{fontSize:"12px"}}>{t.icon}</span>{t.label.toUpperCase()}
+                <span style={{fontSize:t.destacado?"14px":"12px"}}>{t.icon}</span>{t.label.toUpperCase()}
                 {(t.id==="plan"||t.id==="gantt")&&conflictos.length>0&&(
                   <span style={{position:"absolute",top:"8px",right:"5px",background:C.red,color:"white",
                     borderRadius:"8px",padding:"0 4px",fontSize:"8px",fontWeight:800,lineHeight:"14px"}}>
@@ -4561,6 +4573,22 @@ function App(){
           )}
         </div>
       </div>
+
+      {/* Acceso directo al asistente desde cualquier pestaña. Va abajo a la izquierda
+          para no pisarse con el indicador de Drive, y desaparece cuando ya estás ahí. */}
+      {tab!=="asistente"&&(
+        <button onClick={()=>setTab("asistente")}
+          title="Abrir el asistente: cargá la obra hablando, escribiendo o adjuntando una lista de precios"
+          className="fab-asistente"
+          style={{position:"fixed",bottom:"16px",left:"16px",zIndex:9999,
+            display:"flex",alignItems:"center",gap:"8px",
+            background:C.accent,color:"#fff",border:"none",borderRadius:"26px",
+            padding:"11px 18px",fontSize:"13px",fontWeight:800,cursor:"pointer",
+            boxShadow:"0 4px 14px rgba(217,119,6,.42)"}}>
+          <span style={{fontSize:"17px",lineHeight:1}}>👷</span>
+          <span className="fab-texto">Asistente</span>
+        </button>
+      )}
 
       {DRIVE_URL&&(
         <div title={{idle:'Drive sincronizado',pending:'Cambios pendientes…',saving:'Guardando en Drive…',saved:'Guardado en Drive ✓',error:'Error de sincronización',loading:'Cargando desde Drive…'}[driveStatus]||''}
