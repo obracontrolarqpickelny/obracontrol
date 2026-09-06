@@ -54,9 +54,13 @@ input[readonly],input:disabled,select:disabled,textarea:disabled{
   box-shadow:inset 0 0 0 1px var(--edit-dim)}
 .editable-cell:hover{background:var(--edit-bg2)!important}
 .editable-cell span{color:var(--edit-border)!important}
-/* Fuera del lenguaje: no son datos de la obra sino herramientas de la app */
-.chat-input,.no-edit-hl{background:#fff!important;border:1px solid #e2e8f0!important}
-.chat-input:focus,.no-edit-hl:focus{background:#fff!important;outline:2px solid #2563eb!important}
+/* Fuera del lenguaje: no son datos de la obra sino herramientas de la app.
+   La clase va repetida para ganarle en especificidad al selector input[type=…]
+   de la regla dorada, que si no tiene prioridad aunque ambas lleven !important. */
+.chat-input.chat-input,.no-edit-hl.no-edit-hl{
+  background:#fff!important;border:1px solid #e2e8f0!important}
+.chat-input.chat-input:focus,.no-edit-hl.no-edit-hl:focus{
+  background:#fff!important;outline:2px solid #2563eb!important}
 .sth th{position:sticky;top:0;z-index:5}
 
 /* ══════════ MÓVIL / TABLET ══════════
