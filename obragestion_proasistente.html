@@ -1529,7 +1529,10 @@ function GanttView({tc,cfg,rubros,conflictos,proyecto,prof,nota='',rec=[],moItem
   },[allDays,dayPx,totalW,cfg.sabado]);
 
   /* ══ PDF GRÁFICO — paginación horizontal por chunks de 8 semanas ══ */
-  const exportGanttPDF=()=>{
+  /* detalle=false → PDF para el cliente: la columna muestra sólo el rubro
+     ("Trabajos Preliminares"), sin abrir el detalle de ítems.
+     detalle=true  → PDF de obra: rubro + ítem ("Trabajos Preliminares · Replanteo"). */
+  const exportGanttPDF=(detalle=false)=>{
     if(!window.jspdf)return void alert('jsPDF no cargó. Verificá tu conexión a internet.');
     const{jsPDF}=window.jspdf;
     const doc=new jsPDF({orientation:'landscape',unit:'pt',format:'letter'});
@@ -1550,9 +1553,10 @@ function GanttView({tc,cfg,rubros,conflictos,proyecto,prof,nota='',rec=[],moItem
       // En las páginas de continuación se repiten las MISMAS semanas (cambian los
       // ítems, no el tramo de tiempo): se aclara para que no se lea como un reinicio.
       const cnt=cont?'  ·  continuación (mismas semanas)':'';
+      const tipo=detalle?'Detalle por ítem':'Resumen por rubro';
       const sub=rangeLabel
-        ?`Secuencia y fechas de ejecución  ·  ${proyecto}  ·  ${rangeLabel}${cnt}  ·  ${dStr}`
-        :`Secuencia y fechas de ejecución  ·  ${proyecto}${cnt}  ·  ${dStr}`;
+        ?`${tipo}  ·  ${proyecto}  ·  ${rangeLabel}${cnt}  ·  ${dStr}`
+        :`${tipo}  ·  ${proyecto}${cnt}  ·  ${dStr}`;
       doc.text(sub,MG,52);
     };
     const hasProfData=prof&&prof.nombre;
@@ -1609,9 +1613,12 @@ function GanttView({tc,cfg,rubros,conflictos,proyecto,prof,nota='',rec=[],moItem
       let max=0;
       tc.forEach(t=>{
         const rb=rubros.find(r=>r.id===t.rubroId);
-        const w=doc.getTextWidth(`#${t.id} ${rb?.nombre||'—'}`);
+        // Mismo texto que se dibuja después, para no medir de menos en el detallado
+        const w=doc.getTextWidth(`#${t.id} ${rb?.nombre||'—'}`+(detalle?` · ${t.item}`:''));
         if(w>max)max=w;
       });
+      // En el detallado la etiqueta puede partirse en dos líneas: alcanza con la mitad.
+      if(detalle)max=max/2;
       return Math.min(210,Math.max(95,Math.ceil(max)+16));
     })();
     const ROW_H=18,WH=42;
@@ -1791,7 +1798,7 @@ function GanttView({tc,cfg,rubros,conflictos,proyecto,prof,nota='',rec=[],moItem
 
         // ② TEXTO y BARRAS (sobre los fills)
         const rubNombre=rub?.nombre||'—';
-        const fullLbl=(hasE?'! ':'')+`#${t.id} `+rubNombre;
+        const fullLbl=(hasE?'! ':'')+`#${t.id} `+rubNombre+(detalle?` · ${t.item}`:'');
         const lblLines=doc.splitTextToSize(fullLbl,LABW-6);
         const lns=lblLines.slice(0,2);
         const lineH=6;
@@ -1843,7 +1850,10 @@ function GanttView({tc,cfg,rubros,conflictos,proyecto,prof,nota='',rec=[],moItem
         <Btn onClick={()=>setShowMoney(v=>!v)} accent={showMoney?C.violet:C.t3} sm>
           {showMoney?'💰 Ocultar montos':'📊 Solo barras'}
         </Btn>
-        <Btn onClick={exportGanttPDF} accent={C.orange} sm>📄 PDF</Btn>
+        <Btn onClick={()=>exportGanttPDF(false)} accent={C.orange} sm
+          title="Sólo rubros — sin abrir el detalle de ítems">📄 PDF cliente</Btn>
+        <Btn onClick={()=>exportGanttPDF(true)} accent={C.violet} sm
+          title="Rubro e ítem en cada fila">📋 PDF detallado</Btn>
       </div>
       {conflictos.length>0&&(
         <div style={{padding:"8px 14px",background:`${C.red}0d`,borderBottom:`1px solid ${C.red}33`}}>
