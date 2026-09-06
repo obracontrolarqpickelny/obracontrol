@@ -1621,7 +1621,10 @@ function GanttView({tc,cfg,rubros,conflictos,proyecto,prof,nota='',rec=[],moItem
       if(detalle)max=max/2;
       return Math.min(210,Math.max(95,Math.ceil(max)+16));
     })();
-    const ROW_H=18,WH=42;
+    const ROW_H=18;
+    // Alto del encabezado de semana: con "Ocultar montos" no se dibujan las tres
+    // líneas de costos, así que no tiene sentido seguir reservándoles el espacio.
+    const WH=showMoney?42:24;
     const TX=MG+LABW,TW=PW-MG-TX;
 
     const BOTTOM_LIMIT=BOTTOM_CONTENT; // no dibujar sobre el pie de página
@@ -1864,7 +1867,7 @@ function GanttView({tc,cfg,rubros,conflictos,proyecto,prof,nota='',rec=[],moItem
       <div style={{padding:"12px",minWidth:"600px"}}>
         {/* Encabezado: semanas con costos */}
         <div style={{display:"flex",alignItems:"flex-start",marginBottom:"4px",gap:"8px"}}>
-          <div style={{width:"162px",minWidth:"162px",flexShrink:0}}/>
+          <div style={{width:"215px",minWidth:"215px",flexShrink:0}}/>
           <div style={{position:"relative",width:totalW+"px",height:"58px",flexShrink:0}}>
             {weeks.map((wk,wi)=>{
               const lastI=wk.days[wk.days.length-1];
@@ -1908,10 +1911,20 @@ function GanttView({tc,cfg,rubros,conflictos,proyecto,prof,nota='',rec=[],moItem
           const col=hasErr?C.red:(rub?.color||C.t3);
           return(
             <div key={t.id} style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"2px"}}>
-              <div style={{width:"162px",minWidth:"162px",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",gap:"4px"}}>
+              <div style={{width:"215px",minWidth:"215px",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",gap:"4px"}}>
                 <span style={{fontFamily:"monospace",fontSize:"9px",color:C.t3,minWidth:"16px",textAlign:"center"}}>{t.id}</span>
-                <span style={{fontSize:"10px",color:hasErr?C.red:(rub?.color||C.t2),overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,textAlign:"center",fontWeight:600}} title={rub?.nombre||t.item}>
-                  {hasErr&&"⚠ "}{rub?.nombre||'—'}
+                {/* Rubro arriba y el ítem debajo: en pantalla siempre se ve el detalle.
+                    El resumen por rubro solo queda para el PDF del cliente. */}
+                <span style={{flex:1,minWidth:0,textAlign:"left",lineHeight:1.15}} title={`${rub?.nombre||'—'} · ${t.item}`}>
+                  <span style={{display:"block",fontSize:"8.5px",fontWeight:700,letterSpacing:".2px",
+                    color:hasErr?C.red:(rub?.color||C.t3),
+                    overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                    {hasErr&&"⚠ "}{rub?.nombre||'—'}
+                  </span>
+                  <span style={{display:"block",fontSize:"10px",fontWeight:600,color:hasErr?C.red:C.t1,
+                    overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                    {t.item}
+                  </span>
                 </span>
               </div>
               <div style={{width:totalW+"px",flexShrink:0,height:"14px",
