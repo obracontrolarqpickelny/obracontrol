@@ -3257,6 +3257,37 @@ REGLAS DE TRABAJO
 7. Todo lo que hagas explicalo en "mensaje": qué cargaste, con qué supuestos, y UNA sola pregunta al final si hace falta (nunca una lista larga de preguntas).
 8. Si el usuario sólo charla o pregunta algo, respondé con "acciones": [] y contestá en "mensaje".
 
+CÓMO EDITAR SIN PERDER CAMBIOS
+9. En "editar_tarea" los únicos campos válidos dentro de "campos" son:
+   item, qty, und, obs, hsOf, hsAy, nOf, nAy, pred, rubro, dias, solapa, fIniManual.
+   Cualquier otro nombre se ignora y la app te lo va a marcar como no aplicado.
+   Para renombrar un ítem el campo es "item", NO "nombre".
+10. Antes de editar o borrar, copiá el nombre EXACTO del ítem tal como figura en el
+   estado que te paso. Un nombre parcial que coincida con varios no se aplica.
+11. Si renombrás un ítem, revisá qué otros ítems lo tenían como predecesora: si
+   volvés a mandar "pred" en alguno, usá el nombre NUEVO.
+12. Leé siempre el resultado: la app te devuelve lo que realmente se aplicó y lo que
+   no. Si algo figura como no aplicado, corregilo vos en el turno siguiente sin que
+   el usuario tenga que pedírtelo, y decile qué estás corrigiendo.
+
+CRITERIO PROFESIONAL — SOS EL EXPERTO, NO UN FORMULARIO
+13. Trabajás como un colega con oficio: sabés de secuencia constructiva, rendimientos,
+   cuadrillas, materiales y costos en obra argentina. Si algo del plan está mal
+   planteado, decilo aunque no te lo hayan preguntado: un encadenamiento imposible,
+   una cuadrilla que no da para el plazo, un rendimiento fuera de escala, un ítem que
+   falta en un rubro (por ejemplo mampostería sin encadenado, o revoque sin azotado
+   hidrófugo en muros exteriores).
+14. Cuando cargues un ítem, ofrecé los materiales típicos con su cómputo estimado a
+   partir de la cantidad: para mampostería, ladrillos por m², cemento, cal y arena;
+   para hormigón, cemento, arena, piedra y hierro; para revoques, cal, cemento y
+   arena; para pisos, adhesivo y pastina. Proponelos en el "mensaje" con cantidades
+   concretas y cargalos SÓLO si te dicen que sí. Los precios no los inventes nunca.
+15. Si te piden tu opinión o tu punto de vista, dala completa y fundada: qué harías
+   vos, por qué, y qué riesgo ves. Nada de respuestas tibias ni de devolver la
+   pregunta. Si hay un supuesto que cambia la respuesta, decí cuál asumiste.
+16. Una sola pregunta al final, y sólo si de verdad bloquea. Si podés estimar, estimá
+   y avisá que es estimación.
+
 FORMATO DE RESPUESTA — CRÍTICO
 Respondé SIEMPRE con un único objeto JSON válido, sin markdown, sin backticks, sin texto antes ni después:
 {
@@ -3560,22 +3591,42 @@ ${cuadTxt}`;
         const t=buscarT(a.item,'Editar ítem');
         if(!t)return;
         const c=a.campos||{};
-        ['qty','hsOf','hsAy','nOf','nAy'].forEach(k=>{if(c[k]!=null)t[k]=+c[k];});
-        ['und','obs'].forEach(k=>{if(c[k]!=null)t[k]=c[k];});
-        if(c.item)t.item=String(c.item).trim();
-        if(c.pred!=null)t._predNames=c.pred;
+        const nombreOriginal=t.item;
+        /* Antes se aplicaba campo por campo y se registraba "Editado" pasara lo que
+           pasara. Si el modelo mandaba un campo mal escrito, no cambiaba nada y el
+           log igual decía que sí. Ahora se anota qué cambió de verdad y se avisa de
+           los campos que no existen. */
+        const CAMPOS_OK=['item','qty','und','obs','hsOf','hsAy','nOf','nAy','pred','rubro','dias','solapa','fIniManual'];
+        const desconocidos=Object.keys(c).filter(k=>!CAMPOS_OK.includes(k));
+        const cambios=[];
+        const setNum=(k,et)=>{if(c[k]==null)return;const v=+c[k];if(v!==+t[k]){cambios.push(`${et} ${t[k]}→${v}`);t[k]=v;}};
+        const setTxt=(k,et)=>{if(c[k]==null)return;const v=String(c[k]);if(v!==String(t[k]||'')){cambios.push(`${et} «${v}»`);t[k]=v;}};
+        if(c.item){
+          const v=String(c.item).trim();
+          if(v&&v!==t.item){cambios.push(`nombre → «${v}»`);t.item=v;}
+        }
+        setNum('qty','cant.');setNum('hsOf','hsOf');setNum('hsAy','hsAy');
+        setNum('nOf','of');setNum('nAy','ay');
+        setTxt('und','und');setTxt('obs','obs');
+        if(c.pred!=null){t._predNames=c.pred;cambios.push(`predecesoras → ${c.pred||'(ninguna)'}`);}
         if(c.rubro){
           const r2=findR(c.rubro);
-          if(r2)t.rubroId=r2.id;
-          else fallos.push(`Editar ítem «${t.item}»: no existe el rubro «${c.rubro}», quedó en el suyo.`);
+          if(r2){if(r2.id!==t.rubroId){cambios.push(`rubro → ${r2.nombre}`);t.rubroId=r2.id;}}
+          else fallos.push(`Editar «${t.item}»: no existe el rubro «${c.rubro}». Quedó en el suyo.`);
         }
-        if(c.dias!=null)t.dias=Math.max(1,+c.dias||1);
-        if(c.solapa!=null){if(c.solapa)t.solapa=true;else delete t.solapa;}
+        if(c.dias!=null){const v=Math.max(1,+c.dias||1);if(v!==t.dias){cambios.push(`días → ${v}`);t.dias=v;}}
+        if(c.solapa!=null){
+          const v=!!c.solapa;
+          if(v!==!!t.solapa){cambios.push(`solapa → ${v?'sí':'no'}`);if(v)t.solapa=true;else delete t.solapa;}
+        }
         if(c.fIniManual!=null){
           const v=String(c.fIniManual).trim();
-          if(v)t.fIniManual=v;else delete t.fIniManual;
+          if(v!==(t.fIniManual||'')){cambios.push(`inicio fijado → ${v||'(libre)'}`);if(v)t.fIniManual=v;else delete t.fIniManual;}
         }
-        log.push(`Editado: ${t.item}`);
+        if(desconocidos.length)
+          fallos.push(`Editar «${nombreOriginal}»: no existen los campos ${desconocidos.map(k=>`"${k}"`).join(', ')}. Se ignoraron. Los válidos son: ${CAMPOS_OK.join(', ')}.`);
+        if(cambios.length)log.push(`${nombreOriginal}: ${cambios.join(' · ')}`);
+        else if(!desconocidos.length)fallos.push(`Editar «${nombreOriginal}»: los valores enviados ya eran los que tenía. No cambió nada.`);
       }
       else if(tipo==='borrar_tarea'){
         const t=buscarT(a.item,'Borrar ítem');
@@ -3743,15 +3794,30 @@ ${cuadTxt}`;
 
     // Resolver predecesoras por nombre → ID de tarea (renumberTareas los pasa a 1..N)
     const pos={};T.forEach(t=>{pos[norm(t.item)]=t.id;});
+    /* Alias por nombre anterior: al renombrar un ítem en la misma tanda, las
+       predecesoras que lo mencionan con el nombre viejo seguían sin resolver y el
+       enganche se perdía. El nombre nuevo tiene prioridad; el viejo sólo rellena. */
+    T.forEach(t=>{
+      const prev=(tareas.find(x=>x.id===t.id)||{}).item;
+      if(prev&&t.item&&norm(prev)!==norm(t.item)&&pos[norm(prev)]==null)pos[norm(prev)]=t.id;
+    });
     T.forEach(t=>{
       if(t._predNames){
+        /* Los nombres que no resolvían se descartaban en silencio con un filter, así
+           que un ítem podía quedarse sin sus predecesoras y volver a la semana 1 sin
+           que nadie lo dijera. Ahora se avisa cuál no se pudo enganchar. */
+        const sinResolver=[];
         t.pred=String(t._predNames).split(',').map(s=>{
           const n=norm(s);
           if(!n)return null;
           if(pos[n]!=null&&pos[n]!==t.id)return String(pos[n]);
           const k=Object.keys(pos).find(x=>(x.includes(n)||n.includes(x))&&pos[x]!==t.id);
-          return k?String(pos[k]):null;
+          if(k)return String(pos[k]);
+          sinResolver.push(String(s).trim());
+          return null;
         }).filter(Boolean).join(',');
+        if(sinResolver.length)
+          fallos.push(`«${t.item}»: no encontré la predecesora ${sinResolver.map(x=>`«${x}»`).join(', ')}. El ítem quedó sin ese enganche y arranca al principio del plan.`);
       }
       delete t._predNames;
     });
@@ -3809,9 +3875,12 @@ ${cuadTxt}`;
       const previos=nuevos.filter(m=>m.rol==='user'||m.rol==='ai').slice(-HIST_MAX);
       const hist=previos.map(m=>({
         role:m.rol==='user'?'user':'assistant',
-        // Se le devuelven las acciones que REALMENTE aplicó: antes se reserializaban
-        // como `acciones:[]` y el modelo no tenía registro de lo que ya había hecho.
-        content:m.rol==='user'?m.txt:JSON.stringify({mensaje:m.txt,acciones:m.acciones||[]})
+        // Se le devuelven sus acciones Y el resultado real de aplicarlas. Sin el
+        // resultado no puede saber que un cambio no entró, y repetía el mismo error.
+        content:m.rol==='user'?m.txt:JSON.stringify({
+          mensaje:m.txt,acciones:m.acciones||[],
+          resultado:{aplicado:m.log||[],NO_aplicado:m.fallos||[]}
+        })
       }));
       hist[hist.length-1]={role:'user',content:`ESTADO ACTUAL DE LA OBRA\n${buildContext()}\n\n─────────\nEL USUARIO DICE:\n${txt}`};
       const r=await fetch('https://api.anthropic.com/v1/messages',{
