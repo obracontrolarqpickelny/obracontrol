@@ -3288,6 +3288,20 @@ CRITERIO PROFESIONAL — SOS EL EXPERTO, NO UN FORMULARIO
 16. Una sola pregunta al final, y sólo si de verdad bloquea. Si podés estimar, estimá
    y avisá que es estimación.
 
+ARCHIVOS ADJUNTOS (fotos y PDF)
+17. Te pueden adjuntar una foto o un PDF: lista de precios de corralón, presupuesto
+   de un contratista, planilla de cómputo, un plano, una factura.
+18. Leelo y extraé los datos que sirvan para la obra. De una lista de precios sacá
+   material, unidad y precio unitario. ACÁ SÍ tenés los precios: usá exactamente los
+   del archivo, no los redondees ni los completes de memoria.
+19. Primero mostrá en el "mensaje" lo que leíste, en forma de lista corta, y decí a
+   qué ítem de la obra pensás asignar cada material. Cargá las acciones sólo cuando
+   te confirmen, salvo que te hayan pedido de entrada que lo cargues.
+20. Si algo del archivo no se lee bien (foto borrosa, columna cortada, precio
+   ilegible), decí exactamente qué renglón no pudiste leer en vez de adivinarlo.
+21. Si el archivo trae precios con IVA, sin IVA o con fecha de validez, mencionalo:
+   cambia el costo de la obra y el usuario tiene que saberlo.
+
 FORMATO DE RESPUESTA — CRÍTICO
 Respondé SIEMPRE con un único objeto JSON válido, sin markdown, sin backticks, sin texto antes ni después:
 {
@@ -3374,6 +3388,63 @@ function AsistenteChat({tareas,setTareas,rubros,setRubros,grupos,setGrupos,cfg,s
   const [showKey,setShowKey]=useState(!getAIKey());
   const [probando,setProbando]=useState(false);
   const [keyMsg,setKeyMsg]=useState(null);
+  const [adjuntos,setAdjuntos]=useState([]);   // fotos y PDF de este mensaje
+  const fileRef=useRef(null);
+
+  /* ── Adjuntos ──────────────────────────────────────────────────────
+     Las fotos de celular pesan varios MB y en base64 crecen otro 33%. Se
+     reducen a 1568px de lado mayor, que es el tamaño útil para el modelo:
+     más grande no mejora la lectura y sí encarece cada consulta. */
+  const MAX_LADO=1568, MAX_ADJ=4, MAX_MB_TOTAL=14;
+  const leerArchivo=file=>new Promise((res,rej)=>{
+    const fr=new FileReader();
+    fr.onerror=()=>rej(new Error('No se pudo leer el archivo.'));
+    if(file.type==='application/pdf'){
+      fr.onload=()=>res({nombre:file.name,pdf:true,mediaType:'application/pdf',
+        b64:String(fr.result).split(',')[1]});
+      fr.readAsDataURL(file);
+      return;
+    }
+    fr.onload=()=>{
+      const img=new Image();
+      img.onerror=()=>rej(new Error('No se pudo abrir la imagen.'));
+      img.onload=()=>{
+        const esc=Math.min(1,MAX_LADO/Math.max(img.width,img.height));
+        const w=Math.round(img.width*esc),h=Math.round(img.height*esc);
+        const cv=document.createElement('canvas');cv.width=w;cv.height=h;
+        cv.getContext('2d').drawImage(img,0,0,w,h);
+        // JPEG con calidad alta: una lista de precios tiene que quedar legible
+        const url=cv.toDataURL('image/jpeg',0.85);
+        res({nombre:file.name,pdf:false,mediaType:'image/jpeg',b64:url.split(',')[1],
+          dim:`${w}×${h}`});
+      };
+      img.src=String(fr.result);
+    };
+    fr.readAsDataURL(file);
+  });
+
+  const agregarArchivos=async(files)=>{
+    setErr('');
+    const lista=[...files];
+    if(adjuntos.length+lista.length>MAX_ADJ){
+      setErr(`Hasta ${MAX_ADJ} archivos por mensaje.`);return;
+    }
+    const nuevos=[];
+    for(const f of lista){
+      if(!/^image\//.test(f.type)&&f.type!=='application/pdf'){
+        setErr(`"${f.name}" no es una foto ni un PDF.`);continue;
+      }
+      try{nuevos.push(await leerArchivo(f));}
+      catch(e){setErr(`"${f.name}": ${e.message}`);}
+    }
+    const todos=[...adjuntos,...nuevos];
+    const mb=todos.reduce((s,a)=>s+a.b64.length,0)/1024/1024;
+    if(mb>MAX_MB_TOTAL){
+      setErr(`Los adjuntos suman ${mb.toFixed(1)} MB y el tope es ${MAX_MB_TOTAL}. Mandá menos por vez.`);
+      return;
+    }
+    setAdjuntos(todos);
+  };
 
   /* Se prueba la key contra la API antes de darla por buena: así el error sale
      acá y no más tarde, en medio de una carga. */
@@ -3856,7 +3927,9 @@ ${cuadTxt}`;
   /* ── Enviar ── */
   const enviar=async()=>{
     const txt=input.trim();
-    if(!txt||busy)return;
+    const adj=adjuntos;
+    // Con un adjunto alcanza para mandar, aunque no se escriba nada
+    if((!txt&&!adj.length)||busy)return;
     const k=getAIKey();
     if(!k){setShowKey(true);setErr('Cargá tu API key de Anthropic para usar el asistente.');return;}
     // Si la guardada quedó dañada, se avisa acá en vez de dejar reventar a fetch
@@ -3867,8 +3940,11 @@ ${cuadTxt}`;
       return;
     }
     if(grab){try{recRef.current&&recRef.current.stop();}catch{} setGrab(false);}
-    setErr('');setInput('');setBusy(true);
-    const nuevos=[...msgs,{rol:'user',txt}];
+    setErr('');setInput('');setAdjuntos([]);setBusy(true);
+    // En el historial queda constancia del adjunto, pero no el archivo: se manda
+    // una sola vez y no se reenvía en los turnos siguientes.
+    const nota=adj.length?`📎 ${adj.map(a=>a.nombre).join(', ')}`:'';
+    const nuevos=[...msgs,{rol:'user',txt:[nota,txt].filter(Boolean).join('\n')}];
     setMsgs(nuevos);
     try{
       // Tope de historial: sin esto el contexto (y el costo) crecen sin límite dentro de la sesión.
@@ -3882,7 +3958,17 @@ ${cuadTxt}`;
           resultado:{aplicado:m.log||[],NO_aplicado:m.fallos||[]}
         })
       }));
-      hist[hist.length-1]={role:'user',content:`ESTADO ACTUAL DE LA OBRA\n${buildContext()}\n\n─────────\nEL USUARIO DICE:\n${txt}`};
+      /* Los adjuntos van como bloques ANTES del texto, que es como el modelo los
+         aprovecha mejor. Sólo viajan en el turno en que se adjuntan: reenviarlos en
+         cada consulta multiplicaría el costo sin aportar nada. */
+      const textoUsuario=`ESTADO ACTUAL DE LA OBRA\n${buildContext()}\n\n─────────\nEL USUARIO DICE:\n${txt}`;
+      hist[hist.length-1]=adj.length
+        ?{role:'user',content:[
+            ...adj.map(a=>a.pdf
+              ?{type:'document',source:{type:'base64',media_type:'application/pdf',data:a.b64}}
+              :{type:'image',source:{type:'base64',media_type:a.mediaType,data:a.b64}}),
+            {type:'text',text:textoUsuario}]}
+        :{role:'user',content:textoUsuario};
       const r=await fetch('https://api.anthropic.com/v1/messages',{
         method:'POST',
         headers:{'Content-Type':'application/json','x-api-key':k,
@@ -4034,8 +4120,37 @@ ${cuadTxt}`;
 
       {err&&<div style={{fontSize:'11px',color:C.red,marginTop:'6px',fontWeight:600}}>{err}</div>}
 
+      {/* Adjuntos pendientes de enviar */}
+      {adjuntos.length>0&&(
+        <div style={{display:'flex',gap:'6px',flexWrap:'wrap',marginTop:'8px'}}>
+          {adjuntos.map((a,i)=>(
+            <span key={i} style={{display:'inline-flex',alignItems:'center',gap:'6px',
+              background:C.card,border:`1px solid ${C.blue}55`,borderRadius:'8px',
+              padding:'5px 9px',fontSize:'11px',color:C.t2,maxWidth:'100%'}}>
+              <span>{a.pdf?'📄':'🖼'}</span>
+              <span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:'160px'}}>{a.nombre}</span>
+              <span style={{color:C.t3,fontSize:'10px'}}>
+                {a.dim?a.dim:`${Math.round(a.b64.length/1365)} KB`}
+              </span>
+              <button onClick={()=>setAdjuntos(p=>p.filter((_,j)=>j!==i))}
+                title="Quitar" style={{background:'none',border:'none',color:C.red,
+                cursor:'pointer',fontSize:'13px',lineHeight:1,padding:0}}>×</button>
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* Entrada */}
       <div style={{display:'flex',gap:'7px',marginTop:'10px',alignItems:'flex-end'}}>
+        <input ref={fileRef} type="file" accept="image/*,application/pdf" multiple
+          style={{display:'none'}}
+          onChange={e=>{agregarArchivos(e.target.files);e.target.value='';}}/>
+        <button onClick={()=>fileRef.current&&fileRef.current.click()}
+          title="Adjuntar una foto o un PDF (lista de precios, presupuesto, plano)"
+          style={{background:C.card,color:C.t2,border:`1.5px solid ${C.border}`,
+            borderRadius:'8px',width:'44px',height:'44px',fontSize:'18px',cursor:'pointer',flexShrink:0}}>
+          📎
+        </button>
         <button onClick={toggleVoz} title={grab?'Detener dictado':'Dictar por voz'}
           style={{background:grab?C.red:C.card,color:grab?'#fff':C.t2,border:`1.5px solid ${grab?C.red:C.border}`,
             borderRadius:'8px',width:'44px',height:'44px',fontSize:'19px',cursor:'pointer',flexShrink:0,
@@ -4048,10 +4163,10 @@ ${cuadTxt}`;
           rows={2} className="chat-input"
           style={{flex:1,minWidth:0,padding:'10px 12px',border:`1.5px solid ${grab?C.red:C.border}`,borderRadius:'8px',
             fontSize:'13px',fontFamily:'inherit',resize:'vertical',minHeight:'44px',lineHeight:1.45}}/>
-        <button onClick={enviar} disabled={busy||!input.trim()}
-          style={{background:busy||!input.trim()?C.border:C.blue,color:'#fff',border:'none',borderRadius:'8px',
+        <button onClick={enviar} disabled={busy||(!input.trim()&&!adjuntos.length)}
+          style={{background:busy||(!input.trim()&&!adjuntos.length)?C.border:C.blue,color:'#fff',border:'none',borderRadius:'8px',
             padding:'0 18px',height:'44px',fontSize:'13px',fontWeight:800,
-            cursor:busy||!input.trim()?'default':'pointer',flexShrink:0}}>
+            cursor:busy||(!input.trim()&&!adjuntos.length)?'default':'pointer',flexShrink:0}}>
           {busy?'…':'Enviar'}
         </button>
       </div>
