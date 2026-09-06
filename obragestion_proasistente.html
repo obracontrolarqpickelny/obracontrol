@@ -3220,12 +3220,17 @@ const _fhLoad=async()=>{try{const db=await _dbOpen();const tx=db.transaction('h'
 const AI_KEY_LS='obragestion_ai_key';
 const AI_MODEL='claude-opus-5';
 const HIST_MAX=24;   // mensajes de ida y vuelta que se le reenvían (12 intercambios)
-const getAIKey=()=>{try{return localStorage.getItem(AI_KEY_LS)||'';}catch{return'';}};
 const setAIKey=k=>{try{k?localStorage.setItem(AI_KEY_LS,k):localStorage.removeItem(AI_KEY_LS);}catch{}};
-/* Al pegar la key desde el celular suelen colarse espacios, saltos de línea o
-   caracteres invisibles (espacio de ancho cero, BOM). Cualquiera de ellos rompe
-   la cabecera de autenticación y la API devuelve 401 como si la key fuera falsa. */
-const limpiarKey=k=>String(k||'').replace(/[\s ​-‍﻿]/g,'');
+/* Al pegar la key suelen colarse espacios, saltos de línea, caracteres invisibles
+   (NBSP, ancho cero, BOM) o signos "lindos" que mete el autocorrector (comillas
+   curvas, guion largo). Las cabeceras HTTP sólo aceptan Latin-1, así que uno solo
+   de esos hace que fetch falle con "String contains non ISO-8859-1 code point"
+   antes siquiera de contactar a la API. Se deja únicamente ASCII imprimible. */
+const limpiarKey=k=>String(k||'').replace(/[^!-~]/g,'');
+const KEY_RX=/^sk-ant-[A-Za-z0-9._-]{20,}$/;
+// La key se limpia tambien AL LEERLA: si quedo una vieja contaminada en
+// localStorage, se sanea sola en vez de romper el fetch.
+const getAIKey=()=>{try{return limpiarKey(localStorage.getItem(AI_KEY_LS)||'');}catch{return'';}};
 /* Traduce el error de la API a algo accionable: "inválida" y "sin crédito" son
    problemas distintos y antes se mostraban juntos en el mismo mensaje. */
 const _errAPI=(status,cuerpo)=>{
@@ -3344,8 +3349,10 @@ function AsistenteChat({tareas,setTareas,rubros,setRubros,grupos,setGrupos,cfg,s
   const probarYGuardar=async()=>{
     const k=limpiarKey(key);
     if(!k){setKeyMsg({ok:false,txt:'Pegá la API key primero.'});return;}
-    if(!/^sk-ant-/.test(k)){
-      setKeyMsg({ok:false,txt:'Eso no parece una API key de Anthropic: tienen que empezar con "sk-ant-". Fijate de no haber copiado el nombre de la key en vez del valor.'});
+    if(!KEY_RX.test(k)){
+      setKeyMsg({ok:false,txt:limpiarKey(key).length!==String(key).trim().length
+        ? 'El texto pegado traía caracteres raros (comillas curvas, guiones largos o espacios invisibles) y quedó incompleto. Copiala de nuevo desde console.anthropic.com sin pasar por WhatsApp ni notas con formato.'
+        : 'Eso no parece una API key de Anthropic: empiezan con "sk-ant-" y son largas. Fijate de no haber copiado el nombre de la key en vez del valor.'});
       return;
     }
     setProbando(true);setKeyMsg(null);
@@ -3786,6 +3793,13 @@ ${cuadTxt}`;
     if(!txt||busy)return;
     const k=getAIKey();
     if(!k){setShowKey(true);setErr('Cargá tu API key de Anthropic para usar el asistente.');return;}
+    // Si la guardada quedó dañada, se avisa acá en vez de dejar reventar a fetch
+    // con "String contains non ISO-8859-1 code point", que no le dice nada a nadie.
+    if(!KEY_RX.test(k)){
+      setShowKey(true);
+      setErr('La API key guardada quedó dañada. Volvé a pegarla y tocá "Probar y guardar".');
+      return;
+    }
     if(grab){try{recRef.current&&recRef.current.stop();}catch{} setGrab(false);}
     setErr('');setInput('');setBusy(true);
     const nuevos=[...msgs,{rol:'user',txt}];
