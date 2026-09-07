@@ -3551,6 +3551,7 @@ function AsistenteChat({tareas,setTareas,rubros,setRubros,grupos,setGrupos,cfg,s
      usuario siga grabando. Cada sesión aporta su frase una vez y se cierra. */
   const quiereGrabar=useRef(false);
   const dichoRef=useRef('');       // lo ya confirmado en esta grabación
+  const vueltasSinVoz=useRef(0);   // corta el ciclo si el micrófono no capta nada
 
   const arrancarSesion=()=>{
     const r=new SR();
@@ -3561,6 +3562,7 @@ function AsistenteChat({tareas,setTareas,rubros,setRubros,grupos,setGrupos,cfg,s
         const tx=e.results[i][0].transcript;
         if(e.results[i].isFinal)nuevoFinal+=tx+' ';else parcial+=tx;
       }
+      if(nuevoFinal||parcial)vueltasSinVoz.current=0;   // hubo voz: se reinicia el contador
       if(nuevoFinal)dichoRef.current+=nuevoFinal;
       setInput(baseRef.current+dichoRef.current+parcial);
     };
@@ -3575,9 +3577,17 @@ function AsistenteChat({tareas,setTareas,rubros,setRubros,grupos,setGrupos,cfg,s
       quiereGrabar.current=false;setGrab(false);setErr('Dictado: '+ev.error);
     };
     r.onend=()=>{
-      // Mientras el usuario no toque "detener", se abre la sesión siguiente
-      if(quiereGrabar.current){try{r.start();}catch{ setTimeout(()=>{try{r.start();}catch{}},250); }}
-      else setGrab(false);
+      if(!quiereGrabar.current){setGrab(false);return;}
+      /* Instancia NUEVA en cada vuelta. Reiniciar la misma con r.start() falla en
+         Chrome de escritorio con InvalidStateError; el catch se lo tragaba y quedaba
+         "Escuchando…" sin captar nada. El delay le da tiempo a soltar el micrófono. */
+      vueltasSinVoz.current++;
+      if(vueltasSinVoz.current>40){
+        quiereGrabar.current=false;setGrab(false);
+        setErr('Se cortó el dictado por inactividad. Tocá el micrófono para seguir.');
+        return;
+      }
+      setTimeout(()=>{if(quiereGrabar.current)arrancarSesion();},150);
     };
     recRef.current=r;
     try{r.start();}catch(e){setErr('No se pudo iniciar el dictado.');quiereGrabar.current=false;setGrab(false);}
@@ -3593,6 +3603,7 @@ function AsistenteChat({tareas,setTareas,rubros,setRubros,grupos,setGrupos,cfg,s
     }
     baseRef.current=input?input+' ':'';
     dichoRef.current='';
+    vueltasSinVoz.current=0;
     quiereGrabar.current=true;
     setGrab(true);setErr('');
     arrancarSesion();
