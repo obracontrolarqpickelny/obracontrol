@@ -3269,8 +3269,14 @@ const setAIKey=k=>{try{k?localStorage.setItem(AI_KEY_LS,k):localStorage.removeIt
    curvas, guion largo). Las cabeceras HTTP sólo aceptan Latin-1, así que uno solo
    de esos hace que fetch falle con "String contains non ISO-8859-1 code point"
    antes siquiera de contactar a la API. Se deja únicamente ASCII imprimible. */
-const limpiarKey=k=>String(k||'').replace(/[^!-~]/g,'');
-const KEY_RX=/^sk-ant-[A-Za-z0-9._-]{20,}$/;
+const limpiarKey=k=>String(k||'')
+  .replace(/[^!-~]/g,'')          // fuera todo lo que no sea ASCII imprimible
+  .replace(/^["'`«“‘]+|["'`»”’]+$/g,'');  // y las comillas que se copian pegadas
+/* Se saca lo que rompe la cabecera HTTP (todo lo que no sea ASCII imprimible) y las
+   comillas que suelen venir pegadas al copiar. NO se valida la forma exacta de la
+   key para dejar pasar o no la consulta: la única autoridad sobre si una key sirve
+   es la API. Una regex mía de más rechazaba keys buenas y bloqueaba el envío. */
+const KEY_SOSPECHOSA=k=>!/^sk-ant-/.test(k)||k.length<30;
 // La key se limpia tambien AL LEERLA: si quedo una vieja contaminada en
 // localStorage, se sanea sola en vez de romper el fetch.
 const getAIKey=()=>{try{return limpiarKey(localStorage.getItem(AI_KEY_LS)||'');}catch{return'';}};
@@ -3494,12 +3500,9 @@ function AsistenteChat({tareas,setTareas,rubros,setRubros,grupos,setGrupos,cfg,s
   const probarYGuardar=async()=>{
     const k=limpiarKey(key);
     if(!k){setKeyMsg({ok:false,txt:'Pegá la API key primero.'});return;}
-    if(!KEY_RX.test(k)){
-      setKeyMsg({ok:false,txt:limpiarKey(key).length!==String(key).trim().length
-        ? 'El texto pegado traía caracteres raros (comillas curvas, guiones largos o espacios invisibles) y quedó incompleto. Copiala de nuevo desde console.anthropic.com sin pasar por WhatsApp ni notas con formato.'
-        : 'Eso no parece una API key de Anthropic: empiezan con "sk-ant-" y son largas. Fijate de no haber copiado el nombre de la key en vez del valor.'});
-      return;
-    }
+    // Si tiene pinta rara se avisa, pero igual se prueba: decide la API, no yo.
+    if(KEY_SOSPECHOSA(k))
+      setKeyMsg({ok:false,txt:'Ojo: no tiene la forma habitual (empiezan con "sk-ant-" y son largas). La pruebo igual…'});
     setProbando(true);setKeyMsg(null);
     try{
       const r=await fetch('https://api.anthropic.com/v1/messages',{
@@ -4005,13 +4008,9 @@ ${cuadTxt}`;
     if((!txt&&!adj.length)||busy)return;
     const k=getAIKey();
     if(!k){setShowKey(true);setErr('Cargá tu API key de Anthropic para usar el asistente.');return;}
-    // Si la guardada quedó dañada, se avisa acá en vez de dejar reventar a fetch
-    // con "String contains non ISO-8859-1 code point", que no le dice nada a nadie.
-    if(!KEY_RX.test(k)){
-      setShowKey(true);
-      setErr('La API key guardada quedó dañada. Volvé a pegarla y tocá "Probar y guardar".');
-      return;
-    }
+    /* Acá NO se valida la forma de la key. getAIKey ya le sacó lo que rompería la
+       cabecera HTTP, que era el problema real; si además no sirve, lo dice la API con
+       un 401. Una validación propia rechazaba keys buenas y frenaba el envío. */
     // Baja la bandera ANTES de parar: si no, onend abre otra sesión y sigue grabando
     if(quiereGrabar.current||grab){
       quiereGrabar.current=false;
