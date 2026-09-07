@@ -257,6 +257,16 @@ const _driveLoad=async(obraName)=>{
     const j=await r.json();return j.ok?j.data:null;
   }catch{return null;}
 };
+/* Lista las obras que hay en Drive. Sin esto el panel de inicio mostraba sólo lo
+   guardado en ESE navegador, así que una obra cargada en el celular no aparecía
+   en la compu aunque estuviera respaldada. */
+const _driveList=async()=>{
+  if(!DRIVE_URL)return null;
+  try{
+    const r=await fetch(`${DRIVE_URL}?action=list&secreto=${DRIVE_SECRET}`);
+    const j=await r.json();return j.ok?(j.obras||[]):null;
+  }catch{return null;}
+};
 
 // __SNAP__: null en el archivo base.
 // Cuando el usuario hace "Guardar HTML", se embebe el estado completo aquí.
@@ -4738,6 +4748,35 @@ function HomePanel(){
     return list;
   });
   const [newName,setNewName]=React.useState('');
+  const [drive,setDrive]=React.useState('cargando');   // cargando | ok | sin-conexion | apagado
+
+  /* Se trae la lista de Drive y se suma a la local. Antes el panel mostraba sólo lo
+     guardado en ESE navegador, así que una obra cargada en el celular no aparecía en
+     la compu aunque estuviera respaldada. Drive guarda los nombres saneados
+     (Ampliaci_n), así que se comparan sin acentos para no duplicar la tarjeta. */
+  // Se replica el saneado que hace el Apps Script al nombrar el archivo
+  // (cada caracter no permitido pasa a _), que es la unica forma de emparejar
+  // "Ampliacion..." local con "Ampliaci_n..." de Drive.
+  const _norm=s=>String(s||'').replace(/[^a-zA-Z0-9\s_-]/g,'_').trim().toLowerCase();
+
+  React.useEffect(()=>{
+    if(!DRIVE_URL){setDrive('apagado');return;}
+    let vivo=true;
+    _driveList().then(lista=>{
+      if(!vivo)return;
+      if(!lista){setDrive('sin-conexion');return;}
+      setDrive('ok');
+      setObras(prev=>{
+        const conocidas=new Set(prev.map(o=>_norm(o.name)));
+        const soloEnDrive=lista
+          .filter(n=>!conocidas.has(_norm(n)))
+          .map(n=>({name:n,key:'drive:'+n,ts:0,soloDrive:true,claves:[]}));
+        return [...prev,...soloEnDrive];
+      });
+    });
+    return ()=>{vivo=false;};
+  },[]);
+
   const openObra=n=>{ window.location.href='?obra='+encodeURIComponent(n); };
   const delObra=(o)=>{
     const n=o.claves?o.claves.length:1;
@@ -4777,7 +4816,12 @@ function HomePanel(){
         </div>
         <div style={{fontWeight:700,fontSize:'11px',color:C.t3,marginBottom:'12px',
           letterSpacing:'.5px'}}>
-          {obras.length?`${obras.length} OBRA${obras.length!==1?'S':''} GUARDADA${obras.length!==1?'S':''} EN ESTE DISPOSITIVO`:'NO HAY OBRAS GUARDADAS EN ESTE DISPOSITIVO'}
+          {obras.length?`${obras.length} OBRA${obras.length!==1?'S':''}`:'TODAVÍA NO HAY OBRAS'}
+          {' · '}
+          {drive==='cargando'?'buscando en Drive…'
+            :drive==='ok'?'este dispositivo + Drive'
+            :drive==='sin-conexion'?'sólo este dispositivo (no pude consultar Drive)'
+            :'sólo este dispositivo'}
         </div>
         <div style={{display:'grid',gap:'10px',gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))'}}>
           {obras.map(o=>(
@@ -4791,6 +4835,9 @@ function HomePanel(){
               {o.claves&&o.claves.length>1&&<div style={{fontSize:'9px',color:C.t3,fontStyle:'italic'}}>
                 {o.claves.length} copias en este dispositivo — se abre la más reciente
               </div>}
+              {o.soloDrive&&<div style={{fontSize:'10px',color:C.green,fontWeight:700}}>
+                ☁ En Drive — cargada en otro dispositivo
+              </div>}
               <div style={{display:'flex',gap:'6px',marginTop:'6px'}}>
                 <button onClick={()=>openObra(o.name)}
                   style={{flex:1,background:C.accent,color:'white',border:'none',
@@ -4798,10 +4845,14 @@ function HomePanel(){
                     cursor:'pointer'}}>
                   Abrir →
                 </button>
-                <button onClick={()=>delObra(o)}
-                  style={{background:'transparent',color:C.t3,border:`1px solid ${C.border}`,
-                    borderRadius:'7px',padding:'8px 12px',fontWeight:600,fontSize:'13px',
-                    cursor:'pointer'}}>✕</button>
+                {/* La equis borra la copia local; en una obra que sólo está en Drive
+                    no hay nada local que borrar, así que no se ofrece. */}
+                {!o.soloDrive&&(
+                  <button onClick={()=>delObra(o)} title="Quitar de este dispositivo"
+                    style={{background:'transparent',color:C.t3,border:`1px solid ${C.border}`,
+                      borderRadius:'7px',padding:'8px 12px',fontWeight:600,fontSize:'13px',
+                      cursor:'pointer'}}>✕</button>
+                )}
               </div>
             </div>
           ))}
