@@ -1146,6 +1146,26 @@ async function loadFromDrive() {
 }
 
 // ─── IMAGE UPLOAD TO DRIVE ────────────────────────────────────────────
+// Aplica el permiso "cualquiera con el link" y CONFIRMA que quedó aplicado.
+// Devuelve true/false en vez de asumir que salió bien.
+async function _compartirArchivoDrive(fileId){
+  for(var intento=0;intento<2;intento++){
+    try{
+      const res=await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/'+fileId+'/permissions',{
+        method:'POST',
+        headers:driveHeaders(),
+        body:JSON.stringify({role:'reader',type:'anyone'}),
+      });
+      if(res&&res.ok)return true;
+      // 400 con "already exists" también cuenta como compartido
+      if(res&&res.status===400){
+        try{const j=await res.json();if(JSON.stringify(j).indexOf('duplicate')>=0)return true;}catch(_){}
+      }
+    }catch(e){ /* reintenta una vez */ }
+  }
+  console.warn('No se pudo compartir el archivo de Drive:',fileId);
+  return false;
+}
 async function uploadImageToDrive(base64Data, fileName, folderId) {
   const ok = await ensureAuth();
   if (!ok) return null;
@@ -1172,18 +1192,20 @@ async function uploadImageToDrive(base64Data, fileName, folderId) {
     const file = await res.json();
     if (!file.id) return null;
 
-    // Make publicly readable (viewer)
-    await fetchWithTimeout(`https://www.googleapis.com/drive/v3/files/${file.id}/permissions`, {
-      method: 'POST',
-      headers: driveHeaders(),
-      body: JSON.stringify({ role: 'reader', type: 'anyone' }),
-    });
+    // Compartir como "cualquiera con el link". ESTO ES CRÍTICO: la URL de
+    // thumbnail que se guarda abajo funciona igual para el dueño mientras esté
+    // logueado en Google en ese navegador, aunque el permiso haya fallado. Si
+    // no se verifica, la foto se ve bien durante semanas y un día deja de
+    // cargar "de la nada" (al cambiar/expirar la sesión de Google), quedando
+    // un recuadro vacío. Por eso ahora se confirma y se reintenta.
+    const _permOk = await _compartirArchivoDrive(file.id);
 
     // Return direct thumbnail URL
     return {
       driveId: file.id,
       url: `https://drive.google.com/thumbnail?id=${file.id}&sz=w800`,
       viewUrl: `https://drive.google.com/file/d/${file.id}/view`,
+      permisoOk: _permOk,
     };
   } catch(e) {
     console.error('Image upload failed:', e);
@@ -1220,6 +1242,19 @@ async function processPendingImages() {
           });
         });
         (D.economia||[]).forEach(function(e){if(e.imagen===_newUrl)e.updatedAt=nw();});
+        // Guardar el id de Drive en el ítem (sin meter el base64 en los datos,
+        // que volvería a llenar el almacenamiento). Con ese id, si algún día la
+        // URL de Drive no carga, la foto se recupera desde el dispositivo.
+        _photoTbls.forEach(function(tbl){
+          (D[tbl]||[]).forEach(function(x){
+            (x.photos||[]).forEach(function(ph,pi){
+              var _u=typeof ph==='string'?ph:((ph&&ph.url)||'');
+              if(_u!==_newUrl)return;
+              if(typeof ph==='string')x.photos[pi]={url:_newUrl,caption:'',driveId:result.driveId};
+              else ph.driveId=result.driveId;
+            });
+          });
+        });
         try{IMG_CACHE[item.imageId]=_newUrl;}catch(_){} // liberar el base64 de memoria
         imgRec.uploaded=true;imgRec.driveId=result.driveId;imgRec.driveUrl=_newUrl;
         await idbPut('images',imgRec);await idbDelete('pending',item.id);_up++;
@@ -2415,7 +2450,7 @@ function photoGrid(photos,tbl,itemId){if(!photos||!photos.length)return '';
   return `<div class="pitem" style="position:relative">
       ${isBroken
         ?`<div style="width:100%;height:100%;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:18px;color:#94a3b8" title="Foto pendiente de sincronización con Drive">☁️</div>`
-        :`<img src="${_disp}" style="cursor:pointer" onclick="event.stopPropagation();openLB(getLBP('${tbl}','${itemId}'),${i},'${tbl}','${itemId}')">` }
+        :`<img src="${_disp}" style="cursor:pointer" onclick="event.stopPropagation();openLB(getLBP('${tbl}','${itemId}'),${i},'${tbl}','${itemId}')" onerror="_fotoError(this)"><div style="display:none;width:100%;height:100%;background:#fef2f2;border:1px solid #fecaca;align-items:center;justify-content:center;flex-direction:column;font-size:16px;color:#dc2626;cursor:pointer" title="La imagen no se pudo cargar — tocá para reparar" onclick="event.stopPropagation();repararFotosRotas()">&#x26A0;<div style="font-size:8px;margin-top:2px;font-weight:700">Reparar</div></div>` }
       ${hc?`<span class="photo-cdot">${p.comments.length}</span>`:''}
       ${isVisita?`<div class="photo-actions" style="position:absolute;bottom:2px;right:2px;display:flex;gap:2px;opacity:0;transition:opacity .15s" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=0">
         <button class="photo-btn" style="background:rgba(220,38,38,.85)" onclick="event.stopPropagation();delPhoto('${tbl}','${itemId}',${i})" title="Eliminar foto">✕</button>
@@ -9760,46 +9795,176 @@ async function probarServidor(){
 // Recorre todos los módulos y clasifica cada foto: visible, pendiente de subir
 // (recuperable desde el dispositivo) o perdida. Sirve para no enterarse por
 // casualidad de que una foto dejó de verse.
-async function diagnosticoFotos(){
-  var ok=0,pend=0,perdidas=0,detallePerdidas=[];
-  var tablas=['visitas','tareas','materiales','matIngresos','alertas','comentarios'];
+// Si una foto de Drive no carga, se intenta mostrar la copia que quedó en el
+// dispositivo (buscada por el id de Drive). Así una URL rota no deja la foto en
+// blanco: se ve igual, y el diagnóstico avisa aparte que hay que repararla.
+// La copia se busca en IndexedDB en el momento, para no cargar los base64 en
+// memoria ni volver a meterlos en los datos.
+async function _fallbackFotoLocal(img,url){
+  try{
+    if(!img||!GD.idbReady)return false;
+    var m=(url||'').match(/[?&]id=([^&]+)/);
+    if(!m)return false;
+    var imgs=await idbGetAll('images');
+    var rec=(imgs||[]).find(function(r){return r&&r.driveId===m[1]&&typeof r.data==='string'&&r.data.startsWith('data:');});
+    if(!rec)return false;
+    img.src=rec.data;img.style.display='';
+    var sig=img.nextElementSibling;if(sig)sig.style.display='none';
+    return true;
+  }catch(_){return false;}
+}
+function _fotoError(img){
+  var url=img.getAttribute('src')||'';
+  img.style.display='none';
+  var sig=img.nextElementSibling;if(sig)sig.style.display='flex';
+  _fallbackFotoLocal(img,url);
+}
+
+// Prueba de verdad si una URL de imagen carga. El diagnóstico anterior sólo
+// miraba el formato del texto: una URL de Drive bien escrita pero que ya no
+// carga (permiso de compartido que no quedó aplicado) se contaba como
+// "consolidada". Por eso una foto podía estar rota y el panel decir que estaba
+// todo bien.
+function _probarImagen(url,ms){
+  return new Promise(function(res){
+    if(!url||url.startsWith('[')){res(false);return;}
+    if(url.startsWith('data:')){res(true);return;} // bytes locales: siempre cargan
+    var img=new Image();
+    var listo=false;
+    var t=setTimeout(function(){if(!listo){listo=true;res(false);}},ms||8000);
+    img.onload=function(){if(!listo){listo=true;clearTimeout(t);res(true);}};
+    img.onerror=function(){if(!listo){listo=true;clearTimeout(t);res(false);}};
+    img.src=url;
+  });
+}
+
+// Recorre todas las fotos de la obra y devuelve su estado REAL, probando cada
+// una. Cada entrada guarda dónde vive para poder repararla después.
+async function _auditarFotos(){
+  var lista=[];
+  var tablas=['visitas','tareas','materiales','matIngresos','alertas','comentarios','checklists'];
   tablas.forEach(function(tbl){
     (D[tbl]||[]).forEach(function(item){
-      (item.photos||[]).forEach(function(ph){
+      (item.photos||[]).forEach(function(ph,idx){
         var u=typeof ph==='string'?ph:((ph&&ph.url)||'');
         var lu=(typeof ph==='object'&&ph&&ph.localUrl)||'';
-        if(u.startsWith('data:')||u.startsWith('http')||lu.startsWith('data:')){ok++;return;}
-        var r=_resolveImg(u);
-        if(r&&(r.startsWith('data:')||r.startsWith('http'))){pend++;return;}
-        perdidas++;
-        var _t=item.title||item.concepto||item.name||item.text||item.message||'(sin título)';
-        if(detallePerdidas.length<12)detallePerdidas.push(tbl+': '+String(_t).slice(0,45));
+        var titulo=item.title||item.concepto||item.name||item.text||item.message||'(sin título)';
+        lista.push({tbl:tbl,id:item.id,idx:idx,campo:'photos',url:u,localUrl:lu,titulo:String(titulo).slice(0,45)});
       });
     });
   });
   (D.economia||[]).forEach(function(e){
     if(!e.imagen)return;
-    if(e.imagen.startsWith('data:')||e.imagen.startsWith('http')){ok++;return;}
-    var r=_resolveImg(e.imagen);
-    if(r&&(r.startsWith('data:')||r.startsWith('http'))){pend++;return;}
-    perdidas++;
-    if(detallePerdidas.length<12)detallePerdidas.push('economía: '+String(e.concepto||'').slice(0,45));
+    lista.push({tbl:'economia',id:e.id,campo:'imagen',url:e.imagen,localUrl:'',titulo:String(e.concepto||'').slice(0,45)});
   });
+
+  // Bytes originales que todavía viven en el dispositivo. Se indexan por su id
+  // interno Y por el id de Drive: una foto ya subida sólo guarda la URL de
+  // Drive, así que sin este segundo índice sus bytes quedaban inalcanzables
+  // aunque estuvieran ahí, y una URL rota no se podía reparar.
+  var enDispositivo={},porDriveId={};
+  try{
+    if(GD.idbReady){
+      var imgs=await idbGetAll('images');
+      (imgs||[]).forEach(function(im){
+        if(!im||typeof im.data!=='string'||!im.data.startsWith('data:'))return;
+        if(im.id)enDispositivo[im.id]=im.data;
+        if(im.driveId)porDriveId[im.driveId]=im.data;
+      });
+    }
+  }catch(_){}
+
+  for(var i=0;i<lista.length;i++){
+    var f=lista[i];
+    var mostrada=(f.localUrl&&f.localUrl.startsWith('data:'))?f.localUrl:_resolveImg(f.url);
+    var refId=(f.url&&f.url.indexOf('[foto:')===0)?f.url.slice(6,-1):null;
+    f.driveId=(f.url&&f.url.indexOf('drive.google.com')>=0)?((f.url.match(/[?&]id=([^&]+)/)||[])[1]||null):null;
+    f.bytesLocales=(refId?enDispositivo[refId]:null)||(f.driveId?porDriveId[f.driveId]:null)||null;
+    f.carga=await _probarImagen(mostrada,8000);
+    if(f.carga)f.estado='ok';
+    else if(f.bytesLocales||(f.localUrl&&f.localUrl.startsWith('data:')))f.estado='recuperable';
+    else if(f.driveId)f.estado='rota_drive';
+    else f.estado='perdida';
+  }
+  return lista;
+}
+
+async function diagnosticoFotos(){
+  var d=document.createElement('div');d.className='mo open';d.id='diagFotosM';
+  d.innerHTML='<div class="mo-c"><div class="mo-h"><h3>&#x1F4F8; Estado de las fotos</h3><button class="tbtn" onclick="document.getElementById(\'diagFotosM\').remove()">'+I.x+'</button></div>'
+    +'<div class="ts tc3" style="padding:16px 0">Probando cada foto una por una...</div></div>';
+  document.body.appendChild(d);
+
+  var lista=await _auditarFotos();
+  var ok=lista.filter(function(f){return f.estado==='ok';}).length;
+  var recup=lista.filter(function(f){return f.estado==='recuperable';});
+  var rotas=lista.filter(function(f){return f.estado==='rota_drive';});
+  var perdidas=lista.filter(function(f){return f.estado==='perdida';});
 
   var colaPend=0;
   try{ if(GD.idbReady){var q=await idbGetAll('pending');colaPend=(q||[]).filter(function(p){return p.type==='image';}).length;} }catch(_){}
 
-  var d=document.createElement('div');d.className='mo open';d.id='diagFotosM';
+  var det=function(arr){return arr.slice(0,12).map(function(f){return esc(f.tbl+': '+f.titulo);}).join('<br>');};
   var h='<div class="mo-c"><div class="mo-h"><h3>&#x1F4F8; Estado de las fotos</h3><button class="tbtn" onclick="document.getElementById(\'diagFotosM\').remove()">'+I.x+'</button></div>';
-  h+='<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px;margin-bottom:8px"><strong style="color:#15803d">'+ok+'</strong> visibles y consolidadas</div>';
-  h+='<div style="background:'+(pend?'#eff6ff':'var(--gray-ll)')+';border:1px solid '+(pend?'#bfdbfe':'var(--brd)')+';border-radius:8px;padding:10px;margin-bottom:8px"><strong style="color:#1d4ed8">'+pend+'</strong> guardadas en este dispositivo, pendientes de subir a Drive<div class="txxs tc3 mt-4">Se ven normalmente. Sólo falta que Drive las reciba.</div></div>';
-  h+='<div style="background:'+(perdidas?'#fef2f2':'var(--gray-ll)')+';border:1px solid '+(perdidas?'#fecaca':'var(--brd)')+';border-radius:8px;padding:10px;margin-bottom:8px"><strong style="color:'+(perdidas?'var(--red)':'var(--text3)')+'">'+perdidas+'</strong> sin copia disponible';
-  if(perdidas)h+='<div class="txxs mt-4" style="color:var(--red)">Estas se perdieron por el fallo ya corregido. Hay que volver a cargarlas.</div><div class="txxs tc3 mt-4">'+detallePerdidas.map(esc).join('<br>')+'</div>';
+  h+='<div class="txxs tc3 mb-8">Se probó la carga real de las '+lista.length+' fotos de la obra, no solo su referencia.</div>';
+  h+='<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px;margin-bottom:8px"><strong style="color:#15803d">'+ok+'</strong> se ven correctamente</div>';
+  h+='<div style="background:'+(recup.length?'#eff6ff':'var(--gray-ll)')+';border:1px solid '+(recup.length?'#bfdbfe':'var(--brd)')+';border-radius:8px;padding:10px;margin-bottom:8px"><strong style="color:#1d4ed8">'+recup.length+'</strong> recuperables desde este dispositivo';
+  if(recup.length)h+='<div class="txxs tc3 mt-4">'+det(recup)+'</div>';
+  h+='</div>';
+  h+='<div style="background:'+(rotas.length?'#fff7ed':'var(--gray-ll)')+';border:1px solid '+(rotas.length?'#fed7aa':'var(--brd)')+';border-radius:8px;padding:10px;margin-bottom:8px"><strong style="color:#c2410c">'+rotas.length+'</strong> están en Drive pero no cargan';
+  if(rotas.length)h+='<div class="txxs mt-4" style="color:#9a3412">Suele ser el permiso de compartido que no quedó aplicado. Se puede reparar.</div><div class="txxs tc3 mt-4">'+det(rotas)+'</div>';
+  h+='</div>';
+  h+='<div style="background:'+(perdidas.length?'#fef2f2':'var(--gray-ll)')+';border:1px solid '+(perdidas.length?'#fecaca':'var(--brd)')+';border-radius:8px;padding:10px;margin-bottom:8px"><strong style="color:'+(perdidas.length?'var(--red)':'var(--text3)')+'">'+perdidas.length+'</strong> sin copia recuperable';
+  if(perdidas.length)h+='<div class="txxs mt-4" style="color:var(--red)">Hay que volver a cargarlas a mano.</div><div class="txxs tc3 mt-4">'+det(perdidas)+'</div>';
   h+='</div>';
   h+='<div class="txxs tc3 mb-8">En cola de subida a Drive: '+colaPend+'</div>';
-  h+='<button class="btn btn-w" style="background:var(--pri);color:#fff" onclick="processPendingImages().then(function(){toast(\'Sincronización de fotos ejecutada\',\'var(--green)\');});document.getElementById(\'diagFotosM\').remove();">&#x21BB; Reintentar subida a Drive</button>';
+  if(recup.length||rotas.length)h+='<button class="btn btn-w mb-8" style="background:var(--green);color:#fff" onclick="document.getElementById(\'diagFotosM\').remove();repararFotosRotas()">&#x1F527; Reparar '+(recup.length+rotas.length)+' foto(s)</button>';
+  h+='<button class="btn btn-w btn-sec" onclick="processPendingImages().then(function(){toast(\'Sincronización de fotos ejecutada\',\'var(--green)\');});document.getElementById(\'diagFotosM\').remove();">&#x21BB; Reintentar subida a Drive</button>';
   h+='</div>';
-  d.innerHTML=h;document.body.appendChild(d);
+  d.innerHTML=h;
+}
+
+// Repara las fotos que no cargan:
+//  - si quedan los bytes en el dispositivo → se vuelven a subir a Drive
+//  - si sólo está en Drive → se reintenta aplicar el permiso de compartido
+async function repararFotosRotas(){
+  toast('Revisando y reparando fotos...','var(--pri)',3000);
+  var lista=await _auditarFotos();
+  var aReparar=lista.filter(function(f){return f.estado==='recuperable'||f.estado==='rota_drive';});
+  if(!aReparar.length){toast('No hay fotos para reparar ✓','var(--green)',3000);return;}
+
+  var reparadas=0,fallidas=0;
+  for(var i=0;i<aReparar.length;i++){
+    var f=aReparar[i];
+    try{
+      // Si está en Drive, primero se reintenta el permiso: arregla el caso más
+      // común sin duplicar el archivo. Se prueba con un parámetro extra para
+      // que el navegador no devuelva el error que ya tenía cacheado.
+      if(f.driveId){
+        var permOk=await _compartirArchivoDrive(f.driveId);
+        if(permOk&&await _probarImagen(f.url+'&_r='+Date.now(),8000)){reparadas++;continue;}
+      }
+      var bytes=f.bytesLocales||((f.localUrl&&f.localUrl.startsWith('data:'))?f.localUrl:null);
+      if(!bytes){fallidas++;continue;}
+      var fid=(S.proj&&GD.moduleFolders[S.proj+'_'+f.tbl])||GD.imagesFolderId||null;
+      var res=await uploadImageToDrive(bytes,'reparada_'+uid()+'.jpg',fid);
+      if(!res||!res.url){fallidas++;continue;}
+      var item=(D[f.tbl]||[]).find(function(x){return x.id===f.id;});
+      if(!item){fallidas++;continue;}
+      if(f.campo==='imagen')item.imagen=res.url;
+      else{
+        var ph=item.photos[f.idx];
+        if(typeof ph==='string')item.photos[f.idx]=mkPhoto(res.url,'');
+        else{ph.url=res.url;ph.driveId=res.driveId;ph.localUrl=bytes;}
+      }
+      item.updatedAt=nw();
+      reparadas++;
+    }catch(e){fallidas++;}
+  }
+  sv();
+  if(GD.idbReady) saveToIDB().catch(function(){});
+  render();
+  toast(reparadas+' foto(s) reparadas'+(fallidas?' · '+fallidas+' no se pudieron':'')+' ✓',fallidas?'var(--orange)':'var(--green)',6000);
 }
 
 function saveApiCfg(campo,val){
