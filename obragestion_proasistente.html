@@ -92,15 +92,15 @@ input[readonly],input:disabled,select:disabled,textarea:disabled{
   .btn-link-oc{min-height:34px;font-size:11px!important;padding:6px 12px!important}
   /* El acceso al asistente se achica para no chocar con el indicador de Drive */
   .fab-asistente{padding:10px 14px!important;font-size:12px!important}
+  /* Filas de rubros/grupos/ítems: los botones bajan de línea en vez de recortarse */
+  .rowflex{flex-wrap:wrap!important}
+  /* Salto de línea forzado: el nombre queda arriba, los botones en la fila siguiente */
+  .rowbreak{display:block!important;flex:1 0 100%!important;height:0}
 }
 /* En pantallas muy angostas queda sólo el casco */
 @media (max-width:360px){
   .fab-asistente .fab-texto{display:none}
   .fab-asistente{padding:12px!important;border-radius:50%!important}
-  /* Filas de rubros/grupos/ítems: los botones bajan de línea en vez de recortarse */
-  .rowflex{flex-wrap:wrap!important}
-  /* Salto de línea forzado: el nombre queda arriba, los botones en la fila siguiente */
-  .rowbreak{display:block!important;flex:1 0 100%!important;height:0}
 }
 .rowbreak{display:none}
 </style>
@@ -3531,28 +3531,58 @@ function AsistenteChat({tareas,setTareas,rubros,setRubros,grupos,setGrupos,cfg,s
 
   /* ── Dictado por voz (Web Speech API) ── */
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  const toggleVoz=()=>{
-    if(!SR){setErr('Este navegador no soporta dictado por voz. Usá Chrome o Edge.');return;}
-    if(grab){try{recRef.current&&recRef.current.stop();}catch{} setGrab(false);return;}
+  /* Android no respeta continuous=true: reinicia el reconocimiento por su cuenta y
+     vuelve a entregar como finales tramos ya entregados, con lo cual la palabra se
+     repetía muchas veces. La forma que sí funciona es al revés: sesiones cortas de
+     una sola frase (continuous=false), y las reiniciamos nosotros mientras el
+     usuario siga grabando. Cada sesión aporta su frase una vez y se cierra. */
+  const quiereGrabar=useRef(false);
+  const dichoRef=useRef('');       // lo ya confirmado en esta grabación
+
+  const arrancarSesion=()=>{
     const r=new SR();
-    r.lang='es-AR';r.continuous=true;r.interimResults=true;
-    baseRef.current=input?input+' ':'';
-    /* Se rearma el texto completo desde el índice 0 en cada evento, en vez de ir
-       acumulando desde e.resultIndex. En Android, onresult suele reenviar tramos
-       ya dados por finales y esa acumulación los pegaba de nuevo: por eso repetía
-       palabras. Rearmar es idempotente — reenviar lo mismo da el mismo resultado. */
+    r.lang='es-AR';r.continuous=false;r.interimResults=true;
     r.onresult=e=>{
-      let fin='',int='';
+      let nuevoFinal='',parcial='';
       for(let i=0;i<e.results.length;i++){
         const tx=e.results[i][0].transcript;
-        if(e.results[i].isFinal)fin+=tx+' ';else int+=tx;
+        if(e.results[i].isFinal)nuevoFinal+=tx+' ';else parcial+=tx;
       }
-      setInput((baseRef.current||'')+fin+int);
+      if(nuevoFinal)dichoRef.current+=nuevoFinal;
+      setInput(baseRef.current+dichoRef.current+parcial);
     };
-    r.onerror=e=>{setErr('Dictado: '+e.error);setGrab(false);};
-    r.onend=()=>setGrab(false);
+    r.onerror=ev=>{
+      // "no-speech" y "aborted" son normales entre frases: no se cortan ni se avisa
+      if(ev.error==='no-speech'||ev.error==='aborted')return;
+      if(ev.error==='not-allowed'){
+        quiereGrabar.current=false;setGrab(false);
+        setErr('El navegador bloqueó el micrófono. Habilitalo para este sitio y probá de nuevo.');
+        return;
+      }
+      quiereGrabar.current=false;setGrab(false);setErr('Dictado: '+ev.error);
+    };
+    r.onend=()=>{
+      // Mientras el usuario no toque "detener", se abre la sesión siguiente
+      if(quiereGrabar.current){try{r.start();}catch{ setTimeout(()=>{try{r.start();}catch{}},250); }}
+      else setGrab(false);
+    };
     recRef.current=r;
-    try{r.start();setGrab(true);setErr('');}catch(e){setErr('No se pudo iniciar el dictado.');}
+    try{r.start();}catch(e){setErr('No se pudo iniciar el dictado.');quiereGrabar.current=false;setGrab(false);}
+  };
+
+  const toggleVoz=()=>{
+    if(!SR){setErr('Este navegador no soporta dictado por voz. Usá Chrome o Edge.');return;}
+    if(quiereGrabar.current){
+      quiereGrabar.current=false;
+      try{recRef.current&&recRef.current.stop();}catch{}
+      setGrab(false);
+      return;
+    }
+    baseRef.current=input?input+' ':'';
+    dichoRef.current='';
+    quiereGrabar.current=true;
+    setGrab(true);setErr('');
+    arrancarSesion();
   };
 
   /* ── Contexto actual de la obra para la IA ── */
@@ -3982,7 +4012,12 @@ ${cuadTxt}`;
       setErr('La API key guardada quedó dañada. Volvé a pegarla y tocá "Probar y guardar".');
       return;
     }
-    if(grab){try{recRef.current&&recRef.current.stop();}catch{} setGrab(false);}
+    // Baja la bandera ANTES de parar: si no, onend abre otra sesión y sigue grabando
+    if(quiereGrabar.current||grab){
+      quiereGrabar.current=false;
+      try{recRef.current&&recRef.current.stop();}catch{}
+      setGrab(false);
+    }
     setErr('');setInput('');setAdjuntos([]);setBusy(true);
     // En el historial queda constancia del adjunto, pero no el archivo: se manda
     // una sola vez y no se reenvía en los turnos siguientes.
