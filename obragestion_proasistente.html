@@ -3284,9 +3284,9 @@ const getAIKey=()=>{try{return limpiarKey(localStorage.getItem(AI_KEY_LS)||'');}
    problemas distintos y antes se mostraban juntos en el mismo mensaje. */
 const _errAPI=(status,cuerpo)=>{
   const txt=String(cuerpo||'');
-  if(status===401)return 'La API key no es válida o fue revocada. Generá una nueva en console.anthropic.com → API Keys.';
+  if(status===401)return 'La API key no es válida o fue revocada. Generá una nueva en platform.claude.com/settings/keys';
   if(status===400&&/credit balance|insufficient|too low/i.test(txt))
-    return 'La key es válida pero la cuenta no tiene crédito. Cargá saldo en console.anthropic.com → Billing.';
+    return 'La key es válida pero la cuenta no tiene crédito. Cargá saldo en platform.claude.com/settings/billing';
   if(status===429)return 'Demasiadas consultas seguidas. Esperá unos segundos y reintentá.';
   if(status>=500)return 'El servicio de Anthropic no está respondiendo. Reintentá en un rato.';
   return `Error ${status}: ${txt.slice(0,180)}`;
@@ -4123,7 +4123,7 @@ ${cuadTxt}`;
           <div style={{fontSize:'11px',fontWeight:800,color:'#92400e',marginBottom:'6px'}}>API KEY DE ANTHROPIC</div>
           <div style={{fontSize:'11px',color:'#78350f',marginBottom:'8px',lineHeight:1.5}}>
             Se guarda sólo en este navegador (localStorage), nunca se sube a Drive ni al archivo de la obra.
-            Sacala de console.anthropic.com → API Keys.
+            Sacala de platform.claude.com/settings/keys (elegí que no venza).
           </div>
           <div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>
             <input type="password" value={key} onChange={e=>setKey(e.target.value)} placeholder="sk-ant-api03-..."
