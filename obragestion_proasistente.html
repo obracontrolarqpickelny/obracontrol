@@ -4200,7 +4200,9 @@ ${cuadTxt}`;
     setPromptListo(prompt);
     try{
       await navigator.clipboard.writeText(prompt);
-      setMsgs(m=>[...m,{rol:'sys',txt:'📋 Copiado. Pegalo en claude.ai, copiá TODA la respuesta y volvé a pegarla acá con "📥 Pegar respuesta".'}]);
+      // El recordatorio del modelo va acá, no dentro del prompt: elegir Opus se hace
+      // en el selector de claude.ai, un texto dentro del prompt no lo puede forzar.
+      setMsgs(m=>[...m,{rol:'sys',txt:'📋 Copiado. En claude.ai elegí Opus en el selector de modelo (arriba a la izquierda del chat) antes de pegar — es el que mejor detecta rendimientos raros y problemas de secuencia. Después copiá TODA la respuesta y volvé a pegarla acá con "📥 Pegar respuesta".'}]);
     }catch{
       setErr('No se pudo copiar solo. Abrí "Ver prompt" y copialo a mano.');
     }
@@ -4580,7 +4582,7 @@ ${cuadTxt}`;
       <div style={{fontSize:'10px',color:C.t3,marginTop:'6px'}}>
         {grab?'🔴 Grabando — el texto aparece a medida que hablás. Revisalo y mandá.'
           :modo==='puente'
-            ?'Modo puente: gratis, con tu suscripción de claude.ai. Copiás, pegás en Claude, y traés la respuesta con "Pegar respuesta".'
+            ?'Modo puente: gratis, con tu suscripción de claude.ai. Copiás, pegás en Claude (elegí Opus en el selector de modelo), y traés la respuesta con "Pegar respuesta".'
             :'Escribe en todas las pestañas: Rubros, Plan, Gantt, Recursos $ e Incidencia. Corregís a mano cuando quieras.'}
       </div>
     </div>
