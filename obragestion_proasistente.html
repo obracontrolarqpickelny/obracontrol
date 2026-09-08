@@ -3544,26 +3544,36 @@ function AsistenteChat({tareas,setTareas,rubros,setRubros,grupos,setGrupos,cfg,s
 
   /* ── Dictado por voz (Web Speech API) ── */
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  /* Android no respeta continuous=true: reinicia el reconocimiento por su cuenta y
-     vuelve a entregar como finales tramos ya entregados, con lo cual la palabra se
-     repetía muchas veces. La forma que sí funciona es al revés: sesiones cortas de
-     una sola frase (continuous=false), y las reiniciamos nosotros mientras el
-     usuario siga grabando. Cada sesión aporta su frase una vez y se cierra. */
+  /* Cada plataforma necesita un modo distinto, y usar el equivocado la rompe:
+     - Android NO respeta continuous=true: reinicia por su cuenta y reentrega como
+       finales tramos ya entregados, de ahí que repitiera las palabras.
+     - Chrome de escritorio SÍ lo respeta, y en cambio se atraganta si uno le abre y
+       cierra sesiones todo el tiempo: arranca, dice "escuchando" y no entrega nada.
+     Así que el modo se elige por plataforma. El acumulado, en cambio, es uno solo:
+     se lleva la cuenta de cuántos finales de ESTA sesión ya se incorporaron, lo que
+     es correcto tanto si la lista de resultados crece (continuo) como si se reinicia
+     en cada frase (Android). */
+  const esAndroid=/Android/i.test(navigator.userAgent||'');
   const quiereGrabar=useRef(false);
   const dichoRef=useRef('');       // lo ya confirmado en esta grabación
   const vueltasSinVoz=useRef(0);   // corta el ciclo si el micrófono no capta nada
+  const huboAudio=useRef(false);   // ¿el micrófono llegó a abrirse alguna vez?
 
   const arrancarSesion=()=>{
     const r=new SR();
-    r.lang='es-AR';r.continuous=false;r.interimResults=true;
+    r.lang='es-AR';r.continuous=!esAndroid;r.interimResults=true;
+    let consumidos=0;   // finales de ESTA sesión ya incorporados
+    r.onaudiostart=()=>{huboAudio.current=true;};
     r.onresult=e=>{
-      let nuevoFinal='',parcial='';
+      let parcial='';
       for(let i=0;i<e.results.length;i++){
         const tx=e.results[i][0].transcript;
-        if(e.results[i].isFinal)nuevoFinal+=tx+' ';else parcial+=tx;
+        if(e.results[i].isFinal){
+          // Sólo los que todavía no se tomaron: evita duplicar cuando la lista crece
+          if(i>=consumidos){dichoRef.current+=tx+' ';consumidos=i+1;}
+        }else parcial+=tx;
       }
-      if(nuevoFinal||parcial)vueltasSinVoz.current=0;   // hubo voz: se reinicia el contador
-      if(nuevoFinal)dichoRef.current+=nuevoFinal;
+      vueltasSinVoz.current=0;
       setInput(baseRef.current+dichoRef.current+parcial);
     };
     r.onerror=ev=>{
@@ -3590,7 +3600,21 @@ function AsistenteChat({tareas,setTareas,rubros,setRubros,grupos,setGrupos,cfg,s
       setTimeout(()=>{if(quiereGrabar.current)arrancarSesion();},150);
     };
     recRef.current=r;
-    try{r.start();}catch(e){setErr('No se pudo iniciar el dictado.');quiereGrabar.current=false;setGrab(false);}
+    try{
+      r.start();
+      /* Si a los 2 segundos el micrófono no se abrió, algo lo está bloqueando y
+         antes eso quedaba como un "Escuchando…" eterno sin ninguna explicación. */
+      setTimeout(()=>{
+        if(quiereGrabar.current&&!huboAudio.current){
+          quiereGrabar.current=false;setGrab(false);
+          try{r.stop();}catch{}
+          setErr('No se abrió el micrófono. Revisá el candado de la barra de direcciones → Micrófono → Permitir, y que no lo esté usando otra aplicación.');
+        }
+      },2000);
+    }catch(e){
+      setErr('No se pudo iniciar el dictado: '+(e&&e.message||e));
+      quiereGrabar.current=false;setGrab(false);
+    }
   };
 
   const toggleVoz=()=>{
@@ -3604,6 +3628,7 @@ function AsistenteChat({tareas,setTareas,rubros,setRubros,grupos,setGrupos,cfg,s
     baseRef.current=input?input+' ':'';
     dichoRef.current='';
     vueltasSinVoz.current=0;
+    huboAudio.current=false;
     quiereGrabar.current=true;
     setGrab(true);setErr('');
     arrancarSesion();
