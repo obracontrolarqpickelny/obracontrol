@@ -3574,6 +3574,51 @@ function AsistenteChat({tareas,setTareas,rubros,setRubros,grupos,setGrupos,cfg,s
   const dichoRef=useRef('');       // lo ya confirmado en esta grabación
   const vueltasSinVoz=useRef(0);   // corta el ciclo si el micrófono no capta nada
   const huboAudio=useRef(false);   // ¿el micrófono llegó a abrirse alguna vez?
+  const sinVozSeguidas=useRef(0);  // "no-speech" seguidos: el micro no capta
+  const [probandoMic,setProbandoMic]=useState(false);
+  const [micInfo,setMicInfo]=useState(null);
+
+  /* Prueba real del micrófono: abre el audio, mide el nivel de entrada durante
+     4 segundos y dice qué dispositivo está usando. Es lo único que distingue
+     "la app falla" de "Windows está escuchando por el micrófono equivocado". */
+  const probarMicrofono=async()=>{
+    setProbandoMic(true);setMicInfo(null);setErr('');
+    let stream=null,ctx=null;
+    try{
+      stream=await navigator.mediaDevices.getUserMedia({audio:true});
+      const pista=stream.getAudioTracks()[0];
+      const usando=pista?(pista.label||'(sin nombre)'):'(ninguno)';
+      ctx=new (window.AudioContext||window.webkitAudioContext)();
+      const an=ctx.createAnalyser();an.fftSize=512;
+      ctx.createMediaStreamSource(stream).connect(an);
+      const buf=new Uint8Array(an.fftSize);
+      let pico=0;const t0=Date.now();
+      await new Promise(res=>{
+        const tick=()=>{
+          an.getByteTimeDomainData(buf);
+          for(let i=0;i<buf.length;i++){const v=Math.abs(buf[i]-128);if(v>pico)pico=v;}
+          if(Date.now()-t0<4000)requestAnimationFrame(tick);else res();
+        };tick();
+      });
+      const nivel=Math.round(pico/128*100);
+      let entradas=[];
+      try{
+        entradas=(await navigator.mediaDevices.enumerateDevices())
+          .filter(d=>d.kind==='audioinput').map(d=>d.label||'(sin nombre)');
+      }catch{}
+      setMicInfo({nivel,usando,entradas});
+    }catch(e){
+      setMicInfo({error:e.name==='NotAllowedError'
+        ?'Chrome bloqueó el micrófono para este sitio. Tocá el candado de la barra de direcciones → Micrófono → Permitir.'
+        :e.name==='NotFoundError'
+          ?'Windows no reporta ningún micrófono conectado.'
+          :(e.name+': '+e.message)});
+    }finally{
+      if(stream)stream.getTracks().forEach(t=>t.stop());
+      if(ctx)try{ctx.close();}catch{}
+      setProbandoMic(false);
+    }
+  };
 
   const arrancarSesion=()=>{
     const r=new SR();
@@ -3589,12 +3634,21 @@ function AsistenteChat({tareas,setTareas,rubros,setRubros,grupos,setGrupos,cfg,s
           if(i>=consumidos){dichoRef.current+=tx+' ';consumidos=i+1;}
         }else parcial+=tx;
       }
-      vueltasSinVoz.current=0;
+      vueltasSinVoz.current=0;sinVozSeguidas.current=0;
       setInput(baseRef.current+dichoRef.current+parcial);
     };
     r.onerror=ev=>{
-      // "no-speech" y "aborted" son normales entre frases: no se cortan ni se avisa
-      if(ev.error==='no-speech'||ev.error==='aborted')return;
+      if(ev.error==='aborted')return;   // pasa al detener: es normal
+      /* "no-speech" suelto es normal entre frases, pero repetido significa que el
+         micrófono abre y no llega sonido: típico al enchufar auriculares, porque
+         Windows cambia el dispositivo de entrada y Chrome pasa a usar ese. Antes se
+         ignoraba siempre y quedaba "Escuchando…" sin transcribir nada. */
+      if(ev.error==='no-speech'){
+        sinVozSeguidas.current++;
+        if(sinVozSeguidas.current>=3)
+          setErr('El micrófono está abierto pero no llega sonido. Suele pasar al conectar auriculares: Windows cambia el micrófono predeterminado. Tocá "Probar micrófono" para ver cuál está usando.');
+        return;
+      }
       if(ev.error==='not-allowed'){
         quiereGrabar.current=false;setGrab(false);
         setErr('El navegador bloqueó el micrófono. Habilitalo para este sitio y probá de nuevo.');
@@ -3645,6 +3699,7 @@ function AsistenteChat({tareas,setTareas,rubros,setRubros,grupos,setGrupos,cfg,s
     dichoRef.current='';
     vueltasSinVoz.current=0;
     huboAudio.current=false;
+    sinVozSeguidas.current=0;
     quiereGrabar.current=true;
     setGrab(true);setErr('');
     arrancarSesion();
@@ -4175,11 +4230,51 @@ ${cuadTxt}`;
         <button onClick={()=>setShowKey(s=>!s)} className="toque" style={{...btnS(C.t2),fontSize:'10px'}}>
           {getAIKey()?'🔑 API key ✓':'🔑 Configurar API key'}
         </button>
+        <button onClick={probarMicrofono} disabled={probandoMic} className="toque"
+          title="Mide si llega sonido y muestra qué micrófono está usando Chrome"
+          style={{...btnS(probandoMic?C.t3:C.violet),fontSize:'10px'}}>
+          {probandoMic?'🎧 Hablá… midiendo':'🎧 Probar micrófono'}
+        </button>
         {undo&&<button onClick={deshacer} className="toque" style={{...btnS(C.red),fontSize:'10px'}}>↩ Deshacer última carga</button>}
         {msgs.length>0&&<button onClick={()=>{if(window.confirm('¿Borrar la conversación de esta obra? También se borra de Drive.')){setMsgs([]);setUndo(null);}}} className="toque" style={{...btnS(C.t3),fontSize:'10px'}}>🗑 Limpiar chat</button>}
       </div>
 
       {/* API key */}
+      {/* Resultado de la prueba de micrófono */}
+      {micInfo&&(
+        <div style={{background:micInfo.error?'#fef2f2':(micInfo.nivel>=8?'#f0fdf4':'#fffbeb'),
+          border:`1px solid ${micInfo.error?'#fecaca':(micInfo.nivel>=8?'#bbf7d0':'#fde68a')}`,
+          borderRadius:'8px',padding:'11px 13px',marginBottom:'10px',fontSize:'11.5px',lineHeight:1.6}}>
+          {micInfo.error
+            ? <div style={{color:C.red,fontWeight:700}}>⚠ {micInfo.error}</div>
+            : <>
+                <div style={{fontWeight:800,color:micInfo.nivel>=8?'#166534':'#92400e'}}>
+                  {micInfo.nivel>=8
+                    ? `✓ El micrófono capta bien (nivel ${micInfo.nivel}%)`
+                    : `⚠ Casi no llegó sonido (nivel ${micInfo.nivel}%)`}
+                </div>
+                <div style={{color:C.t2,marginTop:'4px'}}>
+                  Chrome está usando: <b>{micInfo.usando}</b>
+                </div>
+                {micInfo.entradas&&micInfo.entradas.length>1&&(
+                  <div style={{color:C.t3,marginTop:'4px',fontSize:'10.5px'}}>
+                    Micrófonos disponibles: {micInfo.entradas.join(' · ')}
+                  </div>
+                )}
+                {micInfo.nivel<8&&(
+                  <div style={{color:C.t2,marginTop:'6px'}}>
+                    Si tenés auriculares puestos, Windows probablemente cambió el micrófono
+                    predeterminado al de ellos. Cambialo en <b>Configuración → Sistema → Sonido
+                    → Entrada</b>, o desconectá los auriculares y volvé a probar.
+                  </div>
+                )}
+              </>}
+          <button onClick={()=>setMicInfo(null)}
+            style={{marginTop:'8px',background:'transparent',border:'none',color:C.t3,
+              fontSize:'10px',cursor:'pointer',padding:0,textDecoration:'underline'}}>cerrar</button>
+        </div>
+      )}
+
       {showKey&&(
         <div style={{background:'#fffbeb',border:'1px solid #fde68a',borderRadius:'8px',padding:'11px 13px',marginBottom:'10px'}}>
           <div style={{fontSize:'11px',fontWeight:800,color:'#92400e',marginBottom:'6px'}}>API KEY DE ANTHROPIC</div>
