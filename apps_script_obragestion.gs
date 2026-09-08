@@ -24,9 +24,19 @@ var CARPETA = 'ObraGestion_Datos';
 
 // ─── CARPETAS ──────────────────────────────────────────────────────
 
-/** Nombre usable como carpeta o archivo en Drive. */
+/** Nombre usable como carpeta o archivo en Drive. Conserva acentos. */
 function _limpio(n) {
   return String(n || 'sin_nombre').replace(/[\/\\:*?"<>|]/g, '_').trim() || 'sin_nombre';
+}
+
+/**
+ * Saneado de la versión anterior, que reemplazaba TODO lo que no fuera
+ * alfanumérico —acentos incluidos— por "_": "Ampliación" quedaba "Ampliaci_n".
+ * Se conserva sólo para poder encontrar los archivos ya guardados con ese criterio.
+ * Sin esto, al actualizar el script las obras existentes aparecerían vacías.
+ */
+function _limpioViejo(n) {
+  return String(n || 'sin_nombre').replace(/[^a-zA-Z0-9\s\_-]/g, '_').trim() || 'sin_nombre';
 }
 
 /** Carpeta raíz del sistema, en la raíz de tu Drive. */
@@ -131,9 +141,14 @@ function doPost(e) {
       _escribir(carpeta, 'materiales.csv', _csvMateriales(d), 'text/csv');
     } catch (err) { console.error('csv: ' + err); }
 
-    // Migración: si venía como archivo suelto en la raíz, ya no hace falta
-    var suelto = _archivo(_raiz(), _limpio(obraName) + '.json');
-    if (suelto) suelto.setTrashed(true);
+    /* Migración: el archivo suelto de la versión anterior ya está representado por
+       la carpeta, así que se descarta. Se prueban los dos criterios de nombre
+       porque el saneado cambió (antes "Ampliaci_n", ahora "Ampliación"). */
+    var raiz = _raiz();
+    [_limpio(obraName), _limpioViejo(obraName)].forEach(function (n) {
+      var suelto = _archivo(raiz, n + '.json');
+      if (suelto) suelto.setTrashed(true);
+    });
 
     return _json({ ok: true, guardado: carpeta.getName(), fecha: new Date().toISOString() });
   } catch (err) {
@@ -156,16 +171,22 @@ function doGet(e) {
       return _json({ ok: true, mensaje: 'ObraGestion Drive API activa', version: 2 });
 
     if (accion === 'load') {
-      var nom = _limpio(p.obra);
       var raiz = _raiz();
-      // Primero la carpeta nueva; si no está, el archivo suelto de antes
-      var it = raiz.getFoldersByName(nom);
-      if (it.hasNext()) {
-        var f = _archivo(it.next(), 'datos.json');
-        if (f) return _json({ ok: true, data: JSON.parse(f.getBlob().getDataAsString()) });
+      // Se prueban los dos criterios de nombre: el actual y el de la versión anterior
+      var nombres = [_limpio(p.obra), _limpioViejo(p.obra)];
+      // 1) Carpeta nueva
+      for (var i = 0; i < nombres.length; i++) {
+        var it = raiz.getFoldersByName(nombres[i]);
+        if (it.hasNext()) {
+          var f = _archivo(it.next(), 'datos.json');
+          if (f) return _json({ ok: true, data: JSON.parse(f.getBlob().getDataAsString()) });
+        }
       }
-      var viejo = _archivo(raiz, nom + '.json');
-      if (viejo) return _json({ ok: true, data: JSON.parse(viejo.getBlob().getDataAsString()) });
+      // 2) Archivo suelto de antes
+      for (var j = 0; j < nombres.length; j++) {
+        var viejo = _archivo(raiz, nombres[j] + '.json');
+        if (viejo) return _json({ ok: true, data: JSON.parse(viejo.getBlob().getDataAsString()) });
+      }
       return _json({ ok: false, error: 'Obra no encontrada.' });
     }
 
