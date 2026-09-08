@@ -4483,6 +4483,7 @@ function App(){
   const [fabMoviendo,setFabMoviendo]=useState(false);
   const fabArrastro=useRef(false);   // ¿el gesto fue arrastre y no toque?
   const fabIni=useRef(null);
+  const fabUltima=useRef(null);   // ultima posicion real del arrastre
 
   const fabDown=e=>{
     fabArrastro.current=false;
@@ -4500,6 +4501,9 @@ function App(){
     // Se mantiene dentro de la pantalla para que no quede inalcanzable
     const x=Math.min(Math.max(4,e.clientX-i.dx),window.innerWidth-i.w-4);
     const y=Math.min(Math.max(4,e.clientY-i.dy),window.innerHeight-i.h-4);
+    // También en una ref: al soltar hay que guardar la posición REAL, y el estado
+    // de React puede no haberse actualizado todavía cuando llega el pointerup.
+    fabUltima.current={x,y};
     setFabPos({x,y});
   };
   /* Si la ventana cambia de tamaño (girar el celular, achicar la ventana), una
@@ -4519,7 +4523,8 @@ function App(){
     fabIni.current=null;
     if(fabMoviendo)setFabMoviendo(false);
     if(fabArrastro.current){
-      try{localStorage.setItem(FAB_LS,JSON.stringify(fabPos));}catch{}
+      const fin=fabUltima.current||fabPos;
+      try{localStorage.setItem(FAB_LS,JSON.stringify(fin));}catch{}
       // Se limpia después del click, que llega justo detrás del pointerup
       setTimeout(()=>{fabArrastro.current=false;},0);
     }
