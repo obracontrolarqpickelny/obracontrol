@@ -3302,6 +3302,14 @@ const _fhLoad=async()=>{try{const db=await _dbOpen();const tx=db.transaction('h'
 const AI_KEY_LS='obragestion_ai_key';
 const AI_MODEL='claude-opus-5';
 const HIST_MAX=24;   // mensajes de ida y vuelta que se le reenvían (12 intercambios)
+/* Modo puente: en vez de pagar la API, se arma el prompt completo (instrucciones +
+   estado de la obra + pedido), se copia al portapapeles y el usuario lo pega en
+   claude.ai con su propia suscripción. La respuesta se pega de vuelta acá y se
+   aplica exactamente igual que si hubiera venido de la API. Cuesta dos
+   copiar-y-pegar por intercambio; a cambio, no gasta crédito de la API. */
+const MODO_LS='obragestion_asist_modo';
+const getModo=()=>{try{return localStorage.getItem(MODO_LS)||'puente';}catch{return'puente';}};
+const setModoLS=m=>{try{localStorage.setItem(MODO_LS,m);}catch{}};
 const setAIKey=k=>{try{k?localStorage.setItem(AI_KEY_LS,k):localStorage.removeItem(AI_KEY_LS);}catch{}};
 /* Al pegar la key suelen colarse espacios, saltos de línea, caracteres invisibles
    (NBSP, ancho cero, BOM) o signos "lindos" que mete el autocorrector (comillas
@@ -3590,6 +3598,11 @@ function AsistenteChat({tareas,setTareas,rubros,setRubros,grupos,setGrupos,cfg,s
   const sinVozSeguidas=useRef(0);  // "no-speech" seguidos: el micro no capta
   const [probandoMic,setProbandoMic]=useState(false);
   const [micInfo,setMicInfo]=useState(null);
+  const [modo,setModo]=useState(getModo);            // 'puente' (gratis) | 'api'
+  const [promptListo,setPromptListo]=useState(null);  // último prompt copiado, para poder volver a copiarlo
+  const [pegando,setPegando]=useState('');            // texto que se está pegando de vuelta
+  const [mostrarPegar,setMostrarPegar]=useState(false);
+  const cambiarModo=m=>{setModo(m);setModoLS(m);setErr('');};
 
   /* Prueba real del micrófono: abre el audio, mide el nivel de entrada durante
      4 segundos y dice qué dispositivo está usando. Es lo único que distingue
@@ -4132,8 +4145,81 @@ ${cuadTxt}`;
     setMsgs(m=>[...m,{rol:'sys',txt:'↩ Se deshizo la última carga.'}]);
   };
 
-  /* ── Enviar ── */
-  const enviar=async()=>{
+  /* ── Procesamiento de la respuesta: compartido por los dos modos ──
+     La API y el pegado manual terminan en el mismo lugar: un texto crudo que
+     debería ser JSON. Separarlo evita mantener la misma lógica dos veces. */
+  const procesarRespuestaCruda=rawIn=>{
+    let raw=String(rawIn||'').trim();
+    raw=raw.replace(/^```(?:json)?/i,'').replace(/```$/,'').trim();
+    const i0=raw.indexOf('{'),i1=raw.lastIndexOf('}');
+    if(i0>=0&&i1>i0)raw=raw.slice(i0,i1+1);
+    let obj,parseOk=true;
+    try{obj=JSON.parse(raw);}catch{parseOk=false;obj={mensaje:rawIn||'(vacío)',acciones:[]};}
+    const {log,fallos}=aplicar(obj.acciones);
+    if(!parseOk)fallos.push('No pude interpretar eso como JSON. Pegá la respuesta COMPLETA que te dio Claude —el bloque que empieza con { "mensaje": ... y termina con }— sin agregar ni sacar nada alrededor.');
+    setMsgs(m=>[...m,{rol:'ai',txt:obj.mensaje||'Listo.',log,fallos,acciones:obj.acciones||[]}]);
+  };
+
+  /* Arma el mismo texto de usuario que se manda por API: estado de la obra +
+     pedido. Se comparte entre los dos modos para que el contexto sea idéntico. */
+  const armarTextoUsuario=txt=>`ESTADO ACTUAL DE LA OBRA\n${buildContext()}\n\n─────────\nEL USUARIO DICE:\n${txt}`;
+
+  /* ── Modo puente: copiar el prompt para pegarlo en claude.ai ──
+     No hay fetch ni key: se arma un prompt autocontenido (instrucciones +
+     historial reciente + estado + pedido) y se copia al portapapeles. El
+     usuario lo pega en su propio Claude, y trae la respuesta de vuelta con
+     "Pegar respuesta". Cuesta dos copiar-y-pegar; no gasta crédito de la API. */
+  const copiarParaClaude=async()=>{
+    const txt=input.trim();
+    const adj=adjuntos;
+    if(!txt&&!adj.length)return;
+    if(quiereGrabar.current||grab){
+      quiereGrabar.current=false;
+      try{recRef.current&&recRef.current.stop();}catch{}
+      setGrab(false);
+    }
+    setErr('');
+    // Las imágenes/PDF no se pueden pegar como texto: se avisa en vez de perderlos en silencio.
+    const nota=adj.length
+      ?`📎 ${adj.map(a=>a.nombre).join(', ')} — adjuntalo vos a mano en claude.ai, el modo puente no copia archivos`
+      :'';
+    const nuevos=[...msgs,{rol:'user',txt:[nota,txt].filter(Boolean).join('\n')}];
+    setMsgs(nuevos);
+    setInput('');setAdjuntos([]);
+
+    const previos=nuevos.filter(m=>m.rol==='user'||m.rol==='ai').slice(-HIST_MAX);
+    const histTxt=previos.slice(0,-1).map(m=>
+      m.rol==='user'?`USUARIO: ${m.txt}`
+        :`VOS RESPONDISTE: ${JSON.stringify({mensaje:m.txt,acciones:m.acciones||[],
+            resultado:{aplicado:m.log||[],NO_aplicado:m.fallos||[]}})}`
+    ).join('\n\n');
+    const prompt=AI_SYSTEM_FULL
+      +(histTxt?`\n\n═════ CONVERSACIÓN PREVIA (para contexto) ═════\n${histTxt}`:'')
+      +`\n\n═════ MENSAJE ACTUAL — respondé SOLO con el JSON pedido arriba ═════\n${armarTextoUsuario(txt)}`;
+
+    setPromptListo(prompt);
+    try{
+      await navigator.clipboard.writeText(prompt);
+      setMsgs(m=>[...m,{rol:'sys',txt:'📋 Copiado. Pegalo en claude.ai, copiá TODA la respuesta y volvé a pegarla acá con "📥 Pegar respuesta".'}]);
+    }catch{
+      setErr('No se pudo copiar solo. Abrí "Ver prompt" y copialo a mano.');
+    }
+  };
+
+  /* Trae lo que Claude respondió en claude.ai. Se intenta leer el portapapeles
+     directo; si el navegador no lo permite sin más contexto, se abre un cuadro
+     para pegarlo a mano — nunca se pierde el intento en silencio. */
+  const pegarRespuesta=async()=>{
+    setErr('');
+    try{
+      const raw=await navigator.clipboard.readText();
+      if(raw&&raw.trim()){procesarRespuestaCruda(raw);setPromptListo(null);return;}
+    }catch{}
+    setMostrarPegar(true);
+  };
+
+  /* ── Enviar por API ── */
+  const enviarAPI=async()=>{
     const txt=input.trim();
     const adj=adjuntos;
     // Con un adjunto alcanza para mandar, aunque no se escriba nada
@@ -4170,7 +4256,7 @@ ${cuadTxt}`;
       /* Los adjuntos van como bloques ANTES del texto, que es como el modelo los
          aprovecha mejor. Sólo viajan en el turno en que se adjuntan: reenviarlos en
          cada consulta multiplicaría el costo sin aportar nada. */
-      const textoUsuario=`ESTADO ACTUAL DE LA OBRA\n${buildContext()}\n\n─────────\nEL USUARIO DICE:\n${txt}`;
+      const textoUsuario=armarTextoUsuario(txt);
       hist[hist.length-1]=adj.length
         ?{role:'user',content:[
             ...adj.map(a=>a.pdf
@@ -4202,20 +4288,16 @@ ${cuadTxt}`;
       // terminaba en "0 acciones" sin ningún aviso. Ahora se dice explícitamente.
       if(data.stop_reason==='max_tokens')
         throw new Error('La respuesta se cortó por ser demasiado larga y no se cargó nada. Pedímelo en tandas más chicas (por ejemplo, un rubro por vez).');
-      let raw=(data.content||[]).filter(c=>c.type==='text').map(c=>c.text).join('\n').trim();
-      raw=raw.replace(/^```(?:json)?/i,'').replace(/```$/,'').trim();
-      const i0=raw.indexOf('{'),i1=raw.lastIndexOf('}');
-      if(i0>=0&&i1>i0)raw=raw.slice(i0,i1+1);
-      let obj,parseOk=true;
-      try{obj=JSON.parse(raw);}catch{parseOk=false;obj={mensaje:raw,acciones:[]};}
-      const {log,fallos}=aplicar(obj.acciones);
-      if(!parseOk)fallos.push('No pude interpretar la respuesta como JSON, así que no se aplicó ninguna acción.');
-      setMsgs(m=>[...m,{rol:'ai',txt:obj.mensaje||'Listo.',log,fallos,acciones:obj.acciones||[]}]);
+      const raw=(data.content||[]).filter(c=>c.type==='text').map(c=>c.text).join('\n').trim();
+      procesarRespuestaCruda(raw);
     }catch(e){
       setMsgs(m=>[...m,{rol:'sys',txt:'⚠ '+e.message}]);
       setErr(e.message);
     }finally{setBusy(false);}
   };
+
+  // Enter en el textarea dispara esto: hace lo que corresponda según el modo activo.
+  const enviar=()=>{modo==='api'?enviarAPI():copiarParaClaude();};
 
   const S={
     burbUser:{alignSelf:'flex-end',background:C.blue,color:'#fff',borderRadius:'12px 12px 3px 12px',
@@ -4242,9 +4324,26 @@ ${cuadTxt}`;
         <div style={{fontSize:'11px',color:C.t2,flex:1,minWidth:'200px'}}>
           Contale la obra hablando o escribiendo. Completa rubros, ítems, cuadrillas, materiales, precios de MO e imprevistos.
         </div>
-        <button onClick={()=>setShowKey(s=>!s)} className="toque" style={{...btnS(C.t2),fontSize:'10px'}}>
-          {getAIKey()?'🔑 API key ✓':'🔑 Configurar API key'}
-        </button>
+        {/* Puente (gratis, con tu suscripción de claude.ai) vs API (paga, automático) */}
+        <div style={{display:'inline-flex',border:`1px solid ${C.border}`,borderRadius:'8px',overflow:'hidden'}}>
+          <button onClick={()=>cambiarModo('puente')} className="toque"
+            title="Copiás el prompt, lo pegás en claude.ai con tu suscripción, y pegás la respuesta de vuelta. Gratis."
+            style={{border:'none',fontSize:'10px',fontWeight:800,cursor:'pointer',
+              background:modo==='puente'?C.green:'transparent',color:modo==='puente'?'#fff':C.t2}}>
+            🌉 Puente (gratis)
+          </button>
+          <button onClick={()=>cambiarModo('api')} className="toque"
+            title="El asistente responde solo, sin copiar y pegar. Consume crédito de la API de Anthropic."
+            style={{border:'none',fontSize:'10px',fontWeight:800,cursor:'pointer',
+              background:modo==='api'?C.blue:'transparent',color:modo==='api'?'#fff':C.t2}}>
+            🔑 API (paga)
+          </button>
+        </div>
+        {modo==='api'&&(
+          <button onClick={()=>setShowKey(s=>!s)} className="toque" style={{...btnS(C.t2),fontSize:'10px'}}>
+            {getAIKey()?'🔑 API key ✓':'🔑 Configurar API key'}
+          </button>
+        )}
         <button onClick={probarMicrofono} disabled={probandoMic} className="toque"
           title="Mide si llega sonido y muestra qué micrófono está usando Chrome"
           style={{...btnS(probandoMic?C.t3:C.violet),fontSize:'10px'}}>
@@ -4408,19 +4507,80 @@ ${cuadTxt}`;
         </button>
         <textarea value={input} onChange={e=>setInput(e.target.value)}
           onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();enviar();}}}
-          placeholder={grab?'Escuchando… hablá tranquilo':'Contame un ítem, o varios… (Enter para enviar, Shift+Enter salto de línea)'}
+          placeholder={grab?'Escuchando… hablá tranquilo':modo==='puente'
+            ?'Contame un ítem, o varios… (Enter copia el prompt para pegar en claude.ai)'
+            :'Contame un ítem, o varios… (Enter para enviar, Shift+Enter salto de línea)'}
           rows={2} className="chat-input"
           style={{flex:1,minWidth:0,padding:'10px 12px',border:`1.5px solid ${grab?C.red:C.border}`,borderRadius:'8px',
             fontSize:'13px',fontFamily:'inherit',resize:'vertical',minHeight:'44px',lineHeight:1.45}}/>
-        <button onClick={enviar} disabled={busy||(!input.trim()&&!adjuntos.length)}
-          style={{background:busy||(!input.trim()&&!adjuntos.length)?C.border:C.blue,color:'#fff',border:'none',borderRadius:'8px',
-            padding:'0 18px',height:'44px',fontSize:'13px',fontWeight:800,
-            cursor:busy||(!input.trim()&&!adjuntos.length)?'default':'pointer',flexShrink:0}}>
-          {busy?'…':'Enviar'}
-        </button>
+        {modo==='api'?(
+          <button onClick={enviar} disabled={busy||(!input.trim()&&!adjuntos.length)}
+            style={{background:busy||(!input.trim()&&!adjuntos.length)?C.border:C.blue,color:'#fff',border:'none',borderRadius:'8px',
+              padding:'0 18px',height:'44px',fontSize:'13px',fontWeight:800,
+              cursor:busy||(!input.trim()&&!adjuntos.length)?'default':'pointer',flexShrink:0}}>
+            {busy?'…':'Enviar'}
+          </button>
+        ):(
+          <button onClick={copiarParaClaude} disabled={!input.trim()&&!adjuntos.length}
+            title="Copia el prompt completo (instrucciones + estado de la obra + tu pedido) para pegarlo en claude.ai"
+            style={{background:(!input.trim()&&!adjuntos.length)?C.border:C.green,color:'#fff',border:'none',borderRadius:'8px',
+              padding:'0 16px',height:'44px',fontSize:'12px',fontWeight:800,
+              cursor:(!input.trim()&&!adjuntos.length)?'default':'pointer',flexShrink:0,whiteSpace:'nowrap'}}>
+            📋 Copiar
+          </button>
+        )}
       </div>
+
+      {/* Modo puente: traer la respuesta de vuelta */}
+      {modo==='puente'&&(
+        <div style={{display:'flex',gap:'7px',marginTop:'8px',alignItems:'center',flexWrap:'wrap'}}>
+          <button onClick={pegarRespuesta} className="toque"
+            style={{...btnS(C.violet),fontSize:'11px',fontWeight:800}}>
+            📥 Pegar respuesta de Claude
+          </button>
+          {promptListo&&(
+            <button onClick={()=>setMostrarPegar(v=>!v)} className="toque"
+              style={{...btnS(C.t3),fontSize:'10px'}}>
+              {mostrarPegar?'Ocultar':'Ver / pegar a mano'}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Cuadro manual: se usa cuando el navegador no deja leer el portapapeles solo,
+          o cuando el usuario prefiere pegar a mano en vez de que se lea directo. */}
+      {modo==='puente'&&mostrarPegar&&(
+        <div style={{marginTop:'8px',background:C.card,border:`1px solid ${C.border}`,borderRadius:'8px',padding:'10px'}}>
+          {promptListo&&(
+            <details style={{marginBottom:'8px'}}>
+              <summary style={{fontSize:'10px',fontWeight:700,color:C.t2,cursor:'pointer'}}>
+                Ver el prompt copiado (por si tenés que copiarlo a mano)
+              </summary>
+              <textarea readOnly value={promptListo} onClick={e=>e.target.select()}
+                rows={4} style={{width:'100%',marginTop:'6px',fontSize:'10px',fontFamily:'monospace',
+                  padding:'6px',border:`1px solid ${C.border}`,borderRadius:'6px',background:C.bg,color:C.t2}}/>
+            </details>
+          )}
+          <div style={{fontSize:'10px',fontWeight:700,color:C.t2,marginBottom:'4px'}}>
+            Pegá acá la respuesta completa que te dio Claude:
+          </div>
+          <textarea value={pegando} onChange={e=>setPegando(e.target.value)}
+            placeholder='{"mensaje": "...", "acciones": [...] }'
+            rows={4} className="chat-input"
+            style={{width:'100%',fontSize:'11px',fontFamily:'monospace',padding:'8px',
+              border:`1.5px solid ${C.violet}`,borderRadius:'6px'}}/>
+          <div style={{display:'flex',gap:'8px',marginTop:'6px'}}>
+            <Btn onClick={()=>{if(!pegando.trim())return;procesarRespuestaCruda(pegando);setPegando('');setMostrarPegar(false);setPromptListo(null);}}
+              accent={pegando.trim()?C.green:C.t3} sm>✓ Procesar</Btn>
+            <Btn onClick={()=>{setMostrarPegar(false);setPegando('');}} accent={C.t3} sm>Cancelar</Btn>
+          </div>
+        </div>
+      )}
+
       <div style={{fontSize:'10px',color:C.t3,marginTop:'6px'}}>
         {grab?'🔴 Grabando — el texto aparece a medida que hablás. Revisalo y mandá.'
+          :modo==='puente'
+            ?'Modo puente: gratis, con tu suscripción de claude.ai. Copiás, pegás en Claude, y traés la respuesta con "Pegar respuesta".'
             :'Escribe en todas las pestañas: Rubros, Plan, Gantt, Recursos $ e Incidencia. Corregís a mano cuando quieras.'}
       </div>
     </div>
