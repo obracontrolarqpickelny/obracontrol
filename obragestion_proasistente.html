@@ -3593,11 +3593,13 @@ function AsistenteChat({tareas,setTareas,rubros,setRubros,grupos,setGrupos,cfg,s
       ctx.createMediaStreamSource(stream).connect(an);
       const buf=new Uint8Array(an.fftSize);
       let pico=0;const t0=Date.now();
+      /* Con setTimeout y no con requestAnimationFrame: rAF se congela si la pestaña
+         pierde el foco y la prueba quedaba colgada en "midiendo" para siempre. */
       await new Promise(res=>{
         const tick=()=>{
           an.getByteTimeDomainData(buf);
           for(let i=0;i<buf.length;i++){const v=Math.abs(buf[i]-128);if(v>pico)pico=v;}
-          if(Date.now()-t0<4000)requestAnimationFrame(tick);else res();
+          if(Date.now()-t0<4000)setTimeout(tick,50);else res();
         };tick();
       });
       const nivel=Math.round(pico/128*100);
