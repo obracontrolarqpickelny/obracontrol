@@ -1847,9 +1847,11 @@ function GanttView({tc,cfg,rubros,conflictos,proyecto,prof,nota='',rec=[],moItem
         const hasE=errIds.has(t.id);
         const col=hasE?[220,38,38]:hxR(rub?.color||'#64748b');
 
-        // Alternado de filas
-        const rowBg=rowIdx%2===0?VLG:[241,245,249];
-        const wkeBg=rowIdx%2===0?WKE:[210,216,228];
+        /* Alternado de filas. Antes iba de [248,250,252] a [241,245,249]: apenas
+           7 puntos de diferencia, invisible impreso. Se separa lo suficiente para
+           seguir el renglón de un vistazo sin que la hoja quede rayada. */
+        const rowBg=rowIdx%2===0?[255,255,255]:[234,239,245];
+        const wkeBg=rowIdx%2===0?WKE:[203,211,225];
 
         // ① FILLS primero (el orden importa: los strokes vendrán después)
         doc.setFillColor(...rowBg);doc.rect(MG,sy,PW-MG*2,ROW_H,'F');
@@ -1960,14 +1962,20 @@ function GanttView({tc,cfg,rubros,conflictos,proyecto,prof,nota='',rec=[],moItem
         </div>
 
         {/* Filas de tareas */}
-        {tc.map(t=>{
+        {tc.map((t,fila)=>{
           const rub=rubros.find(r=>r.id===t.rubroId);
           const bL=gLeft(t.fIni);
           const bW=Math.max(3,gRight(t.fFin)-bL);
           const hasErr=errIds.has(t.id);
           const col=hasErr?C.red:(rub?.color||C.t3);
+          // Al pasar el cursor por la barra tiene que decir de qué ítem es, sin
+          // obligar a seguir la línea con el dedo hasta la etiqueta de la izquierda.
+          const detalle=`#${t.id} · ${rub?.nombre||'—'}\n${t.item}\n${fF(t.fIni)} → ${fF(t.fFin)} (${t.dFin}d)`;
+          const zebra=fila%2===1;   // franja tenue para no perder el renglón
           return(
-            <div key={t.id} style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"2px"}}>
+            <div key={t.id} title={detalle}
+              style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"2px",
+                background:zebra?`${C.t3}14`:"transparent",borderRadius:"4px"}}>
               <div style={{width:"215px",minWidth:"215px",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",gap:"4px"}}>
                 <span style={{fontFamily:"monospace",fontSize:"9px",color:C.t3,minWidth:"16px",textAlign:"center"}}>{t.id}</span>
                 {/* Rubro arriba y el ítem debajo: en pantalla siempre se ve el detalle.
@@ -1993,7 +2001,7 @@ function GanttView({tc,cfg,rubros,conflictos,proyecto,prof,nota='',rec=[],moItem
                   return(
                     <div key={si} style={{position:"absolute",left:sl+"px",width:sw+"px",height:"100%",
                       background:col,borderRadius:"3px",opacity:.85,minWidth:"2px"}}
-                      title={`${fF(t.fIni)} → ${fF(t.fFin)} (${t.dFin}d)`}/>
+                      title={detalle}/>
                   );
                 })}
               </div>
