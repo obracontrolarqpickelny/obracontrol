@@ -4498,9 +4498,13 @@ function App(){
       fabArrastro.current=true; if(!fabMoviendo)setFabMoviendo(true);
     }
     if(!fabArrastro.current)return;
-    // Se mantiene dentro de la pantalla para que no quede inalcanzable
-    const x=Math.min(Math.max(4,e.clientX-i.dx),window.innerWidth-i.w-4);
-    const y=Math.min(Math.max(4,e.clientY-i.dy),window.innerHeight-i.h-4);
+    /* Se mantiene dentro de la pantalla. El tope se calcula con Math.max(4,…):
+       si la ventana llegara a ser más angosta que el botón, el tope quedaba por
+       debajo del piso y el resultado salía negativo, o sea fuera de pantalla. */
+    const topeX=Math.max(4,window.innerWidth-i.w-4);
+    const topeY=Math.max(4,window.innerHeight-i.h-4);
+    const x=Math.min(Math.max(4,e.clientX-i.dx),topeX);
+    const y=Math.min(Math.max(4,e.clientY-i.dy),topeY);
     // También en una ref: al soltar hay que guardar la posición REAL, y el estado
     // de React puede no haberse actualizado todavía cuando llega el pointerup.
     fabUltima.current={x,y};
