@@ -1881,6 +1881,19 @@ function GanttView({tc,cfg,rubros,conflictos,proyecto,prof,nota='',rec=[],moItem
           const bW=Math.max(2,ex-bx);
           const bH=ROW_H*.52,bY=sy+(ROW_H-bH)/2;
           doc.setFillColor(...col);doc.roundedRect(bx,bY,bW,bH,.9,.9,'F');
+          /* Inicial del día dentro de la barra: permite ver de un vistazo si la
+             tarea arranca un martes o termina un jueves, sin ir a contar columnas
+             hasta el encabezado. Sólo si el ancho del día da para que se lea. */
+          const INI='DLMMJVS';
+          for(let di=seg.s;di<=seg.e;di++){
+            const d=allDays[di];
+            if(!d||isWk(d))continue;
+            const anchoDia=isSatHalf(d)?SatWch:DWch;
+            if(anchoDia<5.5)continue;   // más angosto que esto queda ilegible
+            doc.setFont('helvetica','bold');doc.setFontSize(Math.min(6,anchoDia*.62));
+            doc.setTextColor(255,255,255);
+            doc.text(INI[d.getDay()],pdxCh[di]+anchoDia/2,bY+bH*.75,{align:'center'});
+          }
         });
 
         // ③ LÍNEAS DIVISORAS al final — siempre encima de cualquier fill
@@ -4454,6 +4467,64 @@ function App(){
   const _driveTimer=useRef(null);
   const [driveStatus,setDriveStatus]=useState('idle'); // idle | loading | pending | saving | saved | error
 
+  /* ── Botón del asistente: arrastrable ──────────────────────────────
+     Queda fijo sobre el contenido, así que tiene que poder correrse cuando tapa
+     un dato. La posición se guarda por dispositivo. Se distingue arrastrar de
+     tocar por la distancia recorrida: menos de 5px es un toque y abre. */
+  const FAB_LS='obragestion_fab_pos';
+  const [fabPos,setFabPos]=useState(()=>{
+    const alto=typeof window!=='undefined'?window.innerHeight:800;
+    const porDefecto={x:16,y:Math.max(60,alto-72)};
+    try{
+      const g=JSON.parse(localStorage.getItem(FAB_LS)||'null');
+      return (g&&typeof g.x==='number'&&typeof g.y==='number')?g:porDefecto;
+    }catch{return porDefecto;}
+  });
+  const [fabMoviendo,setFabMoviendo]=useState(false);
+  const fabArrastro=useRef(false);   // ¿el gesto fue arrastre y no toque?
+  const fabIni=useRef(null);
+
+  const fabDown=e=>{
+    fabArrastro.current=false;
+    const r=e.currentTarget.getBoundingClientRect();
+    fabIni.current={dx:e.clientX-r.left,dy:e.clientY-r.top,x0:e.clientX,y0:e.clientY,
+      w:r.width,h:r.height};
+    try{e.currentTarget.setPointerCapture(e.pointerId);}catch{}
+  };
+  const fabMove=e=>{
+    const i=fabIni.current; if(!i)return;
+    if(Math.abs(e.clientX-i.x0)+Math.abs(e.clientY-i.y0)>5){
+      fabArrastro.current=true; if(!fabMoviendo)setFabMoviendo(true);
+    }
+    if(!fabArrastro.current)return;
+    // Se mantiene dentro de la pantalla para que no quede inalcanzable
+    const x=Math.min(Math.max(4,e.clientX-i.dx),window.innerWidth-i.w-4);
+    const y=Math.min(Math.max(4,e.clientY-i.dy),window.innerHeight-i.h-4);
+    setFabPos({x,y});
+  };
+  /* Si la ventana cambia de tamaño (girar el celular, achicar la ventana), una
+     posición guardada podía quedar fuera de pantalla y el botón inalcanzable. */
+  useEffect(()=>{
+    const acomodar=()=>setFabPos(p=>({
+      x:Math.min(Math.max(4,p.x),Math.max(4,window.innerWidth-150)),
+      y:Math.min(Math.max(4,p.y),Math.max(4,window.innerHeight-56))
+    }));
+    acomodar();
+    window.addEventListener('resize',acomodar);
+    return ()=>window.removeEventListener('resize',acomodar);
+  },[]);
+
+  const fabUp=e=>{
+    try{e.currentTarget.releasePointerCapture(e.pointerId);}catch{}
+    fabIni.current=null;
+    if(fabMoviendo)setFabMoviendo(false);
+    if(fabArrastro.current){
+      try{localStorage.setItem(FAB_LS,JSON.stringify(fabPos));}catch{}
+      // Se limpia después del click, que llega justo detrás del pointerup
+      setTimeout(()=>{fabArrastro.current=false;},0);
+    }
+  };
+
   // Auto-save local + Drive auto-sync (debounce 15s)
   useEffect(()=>{
     const data={tareas,rec,grupos,rubros,cfg,proyecto,cuadGrupos,cuadRubros,moItems,matIncr,prof,imprevistos,notaPDF,
@@ -4812,17 +4883,23 @@ function App(){
         </div>
       </div>
 
-      {/* Acceso directo al asistente desde cualquier pestaña. Va abajo a la izquierda
-          para no pisarse con el indicador de Drive, y desaparece cuando ya estás ahí. */}
+      {/* Acceso directo al asistente desde cualquier pestaña. Se puede arrastrar
+          para correrlo cuando tapa algo, y la posición queda guardada. */}
       {tab!=="asistente"&&(
-        <button onClick={()=>setTab("asistente")}
-          title="Abrir el asistente: cargá la obra hablando, escribiendo o adjuntando una lista de precios"
+        <button
+          onPointerDown={fabDown} onPointerMove={fabMove} onPointerUp={fabUp}
+          onPointerCancel={fabUp}
+          onClick={()=>{if(!fabArrastro.current)setTab("asistente");}}
+          title="Abrir el asistente. Arrastralo si te tapa algo."
           className="fab-asistente"
-          style={{position:"fixed",bottom:"16px",left:"16px",zIndex:9999,
+          style={{position:"fixed",left:fabPos.x+"px",top:fabPos.y+"px",zIndex:9999,
             display:"flex",alignItems:"center",gap:"8px",
             background:C.accent,color:"#fff",border:"none",borderRadius:"26px",
-            padding:"11px 18px",fontSize:"13px",fontWeight:800,cursor:"pointer",
-            boxShadow:"0 4px 14px rgba(217,119,6,.42)"}}>
+            padding:"11px 18px",fontSize:"13px",fontWeight:800,
+            cursor:fabMoviendo?"grabbing":"grab",touchAction:"none",
+            userSelect:"none",
+            opacity:fabMoviendo?.85:1,
+            boxShadow:fabMoviendo?"0 8px 22px rgba(217,119,6,.55)":"0 4px 14px rgba(217,119,6,.42)"}}>
           <span style={{fontSize:"17px",lineHeight:1}}>👷</span>
           <span className="fab-texto">Asistente</span>
         </button>
