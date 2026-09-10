@@ -1561,10 +1561,21 @@ function PlanObra({tc,setTareas,rec,setRec,cfg,setCfg,rubros,grupos,cuadGrupos,s
 function GanttView({tc,setTareas,cfg,rubros,conflictos,proyecto,prof,nota='',rec=[],moItems={},matIncr={}}){
   /* Edición directa desde el Gantt: al tocar una barra se abre un panelito para
      cambiar inicio, duración o fin sin tener que ir a Plan de Obra y volver. */
-  const [edit,setEdit]=useState(null);   // {id} — el resto se lee de tc en vivo
-  const abrirEdit=t=>setEdit({id:t.id,ini:t.fIniManual||'',
-    dur:String(isGL(t)?(t.dias||t.dFin||1):(t.durEsManual?t.dFin:'')),
-    fin:''});
+  const [edit,setEdit]=useState(null);   // {id,x,y} — el resto se lee de tc en vivo
+  const abrirEdit=(t,ev)=>{
+    const px=ev?Math.min(ev.clientX,window.innerWidth-280):80;
+    const py=ev?Math.min(ev.clientY+12,window.innerHeight-320):80;
+    setEdit({id:t.id,x:Math.max(8,px),y:Math.max(8,py),ini:t.fIniManual||'',
+      dur:String(isGL(t)?(t.dias||t.dFin||1):(t.durEsManual?t.dFin:'')),
+      fin:''});
+  };
+  /* ESC cierra el panelito de edición del Gantt */
+  useEffect(()=>{
+    if(!edit)return;
+    const h=ev=>{if(ev.key==='Escape')setEdit(null);};
+    document.addEventListener('keydown',h);
+    return()=>document.removeEventListener('keydown',h);
+  },[edit]);
   const _upd=(id,fn)=>setTareas&&setTareas(p=>p.map(t=>t.id===id?fn(t):t));
   const gSetIni=(id,v)=>_upd(id,t=>({...t,fIniManual:String(v).trim()}));
   const gClearIni=id=>_upd(id,t=>{const{fIniManual,...r}=t;return r;});
@@ -2119,7 +2130,7 @@ function GanttView({tc,setTareas,cfg,rubros,conflictos,proyecto,prof,nota='',rec
               <div style={{width:totalW+"px",flexShrink:0,height:"14px",
                 backgroundColor:`${C.border}33`,backgroundImage:wkBg,
                 borderRadius:"3px",position:"relative",cursor:"pointer"}}
-                onClick={()=>abrirEdit(t)}>
+                onClick={e=>abrirEdit(t,e)}>
                 {getSegs(t.fIni,t.fFin).map((seg,si)=>{
                   const sl=gLeft(seg.s);
                   const sw=Math.max(2,gRight(seg.e)-sl);
@@ -2136,73 +2147,57 @@ function GanttView({tc,setTareas,cfg,rubros,conflictos,proyecto,prof,nota='',rec
         })}
       </div>
 
-      {/* Panel de edición rápida al tocar una barra */}
+      {/* Panelito de edición rápida al tocar una barra — compacto, sin fondo negro.
+         Lo que se tipea impacta al toque; ESC o clic afuera cierran; ENTER cierra. */}
       {edit&&(()=>{
         const t=tc.find(x=>x.id===edit.id);
         if(!t){setEdit(null);return null;}
         const esGL=isGL(t);
         const rub=rubros.find(r=>r.id===t.rubroId);
-        const aplicarFin=()=>{
-          const nueva=pF(edit.fin);
-          if(!edit.fin||isNaN(nueva.getTime())){setEdit(e=>({...e,fin:''}));return;}
-          const dias=contarHabiles(t.fIni,nueva,!!cfg.sabado);
-          gSetDur(t.id,dias,esGL);
-          setEdit(e=>({...e,fin:'',dur:String(dias)}));
-        };
+        const okFecha=s=>/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(String(s).trim())&&!isNaN(pF(s).getTime());
+        const setIni=v=>{setEdit(e=>({...e,ini:v}));if(okFecha(v))gSetIni(t.id,v);};
+        const setDur=v=>{setEdit(e=>({...e,dur:v}));const n=Math.round(+v);if(String(v).trim()!==''&&n>=1)gSetDur(t.id,n,esGL);};
+        const setFin=v=>{setEdit(e=>({...e,fin:v}));if(okFecha(v)){const d=contarHabiles(t.fIni,pF(v),!!cfg.sabado);gSetDur(t.id,d,esGL);setEdit(e=>({...e,fin:v,dur:String(d)}));}};
+        const lbl={fontSize:'8px',fontWeight:800,letterSpacing:'.5px',color:C.t3,display:'block',marginBottom:'2px'};
         return(
-          <Modal title={`Editar en el Gantt · #${t.id}`} onClose={()=>setEdit(null)}>
-            <div style={{fontSize:'12px',color:C.t2,marginBottom:'12px'}}>
-              <b style={{color:rub?.color||C.t1}}>{rub?.nombre||'—'}</b> · {t.item}<br/>
-              <span style={{fontSize:'11px',color:C.t3}}>
-                Hoy: {fF(t.fIni)} → {fF(t.fFin)} ({t.dFin} d{esGL?', ítem GL':''})
-              </span>
+          <>
+            <div onClick={()=>setEdit(null)}
+              style={{position:'fixed',inset:0,zIndex:998,background:'transparent'}}/>
+            <div onKeyDown={ev=>{if(ev.key==='Enter'&&ev.target.tagName!=='TEXTAREA')setEdit(null);}}
+              style={{position:'fixed',left:edit.x+'px',top:edit.y+'px',width:'256px',zIndex:999,
+                background:C.card,border:`1px solid ${C.border}`,borderRadius:'8px',
+                boxShadow:'0 8px 28px rgba(15,23,42,.22)',padding:'10px 11px',fontSize:'11px'}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:'6px'}}>
+                <b style={{color:rub?.color||C.t1,fontSize:'11px'}}>#{t.id} · {t.item}</b>
+                <span onClick={()=>setEdit(null)} style={{cursor:'pointer',color:C.t3,fontSize:'13px',lineHeight:1}}>✕</span>
+              </div>
+              <div style={{fontSize:'9px',color:C.t3,marginBottom:'8px'}}>
+                {fF(t.fIni)} → {fF(t.fFin)} · {t.dFin} d{esGL?' · GL':''}
+              </div>
+
+              <label style={lbl}>INICIO (DD/MM/AAAA)</label>
+              <div style={{display:'flex',gap:'5px',alignItems:'center',marginBottom:'7px'}}>
+                <FInp value={edit.ini} onChange={setIni} ph={fF(t.fIni)}/>
+                {t.fIniManual&&<button onClick={()=>{gClearIni(t.id);setEdit(e=>({...e,ini:''}));}}
+                  style={{...btnS(C.t3),whiteSpace:'nowrap'}} title="Volver al cálculo por predecesoras">↺</button>}
+              </div>
+
+              <label style={lbl}>{esGL?'DURACIÓN (días)':'DURACIÓN a mano (días)'}</label>
+              <div style={{display:'flex',gap:'5px',alignItems:'center',marginBottom:'7px'}}>
+                <FInp value={edit.dur} onChange={setDur} type="number" step="1" ph={esGL?'Ej: 4':`auto: ${t.dFinAuto}`}/>
+                {!esGL&&t.durEsManual&&<button onClick={()=>{gClearDur(t.id);setEdit(e=>({...e,dur:''}));}}
+                  style={{...btnS(C.t3),whiteSpace:'nowrap'}} title="Volver al cálculo por horas">↺</button>}
+              </div>
+
+              <label style={lbl}>FIN (DD/MM/AAAA)</label>
+              <div style={{display:'flex',gap:'5px',alignItems:'center'}}>
+                <FInp value={edit.fin} onChange={setFin} ph={fF(t.fFin)}/>
+              </div>
+              <div style={{fontSize:'8px',color:C.t3,marginTop:'6px'}}>
+                Se aplica al tipear. ESC o clic afuera cierran · ENTER cierra.
+              </div>
             </div>
-
-            <Fld label="FECHA DE INICIO (DD/MM/AAAA)">
-              <div style={{display:'flex',gap:'6px',alignItems:'center'}}>
-                <FInp value={edit.ini} onChange={v=>setEdit(e=>({...e,ini:v}))} ph={fF(t.fIni)}/>
-                <button onClick={()=>{if(edit.ini.trim())gSetIni(t.id,edit.ini);}}
-                  style={{...btnS(C.green),whiteSpace:'nowrap'}}>Fijar</button>
-                {t.fIniManual&&(
-                  <button onClick={()=>{gClearIni(t.id);setEdit(e=>({...e,ini:''}));}}
-                    style={{...btnS(C.t3),whiteSpace:'nowrap'}} title="Que la calcule según las predecesoras">↺ auto</button>
-                )}
-              </div>
-              <div style={{fontSize:'9px',color:C.t3,marginTop:'3px'}}>
-                {t.fIniManual?`Fijada a mano en ${t.fIniManual}.`:'Ahora la decide la predecesora. Poné una fecha para clavarla.'}
-              </div>
-            </Fld>
-
-            <Fld label={esGL?'DURACIÓN (días)':'DURACIÓN — fijar a mano (días)'}>
-              <div style={{display:'flex',gap:'6px',alignItems:'center'}}>
-                <FInp value={edit.dur} onChange={v=>setEdit(e=>({...e,dur:v}))} type="number" step="1"
-                  ph={esGL?'Ej: 4':`auto: ${t.dFinAuto}`}/>
-                <button onClick={()=>{if(String(edit.dur).trim())gSetDur(t.id,edit.dur,esGL);}}
-                  style={{...btnS(C.green),whiteSpace:'nowrap'}}>Fijar</button>
-                {!esGL&&t.durEsManual&&(
-                  <button onClick={()=>{gClearDur(t.id);setEdit(e=>({...e,dur:''}));}}
-                    style={{...btnS(C.t3),whiteSpace:'nowrap'}} title="Volver al cálculo por horas">↺ auto</button>
-                )}
-              </div>
-              {!esGL&&<div style={{fontSize:'9px',color:C.t3,marginTop:'3px'}}>
-                Vacío = la calcula la app ({t.dFinAuto} d por horas ÷ cuadrilla).
-              </div>}
-            </Fld>
-
-            <Fld label="FECHA DE FIN (DD/MM/AAAA)">
-              <div style={{display:'flex',gap:'6px',alignItems:'center'}}>
-                <FInp value={edit.fin} onChange={v=>setEdit(e=>({...e,fin:v}))} ph={fF(t.fFin)}/>
-                <button onClick={aplicarFin} style={{...btnS(C.green),whiteSpace:'nowrap'}}>Ajustar</button>
-              </div>
-              <div style={{fontSize:'9px',color:C.t3,marginTop:'3px'}}>
-                Mantiene el inicio y cambia la duración para que termine ese día (contando sólo días hábiles).
-              </div>
-            </Fld>
-
-            <div style={{display:'flex',justifyContent:'flex-end',marginTop:'16px'}}>
-              <Btn onClick={()=>setEdit(null)} accent={C.blue}>Listo</Btn>
-            </div>
-          </Modal>
+          </>
         );
       })()}
     </div>
