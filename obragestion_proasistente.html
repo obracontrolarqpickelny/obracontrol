@@ -1567,6 +1567,14 @@ function GanttView({tc,cfg,rubros,conflictos,proyecto,prof,nota='',rec=[],moItem
 
   const isSatHalf=d=>!!cfg.sabado&&d.getDay()===6;
   const isWk=d=>{const n=d.getDay();return n===0||(n===6&&!cfg.sabado);};
+  /* Rango de días LABORABLES de una semana: primer y último día que NO es fin de
+     semana. El domingo siempre queda afuera; el sábado entra sólo si cfg.sabado.
+     Así el encabezado dice "19/09 - 23/09" (lun-vie) en vez de la semana corrida
+     de calendario. Si arranca un miércoles, muestra desde ese miércoles. */
+  const rangoLaboral=(dayIdxs)=>{
+    const lab=dayIdxs.filter(i=>allDays[i]&&!isWk(allDays[i]));
+    return lab.length?[allDays[lab[0]],allDays[lab[lab.length-1]]]:null;
+  };
   const WORK_W=38,WKND_W=12; // px por día hábil / fin de semana
   const SAT_W=Math.round(WORK_W*0.55);
   const dayW=d=>d.getDay()===0?WKND_W:isSatHalf(d)?SAT_W:WORK_W;
@@ -1836,8 +1844,9 @@ function GanttView({tc,cfg,rubros,conflictos,proyecto,prof,nota='',rec=[],moItem
           doc.setFillColor(...VLG);doc.rect(wx,sy,ww,WH,'F');
           doc.setDrawColor(...LGY);doc.setLineWidth(.25);doc.rect(wx,sy,ww,WH,'S');
           if(ww>14){
-            const sd=allDays[wk.si];
-            const ed=allDays[li];
+            const rl=rangoLaboral(wk.days);
+            const sd=rl?rl[0]:allDays[wk.si];
+            const ed=rl?rl[1]:allDays[li];
             const wkCostData=pWkCosts[globalWi]||{mat:0,mo:0,total:0};
             // Línea 1: número de semana
             doc.setFont('helvetica','bold');doc.setFontSize(6);doc.setTextColor(...GRY);
@@ -2019,8 +2028,9 @@ function GanttView({tc,cfg,rubros,conflictos,proyecto,prof,nota='',rec=[],moItem
               const lastI=wk.days[wk.days.length-1];
               const wEnd=dayPx[lastI]+(allDays[lastI]?dayW(allDays[lastI]):WORK_W);
               const ww=wEnd-wk.px;
-              const sd=allDays[wk.si];
-              const ed=allDays[lastI];
+              const rl=rangoLaboral(wk.days);
+              const sd=rl?rl[0]:allDays[wk.si];
+              const ed=rl?rl[1]:allDays[lastI];
               const wc=weekCosts[wi]||{mat:0,mo:0,total:0};
               return(
                 <div key={wi} style={{position:"absolute",left:wk.px+"px",width:ww+"px",
