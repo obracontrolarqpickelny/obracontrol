@@ -428,6 +428,15 @@ const btnS=acc=>({background:`${acc}22`,border:`1px solid ${acc}44`,color:acc,bo
 
 /* ── Helpers días hábiles ── */
 const isWeekend=(d,sabado=false)=>{const n=d.getDay();return n===0||(n===6&&!sabado);};
+/* Días laborables entre dos fechas, inclusive ambas. Sirve para pasar de
+   "quiero que termine el 30/10" a una duración en días. */
+const contarHabiles=(desde,hasta,sabado=false)=>{
+  const a=new Date(desde),b=new Date(hasta);
+  if(b<a)return 1;
+  let n=0;const r=new Date(a);
+  while(r<=b){if(!isWeekend(r,sabado))n++;r.setDate(r.getDate()+1);}
+  return Math.max(1,n);
+};
 const nextWorkDay=(d,sabado=false)=>{const r=new Date(d);while(isWeekend(r,sabado))r.setDate(r.getDate()+1);return r;};
 const addWorkDays=(d,n,sabado=false)=>{
   if(n<=0)return new Date(d);
@@ -1549,7 +1558,21 @@ function PlanObra({tc,setTareas,rec,setRec,cfg,setCfg,rubros,grupos,cuadGrupos,s
 
 /* ══════════ GANTT ══════════ */
 // El % de incremento se carga en la pestaña Recursos $; acá sólo se refleja en los montos.
-function GanttView({tc,cfg,rubros,conflictos,proyecto,prof,nota='',rec=[],moItems={},matIncr={}}){
+function GanttView({tc,setTareas,cfg,rubros,conflictos,proyecto,prof,nota='',rec=[],moItems={},matIncr={}}){
+  /* Edición directa desde el Gantt: al tocar una barra se abre un panelito para
+     cambiar inicio, duración o fin sin tener que ir a Plan de Obra y volver. */
+  const [edit,setEdit]=useState(null);   // {id} — el resto se lee de tc en vivo
+  const abrirEdit=t=>setEdit({id:t.id,ini:t.fIniManual||'',
+    dur:String(isGL(t)?(t.dias||t.dFin||1):(t.durEsManual?t.dFin:'')),
+    fin:''});
+  const _upd=(id,fn)=>setTareas&&setTareas(p=>p.map(t=>t.id===id?fn(t):t));
+  const gSetIni=(id,v)=>_upd(id,t=>({...t,fIniManual:String(v).trim()}));
+  const gClearIni=id=>_upd(id,t=>{const{fIniManual,...r}=t;return r;});
+  const gSetDur=(id,dias,esGL)=>{
+    const v=Math.max(1,Math.round(+dias)||1);
+    _upd(id,t=>esGL?{...t,dias:v}:{...t,durManual:v});
+  };
+  const gClearDur=id=>_upd(id,t=>{const{durManual,...r}=t;return r;});
   const errIds=new Set(conflictos.filter(e=>e.taskId).map(e=>e.taskId));
   const [showMoney,setShowMoney]=useState(true);
   const fi=pF(cfg.fechaInicio);
@@ -2095,14 +2118,15 @@ function GanttView({tc,cfg,rubros,conflictos,proyecto,prof,nota='',rec=[],moItem
               </div>
               <div style={{width:totalW+"px",flexShrink:0,height:"14px",
                 backgroundColor:`${C.border}33`,backgroundImage:wkBg,
-                borderRadius:"3px",position:"relative"}}>
+                borderRadius:"3px",position:"relative",cursor:"pointer"}}
+                onClick={()=>abrirEdit(t)}>
                 {getSegs(t.fIni,t.fFin).map((seg,si)=>{
                   const sl=gLeft(seg.s);
                   const sw=Math.max(2,gRight(seg.e)-sl);
                   return(
                     <div key={si} style={{position:"absolute",left:sl+"px",width:sw+"px",height:"100%",
-                      background:col,borderRadius:"3px",opacity:.85,minWidth:"2px"}}
-                      title={detalle}/>
+                      background:col,borderRadius:"3px",opacity:.85,minWidth:"2px",cursor:"pointer"}}
+                      title={detalle+"\n(clic para editar)"}/>
                   );
                 })}
               </div>
@@ -2111,6 +2135,76 @@ function GanttView({tc,cfg,rubros,conflictos,proyecto,prof,nota='',rec=[],moItem
           );
         })}
       </div>
+
+      {/* Panel de edición rápida al tocar una barra */}
+      {edit&&(()=>{
+        const t=tc.find(x=>x.id===edit.id);
+        if(!t){setEdit(null);return null;}
+        const esGL=isGL(t);
+        const rub=rubros.find(r=>r.id===t.rubroId);
+        const aplicarFin=()=>{
+          const nueva=pF(edit.fin);
+          if(!edit.fin||isNaN(nueva.getTime())){setEdit(e=>({...e,fin:''}));return;}
+          const dias=contarHabiles(t.fIni,nueva,!!cfg.sabado);
+          gSetDur(t.id,dias,esGL);
+          setEdit(e=>({...e,fin:'',dur:String(dias)}));
+        };
+        return(
+          <Modal title={`Editar en el Gantt · #${t.id}`} onClose={()=>setEdit(null)}>
+            <div style={{fontSize:'12px',color:C.t2,marginBottom:'12px'}}>
+              <b style={{color:rub?.color||C.t1}}>{rub?.nombre||'—'}</b> · {t.item}<br/>
+              <span style={{fontSize:'11px',color:C.t3}}>
+                Hoy: {fF(t.fIni)} → {fF(t.fFin)} ({t.dFin} d{esGL?', ítem GL':''})
+              </span>
+            </div>
+
+            <Fld label="FECHA DE INICIO (DD/MM/AAAA)">
+              <div style={{display:'flex',gap:'6px',alignItems:'center'}}>
+                <FInp value={edit.ini} onChange={v=>setEdit(e=>({...e,ini:v}))} ph={fF(t.fIni)}/>
+                <button onClick={()=>{if(edit.ini.trim())gSetIni(t.id,edit.ini);}}
+                  style={{...btnS(C.green),whiteSpace:'nowrap'}}>Fijar</button>
+                {t.fIniManual&&(
+                  <button onClick={()=>{gClearIni(t.id);setEdit(e=>({...e,ini:''}));}}
+                    style={{...btnS(C.t3),whiteSpace:'nowrap'}} title="Que la calcule según las predecesoras">↺ auto</button>
+                )}
+              </div>
+              <div style={{fontSize:'9px',color:C.t3,marginTop:'3px'}}>
+                {t.fIniManual?`Fijada a mano en ${t.fIniManual}.`:'Ahora la decide la predecesora. Poné una fecha para clavarla.'}
+              </div>
+            </Fld>
+
+            <Fld label={esGL?'DURACIÓN (días)':'DURACIÓN — fijar a mano (días)'}>
+              <div style={{display:'flex',gap:'6px',alignItems:'center'}}>
+                <FInp value={edit.dur} onChange={v=>setEdit(e=>({...e,dur:v}))} type="number" step="1"
+                  ph={esGL?'Ej: 4':`auto: ${t.dFinAuto}`}/>
+                <button onClick={()=>{if(String(edit.dur).trim())gSetDur(t.id,edit.dur,esGL);}}
+                  style={{...btnS(C.green),whiteSpace:'nowrap'}}>Fijar</button>
+                {!esGL&&t.durEsManual&&(
+                  <button onClick={()=>{gClearDur(t.id);setEdit(e=>({...e,dur:''}));}}
+                    style={{...btnS(C.t3),whiteSpace:'nowrap'}} title="Volver al cálculo por horas">↺ auto</button>
+                )}
+              </div>
+              {!esGL&&<div style={{fontSize:'9px',color:C.t3,marginTop:'3px'}}>
+                Vacío = la calcula la app ({t.dFinAuto} d por horas ÷ cuadrilla).
+              </div>}
+            </Fld>
+
+            <Fld label="FECHA DE FIN (DD/MM/AAAA)">
+              <div style={{display:'flex',gap:'6px',alignItems:'center'}}>
+                <FInp value={edit.fin} onChange={v=>setEdit(e=>({...e,fin:v}))} ph={fF(t.fFin)}/>
+                <button onClick={aplicarFin} style={{...btnS(C.green),whiteSpace:'nowrap'}}>Ajustar</button>
+              </div>
+              <div style={{fontSize:'9px',color:C.t3,marginTop:'3px'}}>
+                Mantiene el inicio y cambia la duración para que termine ese día (contando sólo días hábiles).
+              </div>
+            </Fld>
+
+            <div style={{display:'flex',justifyContent:'flex-end',marginTop:'16px'}}>
+              <Btn onClick={()=>setEdit(null)} accent={C.blue}>Listo</Btn>
+            </div>
+          </Modal>
+        );
+      })()}
     </div>
   );
 }
@@ -5177,7 +5271,7 @@ function App(){
       <div style={{padding:"12px 14px"}}>
         {tab==="rubros"    &&<EditorRubros grupos={grupos} setGrupos={setGrupos} rubros={rubros} setRubros={setRubros} tareas={tareas} setTareas={setTareas} rec={rec} setRec={setRec} proyecto={proyecto} moItems={moItems} setMoItems={setMoItems} prof={prof} nota={notaPDF}/>}
         {tab==="plan"      &&<PlanObra tc={tc} setTareas={setTareas} rec={rec} setRec={setRec} cfg={cfg} setCfg={setCfg} rubros={rubros} grupos={grupos} cuadGrupos={cuadGrupos} setCuadGrupos={setCuadGrupos} cuadRubros={cuadRubros} setCuadRubros={setCuadRubros} conflictos={conflictos} erroresMap={erroresMap} proyecto={proyecto} moItems={moItems} setMoItems={setMoItems} prof={prof} nota={notaPDF}/>}
-        {tab==="gantt"     &&<GanttView tc={tc} cfg={cfg} rubros={rubros} conflictos={conflictos} proyecto={proyecto} prof={prof} nota={notaPDF} rec={rec} moItems={moItems} matIncr={matIncr}/>}
+        {tab==="gantt"     &&<GanttView tc={tc} setTareas={setTareas} cfg={cfg} rubros={rubros} conflictos={conflictos} proyecto={proyecto} prof={prof} nota={notaPDF} rec={rec} moItems={moItems} matIncr={matIncr}/>}
         {tab==="recursos"  &&<Recursos rec={rec} setRec={setRec} tareas={tareas} rubros={rubros} proyecto={proyecto} prof={prof} imprevistos={imprevistos} setImprevistos={setImprevistos} nota={notaPDF} matIncr={matIncr} setMatIncr={setMatIncr}/>}
         {tab==="asistente" &&<AsistenteChat tareas={tareas} setTareas={setTareas} rubros={rubros} setRubros={setRubros} grupos={grupos} setGrupos={setGrupos} cfg={cfg} setCfg={setCfg} moItems={moItems} setMoItems={setMoItems} rec={rec} setRec={setRec} matIncr={matIncr} setMatIncr={setMatIncr} imprevistos={imprevistos} setImprevistos={setImprevistos} cuadGrupos={cuadGrupos} setCuadGrupos={setCuadGrupos} cuadRubros={cuadRubros} setCuadRubros={setCuadRubros} msgs={aiChat} setMsgs={setAiChat} proyecto={proyecto} setProyecto={setProyecto} prof={prof} setProf={setProf} notaPDF={notaPDF} setNotaPDF={setNotaPDF}/>}
         {tab==="incidencia"&&<Incidencia tc={tc} rec={rec} rubros={rubros} grupos={grupos} moItems={moItems} setMoItems={setMoItems} proyecto={proyecto} prof={prof} nota={notaPDF}/>}
