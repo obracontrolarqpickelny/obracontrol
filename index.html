@@ -1211,6 +1211,71 @@ async function _restaurarDePapelera(fileId){
   }catch(e){return false;}
 }
 
+// ─── BORRADO SEGURO EN DRIVE ──────────────────────────────────────
+// Regla: la app NUNCA borra un archivo de Drive de forma definitiva.
+// Antes usaba DELETE de la API, que borra para siempre SIN pasar por la
+// papelera: un toque de más en el tacho del celular y el archivo no volvía
+// nunca. Ahora todo va a la papelera de Drive, donde queda recuperable 30 días
+// y visible desde la propia app.
+
+/** ¿Algún otro ítem sigue usando este archivo de Drive? */
+function _referenciasDriveId(fileId,excluir){
+  if(!fileId)return [];
+  var usos=[];
+  var mismo=function(tbl,id,idx){
+    return excluir&&excluir.tbl===tbl&&excluir.id===id&&(excluir.idx===undefined||excluir.idx===idx);
+  };
+  var contiene=function(v){
+    if(typeof v!=='string'||!v)return false;
+    return v.indexOf(fileId)>=0;
+  };
+  Object.keys(D||{}).forEach(function(tbl){
+    if(!Array.isArray(D[tbl]))return;
+    D[tbl].forEach(function(item){
+      if(!item||typeof item!=='object')return;
+      (item.photos||[]).forEach(function(ph,idx){
+        var u=typeof ph==='string'?ph:((ph&&(ph.url||ph.driveId))||'');
+        var did=(typeof ph==='object'&&ph&&ph.driveId)||'';
+        if((contiene(u)||did===fileId)&&!mismo(tbl,item.id,idx))usos.push(tbl+'/'+item.id);
+      });
+      (item.archivos||[]).forEach(function(af){
+        if(!af)return;
+        if((af.driveId===fileId||contiene(af.driveUrl)||contiene(af.data))&&!mismo(tbl,item.id,undefined))usos.push(tbl+'/'+item.id);
+      });
+      if(contiene(item.imagen)&&!mismo(tbl,item.id,undefined))usos.push(tbl+'/'+item.id);
+    });
+  });
+  return usos;
+}
+
+/**
+ * Manda un archivo de Drive a la papelera, dejando registro para poder deshacerlo.
+ * Nunca borra definitivamente. Si el archivo todavía se usa en otro ítem, no lo toca.
+ */
+async function _borrarDeDriveSeguro(fileId,descripcion,excluir){
+  if(!fileId)return{ok:false,motivo:'sin id'};
+  var usos=_referenciasDriveId(fileId,excluir);
+  if(usos.length){
+    // Caso real y silencioso: la misma foto referenciada dos veces. Borrar por
+    // una punta rompía la otra "de la nada". Ahora se conserva.
+    console.warn('No se manda a la papelera: el archivo sigue usado en',usos);
+    return{ok:false,motivo:'en uso',usos:usos};
+  }
+  try{
+    var auth=await ensureAuth();
+    if(!auth)return{ok:false,motivo:'sin sesión de Drive'};
+    var res=await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/'+fileId,{
+      method:'PATCH',headers:driveHeaders(),body:JSON.stringify({trashed:true}),
+    });
+    if(!res||!res.ok)return{ok:false,motivo:'Drive respondió '+(res&&res.status)};
+    if(!Array.isArray(D.papeleraDrive))D.papeleraDrive=[];
+    D.papeleraDrive.unshift({driveId:fileId,desc:descripcion||'archivo',
+      fecha:nw(),por:(D.user&&D.user.name)||''});
+    D.papeleraDrive=D.papeleraDrive.slice(0,200);
+    return{ok:true};
+  }catch(e){return{ok:false,motivo:String(e&&e.message||e)};}
+}
+
 // Baja los bytes originales por la API autenticada (alt=media). Es la pieza que
 // faltaba para que el respaldo sea real: la URL pública de thumbnail no se puede
 // leer por fetch (no manda cabeceras CORS), así que hasta ahora una foto subida
@@ -1382,18 +1447,27 @@ async function createVersionBackup(reason = 'auto') {
       body: form,
     });
 
-    // Prune old backups: keep only last 20
-    const q = `'${GD.backupFolderId}' in parents and trashed=false`;
-    const res = await fetchWithTimeout(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name,createdTime)&orderBy=createdTime`, {
-      headers: driveHeaders()
-    });
-    const data = await res.json();
-    if (data.files && data.files.length > 20) {
-      const toDelete = data.files.slice(0, data.files.length - 20);
-      for (const f of toDelete) {
-        await fetchWithTimeout(`https://www.googleapis.com/drive/v3/files/${f.id}`, {
-          method: 'DELETE', headers: driveHeaders()
-        });
+    // Dejar los últimos 40 respaldos. Los viejos van a la PAPELERA, no se
+    // borran: antes esto llamaba a DELETE, que es definitivo, y se llevaba
+    // respaldos sin que nadie lo pidiera ni se enterara.
+    // Guarda de seguridad: si por lo que sea la carpeta de backups no quedó
+    // resuelta, no se toca nada. Una consulta con la carpeta equivocada podría
+    // barrer archivos que no son respaldos.
+    if (GD.backupFolderId) {
+      const q = `'${GD.backupFolderId}' in parents and trashed=false`;
+      const res = await fetchWithTimeout(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name,createdTime)&orderBy=createdTime`, {
+        headers: driveHeaders()
+      });
+      const data = await res.json();
+      if (data.files && data.files.length > 40) {
+        const viejos = data.files.slice(0, data.files.length - 40)
+          // Sólo respaldos: nunca un archivo que no generó esta rutina.
+          .filter(f => /^ObraControl.*\.json$/i.test(f.name || ''));
+        for (const f of viejos) {
+          await fetchWithTimeout(`https://www.googleapis.com/drive/v3/files/${f.id}`, {
+            method: 'PATCH', headers: driveHeaders(), body: JSON.stringify({ trashed: true })
+          });
+        }
       }
     }
     console.log('Backup created:', name);
@@ -1574,7 +1648,7 @@ const SC={'En curso':'#f59e0b',Pausada:'#94a3b8',Finalizada:'#22c55e','Por inici
 const MC={dashboard:'#D97706',visitas:'#3b82f6',tareas:'#0891b2',materiales:'#7c3aed',alertas:'#dc2626',checklist:'#db2777',documentos:'#475569',comentarios:'#ea580c',colaboradores:'#16a34a',economia:'#0891b2',informes:'#D97706',config:'#64748b',bandeja:'#0d9488'};
 const MCBG={dashboard:'#FFFBEB',visitas:'#EFF6FF',tareas:'#ECFEFF',materiales:'#F5F3FF',alertas:'#FEF2F2',checklist:'#FDF2F8',documentos:'#F8FAFC',comentarios:'#FFF7ED',colaboradores:'#F0FDF4',economia:'#ECFEFF',informes:'#FFFBEB',config:'#F8FAFC',bandeja:'#f0fdfa'};
 
-let D={user:null,projects:[],visitas:[],tareas:[],materiales:[],matIngresos:[],alertas:[],documentos:[],enlaces:[],checklists:[],comentarios:[],colaboradores:[],economia:[],auditLog:[],formulariosPendientes:[],carpetas:[],mensajesColab:[],driveConfig:{},lastSync:null};
+let D={user:null,projects:[],visitas:[],tareas:[],materiales:[],matIngresos:[],alertas:[],documentos:[],enlaces:[],checklists:[],comentarios:[],colaboradores:[],economia:[],auditLog:[],formulariosPendientes:[],carpetas:[],mensajesColab:[],papeleraDrive:[],driveConfig:{},lastSync:null};
 let S={proj:null,mod:'dashboard',menu:false,searchOpen:false,searchQ:'',taskFilter:'',taskEncFilter:'',taskSort:'',chkSort:'',chkCollapsed:{},taskCollapsed:{},visitaDetail:null,matDetail:null,matNoteEditing:null,matIngSort:'rec',cmtFilter:'',cmtSearch:'',cmtTipoFilter:'',ecoFilter:'',ecoTipoFilter:'',ecoSort:'',docSort:'',matFilter:'',matCatFilter:'',matSort:'',matSinCompMin:false,matExistMin:false,matAPedirMin:false,matPedMin:false,ecoMetrosOpen:false,bandejaTab:'pendientes'};
 try{S.chkCollapsed=JSON.parse(localStorage.getItem('_cc')||'{}')}catch(e){}
 try{S.taskCollapsed=JSON.parse(localStorage.getItem('_tc')||'{}')}catch(e){}
@@ -2014,20 +2088,21 @@ async function readPhotos(inputId, modKey){
 function mkPhoto(url,cap){return{id:uid(),url,caption:cap||'',date:td(),author:D.user?.name||'',comments:[]};}
 
 // ─── LIGHTBOX ───
-function delVisitaArchivo(vid, idx){
+async function delVisitaArchivo(vid, idx){
   if(!requireDelete())return;
-  if(!confirm('¿Eliminar este archivo?'))return;
   var v=D.visitas.find(function(x){return x.id===vid;});
   if(!v||!v.archivos||!v.archivos[idx])return;
   var arch=v.archivos[idx];
-  // Si tiene driveId, intentar borrar de Drive (best-effort)
-  if(arch.driveId&&GD.accessToken){
-    fetch('https://www.googleapis.com/drive/v3/files/'+arch.driveId,{
-      method:'DELETE',
-      headers:{'Authorization':'Bearer '+GD.accessToken}
-    }).catch(function(e){console.warn('Drive delete failed:',e);});
+  if(!await confirmarBorradoArchivo({titulo:'Eliminar este archivo',nombre:arch.name||'archivo',
+    contexto:String(v.title||v.date||'').slice(0,80)}))return;
+  // La posición pudo moverse mientras el cartel estaba abierto.
+  var pos=v.archivos.indexOf(arch);
+  if(pos<0){toast('Ese archivo ya no está','var(--orange)');render();return;}
+  if(arch.driveId){
+    var r=await _borrarDeDriveSeguro(arch.driveId,'archivo de visita '+(arch.name||''),{tbl:'visitas',id:vid});
+    if(!r.ok&&r.motivo==='sin sesión de Drive')toast('Reconectá Drive para eliminar también el archivo','var(--orange)',5000);
   }
-  v.archivos.splice(idx,1);
+  v.archivos.splice(pos,1);
   v.updatedAt=nw();
   audit('visitas','delArchivo',arch.name||'');
   sv();render();
@@ -2072,15 +2147,16 @@ function viewArchivo(tbl,itemId,archId){
   if(url.startsWith('[foto')||url.startsWith('[arch')){toast('El archivo está pendiente de subir a Drive. Reconectá Drive y reintentá.','var(--orange)',5000);return;}
   openFileData(url,af.name||'archivo');
 }
-function delArchivo(tbl,itemId,archId){
-  if(!confirmDel('¿Eliminar archivo adjunto?'))return;
+async function delArchivo(tbl,itemId,archId){
   var item=(D[tbl]||[]).find(function(x){return x.id===itemId;});
   if(!item||!item.archivos)return;
   var af=_findAf(item.archivos,archId);
-  if(af&&af.driveId&&GD.accessToken){
-    fetch('https://www.googleapis.com/drive/v3/files/'+af.driveId,{
-      method:'DELETE',headers:{'Authorization':'Bearer '+GD.accessToken}
-    }).catch(function(){});
+  if(!af){toast('Archivo no encontrado','var(--orange)');return;}
+  if(!await confirmarBorradoArchivo({titulo:'Eliminar archivo adjunto',nombre:af.name||'adjunto',
+    contexto:String(item.title||item.concepto||item.text||'').slice(0,80)}))return;
+  if(af.driveId){
+    var r=await _borrarDeDriveSeguro(af.driveId,'adjunto '+(af.name||''),{tbl:tbl,id:itemId});
+    if(!r.ok&&r.motivo==='sin sesión de Drive')toast('Reconectá Drive para eliminar también el archivo','var(--orange)',5000);
   }
   item.archivos=item.archivos.filter(function(f){return f.id!==archId&&f.name!==archId;});
   item.updatedAt=nw(); // sin esto el merge podía no ver el borrado como "más reciente" y lo revertía
@@ -2093,27 +2169,28 @@ function viewDoc(docId){
   if(!url){toast('Sin archivo adjunto para este documento','var(--orange)');return;}
   openFileData(url,doc.name||'documento');
 }
-function delArchivoCmt(cmId,archId){
+async function delArchivoCmt(cmId,archId){
   var cm=(D.comentarios||[]).find(function(x){return x.id===cmId;});
   if(!cm||!cm.archivos)return;
-  if(!confirmDel('¿Eliminar archivo adjunto?'))return;
   var af=_findAf(cm.archivos,archId);
-  if(af&&af.driveId&&GD.accessToken){
-    fetch('https://www.googleapis.com/drive/v3/files/'+af.driveId,{
-      method:'DELETE',headers:{'Authorization':'Bearer '+GD.accessToken}
-    }).catch(function(){});
+  if(!af){toast('Archivo no encontrado','var(--orange)');return;}
+  if(!await confirmarBorradoArchivo({titulo:'Eliminar archivo adjunto',nombre:af.name||'adjunto',
+    contexto:String(cm.text||cm.message||'').slice(0,80)}))return;
+  if(af.driveId){
+    var r=await _borrarDeDriveSeguro(af.driveId,'adjunto '+(af.name||''),{tbl:'comentarios',id:cmId});
+    if(!r.ok&&r.motivo==='sin sesión de Drive')toast('Reconectá Drive para eliminar también el archivo','var(--orange)',5000);
   }
   cm.archivos=cm.archivos.filter(function(f){return f.id!==archId&&f.name!==archId;});
   cm.updatedAt=nw(); // sin esto el merge podía no ver el borrado como "más reciente" y lo revertía
   sv();render();toast('Archivo eliminado');
 }
 
-function delPhoto(tbl, itemId, idx){
+async function delPhoto(tbl, itemId, idx){
   if(!requireDelete())return;
-  if(!confirm('\u00bfEliminar esta foto?'))return;
   var item=(D[tbl]||[]).find(function(x){return x.id===itemId;});
   if(!item||!item.photos)return;
   var photo=item.photos[idx];
+  if(!photo)return;
   var driveId=(typeof photo==='object'&&photo.driveId)||null;
   // Si URL es de Drive (thumbnail), extraer fileId
   if(!driveId&&typeof photo==='object'&&photo.url&&photo.url.includes('drive.google.com/thumbnail')){
@@ -2123,16 +2200,28 @@ function delPhoto(tbl, itemId, idx){
     var m2=photo.match(/[?&]id=([^&]+)/);
     if(m2)driveId=m2[1];
   }
-  if(driveId&&GD.accessToken){
-    fetch('https://www.googleapis.com/drive/v3/files/'+driveId,{
-      method:'DELETE',
-      headers:{'Authorization':'Bearer '+GD.accessToken}
-    }).catch(function(e){console.warn('Drive photo delete failed:',e);});
+  var _u=typeof photo==='string'?photo:((photo&&photo.url)||'');
+  var okDel=await confirmarBorradoArchivo({
+    titulo:'Eliminar esta foto',
+    nombre:(typeof photo==='object'&&photo&&photo.caption)||'Foto sin epígrafe',
+    contexto:String(item.title||item.concepto||item.text||item.message||'').slice(0,80),
+    miniatura:_resolveImg(_u),
+  });
+  if(!okDel)return;
+  // El índice pudo cambiar mientras el cartel estaba abierto (una sync que trajo
+  // cambios). Se vuelve a ubicar la foto por identidad y no por posición: con el
+  // índice viejo se podía terminar borrando la foto equivocada.
+  var pos=item.photos.indexOf(photo);
+  if(pos<0){toast('Esa foto ya no está','var(--orange)');render();return;}
+  if(driveId){
+    var r=await _borrarDeDriveSeguro(driveId,'foto de '+tbl,{tbl:tbl,id:itemId,idx:pos});
+    if(!r.ok&&r.motivo==='sin sesión de Drive')toast('Reconectá Drive para eliminar también el archivo','var(--orange)',5000);
   }
-  item.photos.splice(idx,1);
+  item.photos.splice(pos,1);
   item.updatedAt=nw(); // preservar eliminación en merge
+  try{audit(tbl,'delPhoto',String(item.title||item.id||''));}catch(_){}
   sv();render();
-  toast('Foto eliminada');
+  toast('Foto enviada a la papelera de Drive','var(--green)',4000);
 }
 
 function openPhotoEditor(tbl, itemId, idx){
@@ -2551,6 +2640,37 @@ if(!D.matIngresos)D.matIngresos=[];
 
 // ─── HELPERS ───
 function confirmDel(msg){return confirm(msg||'Eliminar?');}
+
+// Confirmación para borrados que tocan archivos (fotos y adjuntos).
+// El confirm() del navegador es un cartel genérico de una línea: en el celular
+// se acepta de rebote sin leerlo, y no dice QUÉ se borra ni si se puede volver
+// atrás. Este cartel nombra el archivo, dice a dónde va y obliga a apuntar a un
+// botón rojo separado del de cancelar.
+function confirmarBorradoArchivo(opts){
+  opts=opts||{};
+  return new Promise(function(resolve){
+    var d=document.createElement('div');
+    d.className='mo open';d.id='confDelM';
+    var cerrar=function(v){try{d.remove();}catch(_){}resolve(v);};
+    d._cerrar=cerrar;
+    var h='<div class="mo-c" style="max-width:340px">';
+    h+='<div class="mo-h"><h3 style="color:var(--red)">&#x26A0; '+esc(opts.titulo||'Eliminar archivo')+'</h3></div>';
+    if(opts.miniatura)h+='<div style="text-align:center;margin-bottom:10px"><img src="'+esc(opts.miniatura)+'" style="max-width:140px;max-height:140px;border-radius:8px;border:1px solid var(--brd)"></div>';
+    h+='<div style="background:var(--gray-ll);border:1px solid var(--brd);border-radius:8px;padding:10px;margin-bottom:10px">';
+    h+='<div class="ts" style="font-weight:700;word-break:break-word">'+esc(opts.nombre||'(sin nombre)')+'</div>';
+    if(opts.contexto)h+='<div class="txxs tc3 mt-4">'+esc(opts.contexto)+'</div>';
+    h+='</div>';
+    h+='<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px;margin-bottom:12px" class="txxs" style="color:#15803d">'
+      +'Se manda a la <strong>papelera de Google Drive</strong>. Queda recuperable 30 días, y desde Configuración &rarr; Papelera lo podés restaurar con un toque.</div>';
+    h+='<button class="btn btn-w mb-8" style="background:var(--red);color:#fff" onclick="document.getElementById(\'confDelM\')._cerrar(true)">Sí, eliminar</button>';
+    h+='<button class="btn btn-w btn-sec" onclick="document.getElementById(\'confDelM\')._cerrar(false)">Cancelar</button>';
+    h+='</div>';
+    d.innerHTML=h;
+    // Un toque en el fondo cancela: nunca confirma.
+    d.addEventListener('click',function(ev){if(ev.target===d)cerrar(false);});
+    document.body.appendChild(d);
+  });
+}
 
 // ── SEGURIDAD: control de permisos por rol ──────────────────────
 function canWrite(){
@@ -6806,7 +6926,7 @@ function rConfig(mc,p){
   [].concat(pf('visitas'),pf('tareas'),pf('materiales'),pf('matIngresos')).forEach(function(it){
     (it.photos||[]).forEach(function(p){var u=typeof p==='string'?p:(p.url||'');if(u.startsWith('data:'))_b64n++;});
   });
-mc.innerHTML=`${modHeader('config','Configuracion')}<div class="card mb-12"><div class="flex justify-between items-center mb-8"><div class="ts fw7">Datos de la obra</div><button class="btn btn-sec btn-s" onclick="openM('editProjM')">${I.edit} Editar</button></div><div class="ts tc3 lh18"><strong>Nombre:</strong> ${p.name}<br><strong>Cliente:</strong> ${p.client||'-'}<br><strong>Ubicacion:</strong> ${p.location||'-'}<br><strong>Director:</strong> ${p.director||'-'}<br><strong>Capataz:</strong> ${p.capataz||'-'}<br><strong>Inicio:</strong> ${fmts(p.startDate)||'-'}<br><strong>Fin:</strong> ${fmts(p.endDate)||'-'}<br><strong>Estado:</strong> ${p.status}</div></div><div class="card mb-12"><div class="ts fw7 mb-8">Estadisticas</div><div class="ts tc3 lh18">Visitas: ${pf('visitas').length} | Tareas: ${pf('tareas').length} | Materiales: ${pf('materiales').length} | Ingresos: ${pf('matIngresos').length} | Alertas: ${pf('alertas').length} | Comentarios: ${pf('comentarios').length} | Docs: ${pf('documentos').length} | Enlaces: ${pf('enlaces').length}</div></div><div class="card mb-12" style="border-left:4px solid #0d9488"><div class="ts fw7 mb-8" style="color:#0d9488">&#x1F4F1; Informes de campo</div><div class="txxs tc3 mb-12">Cuando compartís el link con un colaborador, los informes te llegan por los canales que tengas activos.</div><div class="flex items-center gap-8 mb-10"><div class="flex-1"><label class="fl">Tu WhatsApp</label><input class="fi" id="cfg_arch_tel" type="tel" value="${SYNC.archTel||''}" placeholder="+549..." onblur="saveArchContact('tel',this.value)"></div><button class="btn btn-s" style="margin-top:18px;min-width:80px;font-size:11px;background:${SYNC.sendWA?'var(--green)':'var(--gray-ll)'};color:${SYNC.sendWA?'#fff':'var(--text2)'}" onclick="toggleSendChannel('wa')">${SYNC.sendWA?'&#x2713; Activo':'Inactivo'}</button></div><div class="flex items-center gap-8 mb-12"><div class="flex-1"><label class="fl">Tu email</label><input class="fi" id="cfg_arch_mail" type="email" value="${SYNC.archEmail||''}" placeholder="tu@email.com" onblur="saveArchContact('mail',this.value)"></div><button class="btn btn-s" style="margin-top:18px;min-width:80px;font-size:11px;background:${SYNC.sendEmail?'var(--green)':'var(--gray-ll)'};color:${SYNC.sendEmail?'#fff':'var(--text2)'}" onclick="toggleSendChannel('email')">${SYNC.sendEmail?'&#x2713; Activo':'Inactivo'}</button></div><div class="txxs tc3">Los envíos llegan como un link. Al tocarlo la app muestra los datos en la Bandeja de entrada.</div></div><div class="card mb-12" style="border-left:4px solid var(--green)"><div class="ts fw7 mb-8" style="color:var(--green)">&#x1F680; Servidor propio (recomendado)</div><div class="txxs tc3 mb-12">Con esto los informes y las fotos te llegan solos, sin depender de WhatsApp. Se guardan en tu Google Drive. Instrucciones en el archivo INSTALAR_BACKEND.md.</div><div class="fg"><label class="fl">URL del Apps Script (termina en /exec)</label><input class="fi" id="cfg_api_url" value="${SYNC.apiUrl||''}" placeholder="https://script.google.com/macros/s/..../exec" onblur="saveApiCfg('url',this.value)"></div><div class="fg"><label class="fl">Clave secreta (la misma del script)</label><input class="fi" id="cfg_api_sec" value="${SYNC.apiSecret||''}" placeholder="tu clave" onblur="saveApiCfg('sec',this.value)"></div><div class="flex gap-6"><button class="btn btn-sec btn-s" style="flex:1" onclick="probarServidor()">&#x1F50C; Probar conexión</button><button class="btn btn-s" style="flex:1;background:var(--green);color:#fff" onclick="revisarServidor(true)">&#x1F4E5; Buscar informes</button></div>${SYNC.apiUrl&&SYNC.apiSecret?'<div class="txxs mt-8" style="color:var(--green);font-weight:700">&#x2713; Activo — se revisa solo al abrir la app</div>':'<div class="txxs mt-8 tc3">Sin configurar: los informes siguen dependiendo de WhatsApp.</div>'}</div>v><div class="card mb-12" style="border-left:4px solid #6366f1"><div class="ts fw7 mb-8" style="color:#6366f1">🔒 Protección con PIN</div><div class="txxs tc3 mb-12">Solo vos podés acceder a la app. Al abrir desde cualquier dispositivo se pedirá el PIN.</div>${(function(){var _p=localStorage.getItem('oc_pin');if(_p){return '<div class="txxs mb-10" style="color:var(--green);font-weight:700">✓ PIN activo ('+_p.length+' dígitos)</div><div class="flex gap-6"><input class="fi" id="cfg_pin_new" type="password" name="new-pin" autocomplete="new-password" inputmode="numeric" maxlength="8" placeholder="Nuevo PIN" style="flex:1;margin:0"><button class="btn btn-s" style="background:#6366f1;color:#fff;white-space:nowrap" onclick="var v=$(\'cfg_pin_new\').value.trim();if(v.length>=4)savePin(v);else toast(\'Mínimo 4 dígitos\',\'var(--red)\')">Cambiar</button></div><div class="txxs tc3 mt-8">'+(_pinDevOk()?'Este dispositivo está recordado: no se pide el PIN al abrir.':'Este dispositivo no está recordado: se pide el PIN en cada apertura.')+'</div><button class="btn btn-sec btn-s btn-w mt-4" onclick="olvidarDispositivo()">Olvidar este dispositivo</button><button class="btn btn-x btn-s btn-w mt-8" onclick="if(confirm(\'¿Eliminar PIN? La app quedará sin protección.\'))savePin(\'\')">Quitar PIN</button>';}else{return '<div class="txxs mb-10 tc3">Sin PIN configurado — cualquiera con el link puede acceder.</div><div class="flex gap-6"><input class="fi" id="cfg_pin_new" type="password" name="new-pin" autocomplete="new-password" inputmode="numeric" maxlength="8" placeholder="Nuevo PIN (mín. 4 dígitos)" style="flex:1;margin:0"><button class="btn btn-s" style="background:#6366f1;color:#fff;white-space:nowrap" onclick="var v=$(\'cfg_pin_new\').value.trim();if(v.length>=4)savePin(v);else toast(\'Mínimo 4 dígitos\',\'var(--red)\')">Activar PIN</button></div>';}})()}</div><div class="card mb-12" style="background:var(--red-bg);border:1px solid var(--red-mid)"><div class="ts fw7 mb-8" style="color:var(--red)">Zona peligrosa</div><button class="btn btn-x btn-s btn-w" onclick="deleteProj()">Eliminar obra</button></div><div class="card mb-12" style="border-left:4px solid #8b5cf6;padding:12px"><div class="ts fw7 mb-6" style="color:#8b5cf6">&#x1F4F8; Estado de las fotos</div><div class="txxs tc3 mb-8">Verificá que todas tus fotos estén visibles y respaldadas en Drive.</div><button class="btn btn-sec btn-s btn-w" onclick="diagnosticoFotos()">Ver estado de las fotos</button></div><div class="card mb-12" style="border-left:4px solid var(--cyan);padding:12px"><div class="ts fw7 mb-6">&#x1F4BE; Almacenamiento local</div><div style="background:var(--gray-ll);border-radius:6px;height:8px;margin-bottom:6px"><div style="background:${_lsColor};border-radius:6px;height:8px;width:${_lsPct}%"></div></div><div class="txxs tc3">${_lsUsed} KB usados de ~5120 KB disponibles</div>${_lsPct>80?'<div class="txxs mt-4" style="color:var(--orange)">&#x26A0; Almacenamiento casi lleno. Conectá Drive para liberar espacio.</div>':''}</div><div class="tac mt-20 txxs tc3"><div class="fw7">ObraControl Pro v9.0</div><div class="mt-4">Visita-centric | PDF | Materiales+Ingresos | Comentarios vinculados</div></div><div class="mo" id="editProjM"><div class="mo-c"><div class="mo-h"><h3>Editar Obra</h3><button class="tbtn" onclick="closeM('editProjM')">${I.x}</button></div><div class="fg"><label class="fl">Nombre *</label><input class="fi" id="ep_n" value="${p.name||''}"></div><div class="fg"><label class="fl">Cliente</label><input class="fi" id="ep_cl" value="${p.client||''}"></div><div class="fg"><label class="fl">Ubicacion</label><input class="fi" id="ep_loc" value="${p.location||''}"></div><div class="fr"><div class="fg"><label class="fl">Director</label><input class="fi" id="ep_dir" value="${p.director||''}"></div><div class="fg"><label class="fl">Capataz</label><input class="fi" id="ep_cap" value="${p.capataz||''}"></div></div><div class="fr"><div class="fg"><label class="fl">Inicio</label><input class="fi" id="ep_st" type="date" value="${p.startDate||''}"></div><div class="fg"><label class="fl">Fin</label><input class="fi" id="ep_en" type="date" value="${p.endDate||''}"></div></div><div class="fg"><label class="fl">Estado</label><select class="fs" id="ep_sta">${['En curso','Pausada','Finalizada','Por iniciar'].map(s=>`<option${s===p.status?' selected':''}>${s}</option>`).join('')}</select></div><button class="btn btn-p btn-w mt-8" onclick="saveEP()">Guardar</button></div></div>`;
+mc.innerHTML=`${modHeader('config','Configuracion')}<div class="card mb-12"><div class="flex justify-between items-center mb-8"><div class="ts fw7">Datos de la obra</div><button class="btn btn-sec btn-s" onclick="openM('editProjM')">${I.edit} Editar</button></div><div class="ts tc3 lh18"><strong>Nombre:</strong> ${p.name}<br><strong>Cliente:</strong> ${p.client||'-'}<br><strong>Ubicacion:</strong> ${p.location||'-'}<br><strong>Director:</strong> ${p.director||'-'}<br><strong>Capataz:</strong> ${p.capataz||'-'}<br><strong>Inicio:</strong> ${fmts(p.startDate)||'-'}<br><strong>Fin:</strong> ${fmts(p.endDate)||'-'}<br><strong>Estado:</strong> ${p.status}</div></div><div class="card mb-12"><div class="ts fw7 mb-8">Estadisticas</div><div class="ts tc3 lh18">Visitas: ${pf('visitas').length} | Tareas: ${pf('tareas').length} | Materiales: ${pf('materiales').length} | Ingresos: ${pf('matIngresos').length} | Alertas: ${pf('alertas').length} | Comentarios: ${pf('comentarios').length} | Docs: ${pf('documentos').length} | Enlaces: ${pf('enlaces').length}</div></div><div class="card mb-12" style="border-left:4px solid #0d9488"><div class="ts fw7 mb-8" style="color:#0d9488">&#x1F4F1; Informes de campo</div><div class="txxs tc3 mb-12">Cuando compartís el link con un colaborador, los informes te llegan por los canales que tengas activos.</div><div class="flex items-center gap-8 mb-10"><div class="flex-1"><label class="fl">Tu WhatsApp</label><input class="fi" id="cfg_arch_tel" type="tel" value="${SYNC.archTel||''}" placeholder="+549..." onblur="saveArchContact('tel',this.value)"></div><button class="btn btn-s" style="margin-top:18px;min-width:80px;font-size:11px;background:${SYNC.sendWA?'var(--green)':'var(--gray-ll)'};color:${SYNC.sendWA?'#fff':'var(--text2)'}" onclick="toggleSendChannel('wa')">${SYNC.sendWA?'&#x2713; Activo':'Inactivo'}</button></div><div class="flex items-center gap-8 mb-12"><div class="flex-1"><label class="fl">Tu email</label><input class="fi" id="cfg_arch_mail" type="email" value="${SYNC.archEmail||''}" placeholder="tu@email.com" onblur="saveArchContact('mail',this.value)"></div><button class="btn btn-s" style="margin-top:18px;min-width:80px;font-size:11px;background:${SYNC.sendEmail?'var(--green)':'var(--gray-ll)'};color:${SYNC.sendEmail?'#fff':'var(--text2)'}" onclick="toggleSendChannel('email')">${SYNC.sendEmail?'&#x2713; Activo':'Inactivo'}</button></div><div class="txxs tc3">Los envíos llegan como un link. Al tocarlo la app muestra los datos en la Bandeja de entrada.</div></div><div class="card mb-12" style="border-left:4px solid var(--green)"><div class="ts fw7 mb-8" style="color:var(--green)">&#x1F680; Servidor propio (recomendado)</div><div class="txxs tc3 mb-12">Con esto los informes y las fotos te llegan solos, sin depender de WhatsApp. Se guardan en tu Google Drive. Instrucciones en el archivo INSTALAR_BACKEND.md.</div><div class="fg"><label class="fl">URL del Apps Script (termina en /exec)</label><input class="fi" id="cfg_api_url" value="${SYNC.apiUrl||''}" placeholder="https://script.google.com/macros/s/..../exec" onblur="saveApiCfg('url',this.value)"></div><div class="fg"><label class="fl">Clave secreta (la misma del script)</label><input class="fi" id="cfg_api_sec" value="${SYNC.apiSecret||''}" placeholder="tu clave" onblur="saveApiCfg('sec',this.value)"></div><div class="flex gap-6"><button class="btn btn-sec btn-s" style="flex:1" onclick="probarServidor()">&#x1F50C; Probar conexión</button><button class="btn btn-s" style="flex:1;background:var(--green);color:#fff" onclick="revisarServidor(true)">&#x1F4E5; Buscar informes</button></div>${SYNC.apiUrl&&SYNC.apiSecret?'<div class="txxs mt-8" style="color:var(--green);font-weight:700">&#x2713; Activo — se revisa solo al abrir la app</div>':'<div class="txxs mt-8 tc3">Sin configurar: los informes siguen dependiendo de WhatsApp.</div>'}</div>v><div class="card mb-12" style="border-left:4px solid #6366f1"><div class="ts fw7 mb-8" style="color:#6366f1">🔒 Protección con PIN</div><div class="txxs tc3 mb-12">Solo vos podés acceder a la app. Al abrir desde cualquier dispositivo se pedirá el PIN.</div>${(function(){var _p=localStorage.getItem('oc_pin');if(_p){return '<div class="txxs mb-10" style="color:var(--green);font-weight:700">✓ PIN activo ('+_p.length+' dígitos)</div><div class="flex gap-6"><input class="fi" id="cfg_pin_new" type="password" name="new-pin" autocomplete="new-password" inputmode="numeric" maxlength="8" placeholder="Nuevo PIN" style="flex:1;margin:0"><button class="btn btn-s" style="background:#6366f1;color:#fff;white-space:nowrap" onclick="var v=$(\'cfg_pin_new\').value.trim();if(v.length>=4)savePin(v);else toast(\'Mínimo 4 dígitos\',\'var(--red)\')">Cambiar</button></div><div class="txxs tc3 mt-8">'+(_pinDevOk()?'Este dispositivo está recordado: no se pide el PIN al abrir.':'Este dispositivo no está recordado: se pide el PIN en cada apertura.')+'</div><button class="btn btn-sec btn-s btn-w mt-4" onclick="olvidarDispositivo()">Olvidar este dispositivo</button><button class="btn btn-x btn-s btn-w mt-8" onclick="if(confirm(\'¿Eliminar PIN? La app quedará sin protección.\'))savePin(\'\')">Quitar PIN</button>';}else{return '<div class="txxs mb-10 tc3">Sin PIN configurado — cualquiera con el link puede acceder.</div><div class="flex gap-6"><input class="fi" id="cfg_pin_new" type="password" name="new-pin" autocomplete="new-password" inputmode="numeric" maxlength="8" placeholder="Nuevo PIN (mín. 4 dígitos)" style="flex:1;margin:0"><button class="btn btn-s" style="background:#6366f1;color:#fff;white-space:nowrap" onclick="var v=$(\'cfg_pin_new\').value.trim();if(v.length>=4)savePin(v);else toast(\'Mínimo 4 dígitos\',\'var(--red)\')">Activar PIN</button></div>';}})()}</div><div class="card mb-12" style="background:var(--red-bg);border:1px solid var(--red-mid)"><div class="ts fw7 mb-8" style="color:var(--red)">Zona peligrosa</div><button class="btn btn-x btn-s btn-w" onclick="deleteProj()">Eliminar obra</button></div><div class="card mb-12" style="border-left:4px solid #8b5cf6;padding:12px"><div class="ts fw7 mb-6" style="color:#8b5cf6">&#x1F4F8; Estado de las fotos</div><div class="txxs tc3 mb-8">Verificá que todas tus fotos estén visibles y respaldadas en Drive.</div><button class="btn btn-sec btn-s btn-w" onclick="diagnosticoFotos()">Ver estado de las fotos</button></div><div class="card mb-12" style="border-left:4px solid var(--orange);padding:12px"><div class="ts fw7 mb-6" style="color:var(--orange)">&#x1F5D1; Papelera de Drive</div><div class="txxs tc3 mb-8">Todo lo que se elimina va a la papelera de Drive y se puede restaurar. Nada se borra de forma definitiva.</div><button class="btn btn-sec btn-s btn-w" onclick="verPapeleraDrive()">Ver y restaurar (${(D.papeleraDrive||[]).length})</button></div><div class="card mb-12" style="border-left:4px solid var(--cyan);padding:12px"><div class="ts fw7 mb-6">&#x1F4BE; Almacenamiento local</div><div style="background:var(--gray-ll);border-radius:6px;height:8px;margin-bottom:6px"><div style="background:${_lsColor};border-radius:6px;height:8px;width:${_lsPct}%"></div></div><div class="txxs tc3">${_lsUsed} KB usados de ~5120 KB disponibles</div>${_lsPct>80?'<div class="txxs mt-4" style="color:var(--orange)">&#x26A0; Almacenamiento casi lleno. Conectá Drive para liberar espacio.</div>':''}</div><div class="tac mt-20 txxs tc3"><div class="fw7">ObraControl Pro v9.0</div><div class="mt-4">Visita-centric | PDF | Materiales+Ingresos | Comentarios vinculados</div></div><div class="mo" id="editProjM"><div class="mo-c"><div class="mo-h"><h3>Editar Obra</h3><button class="tbtn" onclick="closeM('editProjM')">${I.x}</button></div><div class="fg"><label class="fl">Nombre *</label><input class="fi" id="ep_n" value="${p.name||''}"></div><div class="fg"><label class="fl">Cliente</label><input class="fi" id="ep_cl" value="${p.client||''}"></div><div class="fg"><label class="fl">Ubicacion</label><input class="fi" id="ep_loc" value="${p.location||''}"></div><div class="fr"><div class="fg"><label class="fl">Director</label><input class="fi" id="ep_dir" value="${p.director||''}"></div><div class="fg"><label class="fl">Capataz</label><input class="fi" id="ep_cap" value="${p.capataz||''}"></div></div><div class="fr"><div class="fg"><label class="fl">Inicio</label><input class="fi" id="ep_st" type="date" value="${p.startDate||''}"></div><div class="fg"><label class="fl">Fin</label><input class="fi" id="ep_en" type="date" value="${p.endDate||''}"></div></div><div class="fg"><label class="fl">Estado</label><select class="fs" id="ep_sta">${['En curso','Pausada','Finalizada','Por iniciar'].map(s=>`<option${s===p.status?' selected':''}>${s}</option>`).join('')}</select></div><button class="btn btn-p btn-w mt-8" onclick="saveEP()">Guardar</button></div></div>`;
 }
 
 function renderConfigSize(){
@@ -7591,16 +7711,18 @@ function verEco(id){
     openFileData(item.imagen, item.concepto||'comprobante');
   }
 }
-function delEcoImagen(id){
-  if(!confirmDel('¿Eliminar imagen/comprobante de este movimiento?'))return;
+async function delEcoImagen(id){
   const item=D.economia.find(x=>x.id===id);if(!item)return;
-  // Borrar de Drive si es URL de Drive
-  if(item.imagen&&item.imagen.includes('drive.google.com')&&GD.accessToken){
+  if(!await confirmarBorradoArchivo({titulo:'Eliminar comprobante',
+    nombre:String(item.concepto||'comprobante'),
+    contexto:'Movimiento de economía',
+    miniatura:_resolveImg(item.imagen||'')}))return;
+  // Mandar a la papelera de Drive si es un archivo de Drive
+  if(item.imagen&&item.imagen.includes('drive.google.com')){
     var _m=item.imagen.match(/[?&]id=([^&]+)/);
     if(_m&&_m[1]){
-      fetch('https://www.googleapis.com/drive/v3/files/'+_m[1],{
-        method:'DELETE',headers:{'Authorization':'Bearer '+GD.accessToken}
-      }).catch(function(){});
+      var r=await _borrarDeDriveSeguro(_m[1],'comprobante '+(item.concepto||''),{tbl:'economia',id:id});
+      if(!r.ok&&r.motivo==='sin sesión de Drive')toast('Reconectá Drive para eliminar también el archivo','var(--orange)',5000);
     }
   }
   // Limpiar cola IDB si es referencia [foto:imgId]
@@ -9971,6 +10093,41 @@ async function _auditarFotos(){
     }));
   }
   return lista;
+}
+
+// Papelera: qué mandó la app a la papelera de Drive y cuándo. Permite deshacer
+// sin salir de la app ni buscar a mano entre los archivos de Drive.
+function verPapeleraDrive(){
+  var reg=D.papeleraDrive||[];
+  var h='<div class="mo-c"><div class="mo-h"><h3>&#x1F5D1; Papelera de Drive</h3><button class="tbtn" onclick="document.getElementById(\'papDriveM\').remove()">'+I.x+'</button></div>';
+  h+='<div class="txxs tc3 mb-8">La app nunca borra un archivo de forma definitiva: lo manda a la papelera de Drive, donde Google lo conserva 30 días.</div>';
+  if(!reg.length){
+    h+='<div style="background:var(--gray-ll);border:1px solid var(--brd);border-radius:8px;padding:14px" class="ts tc3">No se eliminó ningún archivo desde esta app.</div>';
+  } else {
+    reg.forEach(function(r,i){
+      h+='<div style="background:var(--gray-ll);border:1px solid var(--brd);border-radius:8px;padding:10px;margin-bottom:6px">'
+        +'<div class="ts fw7" style="word-break:break-word">'+esc(r.desc||'archivo')+'</div>'
+        +'<div class="txxs tc3 mt-4">'+esc(fmts(r.fecha)||r.fecha||'')+(r.por?' &middot; '+esc(r.por):'')+'</div>'
+        +'<button class="btn btn-sec btn-s btn-w mt-8" onclick="restaurarDePapelera('+i+')">&#x21A9; Restaurar en Drive</button></div>';
+    });
+  }
+  h+='<button class="btn btn-w btn-sec mt-8" onclick="document.getElementById(\'papDriveM\').remove()">Cerrar</button></div>';
+  var d=document.createElement('div');d.className='mo open';d.id='papDriveM';d.innerHTML=h;
+  document.body.appendChild(d);
+}
+
+async function restaurarDePapelera(i){
+  var reg=D.papeleraDrive||[];
+  var r=reg[i];
+  if(!r){toast('No encontrado','var(--orange)');return;}
+  if(!await ensureAuth()){toast('Reconectá Drive para restaurar','var(--orange)',5000);return;}
+  var ok=await _restaurarDePapelera(r.driveId);
+  if(!ok){toast('No se pudo restaurar: puede que ya se haya vaciado la papelera de Drive','var(--orange)',6000);return;}
+  await _compartirArchivoDrive(r.driveId);
+  reg.splice(i,1);sv();
+  try{document.getElementById('papDriveM').remove();}catch(_){}
+  toast('Archivo restaurado en Drive ✓','var(--green)',4000);
+  verPapeleraDrive();
 }
 
 async function diagnosticoFotos(){
