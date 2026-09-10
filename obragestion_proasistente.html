@@ -54,6 +54,13 @@ input[readonly],input:disabled,select:disabled,textarea:disabled{
   box-shadow:inset 0 0 0 1px var(--edit-dim)}
 .editable-cell:hover{background:var(--edit-bg2)!important}
 .editable-cell span{color:var(--edit-border)!important}
+/* Columna DUR: el violeta identifica la columna (duración), el borde dorado avisa
+   que se puede editar. Manual = violeta más claro. */
+.dur-cell{cursor:pointer;background:#4c1d95!important;color:#fff!important;
+  box-shadow:inset 0 0 0 2px var(--edit-border)}
+.dur-cell:hover{background:#5b21b6!important}
+.dur-cell.manual{background:#7c3aed!important}
+.dur-cell span{color:rgba(255,255,255,.7)!important}
 /* Fuera del lenguaje: no son datos de la obra sino herramientas de la app.
    La clase va repetida para ganarle en especificidad al selector input[type=…]
    de la regla dorada, que si no tiene prioridad aunque ambas lleven !important. */
@@ -445,13 +452,19 @@ const pctIncrRec=(r,pctItem)=>
 const sumRecIncr=(rs,pctItem)=>
   rs.reduce((s,r)=>s+r.qty*r.pu*(1+pctIncrRec(r,pctItem)/100),0);
 
+/* durManual: override manual de la duración calculada, sólo para ítems NO-GL.
+   Vacío = la duración la calcula la app (horas ÷ cuadrilla). Con valor = ese
+   número manda, aunque las horas cargadas digan otra cosa. Se distingue de
+   `dias` (que es la duración de los ítems GL, que no tienen cálculo). */
 const cDur=(t,hsDia)=>{
   // GL: duración manual (t.dias), sin cálculo de horas
-  if(isGL(t)){const d=Math.max(1,+(t.dias)||1);return{hOf:0,hAy:0,dOf:d,dAy:d,dFin:d};}
+  if(isGL(t)){const d=Math.max(1,+(t.dias)||1);return{hOf:0,hAy:0,dOf:d,dAy:d,dFin:d,dFinAuto:d,durEsManual:false};}
   const hOf=+t.qty*+t.hsOf,hAy=+t.qty*+t.hsAy;
   const dOf=Math.max(1,Math.ceil(hOf/(Math.max(1,+t.nOf)*hsDia)));
   const dAy=Math.max(1,Math.ceil(hAy/(Math.max(1,+t.nAy)*hsDia)));
-  return{hOf,hAy,dOf,dAy,dFin:Math.max(dOf,dAy)};
+  const dFinAuto=Math.max(dOf,dAy);
+  const man=(t.durManual!=null&&t.durManual!=='')?Math.max(1,Math.round(+t.durManual)||1):null;
+  return{hOf,hAy,dOf,dAy,dFin:man!=null?man:dFinAuto,dFinAuto,durEsManual:man!=null};
 };
 
 /* ── Detección de conflictos en predecesoras ── */
@@ -624,28 +637,46 @@ function QtyCell({t,onSave}){
   );
 }
 
-/* ══════════ INLINE DUR EDIT (solo GL) ══════════ */
-function DurCell({t,onSave}){
+/* ══════════ EDICIÓN INLINE DE LA DURACIÓN ══════════
+   Sirve para los dos casos:
+   - GL: `dias` es el único valor, no hay cálculo. Se edita y listo.
+   - No-GL: la duración la calcula la app; con `onClear` se puede FIJAR un valor a
+     mano (override) y volver al automático cuando se quiera. */
+function DurCell({t,gl,onSave,onClear}){
   const [editing,setEditing]=useState(false);
-  const [val,setVal]=useState(t.dias||t.dFin||1);
+  const [val,setVal]=useState(gl?(t.dias||t.dFin||1):(t.durEsManual?t.dFin:t.dFinAuto));
+  const abrir=()=>{setVal(gl?(t.dias||t.dFin||1):(t.durEsManual?t.dFin:t.dFinAuto));setEditing(true);};
+  const guardar=()=>{onSave(Math.max(1,Math.round(+val)||1));setEditing(false);};
+
   if(editing)return(
     <td style={{padding:"3px 5px",borderBottom:`1px solid ${C.border2}`,background:"#4c1d9522"}}>
-      <div style={{display:"flex",alignItems:"center",gap:"3px"}}>
+      <div style={{display:"flex",alignItems:"center",gap:"3px",flexWrap:"wrap"}}>
         <input autoFocus type="number" step="1" min="1" value={val}
           onChange={e=>setVal(e.target.value)}
-          onKeyDown={e=>{if(e.key==="Enter"){onSave(Math.max(1,+val||1));setEditing(false);}if(e.key==="Escape")setEditing(false);}}
-          style={{width:"52px",border:"1px solid #7c3aed",borderRadius:"4px",padding:"3px 5px",
+          onKeyDown={e=>{if(e.key==="Enter")guardar();if(e.key==="Escape")setEditing(false);}}
+          style={{width:"48px",border:"1px solid #7c3aed",borderRadius:"4px",padding:"3px 5px",
             background:C.bg,color:"#4c1d95",fontFamily:"monospace",fontWeight:700,fontSize:"12px",textAlign:"right"}}/>
-        <button onClick={()=>{onSave(Math.max(1,+val||1));setEditing(false);}} style={btnS(C.green)}>✓</button>
+        <button onClick={guardar} style={btnS(C.green)} title="Fijar esta duración">✓</button>
+        {!gl&&onClear&&t.durEsManual&&(
+          <button onClick={()=>{onClear();setEditing(false);}} style={btnS(C.t3)}
+            title={`Volver al cálculo automático (${t.dFinAuto}d)`}>↺</button>
+        )}
       </div>
+      {!gl&&<div style={{fontSize:"8px",color:C.t3,marginTop:"2px",textAlign:"right"}}>
+        auto: {t.dFinAuto}d
+      </div>}
     </td>
   );
+  const manual=!gl&&t.durEsManual;
   return(
-    <td className="editable-cell" onClick={()=>{setVal(t.dias||t.dFin||1);setEditing(true);}}
-      title="Clic para editar días (ítem GL)"
-      style={{padding:"6px 9px",textAlign:"right",fontFamily:"monospace",fontWeight:800,color:"white",
-        background:"#4c1d95",borderBottom:`1px solid ${C.border2}`,cursor:"pointer"}}>
-      {t.dFin}d<span style={{fontSize:"8px",color:"rgba(255,255,255,.5)",marginLeft:"3px"}}>▼</span>
+    <td className={"dur-cell"+(manual?" manual":"")} onClick={abrir}
+      title={gl?'Clic para editar la duración (ítem GL)'
+        :manual?`Duración fijada a mano. El cálculo daría ${t.dFinAuto}d. Clic para cambiar o volver al automático.`
+        :`Duración calculada (${t.dFin}d). Clic para fijarla a mano.`}
+      style={{padding:"6px 9px",textAlign:"right",fontFamily:"monospace",fontWeight:800,
+        borderBottom:`1px solid ${C.border2}`}}>
+      {t.dFin}d
+      <span style={{fontSize:"8px",marginLeft:"3px"}}>{manual?'✎':'▼'}</span>
     </td>
   );
 }
@@ -1035,6 +1066,7 @@ function renumberTareas(arr, moItems){
 const toRaw=t=>({id:t.id,rubroId:t.rubroId,item:t.item,und:t.und,qty:t.qty,
   hsOf:t.hsOf,hsAy:t.hsAy,nOf:t.nOf,nAy:t.nAy,pred:t.pred,obs:t.obs,
   ...(t.dias!=null?{dias:t.dias}:{}),
+  ...(t.durManual!=null&&t.durManual!==''?{durManual:t.durManual}:{}),
   ...(t.solapa?{solapa:true}:{}),
   ...(t.fIniManual?{fIniManual:t.fIniManual}:{})});
 
@@ -1189,7 +1221,14 @@ function PlanObra({tc,setTareas,rec,setRec,cfg,setCfg,rubros,grupos,cuadGrupos,s
   const saveEdit=()=>{
     const oldItem=tc.find(t=>t.id===editTask)?.item;
     const newItem=et.item?.trim();
-    setTareas(p=>p.map(t=>t.id===editTask?{...toRaw(et),id:t.id,item:newItem||t.item,qty:+et.qty,hsOf:+et.hsOf,hsAy:+et.hsAy,nOf:+et.nOf,nAy:+et.nAy}:t));
+    // durManual vacío → se descarta (vuelve al automático); con valor → número entero ≥1
+    const dm=(et.durManual!=null&&String(et.durManual).trim()!=='')?Math.max(1,Math.round(+et.durManual)||1):undefined;
+    setTareas(p=>p.map(t=>{
+      if(t.id!==editTask)return t;
+      const {durManual,...base}=toRaw(et);
+      return {...base,id:t.id,item:newItem||t.item,qty:+et.qty,hsOf:+et.hsOf,hsAy:+et.hsAy,nOf:+et.nOf,nAy:+et.nAy,
+        ...(dm!==undefined?{durManual:dm}:{})};
+    }));
     if(oldItem&&newItem&&oldItem!==newItem)
       setRec(p=>p.map(r=>r.item===oldItem?{...r,item:newItem}:r));
     setEditTask(null);
@@ -1197,6 +1236,9 @@ function PlanObra({tc,setTareas,rec,setRec,cfg,setCfg,rubros,grupos,cuadGrupos,s
   const saveQty=(id,qty)=>setTareas(p=>p.map(t=>t.id===id?{...t,qty}:t));
   const savePred=(id,pred)=>setTareas(p=>p.map(t=>t.id===id?{...t,pred}:t));
   const saveDias=(id,dias)=>setTareas(p=>p.map(t=>t.id===id?{...t,dias:Math.max(1,+dias||1)}:t));
+  // Override de la duración calculada (ítems no-GL). '' o null = vuelve al automático.
+  const saveDurManual=(id,v)=>setTareas(p=>p.map(t=>t.id===id?{...t,durManual:Math.max(1,Math.round(+v)||1)}:t));
+  const clearDurManual=(id)=>setTareas(p=>p.map(t=>{if(t.id!==id)return t;const{durManual,...resto}=t;return resto;}));
   const saveSolapa=(id,v)=>setTareas(p=>p.map(t=>t.id===id?{...t,solapa:v}:t));
   const saveFIni=(id,fIniManual)=>{
     // Advertir si la fecha manual se superpone con otros ítems
@@ -1386,8 +1428,11 @@ function PlanObra({tc,setTareas,rec,setRec,cfg,setCfg,rubros,grupos,cuadGrupos,s
                       onChange={e=>saveSolapa(t.id,e.target.checked)}
                       style={{accentColor:"#7c3aed",cursor:"pointer",width:"13px",height:"13px"}}/>
                   </td>
-                  {gl?<DurCell t={t} onSave={dias=>saveDias(t.id,dias)}/>
-                    :<TD align="right" mono col="white" fw={800} bg="#4c1d95">{t.dFin}d</TD>}
+                  {gl
+                    ?<DurCell t={t} gl onSave={dias=>saveDias(t.id,dias)}/>
+                    :<DurCell t={t} gl={false}
+                        onSave={v=>saveDurManual(t.id,v)}
+                        onClear={()=>clearDurManual(t.id)}/>}
                   </>);})()}
                   {/* Predecesoras editables inline */}
                   <PredCell t={t} todos={tc} erroresMap={erroresMap} onSave={pred=>savePred(t.id,pred)}/>
@@ -1423,10 +1468,13 @@ function PlanObra({tc,setTareas,rec,setRec,cfg,setCfg,rubros,grupos,cuadGrupos,s
 
       {/* Modal edición completa */}
       {editTask&&(()=>{
+        const esGL=isGL(et);
         const hOf=+et.qty*+et.hsOf,hAy=+et.qty*+et.hsAy;
         const dOf=Math.max(1,Math.ceil(hOf/(Math.max(1,+et.nOf)*cfg.hsDia)));
         const dAy=Math.max(1,Math.ceil(hAy/(Math.max(1,+et.nAy)*cfg.hsDia)));
-        const dFin=Math.max(dOf,dAy);
+        const dFinAuto=Math.max(dOf,dAy);
+        const durMan=(et.durManual!=null&&et.durManual!=='')?Math.max(1,Math.round(+et.durManual)||1):null;
+        const dFin=esGL?Math.max(1,+et.dias||1):(durMan!=null?durMan:dFinAuto);
         return(
           <Modal title={`Editar ítem #${editTask}: ${et.item}`} onClose={()=>setEditTask(null)} onEnter={()=>{if(et.item?.trim())saveEdit();}}>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"11px"}}>
@@ -1454,12 +1502,34 @@ function PlanObra({tc,setTareas,rec,setRec,cfg,setCfg,rubros,grupos,cuadGrupos,s
                 <FInp value={et.pred} onChange={v=>setEt(d=>({...d,pred:v}))} ph="Ej: 3,5"/>
               </Fld>
               <Fld label="OBSERVACIONES"><FInp value={et.obs} onChange={v=>setEt(d=>({...d,obs:v}))}/></Fld>
+              {/* Duración: manual para GL, override opcional para el resto */}
+              {esGL?(
+                <Fld label="DURACIÓN (días)">
+                  <FInp value={et.dias??''} onChange={v=>setEt(d=>({...d,dias:v}))} type="number" step="1"
+                    ph="Ej: 4"/>
+                </Fld>
+              ):(
+                <Fld label="DURACIÓN — fijar a mano (días)">
+                  <div style={{display:'flex',gap:'6px',alignItems:'center'}}>
+                    <FInp value={et.durManual??''} onChange={v=>setEt(d=>({...d,durManual:v}))}
+                      type="number" step="1" ph={`auto: ${dFinAuto}`}/>
+                    {durMan!=null&&(
+                      <button onClick={()=>setEt(d=>{const{durManual,...r}=d;return r;})}
+                        style={{...btnS(C.t3),whiteSpace:'nowrap'}} title="Volver al cálculo automático">↺ auto</button>
+                    )}
+                  </div>
+                  <div style={{fontSize:'9px',color:C.t3,marginTop:'3px'}}>
+                    Vacío = la calcula la app ({dFinAuto} d). Con valor, ese número manda.
+                  </div>
+                </Fld>
+              )}
             </div>
             {/* Cálculo preview */}
             <div style={{marginTop:"14px",background:C.surface,borderRadius:"8px",padding:"10px 12px",
               display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"8px"}}>
               {[["Hs·Of tot.",fN(hOf,1),C.blue],["Hs·Ay tot.",fN(hAy,1),C.violet],
-                ["Dur. oficial",dOf+"d","#93c5fd"],["DUR. FINAL",dFin+"d",C.accent]].map(([l,v,a])=>(
+                ["Dur. oficial",dOf+"d","#93c5fd"],
+                [durMan!=null?"DUR. (fijada)":"DUR. FINAL",dFin+"d",durMan!=null?"#7c3aed":C.accent]].map(([l,v,a])=>(
                 <div key={l} style={{textAlign:"center"}}>
                   <div style={{fontSize:"9px",color:C.t3,marginBottom:"2px"}}>{l}</div>
                   <div style={{fontFamily:"monospace",fontWeight:800,color:a,fontSize:"15px"}}>{v}</div>
@@ -3421,6 +3491,7 @@ Sólo se puede borrar un rubro sin ítems y un grupo sin rubros. Si tiene conten
 ── CAMPOS ESPECIALES DE PLAN DE OBRA ──
 Van dentro de "tarea" o de los "campos" de "editar_tarea":
 - "dias": duración fija en días. SÓLO para ítems con und "gl" (global): esos no calculan por horas.
+- "durManual": fija la duración a mano en un ítem NO-GL, pisando el cálculo de horas ÷ cuadrilla. "" vuelve al automático. Usalo cuando el usuario diga "esa tarea son 5 días" y no quiera que se recalcule.
 - "solapa": true = arranca junto con su predecesora en vez de esperar a que termine.
 - "fIniManual": "DD/MM/AAAA" para clavar la fecha de inicio de ese ítem. "" la libera.
 Ejemplo: {"tipo":"tarea","rubro":"Instalaciones","item":"Tramitación de medidor","und":"gl","qty":1,"dias":15}
@@ -3888,7 +3959,7 @@ ${cuadTxt}`;
            pasara. Si el modelo mandaba un campo mal escrito, no cambiaba nada y el
            log igual decía que sí. Ahora se anota qué cambió de verdad y se avisa de
            los campos que no existen. */
-        const CAMPOS_OK=['item','qty','und','obs','hsOf','hsAy','nOf','nAy','pred','rubro','dias','solapa','fIniManual'];
+        const CAMPOS_OK=['item','qty','und','obs','hsOf','hsAy','nOf','nAy','pred','rubro','dias','durManual','solapa','fIniManual'];
         const desconocidos=Object.keys(c).filter(k=>!CAMPOS_OK.includes(k));
         const cambios=[];
         const setNum=(k,et)=>{if(c[k]==null)return;const v=+c[k];if(v!==+t[k]){cambios.push(`${et} ${t[k]}→${v}`);t[k]=v;}};
@@ -3907,6 +3978,12 @@ ${cuadTxt}`;
           else fallos.push(`Editar «${t.item}»: no existe el rubro «${c.rubro}». Quedó en el suyo.`);
         }
         if(c.dias!=null){const v=Math.max(1,+c.dias||1);if(v!==t.dias){cambios.push(`días → ${v}`);t.dias=v;}}
+        if(c.durManual!=null){
+          // Fijar la duración a mano en un ítem no-GL, o '' para volver al automático
+          const s=String(c.durManual).trim();
+          if(s===''){if(t.durManual!=null){delete t.durManual;cambios.push('duración → automática');}}
+          else{const v=Math.max(1,Math.round(+c.durManual)||1);if(v!==+t.durManual){cambios.push(`duración fijada → ${v} d`);t.durManual=v;}}
+        }
         if(c.solapa!=null){
           const v=!!c.solapa;
           if(v!==!!t.solapa){cambios.push(`solapa → ${v?'sí':'no'}`);if(v)t.solapa=true;else delete t.solapa;}
