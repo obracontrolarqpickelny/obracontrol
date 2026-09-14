@@ -8592,8 +8592,10 @@ function openPerfilColab(colabId,tab){
     } else {
       notas.forEach(function(n){
         var wa=n.enviado==='wa';
-        h+='<div style="display:flex;justify-content:flex-end;margin:0 2px">';
-        h+='<div style="background:'+(wa?'#dcf8c6':'var(--surface)')+';border-radius:12px 12px 0 12px;padding:7px 11px;max-width:85%;box-shadow:0 1px 2px rgba(0,0,0,.12)">';
+        var deColab=n.de==='colab';
+        h+='<div style="display:flex;justify-content:'+(deColab?'flex-start':'flex-end')+';margin:0 2px">';
+        h+='<div style="background:'+(deColab?'#fff':(wa?'#dcf8c6':'var(--surface)'))+';border:'+(deColab?'1px solid #e2e8f0':'none')+';border-radius:'+(deColab?'12px 12px 12px 0':'12px 12px 0 12px')+';padding:7px 11px;max-width:85%;box-shadow:0 1px 2px rgba(0,0,0,.12)">';
+        if(deColab)h+='<div style="font-size:10px;font-weight:700;color:#0d9488;margin-bottom:2px">👤 '+esc(co.name||'Colaborador')+'</div>';
         h+='<div style="font-size:13px;white-space:pre-wrap;color:var(--text)">'+esc(n.texto)+'</div>';
         h+='<div style="font-size:9px;color:var(--text3);margin-top:3px;text-align:right">'+fmts(n.fecha)+(wa?' ✓✓':'')+'</div>';
         h+='</div></div>';
@@ -9527,13 +9529,36 @@ function _rAyudantes(p){
 // ═══════════════════════════════════════════════════════════
 // MÓDULO: BANDEJA DE FORMULARIOS
 // ═══════════════════════════════════════════════════════════
-function rBandeja(mc,p){
+function _formTexto(sub){
+  // Todo el texto buscable de un informe, para el buscador de la Bandeja.
+  var partes=[sub.ayudante,sub.mensajeGeneral,sub.obraName];
+  (sub.movimientos||[]).forEach(function(m){partes.push(m.concepto);});
+  (sub.tareas||[]).forEach(function(t){partes.push(t.titulo,t.descripcion);});
+  (sub.materialesExistentes||[]).forEach(function(m){partes.push(m.nombre,m.notas);});
+  (sub.materialesPedidos||[]).forEach(function(m){partes.push(m.nombre,m.notas);});
+  (sub.materialesIngresados||[]).forEach(function(m){partes.push(m.nombre,m.proveedor);});
+  if(sub.checklist){partes.push(sub.checklist.titulo,sub.checklist.items);}
+  partes.push(sub.titulo,sub.materialNombre,sub.concepto,sub.notas);
+  return partes.filter(Boolean).join(' ').toLowerCase();
+}
+function _formMatch(sub,q){
+  if(!q)return true;
+  var texto=_formTexto(sub);
+  return q.split(/\s+/).filter(Boolean).every(function(w){return texto.indexOf(w.toLowerCase())>=0;});
+}
+function renderBandejaBody(){
+  var el=$('bandeja_body');if(!el)return;
+  el.innerHTML=_bandejaBodyHtml();
+}
+function _bandejaBodyHtml(){
   var c2='#0d9488';
-  if(!S.bandejaTab)S.bandejaTab='pendientes';
   var tab=S.bandejaTab;
-  var all=(D.formulariosPendientes||[]).filter(function(x){return x.estado!=='eliminado';}).slice().sort(function(a,b){return new Date(b.receivedAt||b.fecha||0)-new Date(a.receivedAt||a.fecha||0);});
-  var pendientes=all.filter(function(x){return x.estado==='pendiente';});
-  var procesados=all.filter(function(x){return x.estado!=='pendiente';});
+  var q=S.bandejaSearch.trim();
+  var all=(D.formulariosPendientes||[]).filter(function(x){return x.estado!=='eliminado'&&x.estado!=='papelera';}).slice().sort(function(a,b){return new Date(b.receivedAt||b.fecha||0)-new Date(a.receivedAt||a.fecha||0);});
+  var papeleraItems=(D.formulariosPendientes||[]).filter(function(x){return x.estado==='papelera';}).slice().sort(function(a,b){return new Date(b.updatedAt||0)-new Date(a.updatedAt||0);});
+  var pendientes=all.filter(function(x){return x.estado==='pendiente'&&_formMatch(x,q);});
+  var procesados=all.filter(function(x){return x.estado!=='pendiente'&&_formMatch(x,q);});
+  var papelera=papeleraItems.filter(function(x){return _formMatch(x,q);});
   function subSummary(sub){
     if(sub.tareas!==undefined){
       var pts=[];
@@ -9554,7 +9579,7 @@ function rBandeja(mc,p){
     var bc=isPend?c2:sub.estado==='incorporado'?'var(--green)':'var(--gray-l)';
     var stLbl=isPend?'':'<span style="color:'+(sub.estado==='incorporado'?'var(--green)':'var(--gray-l)')+';font-weight:600">'+(sub.estado==='incorporado'?'✓ Cargado'+(sub.fechaIncorporado?' · '+fmts(sub.fechaIncorporado):''):'✕ Descartado')+'</span>';
     var vBdg=sub.version>1?'<span style="background:var(--gray-ll);color:var(--text3);font-size:9px;padding:1px 6px;border-radius:10px;margin-left:6px">v'+sub.version+'</span>':'';
-    var btns=isPend?('<div class="flex gap-4" style="flex-shrink:0"><button class="btn btn-s" style="background:'+c2+';color:#fff;white-space:nowrap" onclick="incorporarFormularioModal(\''+sub.id+'\')">📥 Revisar</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="descartarFormulario(\''+sub.id+'\')">✕</button></div>'):('<div style="flex-shrink:0;text-align:right"><div class="txxs">'+stLbl+'</div><div class="flex gap-4 mt-6"><button class="btn btn-g btn-s" style="font-size:10px" onclick="incorporarFormularioModal(\''+sub.id+'\')">👁 Ver</button><button class="btn btn-s" style="font-size:10px;background:#dc2626;color:#fff" onclick="descartarFormulario(\''+sub.id+'\')">🗑</button></div></div>');
+    var btns=isPend?('<div class="flex gap-4" style="flex-shrink:0"><button class="btn btn-s" style="background:'+c2+';color:#fff;white-space:nowrap" onclick="incorporarFormularioModal(\''+sub.id+'\')">📥 Revisar</button><button class="btn btn-g btn-s" style="color:var(--red)" title="Enviar a la papelera" onclick="descartarFormulario(\''+sub.id+'\')">✕</button></div>'):('<div style="flex-shrink:0;text-align:right"><div class="txxs">'+stLbl+'</div><div class="flex gap-4 mt-6"><button class="btn btn-g btn-s" style="font-size:10px" onclick="incorporarFormularioModal(\''+sub.id+'\')">👁 Ver</button><button class="btn btn-s" style="font-size:10px;background:#dc2626;color:#fff" title="Enviar a la papelera" onclick="descartarFormulario(\''+sub.id+'\')">🗑</button></div></div>');
     var obraNm=sub.obraName||(D.projects&&D.projects.find(function(p2){return p2.id===(sub.obraId||sub.projectId);})||{}).name||'';
     var _regColab=(D.colaboradores||[]).find(function(c){return c.id===sub.token;});
     var _dispName=_regColab?_regColab.name:sub.ayudante||'?';
@@ -9568,6 +9593,17 @@ function rBandeja(mc,p){
     var newFiles=(cp.archivos||[]).filter(function(f){return f.subidoPor==='col'&&f.visto===false;});
     if(newFiles.length) newCarpetaGroups.push({colabId:cp.colabId,coName:coName,count:newFiles.length,imgs:newFiles.filter(function(f){return f.tipo&&f.tipo.startsWith('image/');}).length});
   });
+  function renderPapeleraCard(sub){
+    var obraNm=sub.obraName||(D.projects&&D.projects.find(function(p2){return p2.id===(sub.obraId||sub.projectId);})||{}).name||'';
+    var _regColab=(D.colaboradores||[]).find(function(c){return c.id===sub.token;});
+    var _dispName=_regColab?_regColab.name:sub.ayudante||'?';
+    var btns='<div class="flex gap-4" style="flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">'
+      +'<button class="btn btn-g btn-s" style="font-size:10px" onclick="restaurarFormulario(\''+sub.id+'\',\'pendiente\')">↩ A pendientes</button>'
+      +'<button class="btn btn-g btn-s" style="font-size:10px" onclick="restaurarFormulario(\''+sub.id+'\',\'historial\')">↩ A historial</button>'
+      +'<button class="btn btn-s" style="font-size:10px;background:#dc2626;color:#fff" onclick="eliminarFormularioDefinitivo(\''+sub.id+'\')">🗑 Eliminar def.</button>'
+      +'</div>';
+    return '<div class="card" style="border-left:3px solid var(--gray-l);padding:12px;margin-bottom:8px"><div class="flex justify-between items-start gap-8"><div style="flex:1;min-width:0"><div class="ts fw7">👤 '+esc(_dispName)+(obraNm?'<span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:6px">🏗 '+esc(obraNm)+'</span>':'')+'</div><div class="txxs tc3 mt-2">📅 '+fmts(sub.receivedAt||sub.fecha||'')+'</div><div class="txxs mt-6" style="color:var(--text2);line-height:1.6">'+subSummary(sub)+'</div></div>'+btns+'</div></div>';
+  }
   var completedMsgs=(D.mensajesColab||[]).filter(function(m){return m.proyectoId===S.proj&&m.estadoColab==='completado';});
   var totalPend=pendientes.length+newCarpetaGroups.length+completedMsgs.length;
   var pendBdg=totalPend?(' <span style="background:'+(tab==='pendientes'?'rgba(255,255,255,.3)':'#0d9488')+';color:#fff;border-radius:10px;padding:0 6px;font-size:10px;font-weight:700;margin-left:4px">'+totalPend+'</span>'):'';
@@ -9592,21 +9628,58 @@ function rBandeja(mc,p){
       +'</div>'
       +'</div>';
   }).join('');
-  mc.innerHTML=modHeader('bandeja','Bandeja',(SYNC.apiUrl&&SYNC.apiSecret)?'<button class="btn btn-sec btn-s" onclick="revisarServidor(true)">&#x1F4E5; Buscar informes</button>':'')
-    +'<div class="flex gap-6 mb-12">'
-    +'<button class="btn btn-s" style="'+(tab==='pendientes'?'background:'+c2+';color:#fff':'background:var(--gray-ll);color:var(--text2)')+'" onclick="S.bandejaTab=\'pendientes\';render()">'+I.bell+' Pendientes'+pendBdg+'</button>'
-    +(function(){var _na=_alertaCount();return '<button class="btn btn-s" style="'+(tab==='alertas'?'background:#dc2626;color:#fff':(_na?'background:#fef2f2;color:#dc2626;border:1px solid #fecaca':'background:var(--gray-ll);color:var(--text2)'))+'" onclick="S.bandejaTab=\'alertas\';render()">🚨 Alertas'+(_na?' <span style="background:'+(tab==='alertas'?'rgba(255,255,255,.3)':'#dc2626')+';color:#fff;border-radius:10px;padding:0 6px;font-size:10px;font-weight:700;margin-left:2px">'+_na+'</span>':'')+'</button>';})()
-    +'<button class="btn btn-s" style="'+(tab==='log'?'background:'+c2+';color:#fff':'background:var(--gray-ll);color:var(--text2)')+'" onclick="S.bandejaTab=\'log\';render()">📋 Log ('+procesados.length+')</button>'
-    +'</div>'
-    +(tab==='pendientes'
+  return (tab==='pendientes'
       ?((completedMsgs.length?'<div class="txs fw7 mb-8" style="color:var(--green)">✅ Respuestas para revisar ('+completedMsgs.length+')</div>':'')+completedMsgsHtml
         +((completedMsgs.length&&(pendientes.length||newCarpetaGroups.length))?'<div class="txs fw7 mb-8 mt-12" style="color:#0d9488">📥 Informes y archivos recibidos</div>':'')
         +newCarpetaGroups.map(function(g){
           return '<div class="card" style="border-left:3px solid #16a34a;padding:12px;margin-bottom:8px"><div class="flex justify-between items-center gap-8"><div><div class="ts fw7">📁 '+esc(g.coName)+'</div><div class="txxs tc3 mt-2">'+g.count+' archivo'+(g.count>1?'s':'')+' nuevo'+(g.count>1?'s':'')+(g.imgs?' · '+g.imgs+' foto'+(g.imgs>1?'s':''):'')+'</div></div><button class="btn btn-s" style="background:#16a34a;color:#fff;white-space:nowrap;flex-shrink:0" onclick="S.mod=\'colaboradores\';render();setTimeout(function(){openPerfilColab(\''+g.colabId+'\',\'carpeta\');},100)">📁 Ver</button></div></div>';
-        }).join('')+(pendientes.length?pendientes.map(renderCard).join(''):'')+(completedMsgs.length===0&&newCarpetaGroups.length===0&&!pendientes.length?'<div class="empty">'+I.checkc+'<div class="ts mt-8">Bandeja vacía</div><div class="txxs tc3 mt-4">Cuando un colaborador envíe su informe o suba archivos, aparecerá aquí.</div></div>':''))
+        }).join('')+(pendientes.length?pendientes.map(renderCard).join(''):'')+(completedMsgs.length===0&&newCarpetaGroups.length===0&&!pendientes.length?'<div class="empty">'+I.checkc+'<div class="ts mt-8">'+(q?'Sin resultados para "'+esc(q)+'"':'Bandeja vacía')+'</div><div class="txxs tc3 mt-4">'+(q?'Probá con otra palabra.':'Cuando un colaborador envíe su informe o suba archivos, aparecerá aquí.')+'</div></div>':''))
       :tab==='alertas'
       ?_renderAlertasBandeja()
-      :(procesados.length?procesados.map(renderCard).join(''):'<div class="empty"><div class="ts mt-8">Sin informes procesados aún</div></div>'));
+      :tab==='papelera'
+      ?(papelera.length?papelera.map(renderPapeleraCard).join(''):'<div class="empty">'+I.checkc+'<div class="ts mt-8">'+(q?'Sin resultados para "'+esc(q)+'"':'Papelera vacía')+'</div></div>')
+      :(procesados.length?procesados.map(renderCard).join(''):'<div class="empty"><div class="ts mt-8">'+(q?'Sin resultados para "'+esc(q)+'"':'Sin informes procesados aún')+'</div></div>'));
+}
+function _bandejaCounts(){
+  var all=(D.formulariosPendientes||[]).filter(function(x){return x.estado!=='eliminado'&&x.estado!=='papelera';});
+  var newCarpeta=0;
+  (D.carpetas||[]).filter(function(cp){return cp.projectId===S.proj;}).forEach(function(cp){
+    if((cp.archivos||[]).some(function(f){return f.subidoPor==='col'&&f.visto===false;}))newCarpeta++;
+  });
+  return {
+    pendientes:all.filter(function(x){return x.estado==='pendiente';}).length,
+    procesados:all.filter(function(x){return x.estado!=='pendiente';}).length,
+    papelera:(D.formulariosPendientes||[]).filter(function(x){return x.estado==='papelera';}).length,
+    newCarpeta:newCarpeta,
+    completedMsgs:(D.mensajesColab||[]).filter(function(m){return m.proyectoId===S.proj&&m.estadoColab==='completado';}).length
+  };
+}
+function bandejaSearchInput(v){
+  S.bandejaSearch=v;
+  renderBandejaBody();
+}
+function rBandeja(mc,p){
+  var c2='#0d9488';
+  if(!S.bandejaTab)S.bandejaTab='pendientes';
+  if(S.bandejaSearch===undefined)S.bandejaSearch='';
+  var tab=S.bandejaTab;
+  var q=S.bandejaSearch.trim();
+  var cnt=_bandejaCounts();
+  var totalPend=cnt.pendientes+cnt.newCarpeta+cnt.completedMsgs;
+  var pendBdg=totalPend?(' <span style="background:'+(tab==='pendientes'?'rgba(255,255,255,.3)':'#0d9488')+';color:#fff;border-radius:10px;padding:0 6px;font-size:10px;font-weight:700;margin-left:4px">'+totalPend+'</span>'):'';
+  var papBdg=cnt.papelera?(' <span style="background:'+(tab==='papelera'?'rgba(255,255,255,.3)':'var(--gray-l)')+';color:#fff;border-radius:10px;padding:0 6px;font-size:10px;font-weight:700;margin-left:2px">'+cnt.papelera+'</span>'):'';
+  var searchBox=(tab==='pendientes'||tab==='log'||tab==='papelera')
+    ?'<div class="flex gap-6 mb-10 items-center"><input class="fi" style="margin:0;flex:1" placeholder="🔎 Buscar en los informes (una o más palabras)…" value="'+esc(S.bandejaSearch)+'" oninput="bandejaSearchInput(this.value)">'+(q?'<button class="btn btn-g btn-s" onclick="S.bandejaSearch=\'\';render()">✕</button>':'')+'</div>'
+    :'';
+  mc.innerHTML=modHeader('bandeja','Bandeja',(SYNC.apiUrl&&SYNC.apiSecret)?'<button class="btn btn-sec btn-s" onclick="revisarServidor(true)">&#x1F4E5; Buscar informes</button>':'')
+    +'<div class="flex gap-6 mb-12" style="flex-wrap:wrap">'
+    +'<button class="btn btn-s" style="'+(tab==='pendientes'?'background:'+c2+';color:#fff':'background:var(--gray-ll);color:var(--text2)')+'" onclick="S.bandejaTab=\'pendientes\';render()">'+I.bell+' Pendientes'+pendBdg+'</button>'
+    +(function(){var _na=_alertaCount();return '<button class="btn btn-s" style="'+(tab==='alertas'?'background:#dc2626;color:#fff':(_na?'background:#fef2f2;color:#dc2626;border:1px solid #fecaca':'background:var(--gray-ll);color:var(--text2)'))+'" onclick="S.bandejaTab=\'alertas\';render()">🚨 Alertas'+(_na?' <span style="background:'+(tab==='alertas'?'rgba(255,255,255,.3)':'#dc2626')+';color:#fff;border-radius:10px;padding:0 6px;font-size:10px;font-weight:700;margin-left:2px">'+_na+'</span>':'')+'</button>';})()
+    +'<button class="btn btn-s" style="'+(tab==='log'?'background:'+c2+';color:#fff':'background:var(--gray-ll);color:var(--text2)')+'" onclick="S.bandejaTab=\'log\';render()">📋 Log ('+cnt.procesados+')</button>'
+    +'<button class="btn btn-s" style="'+(tab==='papelera'?'background:var(--gray-l);color:#fff':'background:var(--gray-ll);color:var(--text2)')+'" onclick="S.bandejaTab=\'papelera\';render()">🗑 Papelera'+papBdg+'</button>'
+    +'</div>'
+    +searchBox
+    +'<div id="bandeja_body">'+_bandejaBodyHtml()+'</div>';
 }
 
 function incorporarFormularioModal(id){
@@ -9618,12 +9691,6 @@ function incorporarFormularioModal(id){
   h+='<div class="mo-h" style="padding:14px 16px"><h3 style="color:#0d9488;flex:1;min-width:0">📥 '+esc(sub.ayudante||'?')+'</h3><button class="tbtn" onclick="document.getElementById(\'ifmM\').remove()">'+I.x+'</button></div>';
   h+='<div class="txxs tc3 mb-4" style="padding:0 16px">📅 '+fmts(sub.receivedAt||sub.fecha||'')+(sub.version>1?' · <strong>v'+sub.version+'</strong>':'')+'</div>';
   h+='<div style="flex:1;overflow-y:auto;padding:8px 16px 8px">';
-  if(sub.mensajeGeneral){
-    h+='<div class="card" style="padding:10px;margin-bottom:8px;border-left:3px solid #0d9488">';
-    h+='<div class="txxs fw7" style="color:#0d9488;margin-bottom:6px">💬 Mensaje general</div>';
-    h+='<div class="ts" style="white-space:pre-wrap;line-height:1.5">'+esc(sub.mensajeGeneral)+'</div>';
-    h+='</div>';
-  }
   var _iBtn=function(key,done){
     if(isPend){
       if(done)return '<button disabled style="flex-shrink:0;border:none;background:#0d9488;color:#fff;border-radius:6px;padding:5px 9px;font-size:11px">✓</button>';
@@ -9637,6 +9704,14 @@ function incorporarFormularioModal(id){
     if(!isPend||!any)return '';
     return '<button onclick="incSec(\''+id+'\',\''+pfx+'\')" style="border:none;background:#0d9488;color:#fff;border-radius:6px;padding:3px 9px;font-size:10px;cursor:pointer;white-space:nowrap">✓ Todo</button>';
   };
+  if(sub.mensajeGeneral){
+    var msgDone=sub.itemsInc.indexOf('msg_0')>=0;
+    h+='<div class="card" style="padding:10px;margin-bottom:8px;border-left:3px solid #0d9488;opacity:'+(msgDone?'0.5':'1')+'">';
+    h+='<div class="flex items-center justify-between mb-6"><span class="txxs fw7" style="color:#0d9488">💬 Mensaje general</span>'+_iBtn('msg_0',msgDone)+'</div>';
+    h+='<div class="ts" style="white-space:pre-wrap;line-height:1.5">'+esc(sub.mensajeGeneral)+'</div>';
+    if(msgDone)h+='<div class="txxs mt-6" style="color:var(--green)">✓ En Comentarios del propietario'+((D.colaboradores||[]).some(function(c){return c.id===sub.token;})?' y en Mensajes':'')+'</div>';
+    h+='</div>';
+  }
   if(sub.movimientos&&sub.movimientos.length){
     var anyMov=sub.movimientos.some(function(_,i){return sub.itemsInc.indexOf('mov_'+i)<0;});
     h+='<div class="card" style="padding:10px;margin-bottom:8px">';
@@ -9726,12 +9801,12 @@ function incorporarFormularioModal(id){
     var ak=_getAllFormKeys(sub);var allD=ak.length>0&&ak.every(function(k){return sub.itemsInc.indexOf(k)>=0;});
     h+='<div class="flex gap-6" style="padding:12px 16px;border-top:1px solid var(--gray-ll)">';
     if(!allD)h+='<button class="btn" style="background:#0d9488;color:#fff;flex:2;padding:12px" onclick="incAll(\''+id+'\')">✓ Incorporar todo</button>';
-    h+='<button class="btn btn-g btn-s" style="color:var(--red);flex:1" onclick="descartarFormulario(\''+id+'\')">✕ Descartar</button>';
+    h+='<button class="btn btn-g btn-s" style="color:var(--red);flex:1" onclick="descartarFormulario(\''+id+'\')">🗑 A la papelera</button>';
     h+='</div>';
   } else {
     h+='<div class="flex gap-6" style="padding:12px 16px;border-top:1px solid var(--gray-ll)">';
     h+='<button class="btn btn-sec" style="flex:1" onclick="reabrirFormulario(\''+id+'\')">↩ Reabrir</button>';
-    h+='<button class="btn btn-s" style="flex:1;background:#dc2626;color:#fff" onclick="descartarFormulario(\''+id+'\')">🗑 Eliminar</button>';
+    h+='<button class="btn btn-s" style="flex:1;background:#dc2626;color:#fff" onclick="descartarFormulario(\''+id+'\')">🗑 A la papelera</button>';
     h+='<button class="btn btn-g btn-s" style="flex:1" onclick="document.getElementById(\'ifmM\').remove()">Cerrar</button>';
     h+='</div>';
   }
@@ -9751,6 +9826,7 @@ function reabrirFormulario(id){
 function _getAllFormKeys(sub){
   var keys=[];
   if(sub.tareas!==undefined){
+    if(sub.mensajeGeneral)keys.push('msg_0');
     if(sub.movimientos)sub.movimientos.forEach(function(_,i){keys.push('mov_'+i);});
     if(sub.tareas)sub.tareas.forEach(function(_,i){keys.push('tar_'+i);});
     if(sub.materialesExistentes)sub.materialesExistentes.forEach(function(_,i){keys.push('mex_'+i);});
@@ -9764,7 +9840,17 @@ function _doIncItem(sub,key){
   var parts=key.split('_');var type=parts[0];var idx=parseInt(parts[1])||0;
   var pid=sub.obraId||sub.projectId||S.proj;
   var by=sub.ayudante||'Colaborador';
-  if(type==='mov'){
+  if(type==='msg'){
+    if(!sub.mensajeGeneral)return;
+    D.comentarios=D.comentarios||[];
+    D.comentarios.push({id:uid(),projectId:pid,text:sub.mensajeGeneral,tipo:'propietario',rubro:'General',etapa:'',tareaId:'',photos:[],archivos:[],sourceType:'formulario',sourceName:by,sourceId:sub.id,date:nw(),updatedAt:nw()});
+    audit('comentarios','create','form msg: '+sub.mensajeGeneral.slice(0,30));
+    var _coMsg=(D.colaboradores||[]).find(function(c){return c.id===sub.token;});
+    if(_coMsg){
+      if(!_coMsg.notas)_coMsg.notas=[];
+      _coMsg.notas.unshift({texto:sub.mensajeGeneral,fecha:sub.receivedAt||sub.fecha||nw(),de:'colab'});
+    }
+  } else if(type==='mov'){
     var m=(sub.movimientos||[])[idx];if(!m)return;
     D.economia=D.economia||[];
     D.economia.push({id:uid(),projectId:pid,tipo:m.tipo==='ingreso'?'ingreso':'egreso',
@@ -9939,11 +10025,29 @@ function incorporarFormulario(id){
 function descartarFormulario(id){
   var sub=(D.formulariosPendientes||[]).find(function(x){return x.id===id;});
   if(!sub)return;
+  // Va a la papelera en lugar de borrarse: se puede restaurar a Pendientes o al
+  // Log desde ahí. estadoPrevio guarda de dónde venía para restaurarlo bien.
+  sub.estadoPrevio=sub.estado;
+  sub.estado='papelera';sub.updatedAt=nw();
+  document.getElementById('ifmM')?.remove();
+  sv();render();toast('Enviado a la papelera','var(--orange)');
+}
+function restaurarFormulario(id,destino){
+  var sub=(D.formulariosPendientes||[]).find(function(x){return x.id===id;});
+  if(!sub)return;
+  sub.estado=destino==='pendiente'?'pendiente':(sub.estadoPrevio&&sub.estadoPrevio!=='papelera'?sub.estadoPrevio:'descartado');
+  delete sub.estadoPrevio;
+  sub.updatedAt=nw();
+  sv();render();toast('Restaurado','var(--green)');
+}
+function eliminarFormularioDefinitivo(id){
+  if(!confirmDel('¿Eliminar este informe definitivamente? No se puede deshacer.'))return;
+  var sub=(D.formulariosPendientes||[]).find(function(x){return x.id===id;});
+  if(!sub)return;
   // Marcar como eliminado en lugar de borrar del array — si se borra, el próximo
   // fetchFormulariosPending() lo restaura desde Drive porque ya no está en existingIds.
   sub.estado='eliminado';sub.updatedAt=nw();
-  document.getElementById('ifmM')?.remove();
-  sv();render();toast('Informe eliminado','var(--red)');
+  sv();render();toast('Informe eliminado definitivamente','var(--red)');
 }
 
 async function fetchFormulariosPending(){
