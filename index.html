@@ -86,6 +86,14 @@ a{color:var(--blue);text-decoration:none}
 }
 /* Zócalo de alertas: latido suave para que llame la atención sin molestar */
 @keyframes zocPulse{0%,100%{box-shadow:0 3px 12px #dc262650}50%{box-shadow:0 3px 20px #dc2626aa}}
+/* Las cuatro secciones de Materiales (Existentes / Sin cómputo / A pedir /
+   Pedidos): misma altura de encabezado y algo más finas, para que plegadas
+   entren las cuatro de un vistazo. El nowrap evita que un título largo salte
+   de renglón y deje esa fila más alta que las otras tres. */
+.matsec{padding:8px 10px!important;margin-bottom:8px!important}
+.matsec-h{display:flex;justify-content:space-between;align-items:center;gap:8px;min-height:32px}
+.matsec-h>.link-tag{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.matsec-h .btn{flex-shrink:0}
 /* Filas compactas de materiales computados: mismo dato, bastante menos alto */
 .matrow-compact{padding:7px 10px;margin-bottom:5px}
 .matrow-compact .mat-nm{flex:1;min-width:0;font-size:13px;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -3854,7 +3862,7 @@ function rVisitaDetail(mc,vid){
   ${v.archivos&&v.archivos.length?`<div class="card mb-12"><div class="ts fw7 mb-8">${I.file} Archivos adjuntos (${v.archivos.length})</div>${v.archivos.map((f,fi)=>`<div class="flex items-center gap-6" style="padding:6px 0;border-bottom:1px solid var(--gray-ll)"><span style="color:var(--slate);flex-shrink:0">${I.file}</span><div class="flex-1 ts fw6 trun" style="min-width:0">${f.name}</div><button class="btn btn-sec btn-s" onclick="event.stopPropagation();viewArchivo('visitas','${vid}','${f.id||''}')" style="flex-shrink:0">👁</button><button class="btn btn-sec btn-s" onclick="event.stopPropagation();delVisitaArchivo('${vid}',${fi})" style="color:var(--red);flex-shrink:0" title="Eliminar archivo">${I.trash}</button></div>`).join('')}</div>`:''}
   <!-- Linked entities -->
   <div class="card mb-12"><div class="flex justify-between items-center mb-8"><div class="ts fw7" style="color:var(--cyan)">${I.list} Tareas (${lT.length})</div><button class="btn btn-s btn-sec" onclick="openM('lkTM');setTimeout(function(){_renderEncChips('lt_enc','lt_enc_chips');},80)">${I.plus}</button></div>${lT.length?lT.map(t=>`<div style="padding:6px 0;border-bottom:1px solid var(--gray-ll)"><div class="flex items-center gap-4"><div class="flex-1"><div class="ts fw6" style="${t.status==='completada'?'text-decoration:line-through;color:var(--gray-l)':''}">${t.title}</div>${t.description?`<div class="txxs tc3 mt-2" style="white-space:pre-wrap">${t.description}</div>`:''}<div class="txxs tc3 mt-2">${priBadge(t.priority,true)} ${stBadge(t.status,true)}${t.dueDate?' | '+fmts(t.dueDate):''}${t.encargado?` | <span style="color:var(--cyan)">👤 ${t.encargado}</span>`:''}</div></div><button class="btn btn-g btn-s" title="Calendario" onclick="exportTareaGCal('${t.id}')">&#128197;</button><button class="btn btn-g btn-s" onclick="editTarea('${t.id}')">${I.edit}</button><button class="btn btn-g btn-s" style="color:${t.status==='completada'?'var(--gray-l)':'var(--green)'}" onclick="updT('${t.id}','${t.status==='completada'?'pendiente':'completada'}')" title="${t.status==='completada'?'Reabrir':'Completar'}">${t.status==='completada'?'&#x21A9;':I.check}</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delI('tareas','${t.id}')">${I.trash}</button>${(t.photos&&t.photos.filter(function(p){var u=typeof p==='string'?p:p.url;return u&&!u.startsWith('[');}).length)?'<div style="margin-top:4px">'+photoGrid(t.photos,'tareas',t.id)+'</div>':''}</div></div>`).join(''):'<div class="txxs tc3">Sin tareas</div>'}</div>
-  <div class="card mb-12"><div class="flex justify-between items-center mb-8"><div class="ts fw7" style="color:var(--purple)">${I.pkg} Materiales (${lM.length+lMI.length})</div><button class="btn btn-s btn-sec" onclick="openLkMM('${vid}')">${I.plus}</button></div>${lM.length?lM.map(m=>`<div style="padding:6px 0;border-bottom:1px solid var(--gray-ll)"><div class="flex items-center gap-4"><div class="flex-1"><div class="ts fw6">${m.name}</div><div class="txxs tc3 mt-2">${m.qty||0} ${m.unit||''} ${m.visitaTipo?colBadge(m.visitaTipo==='a_pedir'?'A pedir':'Existente',m.visitaTipo==='a_pedir'?'var(--orange)':'var(--green)',true):''}${m.notes?` | ${m.notes}`:''}</div></div><button class="btn btn-g btn-s" onclick="editMatVisita('${m.id}')">${I.edit}</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel('¿Quitar?')){D.materiales=D.materiales.filter(x=>x.id!=='${m.id}');addTombstone('materiales','${m.id}');sv();render();}">${I.trash}</button></div>${m.photos&&m.photos.length?photoGrid(m.photos,'materiales',m.id):''}</div>`).join(''):''}${!lM.length&&!lMI.length?'<div class="txxs tc3">Sin materiales</div>':''}${lMI.length?`<div style="margin-top:8px;border-top:1px solid var(--gray-ll);padding-top:8px"><div class="txxs fw7 mb-4" style="color:var(--green)">&#x2713; Ingresos/Existentes cargados</div>`+lMI.map(i=>`<div style="padding:4px 0;border-bottom:1px solid var(--gray-ll)"><div class="flex items-center gap-4"><div class="flex-1"><div class="ts fw6">${i.matNombre}</div><div class="txxs tc3 mt-2">${i.qty||0} ${i.unit||''} ${i.estado==='ingresado'?'<span style="color:var(--green)">&#x2713; Ingresado</span>':i.estado==='pedido'?'<span style="color:var(--orange)">&#x1F4CB; Pedido</span>':i.estado==='a_pedir'?'<span style="color:var(--orange)">A pedir</span>':'<span style="color:var(--green)">Existente</span>'}${i.fechaNecesaria?` | <span style="color:var(--orange)">&#128197; ${fmts(i.fechaNecesaria)}</span>`:''}${i.observations?' | '+i.observations:''}</div></div><button class="btn btn-g btn-s" onclick="editLMI('${i.id}')">${I.edit}</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel('¿Quitar material?')){D.matIngresos=D.matIngresos.filter(x=>x.id!=='${i.id}');addTombstone('matIngresos','${i.id}');sv();render();}">${I.trash}</button></div></div>`).join('')+`</div>`:''}}</div>
+  <div class="card mb-12"><div class="flex justify-between items-center mb-8"><div class="ts fw7" style="color:var(--purple)">${I.pkg} Materiales (${lM.length+lMI.length})</div><button class="btn btn-s btn-sec" onclick="openLkMM('${vid}')">${I.plus}</button></div>${lM.length?lM.map(m=>`<div style="padding:6px 0;border-bottom:1px solid var(--gray-ll)"><div class="flex items-center gap-4"><div class="flex-1"><div class="ts fw6">${m.name}</div><div class="txxs tc3 mt-2">${m.qty||0} ${m.unit||''} ${m.visitaTipo?colBadge(m.visitaTipo==='a_pedir'?'A pedir':'Existente',m.visitaTipo==='a_pedir'?'var(--orange)':'var(--green)',true):''}${m.notes?` | ${m.notes}`:''}</div></div><button class="btn btn-g btn-s" onclick="editMatVisita('${m.id}')">${I.edit}</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel('¿Quitar?')){D.materiales=D.materiales.filter(x=>x.id!=='${m.id}');addTombstone('materiales','${m.id}');sv();render();}">${I.trash}</button></div>${m.photos&&m.photos.length?photoGrid(m.photos,'materiales',m.id):''}</div>`).join(''):''}${!lM.length&&!lMI.length?'<div class="txxs tc3">Sin materiales</div>':''}${lMI.length?`<div style="margin-top:8px;border-top:1px solid var(--gray-ll);padding-top:8px"><div class="txxs fw7 mb-4" style="color:var(--green)">&#x2713; Ingresos/Existentes cargados</div>`+lMI.map(i=>`<div style="padding:4px 0;border-bottom:1px solid var(--gray-ll)"><div class="flex items-center gap-4"><div class="flex-1"><div class="ts fw6">${i.matNombre}</div><div class="txxs tc3 mt-2">${i.qty||0} ${i.unit||''} ${i.estado==='ingresado'?'<span style="color:var(--green)">&#x2713; Ingresado</span>':i.estado==='pedido'?'<span style="color:var(--orange)">&#x1F4CB; Pedido</span>':i.estado==='a_pedir'?'<span style="color:var(--orange)">A pedir</span>':'<span style="color:var(--green)">Existente</span>'}${i.fechaNecesaria?` | <span style="color:var(--orange)">&#128197; ${fmts(i.fechaNecesaria)}</span>`:''}${i.observations?' | '+i.observations:''}</div></div><button class="btn btn-g btn-s" onclick="editLMI('${i.id}')">${I.edit}</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel('¿Quitar material?')){D.matIngresos=D.matIngresos.filter(x=>x.id!=='${i.id}');addTombstone('matIngresos','${i.id}');sv();render();}">${I.trash}</button></div></div>`).join('')+`</div>`:''}</div>
   <div class="card mb-12"><div class="flex justify-between items-center mb-8"><div class="ts fw7" style="color:var(--slate)">${I.file} Adjuntos (${lD.length})</div><button class="btn btn-s btn-sec" onclick="openM('lkDM')">${I.plus}</button></div>${lD.length?lD.map(d=>`<div class="flex items-center gap-8" style="padding:6px 0;border-bottom:1px solid var(--gray-ll)"><span style="color:var(--slate);flex-shrink:0">${I.file}</span><div class="flex-1 ts fw6 trun">${d.name}</div>${d.url?`<a href="${d.url}" target="_blank" onclick="event.stopPropagation()" class="btn btn-sec btn-s" style="flex-shrink:0">${I.eye} Ver</a>`:''}<button class="btn btn-g btn-s" style="color:var(--red);flex-shrink:0" onclick="if(confirmDel('¿Quitar?')){D.documentos=D.documentos.filter(x=>x.id!=='${d.id}');addTombstone('documentos','${d.id}');sv();render();}">${I.trash}</button></div>`).join(''):'<div class="txxs tc3">Sin adjuntos</div>'}</div>
   <!-- Checklist de visita -->
   ${(()=>{const vChk=D.checklists.filter(ch=>ch.visitaId===vid);const genChk=pf('checklists').filter(ch=>!ch.visitaId);return `<div class="card mb-12"><div class="flex justify-between items-center mb-8"><div class="ts fw7" style="color:var(--pink)">${I.chklist} Checklist (${vChk.length})</div><button class="btn btn-s btn-sec" onclick="openM('lkCkM')">+ Nueva</button></div>${vChk.length?vChk.map(ch=>{const dn=ch.items.filter(i=>i.done).length;const tot=ch.items.length;return `<div style="padding:8px 0;border-bottom:1px solid var(--gray-ll)"><div class="flex justify-between items-center mb-4"><div class="ts fw6">${ch.title}</div><div class="flex items-center gap-6"><div class="txxs tc3">${dn}/${tot}</div><button class="btn btn-g btn-s" style="color:var(--orange);padding:2px 6px;font-size:10px" onclick="unlinkChkFromVisita('${ch.id}')" title="Desvincular checklist">✕ Desvincular</button></div></div>${ch.items.map(it=>`<div class="chk-item" style="padding:4px 0"><div class="chk-box${it.done?' checked':''}" onclick="togC('${ch.id}','${it.id}')" style="width:18px;height:18px;flex-shrink:0">${it.done?I.check:''}</div><div class="chk-text${it.done?' done':''} ts flex-1">${it.text}</div><button class="btn btn-g btn-s" style="padding:2px 4px;flex-shrink:0" onclick="editChkItem('${ch.id}','${it.id}')">${I.edit}</button><button class="btn btn-g btn-s" style="padding:2px 4px;flex-shrink:0" onclick="if(confirmDel())dCI('${ch.id}','${it.id}')">${I.trash}</button></div>`).join('')}</div>`; }).join(''):''}${genChk.length?`<div class="mt-8 txxs tc3">Vincular del general: ${genChk.map(ch=>`<button class="btn btn-s btn-sec" style="margin:2px" onclick="linkChkToVisita('${ch.id}','${vid}')">${ch.title}</button>`).join('')}</div>`:'<div class="txxs tc3">Sin checklists generales</div>'}</div>`;})()}
@@ -4854,7 +4862,7 @@ function rMat(mc){
     const status=comp===0?'':pct>=100?'ok':pct>=80?'limit':'under';
     cats[cat].push({...m,totalIng,pct,status});
   });
-  mc.innerHTML=`${modHeader('materiales','Materiales',`<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><button class="btn btn-s" style="background:#8b5cf6;color:#fff;white-space:nowrap" onclick="openM('newAPedirM')">&#x1F4DD; A pedir</button><button class="btn btn-s" style="background:var(--orange);color:#fff;white-space:nowrap" onclick="openM('newPedidoM')">&#x1F4CB; Pedido</button><button class="btn btn-s" style="background:${c};color:#fff;white-space:nowrap" onclick="openM('newIngM')">${I.truck} Ingreso</button><button class="btn btn-s" style="background:var(--green);color:#fff;white-space:nowrap" onclick="openM('newExistenteM')">&#x2713; Existente</button><button class="btn btn-sec btn-s" style="white-space:nowrap" onclick="openM('newMatM')">${I.plus} Material</button><button class="btn btn-sec btn-s" style="white-space:nowrap" onclick="exportMatPDF()">${I.pdf} PDF</button><button class="btn btn-sec btn-s" style="white-space:nowrap" id="mat_mic_btn" onclick="startMatVoice()">🎤 Voz</button><button class="btn btn-sec btn-s" style="white-space:nowrap" onclick="abrirFusionMat()">&#x1F501; Fusionar</button></div>`)}
+  mc.innerHTML=`${modHeader('materiales','Materiales',`<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><button class="btn btn-s" style="background:#8b5cf6;color:#fff;white-space:nowrap" onclick="openM('newAPedirM')">&#x1F4DD; A pedir</button><button class="btn btn-s" style="background:var(--orange);color:#fff;white-space:nowrap" onclick="openM('newPedidoM')">&#x1F4CB; Pedido</button><button class="btn btn-s" style="background:${c};color:#fff;white-space:nowrap" onclick="openM('newIngM')">${I.truck} Ingreso</button><button class="btn btn-s" style="background:#7c3aed;color:#fff;white-space:nowrap" onclick="abrirIngresoMultiple()">&#x1F4E6; Remito</button><button class="btn btn-s" style="background:var(--green);color:#fff;white-space:nowrap" onclick="openM('newExistenteM')">&#x2713; Existente</button><button class="btn btn-sec btn-s" style="white-space:nowrap" onclick="openM('newMatM')">${I.plus} Material</button><button class="btn btn-sec btn-s" style="white-space:nowrap" onclick="exportMatPDF()">${I.pdf} PDF</button><button class="btn btn-sec btn-s" style="white-space:nowrap" id="mat_mic_btn" onclick="startMatVoice()">🎤 Voz</button><button class="btn btn-sec btn-s" style="white-space:nowrap" onclick="abrirFusionMat()">&#x1F501; Fusionar</button></div>`)}
   <!-- FILTROS MATERIALES -->
   <div class="card mb-12" style="padding:12px">
     <div class="flex gap-6 mb-8 items-center">
@@ -4871,7 +4879,7 @@ function rMat(mc){
   <div id="mat_items_list"><div class="txxs tc3 tac" style="padding:16px">Cargando...</div></div>
   
   <div class="mo" id="newMatM"><div class="mo-c"><div class="mo-h"><h3 style="color:${c}">Nuevo Material</h3><button class="tbtn" onclick="closeM('newMatM')">${I.x}</button></div><div class="fg"><label class="fl">Material *</label><input class="fi" id="nm_n"></div><div class="fr"><div class="fg"><label class="fl">Computado</label><input class="fi" id="nm_comp" type="number" min="0" placeholder="Cantidad prevista"></div><div class="fg"><label class="fl">Unidad</label><select class="fs" id="nm_u">${UNI.map(u=>`<option>${u}</option>`).join('')}</select></div></div><div class="fg"><label class="fl">Categoría</label><select class="fs" id="nm_c">${MATCAT.map(c=>`<option>${c}</option>`).join('')}</select></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="nm_no"></textarea></div><div class="fg"><label class="fl">Fotos</label><input type="file" accept="image/*" multiple id="nm_ph" class="fi" style="padding:6px"></div><button class="btn btn-w mt-8" style="background:${c};color:#fff" onclick="saveMat()">Guardar</button></div></div>
-  <div class="mo" id="newIngM"><div class="mo-c"><div class="mo-h"><h3 style="color:${c}">Ingreso de Material</h3><button class="tbtn" onclick="closeM('newIngM')">${I.x}</button></div>${allItems.length?`<div class="fg"><label class="fl">Material *</label>${_mcsHtml('ni_mat',allItems,'Buscar material...',null)}<div id="ni_uinfo" style="display:none"></div></div>`:'<div class="ts tc3 mb-12">Primero carga materiales en el cómputo</div>'}<div class="fr"><div class="fg"><label class="fl">Cantidad *</label><input class="fi" id="ni_q" type="number" min="0" oninput="_unidadInfo('ni')"></div><div class="fg"><label class="fl">Fecha</label><input class="fi" id="ni_d" type="date" value="${td()}" onchange="_unidadInfo('ni')"></div></div><div class="fg"><label class="fl">Proveedor</label>${_pcHtml('ni_prov',_provList,'Buscar o escribir proveedor...')}</div><div class="fg"><label class="fl">Remito</label><input class="fi" id="ni_rem"></div><div class="fg"><label class="fl">Observaciones</label><textarea class="ft" id="ni_obs"></textarea></div><div class="fg"><label class="fl">Fotos del ingreso</label><input type="file" accept="image/*" multiple id="ni_ph" class="fi" style="padding:6px"></div><button class="btn btn-w mt-8" style="background:${c};color:#fff" onclick="saveIng()">Registrar</button>
+  <div class="mo" id="newIngM"><div class="mo-c"><div class="mo-h"><h3 style="color:${c}">Ingreso de Material</h3><button class="tbtn" onclick="closeM('newIngM')">${I.x}</button></div><button class="btn btn-sec btn-s btn-w mb-10" style="color:#7c3aed" onclick="closeM('newIngM');abrirIngresoMultiple()">&#x1F4E6; ¿Llegaron varios? Cargar el remito entero</button>${allItems.length?`<div class="fg"><label class="fl">Material *</label>${_mcsHtml('ni_mat',allItems,'Buscar material...',null)}<div id="ni_uinfo" style="display:none"></div></div>`:'<div class="ts tc3 mb-12">Primero carga materiales en el cómputo</div>'}<div class="fr"><div class="fg"><label class="fl">Cantidad *</label><input class="fi" id="ni_q" type="number" min="0" oninput="_unidadInfo('ni')"></div><div class="fg"><label class="fl">Fecha</label><input class="fi" id="ni_d" type="date" value="${td()}" onchange="_unidadInfo('ni')"></div></div><div class="fg"><label class="fl">Proveedor</label>${_pcHtml('ni_prov',_provList,'Buscar o escribir proveedor...')}</div><div class="fg"><label class="fl">Remito</label><input class="fi" id="ni_rem"></div><div class="fg"><label class="fl">Observaciones</label><textarea class="ft" id="ni_obs"></textarea></div><div class="fg"><label class="fl">Fotos del ingreso</label><input type="file" accept="image/*" multiple id="ni_ph" class="fi" style="padding:6px"></div><button class="btn btn-w mt-8" style="background:${c};color:#fff" onclick="saveIng()">Registrar</button>
 </div></div>
   <div class="mo" id="newPedidoM"><div class="mo-c"><div class="mo-h"><h3 style="color:var(--orange)">&#x1F4CB; Nuevo Pedido</h3><button class="tbtn" onclick="closeM('newPedidoM')">${I.x}</button></div><div style="background:#fff7ed;border-left:3px solid var(--orange);border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px">Los pedidos <strong>no computan</strong> como ingresados. Se convierten en ingreso con un clic cuando lleguen.</div><div class="fg"><label class="fl">Material del c&oacute;mputo (opcional)</label>${_mcsHtml('np_mat',allItems,'Buscar o dejar vacío...','— Ninguno —')}<div id="np_uinfo" style="display:none"></div></div><div class="fg"><label class="fl">Nombre libre</label><input class="fi" id="np_nombre" placeholder="Si no est&aacute; en el c&oacute;mputo..."></div><div class="fr"><div class="fg"><label class="fl">Cantidad *</label><input class="fi" id="np_q" type="number" min="0" step="0.01" oninput="_unidadInfo('np')"></div><div class="fg"><label class="fl">Unidad</label><select class="fs" id="np_u">${UNI.map(u=>`<option>${u}</option>`).join('')}</select></div></div><div class="fg"><label class="fl">Proveedor</label>${_pcHtml('np_prov',_provList,'Buscar o escribir proveedor...')}</div><div class="fg"><label class="fl">Fecha pedido</label><input class="fi" id="np_fecha" type="date" value="${td()}" onchange="_unidadInfo('np')"></div><div class="fg"><label class="fl">Grupo (opcional)</label>${_pcHtml('np_grupo',_grupoNames,'Buscar o crear un grupo...')}<div class="txxs tc3 mt-2">Agrupá varios materiales bajo el mismo nombre para no ver un listado tan largo.</div></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="np_obs"></textarea></div><button class="btn btn-w mt-8" style="background:var(--orange);color:#fff" onclick="savePedido()">Registrar Pedido</button></div></div>
   <div class="mo" id="newAPedirM"><div class="mo-c"><div class="mo-h"><h3 style="color:#8b5cf6">&#x1F4DD; A pedir</h3><button class="tbtn" onclick="closeM('newAPedirM')">${I.x}</button></div><div style="background:#f5f3ff;border-left:3px solid #8b5cf6;border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px">Material pendiente de pedido. Pas&aacute;lo a Pedido cuando se solicite.</div><div class="fg"><label class="fl">Material del c&oacute;mputo (opcional)</label>${_mcsHtml('nap_mat',allItems,'Buscar o dejar vacío...','— Ninguno —')}<div id="nap_uinfo" style="display:none"></div></div><div class="fg"><label class="fl">Nombre</label><input class="fi" id="nap_nombre" placeholder="Nombre del material"></div><div class="fr"><div class="fg"><label class="fl">Cantidad</label><input class="fi" id="nap_q" type="number" min="0" step="0.01" oninput="_unidadInfo('nap')"></div><div class="fg"><label class="fl">Unidad</label><select class="fs" id="nap_u">${UNI.map(u=>`<option>${u}</option>`).join('')}</select></div></div><div class="fg"><label class="fl">Proveedor sugerido</label>${_pcHtml('nap_prov',_provList,'Buscar o escribir proveedor...')}</div><div class="fg"><label class="fl">Fecha estimada</label><input class="fi" id="nap_fecha" type="date" value="${td()}" onchange="_unidadInfo('nap')"></div><div class="fg"><label class="fl">Grupo (opcional)</label>${_pcHtml('nap_grupo',_grupoNames,'Buscar o crear un grupo...')}<div class="txxs tc3 mt-2">Agrupá varios materiales bajo el mismo nombre para no ver un listado tan largo.</div></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="nap_obs"></textarea></div><button class="btn btn-w mt-8" style="background:#8b5cf6;color:#fff" onclick="saveAPedir()">Registrar A pedir</button></div></div>
@@ -5014,8 +5022,8 @@ function renderMatItems(){
     .sort(function(a,b){return (b.updatedAt||b.date||'').localeCompare(a.updatedAt||a.date||'');});
   var _existH='';
   if(_exist.length){
-    _existH='<div class="card mb-12" style="border-left:3px solid var(--green);background:var(--green-bg)">';
-    _existH+='<div class="flex justify-between items-center mb-4">';
+    _existH='<div class="card matsec" style="border-left:3px solid var(--green);background:var(--green-bg)">';
+    _existH+='<div class="matsec-h">';
     _existH+='<button class="link-tag fw7" style="color:var(--green);font-size:13px" onclick="S.matExistMin=!S.matExistMin;renderMatItems()">&#x2713; Existentes en obra ('+_exist.length+')'+(S.matExistMin?' &#x25B6;':' &#x25BC;')+'</button>';
     _existH+='<button class="btn btn-s btn-sec" onclick="openM(\'newExistenteM\')">'+I.plus+' Nuevo</button>';
     _existH+='</div>';
@@ -5039,8 +5047,8 @@ function renderMatItems(){
   var _apedir=(D.matIngresos||[]).filter(function(i){return i.projectId===S.proj&&i.estado==='a_pedir';});
   var _apedirH='';
   if(_apedir.length){
-    _apedirH='<div class="card mb-12" style="border-left:3px solid #8b5cf6">';
-    _apedirH+='<div class="flex justify-between items-center mb-4">';
+    _apedirH='<div class="card matsec" style="border-left:3px solid #8b5cf6">';
+    _apedirH+='<div class="matsec-h">';
     _apedirH+='<button class="link-tag fw7" style="color:#8b5cf6;font-size:13px" onclick="S.matAPedirMin=!S.matAPedirMin;renderMatItems()">&#x1F4DD; A pedir ('+_apedir.length+')'+(S.matAPedirMin?' &#x25B6;':' &#x25BC;')+'</button>';
     _apedirH+='<div class="flex gap-4"><button class="btn btn-s btn-sec" title="Agregar al calendario" onclick="exportMatItemsGCal(\'a_pedir\')">&#x1F4C5;</button><button class="btn btn-s btn-sec" onclick="openM(\'newAPedirM\')">'+ I.plus +' Nuevo</button></div></div>';
     if(!S.matAPedirMin){
@@ -5068,9 +5076,9 @@ function renderMatItems(){
 
   var _pedH='';
   if(_peds.length){
-    _pedH='<div class="card mb-12" style="border-left:3px solid var(--orange)">';
-    _pedH+='<div class="flex justify-between items-center mb-4">';
-    _pedH+='<button class="link-tag fw7" style="color:var(--orange);font-size:13px" onclick="S.matPedMin=!S.matPedMin;renderMatItems()">&#x1F4CB; Pedidos pendientes ('+_peds.length+')'+(S.matPedMin?' &#x25B6;':' &#x25BC;')+'</button>';
+    _pedH='<div class="card matsec" style="border-left:3px solid var(--orange)">';
+    _pedH+='<div class="matsec-h">';
+    _pedH+='<button class="link-tag fw7" style="color:var(--orange);font-size:13px" onclick="S.matPedMin=!S.matPedMin;renderMatItems()">&#x1F4CB; Pedidos ('+_peds.length+')'+(S.matPedMin?' &#x25B6;':' &#x25BC;')+'</button>';
     _pedH+='<div class="flex gap-4"><button class="btn btn-s btn-sec" title="Agregar al calendario" onclick="exportMatItemsGCal(\'pedido\')">&#x1F4C5;</button><button class="btn btn-s btn-sec" onclick="openM(\'newPedidoM\')">' +I.plus+' Nuevo</button></div></div>';
     if(!S.matPedMin){
       var _pedGrp=_buildMatGroups(_peds);
@@ -5102,8 +5110,8 @@ function renderMatItems(){
   });
   var _sinCompH='';
   if(_sinComp.length>0){
-    _sinCompH='<div class="card mb-12" style="border-left:3px solid var(--cyan)">'
-      +'<div class="flex justify-between items-center mb-8">'
+    _sinCompH='<div class="card matsec" style="border-left:3px solid var(--cyan)">'
+      +'<div class="matsec-h">'
       +'<button class="link-tag fw7" style="color:var(--cyan);font-size:13px" onclick="S.matSinCompMin=!S.matSinCompMin;renderMatItems()">'
       +'&#x1F4E6; Ingresados sin c\u00f3mputo ('+_sinComp.length+')'
       +(S.matSinCompMin?' &#x25B6;':' &#x25BC;')
@@ -5596,7 +5604,7 @@ async function savePedido(){
   });
   audit('matIngresos','pedido',matNombre);
   sv(); closeM('newPedidoM'); render();
-  toast('Pedido registrado — visible en Pedidos pendientes');
+  toast('Pedido registrado — visible en Pedidos');
 }
 
 function closeConfirmPed(){ var el=document.getElementById('confirmPedM'); if(el) el.remove(); }
@@ -5648,6 +5656,195 @@ function ejecutarConfirmarPedido(pedidoId){
 async function saveMat(){
   if(!requireWrite())return;const n=$('nm_n').value.trim();if(!n){toast('Nombre obligatorio','var(--red)');return;}const pu=await readPhotos('nm_ph','materiales');D.materiales.push({id:uid(),projectId:S.proj,name:n,computado:parseFloat($('nm_comp').value)||0,qty:0,unit:$('nm_u').value,category:$('nm_c').value||'General',notes:$('nm_no').value,photos:pu.map(u=>mkPhoto(u,'')),date:td(),updatedAt:nw()});audit('materiales','create',n);sv();closeM('newMatM');render();toast('Material registrado');}
 async function saveIng(){const mid=$('ni_mat')?.value;const q=parseFloat($('ni_q').value);if(!mid){toast('Selecciona material','var(--red)');return;}if(!q||q<=0){toast('Cantidad invalida','var(--red)');return;}if(!D.matIngresos)D.matIngresos=[];const pu=await readPhotos('ni_ph','materiales');const _ingMat=(D.materiales||[]).find(function(m){return m.id===mid;});D.matIngresos.push({id:uid(),projectId:S.proj,materialId:mid,matNombre:_ingMat?_ingMat.name:'',qty:q,date:$('ni_d').value||td(),proveedor:$('ni_prov').value,remito:$('ni_rem').value,observations:$('ni_obs').value,photos:pu.map(u=>mkPhoto(u,'')),unitEsNueva:_matUnitAt(_ingMat,$('ni_d').value||td()).nueva,unit:_matUnitAt(_ingMat,$('ni_d').value||td()).unit,updatedAt:nw()});audit('matIngresos','create','+'+q);sv();closeM('newIngM');render();toast('Ingreso registrado');}
+// ─── INGRESO MÚLTIPLE (UN REMITO, VARIOS MATERIALES) ──────────────
+// Un remito trae 8 o 10 materiales, pero comparten proveedor, fecha y número de
+// remito. Cargarlos de a uno obligaba a repetir esos tres datos otras tantas
+// veces. Acá se cargan una sola vez y abajo va la lista.
+
+var _IM=[]; // filas en edición: [{nombre,qty,unit}]
+
+function _normTxt(s){
+  return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim();
+}
+
+/** Busca el material computado que corresponde a un nombre escrito a mano. */
+function _matchMaterial(nombre){
+  var n=_normTxt(nombre);
+  if(!n)return null;
+  var mats=pf('materiales').filter(function(m){return !m.visitaId;});
+  var exacto=mats.find(function(m){return _normTxt(m.name)===n;});
+  if(exacto)return exacto;
+  // Contiene: "cemento" encuentra "Cemento portland"; se queda con el más corto
+  // para no engancharse con un nombre larguísimo que apenas lo menciona.
+  // Se exigen 3 letras: con una o dos, cualquier material "contiene" el texto y
+  // se vinculaba el ingreso al material equivocado.
+  if(n.length<3)return null;
+  var cand=mats.filter(function(m){
+    var mn=_normTxt(m.name);
+    return mn.indexOf(n)>=0||(mn.length>=3&&n.indexOf(mn)>=0);
+  });
+  cand.sort(function(a,b){return a.name.length-b.name.length;});
+  return cand[0]||null;
+}
+
+/**
+ * Interpreta una línea dictada o pegada. Acepta las formas en que uno lo dice:
+ *   "Cemento 50 bolsas" · "Cemento x 50" · "Cemento: 50" · "50 bolsas de cemento"
+ */
+function _parsearLineaMaterial(linea){
+  var t=String(linea||'').trim();
+  if(!t)return null;
+  // Viñetas y numeración de lista. Ojo: se exige el punto o el paréntesis para
+  // los números ("1. Clavos"), porque si no "50 bolsas de cemento" perdía el 50.
+  t=t.replace(/^[-*•]\s+/,'').replace(/^\d+[).]\s+/,'');
+  // Vocabulario de unidades. Con un patrón libre se desarmaban líneas como
+  // "12 l hidrofugo", donde la "unidad" se comía medio nombre. Una unidad
+  // conocida puede llevar un calificador pegado ("bolsas 25kg"); si no está en
+  // la lista, se acepta una sola palabra suelta y nada más.
+  var UC='(?:u|un|unid|unidades?|kg|kgs|gr|grs|g|tn|t|m|m2|m3|ml|mts?|cm|mm|lts?|litros?|l|bolsas?|pallets?|rollos?|cajas?|barras?|chapas?|tiras?|baldes?|tambores?|tambor|pares?|jgo|juegos?|piezas?|placas?|planchas?|hs|horas?|dias?|global|gl)';
+  var U='(?:'+UC+'(?:\\s+\\S+)?|[a-zA-ZáéíóúñÁÉÍÓÚÑ][\\wáéíóúñÁÉÍÓÚÑ°"\'\\/.]*)';
+  var m;
+  // <nombre> [x|:|-] <cantidad> [unidad]
+  m=t.match(new RegExp('^(.+?)\\s*(?:[x×:\\-,]|\\s)\\s*(\\d+(?:[.,]\\d+)?)\\s*('+U+')?$','i'));
+  if(m&&_normTxt(m[1])){
+    return {nombre:m[1].replace(/[x×:\-,]\s*$/,'').trim(),
+            qty:parseFloat(m[2].replace(',','.')),
+            unit:(m[3]||'').trim()};
+  }
+  // <cantidad> [unidad] [de] <nombre> — acá la unidad tiene que ser conocida sí
+  // o sí: cualquier palabra valdría y se llevaría puesto el nombre.
+  m=t.match(new RegExp('^(\\d+(?:[.,]\\d+)?)\\s*('+UC+')?\\s*(?:de\\s+)?(.+)$','i'));
+  if(m&&_normTxt(m[3])){
+    return {nombre:m[3].trim(),qty:parseFloat(m[1].replace(',','.')),unit:(m[2]||'').trim()};
+  }
+  return {nombre:t,qty:'',unit:''}; // sin cantidad: se completa a mano
+}
+
+function abrirIngresoMultiple(){
+  _IM=[{nombre:'',qty:'',unit:''},{nombre:'',qty:'',unit:''},{nombre:'',qty:'',unit:''}];
+  var provs=[...new Set((D.matIngresos||[]).filter(function(x){return x.projectId===S.proj&&x.proveedor;}).map(function(x){return x.proveedor.trim();}))].sort();
+  var h='<div class="mo-c"><div class="mo-h"><h3 style="color:var(--purple)">&#x1F4E6; Ingreso por remito</h3><button class="tbtn" onclick="closeM(\'ingMultM\')">'+I.x+'</button></div>';
+  h+='<div class="txxs tc3 mb-10">Los datos del remito se cargan una vez y valen para todos los materiales de la lista.</div>';
+  h+='<div class="fr"><div class="fg"><label class="fl">Fecha</label><input class="fi" id="im_d" type="date" value="'+td()+'"></div>';
+  h+='<div class="fg"><label class="fl">Remito</label><input class="fi" id="im_rem" placeholder="N°"></div></div>';
+  h+='<div class="fg"><label class="fl">Proveedor</label>'+_pcHtml('im_prov',provs,'Buscar o escribir proveedor...','')+'</div>';
+  h+='<div class="fg"><label class="fl">Dictar o pegar la lista</label>'
+    +'<textarea class="ft" id="im_txt" rows="4" placeholder="Un material por renglón:&#10;Cemento 50 bolsas&#10;Arena gruesa 10 m3&#10;Hierro del 8 x 24"></textarea>'
+    +'<button class="btn btn-sec btn-s btn-w mt-4" onclick="imInterpretarLista()">&#x2193; Pasar a la lista</button></div>';
+  h+='<div class="fl mt-8">Materiales del remito</div><div id="im_filas"></div>';
+  h+='<button class="btn btn-sec btn-s btn-w mt-4" onclick="imAgregarFila()">'+I.plus+' Agregar renglón</button>';
+  h+='<div class="fg mt-8"><label class="fl">Observaciones</label><textarea class="ft" id="im_obs" rows="2"></textarea></div>';
+  h+='<div class="fg"><label class="fl">Fotos del remito</label><input type="file" accept="image/*" multiple id="im_ph" class="fi" style="padding:6px"></div>';
+  h+='<button class="btn btn-w mt-8" style="background:var(--purple);color:#fff" id="im_btn" onclick="imRegistrar()">Registrar ingresos</button></div>';
+  var d=document.getElementById('ingMultM');
+  if(d)d.remove();
+  d=document.createElement('div');d.className='mo open';d.id='ingMultM';d.innerHTML=h;
+  document.body.appendChild(d);
+  _imPintarFilas();
+}
+
+/** Guarda lo tipeado antes de volver a dibujar, para no perder nada. */
+function _imLeerFilas(){
+  _IM.forEach(function(f,i){
+    var n=$('im_n'+i),q=$('im_q'+i),u=$('im_u'+i);
+    if(n)f.nombre=n.value;
+    if(q)f.qty=q.value;
+    if(u)f.unit=u.value;
+  });
+}
+function _imPintarFilas(){
+  var cont=$('im_filas');
+  if(!cont)return;
+  var nombres=pf('materiales').filter(function(m){return !m.visitaId;}).map(function(m){return m.name;}).sort();
+  cont.innerHTML=_IM.map(function(f,i){
+    var mat=_matchMaterial(f.nombre);
+    // Se avisa si el nombre no coincide con ningún material del cómputo: igual
+    // se puede cargar, entra como "Ingresado sin cómputo".
+    var marca=f.nombre?(mat
+      ?'<span class="txxs" style="color:var(--green)">&#x2713; '+esc(mat.name)+'</span>'
+      :'<span class="txxs" style="color:var(--cyan)">&#x1F4E6; sin cómputo</span>'):'';
+    return '<div style="border:1px solid var(--brd);border-radius:8px;padding:8px;margin-bottom:6px">'
+      +'<div class="flex gap-6 items-center">'
+      +'<div style="flex:1;min-width:0">'+_pcHtml('im_n'+i,nombres,'Material',f.nombre||'')+'</div>'
+      +'<button class="btn btn-g btn-s" style="color:var(--red);flex-shrink:0" onclick="imQuitarFila('+i+')" title="Quitar renglón">'+I.trash+'</button>'
+      +'</div>'
+      +'<div class="flex gap-6 mt-6">'
+      +'<input class="fi" id="im_q'+i+'" type="number" step="any" inputmode="decimal" placeholder="Cantidad" value="'+(f.qty!==''&&f.qty!==undefined?f.qty:'')+'" style="margin:0;flex:1">'
+      +'<input class="fi" id="im_u'+i+'" placeholder="Unidad" value="'+esc(f.unit||'')+'" style="margin:0;width:90px">'
+      +'</div>'
+      +(marca?'<div class="mt-4">'+marca+'</div>':'')
+      +'</div>';
+  }).join('');
+}
+function imAgregarFila(){_imLeerFilas();_IM.push({nombre:'',qty:'',unit:''});_imPintarFilas();}
+function imQuitarFila(i){_imLeerFilas();_IM.splice(i,1);if(!_IM.length)_IM.push({nombre:'',qty:'',unit:''});_imPintarFilas();}
+function imInterpretarLista(){
+  var txt=($('im_txt')&&$('im_txt').value)||'';
+  var lineas=txt.split('\n').map(function(l){return l.trim();}).filter(Boolean);
+  if(!lineas.length){toast('Escribí o dictá la lista primero','var(--orange)');return;}
+  _imLeerFilas();
+  var nuevas=lineas.map(_parsearLineaMaterial).filter(Boolean);
+  // Se conserva lo que ya estaba cargado a mano y se suman las líneas nuevas.
+  var previas=_IM.filter(function(f){return (f.nombre||'').trim();});
+  _IM=previas.concat(nuevas);
+  nuevas.forEach(function(f){
+    // Si el material está en el cómputo, manda la unidad que le corresponde a la
+    // fecha del remito (respeta el cambio de unidad comercial). Se pisa lo que
+    // haya salido de la línea a propósito: una unidad mal leída rompe el balance
+    // en silencio. Queda a la vista en el campo y se puede corregir.
+    var m=_matchMaterial(f.nombre);
+    if(m)f.unit=_matUnitAt(m,($('im_d')&&$('im_d').value)||td()).unit;
+  });
+  $('im_txt').value='';
+  _imPintarFilas();
+  toast(nuevas.length+' renglón(es) cargados — revisá y registrá','var(--green)',4000);
+}
+
+async function imRegistrar(){
+  if(!requireWrite())return;
+  _imLeerFilas();
+  var fecha=($('im_d')&&$('im_d').value)||td();
+  var prov=($('im_prov')&&$('im_prov').value||'').trim();
+  var remito=($('im_rem')&&$('im_rem').value||'').trim();
+  var obs=($('im_obs')&&$('im_obs').value)||'';
+  var filas=_IM.filter(function(f){return (f.nombre||'').trim();});
+  if(!filas.length){toast('Cargá al menos un material','var(--red)');return;}
+  var malas=filas.filter(function(f){return !(parseFloat(f.qty)>0);});
+  if(malas.length){toast('Falta la cantidad en '+malas.length+' renglón(es)','var(--red)',4000);return;}
+
+  var btn=$('im_btn');
+  if(btn){btn.disabled=true;btn.textContent='Registrando...';}
+  // Las fotos del remito se leen UNA vez y se guardan en el primer ingreso: no
+  // tiene sentido duplicar el mismo remito en diez registros.
+  var pu=await readPhotos('im_ph','materiales');
+  if(!D.matIngresos)D.matIngresos=[];
+  var creados=0,vinculados=0;
+  filas.forEach(function(f,idx){
+    var mat=_matchMaterial(f.nombre);
+    var u=mat?_matUnitAt(mat,fecha):{unit:(f.unit||'u'),nueva:false};
+    D.matIngresos.push({
+      id:uid(),projectId:S.proj,
+      materialId:mat?mat.id:'',
+      matNombre:mat?mat.name:f.nombre.trim(),
+      qty:parseFloat(f.qty),
+      unit:(f.unit||'').trim()||u.unit||'u',
+      unitEsNueva:mat?u.nueva:false,
+      estado:'ingresado',
+      date:fecha,fecha:fecha,fechaIngreso:fecha,
+      proveedor:prov,remito:remito,observations:obs,
+      photos:idx===0?pu.map(function(x){return mkPhoto(x,'');}):[],
+      updatedAt:nw(),
+    });
+    creados++;
+    if(mat)vinculados++;
+  });
+  audit('matIngresos','create_multiple',creados+' ingresos'+(remito?' · remito '+remito:''));
+  sv();
+  try{document.getElementById('ingMultM').remove();}catch(_){}
+  render();
+  toast(creados+' ingreso(s) registrados'+(vinculados<creados?' · '+(creados-vinculados)+' sin cómputo':'')+' ✓','var(--green)',5000);
+}
+
 // Material detail with history
 function exportMatDetailPDF(mid){
   try{
@@ -5696,7 +5893,7 @@ function exportMatItemsGCal(tipo){
   var _items=(D.matIngresos||[]).filter(function(i){return i.projectId===S.proj&&i.estado===tipo;});
   if(!_items.length){toast('Sin ítems','var(--orange)');return;}
   var p=D.projects.find(function(x){return x.id===S.proj;});
-  var _label=tipo==='a_pedir'?'A pedir':'Pedidos pendientes';
+  var _label=tipo==='a_pedir'?'A pedir':'Pedidos';
   var d=document.createElement('div');d.className='mo open';d.id='matCalM';
   d.innerHTML='<div class="mo-c" style="max-width:400px"><div class="mo-h"><h3 style="color:var(--purple)">&#128197; Agregar al Calendario</h3><button class="tbtn" onclick="this.closest(\'.mo\').remove()">'+I.x+'</button></div>'
     +'<div class="alrt alrt-b mb-8">'+I.pkg+'<div class="ts flex-1"><strong>'+_label+'</strong><br><span class="txxs">'+_items.length+' ítem'+(parseInt(_items.length)!==1?'s':'')+' — '+(p?p.name:'')+'</span></div></div>'
@@ -5710,7 +5907,7 @@ function exportMatItemsGCal(tipo){
 function _openMatItemsGCal(tipo){
   var _items=(D.matIngresos||[]).filter(function(i){return i.projectId===S.proj&&i.estado===tipo;});
   var p=D.projects.find(function(x){return x.id===S.proj;});
-  var _label=tipo==='a_pedir'?'A pedir':'Pedidos pendientes';
+  var _label=tipo==='a_pedir'?'A pedir':'Pedidos';
   var _d=$('matcal_d')?.value||td();var _t=($('matcal_t')?.value||'08:00').replace(':','');
   var due=_d.replace(/-/g,'');var endH=String(parseInt(_t.slice(0,2))+1).padStart(2,'0')+_t.slice(2);
   var _listTxt=_items.map(function(i){return '- '+(i.matNombre||'Sin nombre')+': '+i.qty+' '+(i.unit||'')+(i.proveedor?' | '+i.proveedor:'');}).join('\n');
@@ -5722,7 +5919,7 @@ function _openMatItemsGCal(tipo){
 function _downloadMatItemsICS(tipo){
   var _items=(D.matIngresos||[]).filter(function(i){return i.projectId===S.proj&&i.estado===tipo;});
   var p=D.projects.find(function(x){return x.id===S.proj;});
-  var _label=tipo==='a_pedir'?'A pedir':'Pedidos pendientes';
+  var _label=tipo==='a_pedir'?'A pedir':'Pedidos';
   var _d=$('matcal_d')?.value||td();var _t=$('matcal_t')?.value||'08:00';
   var due=_d.replace(/-/g,'');var dtS=due+'T'+_t.replace(':','')+'00';
   var endH=String(parseInt(_t.split(':')[0])+1).padStart(2,'0')+_t.split(':')[1];var dtE=due+'T'+endH.replace(':','')+'00';
