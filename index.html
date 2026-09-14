@@ -86,6 +86,13 @@ a{color:var(--blue);text-decoration:none}
 }
 /* Zócalo de alertas: latido suave para que llame la atención sin molestar */
 @keyframes zocPulse{0%,100%{box-shadow:0 3px 12px #dc262650}50%{box-shadow:0 3px 20px #dc2626aa}}
+/* Filas compactas de materiales computados: mismo dato, bastante menos alto */
+.matrow-compact{padding:7px 10px;margin-bottom:5px}
+.matrow-compact .mat-nm{flex:1;min-width:0;font-size:13px;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.matrow-compact .mat-pct{font-size:12px;flex-shrink:0}
+.matrow-compact .prog-slim{height:4px;margin-top:4px}
+.matrow-compact .prog-slim .prog-bar{height:4px}
+.matrow-compact .mat-nums{font-size:10px;color:var(--text3);margin-top:3px}
 .zocalo-alerta{animation:zocPulse 2.4s ease-in-out infinite}
 @media (prefers-reduced-motion:reduce){.zocalo-alerta{animation:none}}
 .st-encurso{background:#DBEAFE;color:#1E40AF;border:1px solid #BFDBFE}
@@ -2904,6 +2911,191 @@ function eliminarGrupoMat(estado,key){
   toast('Grupo eliminado','var(--green)');
 }
 
+// ─── INGRESADOS SIN CÓMPUTO: GRUPOS Y PASE A COMPUTADO ────────────
+// Los ingresos sin cómputo son material que entró a la obra antes de que
+// existiera el cómputo. Agruparlos permite seguirlos igual que a los computados
+// (proveedores, fechas, cantidad acumulada) y, cuando el cómputo está hecho,
+// convertir el grupo entero en un material computado sin recargar nada a mano.
+
+/** Ingresos de este proyecto que todavía no están vinculados a un computado. */
+function _sinCompItems(){
+  var conComputo={};
+  pf('materiales').filter(function(m){return !m.visitaId;}).forEach(function(m){conComputo[m.id]=true;});
+  return (D.matIngresos||[]).filter(function(i){
+    return i.projectId===S.proj&&(i.estado==='ingresado'||!i.estado)&&(!i.materialId||!conComputo[i.materialId]);
+  });
+}
+function _itemsSinCompDeGrupo(key){
+  return _sinCompItems().filter(function(i){return (i.grupo||'').trim().toLowerCase()===key;});
+}
+
+/** Resumen de un conjunto de ingresos: cuánto entró, de quiénes y entre qué fechas. */
+function _resumenIngresos(items){
+  var porUnidad={},provs={},fechas=[];
+  items.forEach(function(i){
+    var u=(i.unit||'u').trim();
+    porUnidad[u]=(porUnidad[u]||0)+(parseFloat(i.qty)||0);
+    if(i.proveedor&&i.proveedor.trim())provs[i.proveedor.trim()]=true;
+    var f=i.fechaIngreso||i.fecha||i.date;
+    if(f)fechas.push(String(f).slice(0,10));
+  });
+  fechas.sort();
+  return {
+    totales:Object.keys(porUnidad).map(function(u){return _fmtNum(porUnidad[u])+' '+u;}),
+    proveedores:Object.keys(provs).sort(),
+    desde:fechas[0]||'',hasta:fechas[fechas.length-1]||'',
+  };
+}
+function _fmtNum(n){
+  n=Math.round((parseFloat(n)||0)*100)/100;
+  return String(n);
+}
+
+function _renderSinCompGroupCard(key,group){
+  var collapsed=!!(S.matGrupoCollapsed&&S.matGrupoCollapsed['sincomp|'+key]);
+  var r=_resumenIngresos(group.items);
+  var h='<div class="card mb-8" style="border-left:3px solid var(--cyan);padding:10px 12px">';
+  h+='<div class="flex justify-between items-center" style="cursor:pointer" onclick="toggleMatGrupo(\'sincomp\',\''+esc(key)+'\')">';
+  h+='<span class="ts fw7" style="color:var(--cyan)">&#x1F4E6; '+esc(group.label)+' ('+group.items.length+')</span>';
+  h+='<span class="txxs tc3">'+(collapsed?'&#x25B6;':'&#x25BC;')+'</span></div>';
+  // El resumen se ve siempre, aunque el grupo esté plegado: es lo que interesa de un vistazo.
+  h+='<div class="txxs tc3 mt-4" style="line-height:1.6">';
+  if(r.totales.length)h+='<div><strong>Ingresado:</strong> '+esc(r.totales.join(' · '))+'</div>';
+  if(r.proveedores.length)h+='<div><strong>Proveedores:</strong> '+esc(r.proveedores.join(', '))+'</div>';
+  if(r.desde)h+='<div><strong>Ingresos:</strong> '+esc(fmts(r.desde)||r.desde)+(r.hasta&&r.hasta!==r.desde?' &rarr; '+esc(fmts(r.hasta)||r.hasta):'')+'</div>';
+  h+='</div>';
+  if(!collapsed){
+    h+='<div class="mt-8">';
+    group.items.forEach(function(i){
+      h+='<div style="padding:6px 0;border-top:1px solid var(--gray-ll)"><div class="matrow">';
+      h+='<div class="matrow-txt"><div class="ts fw6">'+esc(i.matNombre||'Sin nombre')+_alertTag(i)+_notaBadge('matIngresos',i.id,'observations')+'</div>';
+      h+='<div class="txxs tc3 mt-2">'+_fmtNum(i.qty)+' '+esc(i.unit||'u')+(i.proveedor?' | '+esc(i.proveedor):'')+((i.fechaIngreso||i.fecha)?' | '+esc(fmts(i.fechaIngreso||i.fecha)||(i.fechaIngreso||i.fecha)):'')+'</div>';
+      h+='</div><div class="matrow-acts">';
+      h+='<button class="btn btn-g btn-s" onclick="editSinComp(\''+i.id+'\')" title="Editar">'+I.edit+'</button>';
+      h+='<button class="btn btn-g btn-s" style="font-size:10px" onclick="asignarGrupoSinComp(\''+i.id+'\')" title="Cambiar de grupo">&#x1F3D7;</button>';
+      h+='<button class="btn btn-g btn-s" style="color:var(--red)" onclick="delMatIngreso(\''+i.id+'\')" title="Eliminar">'+I.trash+'</button>';
+      h+='</div></div></div>';
+    });
+    h+='</div><div class="flex gap-6 mt-8">';
+    h+='<button class="btn btn-s" style="background:var(--purple);color:#fff;flex:1;font-size:11px" onclick="convertirGrupoAComputado(\''+esc(key)+'\')">&#x1F4CA; Pasar a computado</button>';
+    h+='<button class="btn btn-sec btn-s" style="color:var(--red);font-size:11px" onclick="desarmarGrupoSinComp(\''+esc(key)+'\')" title="Deshacer el grupo (no borra los materiales)">Desarmar</button>';
+    h+='</div>';
+  }
+  h+='</div>';
+  return h;
+}
+
+/** Elige o crea el grupo de un ingreso sin cómputo. */
+function asignarGrupoSinComp(id){
+  var i=(D.matIngresos||[]).find(function(x){return x.id===id;});
+  if(!i)return;
+  var nombres=_matGrupoNames();
+  var h='<div class="mo-c"><div class="mo-h"><h3>&#x1F3D7; Grupo del material</h3><button class="tbtn" onclick="closeM(\'grpSinCompM\')">'+I.x+'</button></div>';
+  h+='<div class="ts fw7 mb-4">'+esc(i.matNombre||'Sin nombre')+'</div>';
+  h+='<div class="txxs tc3 mb-10">Agrupá los ingresos que pertenecen al mismo rubro para seguirlos juntos.</div>';
+  if(nombres.length){
+    h+='<div class="fl mb-4">Grupos que ya usás</div>';
+    nombres.forEach(function(n){
+      var act=(i.grupo||'').trim().toLowerCase()===n.toLowerCase();
+      h+='<button class="btn btn-w btn-s mb-4" style="'+(act?'background:var(--cyan);color:#fff':'background:var(--gray-ll);color:var(--text2)')+'" onclick="_setGrupoSinComp(\''+id+'\','+_argAttr(n)+')">'+esc(n)+(act?' &#x2713;':'')+'</button>';
+    });
+  }
+  h+='<div class="fg mt-8"><label class="fl">Grupo nuevo</label><input class="fi" id="grp_new" placeholder="Ej: Materiales techo metálico" value=""></div>';
+  h+='<button class="btn btn-p btn-w" onclick="_setGrupoSinComp(\''+id+'\',($(\'grp_new\').value||\'\').trim())">Guardar</button>';
+  if((i.grupo||'').trim())h+='<button class="btn btn-sec btn-w mt-6" onclick="_setGrupoSinComp(\''+id+'\',\'\')">Sacar del grupo</button>';
+  h+='</div>';
+  var d=document.getElementById('grpSinCompM');
+  if(d)d.remove();
+  d=document.createElement('div');d.className='mo open';d.id='grpSinCompM';d.innerHTML=h;
+  document.body.appendChild(d);
+}
+function _setGrupoSinComp(id,nombre){
+  var i=(D.matIngresos||[]).find(function(x){return x.id===id;});
+  if(!i)return;
+  i.grupo=(nombre||'').trim();
+  i.updatedAt=nw();
+  audit('matIngresos','grupo',i.matNombre||'');
+  sv();
+  try{document.getElementById('grpSinCompM').remove();}catch(_){}
+  render();
+  toast(i.grupo?('Agregado a: '+i.grupo):'Sacado del grupo','var(--green)');
+}
+
+/** Deshace la agrupación sin tocar los materiales. */
+function desarmarGrupoSinComp(key){
+  var items=_itemsSinCompDeGrupo(key);
+  if(!items.length)return;
+  if(!confirm('¿Desarmar este grupo?\n\nLos '+items.length+' materiales NO se borran: vuelven a la lista sueltos.'))return;
+  items.forEach(function(i){i.grupo='';i.updatedAt=nw();});
+  sv();render();
+  toast('Grupo desarmado — los materiales siguen ahí','var(--green)',4000);
+}
+
+/**
+ * Convierte un grupo de ingresos sueltos en un material computado: crea el
+ * material con el cómputo que cargues y le engancha todos los ingresos, así el
+ * balance (computado vs ingresado) arranca con lo que ya entró.
+ */
+function convertirGrupoAComputado(key){
+  var items=_itemsSinCompDeGrupo(key);
+  if(!items.length){toast('El grupo está vacío','var(--orange)');return;}
+  _modalPasarAComputado(items,items[0]&&items[0].grupo||'');
+}
+function convertirSinCompAComputado(id){
+  var i=(D.matIngresos||[]).find(function(x){return x.id===id;});
+  if(!i)return;
+  _modalPasarAComputado([i],i.matNombre||'');
+}
+function _modalPasarAComputado(items,nombreSugerido){
+  var r=_resumenIngresos(items);
+  var unidades=[...new Set(items.map(function(i){return (i.unit||'u').trim();}))];
+  var cats=[...new Set(pf('materiales').map(function(m){return m.category||'General';}))];
+  if(!cats.length)cats=['General'];
+  var ids=items.map(function(i){return i.id;}).join(',');
+  var h='<div class="mo-c"><div class="mo-h"><h3>&#x1F4CA; Pasar a computado</h3><button class="tbtn" onclick="closeM(\'aComputadoM\')">'+I.x+'</button></div>';
+  h+='<div class="txxs tc3 mb-10">Se crea el material en la planilla general y se le enganchan los '+items.length+' ingreso(s). Lo que ya entró cuenta desde el arranque.</div>';
+  h+='<div style="background:var(--gray-ll);border:1px solid var(--brd);border-radius:8px;padding:10px;margin-bottom:10px" class="txxs">';
+  h+='<div><strong>Ya ingresado:</strong> '+esc(r.totales.join(' · ')||'-')+'</div>';
+  if(r.proveedores.length)h+='<div class="mt-2"><strong>Proveedores:</strong> '+esc(r.proveedores.join(', '))+'</div>';
+  if(unidades.length>1)h+='<div class="mt-4" style="color:var(--orange)">&#x26A0; Hay unidades distintas ('+esc(unidades.join(', '))+'). Elegí con cuál queda el material: los ingresos en otra unidad se van a sumar igual, revisalos después.</div>';
+  h+='</div>';
+  h+='<div class="fg"><label class="fl">Nombre del material *</label><input class="fi" id="ac_n" value="'+esc(nombreSugerido||'')+'"></div>';
+  h+='<div class="fr"><div class="fg"><label class="fl">Cómputo total *</label><input class="fi" id="ac_comp" type="number" step="any" inputmode="decimal" placeholder="0"></div>';
+  h+='<div class="fg"><label class="fl">Unidad</label><input class="fi" id="ac_u" value="'+esc(unidades[0]||'u')+'"></div></div>';
+  h+='<div class="fg"><label class="fl">Categoría</label><select class="fs" id="ac_c">'+cats.map(function(c){return '<option>'+esc(c)+'</option>';}).join('')+'</select></div>';
+  h+='<button class="btn btn-p btn-w mt-8" onclick="_confirmarPasarAComputado('+_argAttr(ids)+')">Crear material computado</button>';
+  h+='</div>';
+  var d=document.getElementById('aComputadoM');
+  if(d)d.remove();
+  d=document.createElement('div');d.className='mo open';d.id='aComputadoM';d.innerHTML=h;
+  document.body.appendChild(d);
+}
+function _confirmarPasarAComputado(ids){
+  var lista=String(ids||'').split(',').filter(Boolean);
+  var items=(D.matIngresos||[]).filter(function(i){return lista.indexOf(i.id)>=0;});
+  if(!items.length){toast('No se encontraron los ingresos','var(--red)');return;}
+  var nombre=($('ac_n')&&$('ac_n').value||'').trim();
+  if(!nombre){toast('El nombre es obligatorio','var(--red)');return;}
+  var comp=parseFloat($('ac_comp')&&$('ac_comp').value)||0;
+  if(comp<=0){toast('Cargá el cómputo total','var(--red)');return;}
+  var unidad=($('ac_u')&&$('ac_u').value||'u').trim();
+  var categoria=($('ac_c')&&$('ac_c').value)||'General';
+  var mat={id:uid(),projectId:S.proj,name:nombre,computado:comp,qty:0,unit:unidad,
+           category:categoria,notes:'Creado desde ingresos sin cómputo',photos:[],
+           date:td(),updatedAt:nw()};
+  D.materiales.push(mat);
+  items.forEach(function(i){
+    i.materialId=mat.id;
+    i.matNombre=nombre;
+    i.updatedAt=nw(); // que el merge multi-dispositivo elija esta versión
+  });
+  audit('materiales','create',nombre+' (desde '+items.length+' ingreso/s)');
+  sv();
+  try{document.getElementById('aComputadoM').remove();}catch(_){}
+  render();
+  toast(nombre+': ahora es computado con '+items.length+' ingreso(s) &#x2713;','var(--green)',5000);
+}
+
 function _alertBtn(tbl,id,on){
   return '<button class="btn btn-g btn-s" title="'+(on?'Quitar de alertas':'Marcar como alerta — aparece en la Bandeja')+'"'
     +' onclick="event.stopPropagation();toggleAlerta(\''+tbl+'\',\''+id+'\')"'
@@ -2922,6 +3114,41 @@ function _zocaloAlertas(){
     +'<span style="font-size:21px;line-height:1">&#x1F6A8;</span>'
     +'<div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:800;line-height:1.2">'+n+' alerta'+(n>1?'s':'')+' activa'+(n>1?'s':'')+'</div>'
     +'<div style="font-size:11px;opacity:.92;margin-top:1px">Requieren atención inmediata — tocá para verlas</div></div>'
+    +'<span style="font-size:20px;opacity:.85">&#x203A;</span></div>';
+}
+
+// Novedades de la bandeja de entrada: lo que llegó y todavía no miraste.
+// Son las mismas tres fuentes que cuenta la pestaña Pendientes, para que el
+// número del zócalo y el de la bandeja nunca digan cosas distintas.
+function _bandejaNovedades(){
+  var informes=(D.formulariosPendientes||[]).filter(function(x){
+    return x.estado==='pendiente'&&(x.projectId||x.obraId)===S.proj;
+  }).length;
+  var archivos=(D.carpetas||[]).filter(function(cp){return cp.projectId===S.proj;})
+    .reduce(function(s,cp){
+      return s+(cp.archivos||[]).filter(function(f){return f.subidoPor==='col'&&f.visto===false;}).length;
+    },0);
+  var respuestas=(D.mensajesColab||[]).filter(function(m){
+    return m.proyectoId===S.proj&&m.estadoColab==='completado';
+  }).length;
+  return {informes:informes,archivos:archivos,respuestas:respuestas,
+          total:informes+archivos+respuestas};
+}
+
+// Zócalo de novedades: va debajo del de alertas. Las alertas son cosas que vos
+// marcaste; esto es lo que te mandaron y todavía no viste.
+function _zocaloBandeja(){
+  var n=_bandejaNovedades();
+  if(!n.total)return '';
+  var partes=[];
+  if(n.informes)partes.push(n.informes+' informe'+(n.informes>1?'s':''));
+  if(n.archivos)partes.push(n.archivos+' archivo'+(n.archivos>1?'s':''));
+  if(n.respuestas)partes.push(n.respuestas+' respuesta'+(n.respuestas>1?'s':''));
+  var titulo=n.total+(n.total>1?' novedades sin revisar':' novedad sin revisar');
+  return '<div onclick="S.mod=\'bandeja\';S.bandejaTab=\'pendientes\';render()" style="cursor:pointer;background:linear-gradient(90deg,#0d9488,#2dd4bf);color:#fff;border-radius:10px;padding:11px 14px;margin-bottom:12px;display:flex;align-items:center;gap:11px;box-shadow:0 3px 12px #0d948850">'
+    +'<span style="font-size:21px;line-height:1">&#x1F4E5;</span>'
+    +'<div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:800;line-height:1.2">'+titulo+'</div>'
+    +'<div style="font-size:11px;opacity:.92;margin-top:1px">'+esc(partes.join(' · '))+' — tocá para verlas</div></div>'
     +'<span style="font-size:20px;opacity:.85">&#x203A;</span></div>';
 }
 
@@ -3533,7 +3760,7 @@ function rDash(mc,p){
   const over=pT.filter(t=>(t.status==='pendiente'||t.status==='en curso')&&t.dueDate&&dd(td(),t.dueDate)<0).length;
   const lastV=pV.length?[...pV].sort((a,b)=>(b.date||'').localeCompare(a.date||''))[0]:null;
   mc.innerHTML=`
-  ${_zocaloAlertas()}
+  ${_zocaloAlertas()}${_zocaloBandeja()}
   <div class="card hero mb-12"><div class="flex justify-between items-start"><div><div class="hero-sm">Obra activa</div><div class="hero-lg">${p.name}</div></div>${colBadge(p.status,SC[p.status]||'#94a3b8')}</div><div class="flex gap-10 mt-8 ts tc3 wrap">${p.client?`<span>${I.user} ${p.client}</span>`:''}${p.location?`<span>${I.pin} ${p.location}</span>`:''}${p.startDate?`<span>${I.cal} ${fmts(p.startDate)}</span>`:''}</div></div>
   <div class="g2 mb-12">
     <div class="card stat card-click" onclick="S.mod='visitas';render()"><div class="stico" style="background:var(--blue-bg);color:var(--blue)">${I.clip}</div><div><div class="stval" style="color:var(--blue)">${pV.length}</div><div class="stlbl">Visitas</div></div></div>
@@ -4656,19 +4883,47 @@ function rMat(mc){
   // se llega a medir ni a pintar.
   renderMatItems();
 }
+// Ficha completa del ingreso sin cómputo. Antes eran cuatro prompt() seguidos y
+// no había forma de cargar proveedor ni fecha de ingreso, que es justo lo que
+// hace falta para seguirlos como a los computados.
 function editSinComp(id){
   var i=(D.matIngresos||[]).find(function(x){return x.id===id;});
   if(!i)return;
-  var nomb=prompt('Nombre:',i.matNombre);if(nomb===null)return;
-  var qty=prompt('Cantidad:',i.qty);if(qty===null)return;
-  var uni=prompt('Unidad:',i.unit||'u');if(uni===null)return;
-  var obs=prompt('Observaciones:',i.observations||'');
-  i.matNombre=nomb.trim()||i.matNombre;
-  i.qty=parseFloat(qty)||i.qty;
-  i.unit=uni.trim()||i.unit;
-  i.observations=obs;
+  var provs=[...new Set((D.matIngresos||[]).filter(function(x){return x.projectId===S.proj&&x.proveedor;}).map(function(x){return x.proveedor.trim();}))].sort();
+  var grupos=_matGrupoNames();
+  var h='<div class="mo-c"><div class="mo-h"><h3>Editar ingreso</h3><button class="tbtn" onclick="closeM(\'editSinCompM\')">'+I.x+'</button></div>';
+  h+='<div class="fg"><label class="fl">Nombre *</label><input class="fi" id="esc_n" value="'+esc(i.matNombre||'')+'"></div>';
+  h+='<div class="fr"><div class="fg"><label class="fl">Cantidad</label><input class="fi" id="esc_q" type="number" step="any" inputmode="decimal" value="'+(i.qty||'')+'"></div>';
+  h+='<div class="fg"><label class="fl">Unidad</label><input class="fi" id="esc_u" value="'+esc(i.unit||'u')+'"></div></div>';
+  h+='<div class="fg"><label class="fl">Proveedor</label>'+_pcHtml('esc_prov',provs,'Proveedor',i.proveedor||'')+'</div>';
+  h+='<div class="fg"><label class="fl">Fecha de ingreso</label><input class="fi" id="esc_f" type="date" value="'+String(i.fechaIngreso||i.fecha||'').slice(0,10)+'"></div>';
+  h+='<div class="fg"><label class="fl">Grupo</label>'+_pcHtml('esc_grp',grupos,'Ej: Materiales techo metálico',i.grupo||'')+'</div>';
+  h+='<div class="fg"><label class="fl">Observaciones</label><textarea class="fi" id="esc_obs" rows="2">'+esc(i.observations||'')+'</textarea></div>';
+  h+='<button class="btn btn-p btn-w mt-8" onclick="_guardarSinComp(\''+id+'\')">Guardar</button></div>';
+  var d=document.getElementById('editSinCompM');
+  if(d)d.remove();
+  d=document.createElement('div');d.className='mo open';d.id='editSinCompM';d.innerHTML=h;
+  document.body.appendChild(d);
+}
+function _guardarSinComp(id){
+  var i=(D.matIngresos||[]).find(function(x){return x.id===id;});
+  if(!i)return;
+  var n=($('esc_n')&&$('esc_n').value||'').trim();
+  if(!n){toast('El nombre es obligatorio','var(--red)');return;}
+  i.matNombre=n;
+  var q=parseFloat($('esc_q')&&$('esc_q').value);
+  if(!isNaN(q))i.qty=q;
+  i.unit=($('esc_u')&&$('esc_u').value||'u').trim();
+  i.proveedor=($('esc_prov')&&$('esc_prov').value||'').trim();
+  var f=($('esc_f')&&$('esc_f').value||'').trim();
+  if(f)i.fechaIngreso=f;
+  i.grupo=($('esc_grp')&&$('esc_grp').value||'').trim();
+  i.observations=($('esc_obs')&&$('esc_obs').value||'');
+  i.updatedAt=nw();
   audit('matIngresos','update',i.matNombre);
-  sv();render();toast('Material actualizado');
+  sv();
+  try{document.getElementById('editSinCompM').remove();}catch(_){}
+  render();toast('Material actualizado','var(--green)');
 }
 
 function vincularSinComp(id){
@@ -4854,32 +5109,47 @@ function renderMatItems(){
       +(S.matSinCompMin?' &#x25B6;':' &#x25BC;')
       +'</button>'
       +'</div>'
-      +(S.matSinCompMin?'':_sinComp.map(function(i){
-        return '<div class="matrow" style="padding:8px 0;border-bottom:1px solid var(--gray-ll)">'
+      +(S.matSinCompMin?'':(function(){
+        // Se separan en grupos igual que "A pedir" y "Pedidos": los agrupados
+        // muestran su resumen (cuánto entró, de qué proveedores, entre qué
+        // fechas) y pueden pasarse enteros a computado.
+        var _g=_buildMatGroups(_sinComp);
+        var _h='';
+        Object.keys(_g.groups).sort().forEach(function(k){_h+=_renderSinCompGroupCard(k,_g.groups[k]);});
+        if(_g.ungrouped.length&&Object.keys(_g.groups).length)
+          _h+='<div class="txxs tc3 fw7 mt-8 mb-4">Sin agrupar ('+_g.ungrouped.length+')</div>';
+        _h+=_g.ungrouped.map(function(i){
+          return '<div class="matrow" style="padding:8px 0;border-bottom:1px solid var(--gray-ll)">'
           +'<div class="matrow-txt">'
-          +'<div class="ts fw6">'+(i.matNombre||'Sin nombre')+'</div>'
-          +'<div class="txxs tc3 mt-2">'+i.qty+' '+(i.unit||'u')+(i.proveedor?' | '+i.proveedor:'')+(i.fecha?' | '+i.fecha:'')+'</div>'
-          +(i.observations?'<div class="txxs tc3">'+i.observations+'</div>':'')
-          +(i.sourceType==='formulario'&&i.cargadoPor?'<div class="txxs mt-1" style="color:#16a34a;font-weight:700">&#x1F464; '+(i.cargadoPor||i.sourceName||'')+(i.date?' · '+fmts(i.date):'')+'</div>':'')
+          +'<div class="ts fw6">'+(i.matNombre||'Sin nombre')+_alertTag(i)+'</div>'
+          +'<div class="txxs tc3 mt-2">'+_fmtNum(i.qty)+' '+(i.unit||'u')+(i.proveedor?' | '+esc(i.proveedor):'')+((i.fechaIngreso||i.fecha)?' | '+(fmts(i.fechaIngreso||i.fecha)||(i.fechaIngreso||i.fecha)):'')+'</div>'
+          +(i.observations?'<div class="txxs tc3">'+esc(i.observations)+'</div>':'')
+          +(i.sourceType==='formulario'&&i.cargadoPor?'<div class="txxs mt-1" style="color:#16a34a;font-weight:700">&#x1F464; '+esc(i.cargadoPor||i.sourceName||'')+(i.date?' · '+fmts(i.date):'')+'</div>':'')
           +'</div>'
           +'<div class="matrow-acts">'
           +'<button class="btn btn-g btn-s" onclick="editSinComp(\''+i.id+'\')" title="Editar">'+I.edit+'</button>'
+          +'<button class="btn btn-g btn-s" style="font-size:10px" onclick="asignarGrupoSinComp(\''+i.id+'\')" title="Agrupar con otros">&#x1F3D7;</button>'
+          +'<button class="btn btn-g btn-s" style="font-size:10px;color:var(--purple)" onclick="convertirSinCompAComputado(\''+i.id+'\')" title="Pasar a computado">&#x1F4CA;</button>'
           +'<button class="btn btn-g btn-s" onclick="vincularSinComp(\''+i.id+'\')" title="Vincular a material existente" style="font-size:10px">&#x1F517;</button>'
           +'<button class="btn btn-sec btn-s" style="font-size:10px;color:var(--orange)" onclick="retrocederAPedido(\''+i.id+'\')" title="Retroceder a Pedido">&larr; Pedido</button>'
           +'<button class="btn btn-g btn-s" style="color:var(--red)" onclick="delMatIngreso(\''+i.id+'\')" title="Eliminar">'+I.trash+'</button>'
           +'</div>'
           +'</div>';
-      }).join(''))
+        }).join('');
+        return _h;
+      })())
       +'</div>';
   }
   if(!items.length){
   el.innerHTML=_existH+_sinCompH+_apedirH+_pedH+`<div class="empty"><span style="color:${c}">${I.pkg}</span><div class="ts mt-8">${hasFilter?'Sin resultados':'Sin materiales'}</div>${hasFilter?`<button class="btn btn-sec btn-s mt-8" onclick="S.matFilter='';S.matCatFilter='';renderMatItems()">Limpiar</button>`:''}</div>`;
     return;
   }
-  el.innerHTML=_existH+_sinCompH+_apedirH+_pedH+Object.entries(cats).map(([cat,mats])=>`<div class="mb-12"><div class="ts fw7 mb-6" style="color:var(--purple)">${cat} (${mats.length})</div>${mats.map(m=>{const col=m.status==='ok'?'var(--green)':m.status==='limit'?'var(--orange)':m.status==='under'?'var(--blue)':'var(--gray-l)';return `<div class="card card-click" style="padding:12px" onclick="S.matDetail='${m.id}';render();">
-    <div class="flex justify-between items-center"><div class="fw6">${m.name}</div>${m.computado?`<div class="fw8" style="color:${col}">${m.pct}%</div>`:''}</div>
-    ${m.computado?`<div class="mt-4">${progress(m.totalIng,m.computado,col)}</div><div class="flex justify-between mt-4 txxs"><span>Comp: ${m.computado} ${m.unit||''}</span><span>Ing: ${m.totalIng}</span><span style="color:${col}">Falta: ${Math.max(m.computado-m.totalIng,0)}</span></div>`:`<div class="txxs tc3 mt-4">${m.qty||0} ${m.unit||''}</div>`}
-    ${m.photos&&m.photos.length?`<div class="txxs tc3 mt-4">${I.cam} ${m.photos.length} foto(s)</div>`:''}
+  // Filas compactas: el nombre y el % comparten renglón, la barra queda fina y
+  // los tres números van en una línea sola. Así entran bastantes más materiales
+  // en la pantalla del celular sin perder ningún dato.
+  el.innerHTML=_existH+_sinCompH+_apedirH+_pedH+Object.entries(cats).map(([cat,mats])=>`<div class="mb-12"><div class="ts fw7 mb-6" style="color:var(--purple)">${cat} (${mats.length})</div>${mats.map(m=>{const col=m.status==='ok'?'var(--green)':m.status==='limit'?'var(--orange)':m.status==='under'?'var(--blue)':'var(--gray-l)';return `<div class="card card-click matrow-compact" onclick="S.matDetail='${m.id}';render();">
+    <div class="flex justify-between items-center gap-8"><div class="fw6 mat-nm">${m.name}${m.photos&&m.photos.length?`<span class="txxs tc3" style="font-weight:400;margin-left:5px">${I.cam}${m.photos.length}</span>`:''}</div>${m.computado?`<div class="fw8 mat-pct" style="color:${col}">${m.pct}%</div>`:''}</div>
+    ${m.computado?`<div class="prog prog-slim"><div class="prog-bar" style="width:${m.computado>0?Math.min(m.totalIng/m.computado*100,100):0}%;background:${col}"></div></div><div class="flex justify-between mat-nums"><span>Comp: ${m.computado} ${m.unit||''}</span><span>Ing: ${m.totalIng}</span><span style="color:${col}">Falta: ${Math.max(m.computado-m.totalIng,0)}</span></div>`:`<div class="mat-nums tc3">${m.qty||0} ${m.unit||''}</div>`}
   </div>`;}).join('')}</div>`).join('');
 }
 
