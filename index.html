@@ -876,6 +876,30 @@ async function _rescueBase64BeforeSync(){
       });
     });
   });
+  // 4. Documentos. El archivo vivía sólo dentro de los datos (fileData) y la
+  //    copia de Drive lo reemplaza por una marca: los PDF nunca llegaban a
+  //    Drive, así que en otro dispositivo —o si se perdía el celular— el
+  //    documento no existía. Se sube a la carpeta Documentos y se guarda su
+  //    link; la copia local se conserva para verlo sin conexión.
+  if(GD.online&&GD.accessToken){
+    var _docs=(D.documentos||[]).filter(function(d){
+      return d&&!d.driveId&&!d._subiendo&&typeof d.fileData==='string'&&d.fileData.indexOf('data:')===0;
+    });
+    for(var _di=0;_di<_docs.length;_di++){
+      var _d=_docs[_di];
+      _d._subiendo=true;
+      try{
+        var _dFid=GD.moduleFolders[(_d.projectId||S.proj)+'_documentos']||GD.imagesFolderId||null;
+        var _r=await uploadImageToDrive(_d.fileData,'doc_'+(_d.fileName||_d.name||_d.id),_dFid);
+        if(_r&&_r.driveId){
+          _d.driveId=_r.driveId;
+          _d.url=(_d.fileData.indexOf('data:image')===0)?_r.url:_r.viewUrl;
+          _d.updatedAt=nw();
+        }
+      }catch(_e){}
+      finally{delete _d._subiendo;}
+    }
+  }
 }
 
 function showDriveReconnectBanner(){
@@ -984,7 +1008,18 @@ async function saveToDrive() {
     await saveToIDB(); // keep IDB in sync too
     _lsSave();
     GD.pendingSync = false;
+    GD._cambiosSinSubir = false;
     updateSyncIndicator('ok');
+    // Copia con fecha, una por día. Antes sólo se creaba a mano o al cerrar la
+    // app, y en el celular el cierre casi nunca avisa: podían pasar semanas sin
+    // una versión a la que volver. Si la copia falla, se reintenta en la próxima.
+    try{
+      var _kBk='oc_backup_diario_'+(S.proj||'');
+      if(Date.now()-parseInt(localStorage.getItem(_kBk)||'0',10)>24*3600*1000){
+        localStorage.setItem(_kBk,String(Date.now()));
+        createVersionBackup('diario').then(function(ok){if(!ok)try{localStorage.removeItem(_kBk);}catch(_){}});
+      }
+    }catch(_){}
     // Guardar log .txt en Drive (máx una vez cada 2 min)
     var _now=Date.now();
     if(!GD._lastLogSave||(_now-GD._lastLogSave)>120000){
@@ -1516,13 +1551,16 @@ async function createVersionBackup(reason = 'auto') {
       }
     }
     console.log('Backup created:', name);
+    return true;
   } catch(e) {
     console.warn('Backup failed:', e);
+    return false;
   }
 }
 
 // ─── DEBOUNCED AUTO-SAVE ─────────────────────────────────────────────
 function scheduleSync(delay = 3000) {
+  GD._cambiosSinSubir = true; // hay cambios que todavía no llegaron a Drive
   if (GD._retrying) return;
   if (GD.syncTimer) clearTimeout(GD.syncTimer);
   GD.syncTimer = setTimeout(async () => {
@@ -1538,12 +1576,23 @@ function scheduleSync(delay = 3000) {
 }
 
 // ─── ONLINE/OFFLINE HANDLING ─────────────────────────────────────────
-document.addEventListener('visibilitychange',function(){
-  if(document.visibilityState==='hidden'){
-    _lsSave();
-    if(GD.idbReady)saveToIDB().catch(function(){});
+// Al salir de la app (cambiar de app, bloquear el celular, cerrar la pestaña)
+// sólo se guardaba en el dispositivo. En el celular el cierre casi nunca avisa
+// (beforeunload no se dispara), así que los últimos cambios podían quedar sin
+// llegar a Drive hasta volver a abrir la app. Si hay cambios pendientes, se
+// suben en ese momento.
+function _subirPendienteAlSalir(){
+  _lsSave();
+  if(GD.idbReady)saveToIDB().catch(function(){});
+  if(GD._cambiosSinSubir&&GD.online&&GD.accessToken&&((GD.tokenExpiry||0)-Date.now())>60000){
+    if(GD.syncTimer){clearTimeout(GD.syncTimer);GD.syncTimer=null;}
+    saveToDrive().catch(function(){});
   }
+}
+document.addEventListener('visibilitychange',function(){
+  if(document.visibilityState==='hidden')_subirPendienteAlSalir();
 });
+window.addEventListener('pagehide',_subirPendienteAlSalir);
 window.addEventListener('online', async () => {
   GD.online = true;
   updateSyncIndicator('syncing');
@@ -2214,10 +2263,22 @@ async function delArchivo(tbl,itemId,archId){
   item.updatedAt=nw(); // sin esto el merge podía no ver el borrado como "más reciente" y lo revertía
   sv();render();toast('Archivo eliminado');
 }
+// Dónde abrir un documento. La copia de Drive no lleva el archivo (se reemplaza
+// por una marca), así que en otro dispositivo `fileData` es esa marca y no el
+// archivo: hay que usar el link de Drive. Antes se tomaba la marca y el
+// documento no abría.
+function _docHref(d){
+  if(!d)return '';
+  if(typeof d.fileData==='string'&&d.fileData.indexOf('data:')===0)return d.fileData;
+  if(typeof d.url==='string'&&(/^https?:/.test(d.url)||d.url.indexOf('data:')===0))return d.url;
+  if(d.driveId)return 'https://drive.google.com/file/d/'+d.driveId+'/view';
+  if(typeof d.fileData==='string'&&d.fileData.indexOf('[foto:')===0)return _resolveImg(d.fileData)||'';
+  return '';
+}
 function viewDoc(docId){
   var doc=(D.documentos||[]).find(function(x){return x.id===docId;});
   if(!doc){toast('Documento no encontrado','var(--orange)');return;}
-  var url=doc.url||doc.fileData||'';
+  var url=_docHref(doc);
   if(!url){toast('Sin archivo adjunto para este documento','var(--orange)');return;}
   openFileData(url,doc.name||'documento');
 }
@@ -3013,11 +3074,12 @@ function _renderSinCompGroupCard(key,group){
     h+='<div class="mt-8">';
     group.items.forEach(function(i){
       h+='<div style="padding:6px 0;border-top:1px solid var(--gray-ll)"><div class="matrow">';
-      h+='<div class="matrow-txt"><div class="ts fw6">'+esc(i.matNombre||'Sin nombre')+_alertTag(i)+_notaBadge('matIngresos',i.id,'observations')+'</div>';
+      h+='<div class="matrow-txt"><div class="ts fw6" style="cursor:pointer" title="Ver historial de ingresos" onclick="abrirSinCompDetalle(\''+i.id+'\')">'+esc(i.matNombre||'Sin nombre')+' <span style="color:var(--cyan)">&#x203A;</span>'+_alertTag(i)+_notaBadge('matIngresos',i.id,'observations')+'</div>';
       h+='<div class="txxs tc3 mt-2">'+_fmtNum(i.qty)+' '+esc(i.unit||'u')+(i.proveedor?' | '+esc(i.proveedor):'')+((i.fechaIngreso||i.fecha)?' | '+esc(fmts(i.fechaIngreso||i.fecha)||(i.fechaIngreso||i.fecha)):'')+'</div>';
       h+='</div><div class="matrow-acts">';
       h+='<button class="btn btn-g btn-s" onclick="editSinComp(\''+i.id+'\')" title="Editar">'+I.edit+'</button>';
       h+='<button class="btn btn-g btn-s" style="font-size:10px" onclick="asignarGrupoSinComp(\''+i.id+'\')" title="Cambiar de grupo">&#x1F3D7;</button>';
+      h+='<button class="btn btn-g btn-s" style="font-size:10px" onclick="vincularSinComp(\''+i.id+'\')" title="Vincular o fusionar con otro material">&#x1F517;</button>';
       h+='<button class="btn btn-g btn-s" style="color:var(--red)" onclick="delMatIngreso(\''+i.id+'\')" title="Eliminar">'+I.trash+'</button>';
       h+='</div></div></div>';
     });
@@ -3139,6 +3201,92 @@ function _confirmarPasarAComputado(ids){
   try{document.getElementById('aComputadoM').remove();}catch(_){}
   render();
   toast(nombre+': ahora es computado con '+items.length+' ingreso(s) &#x2713;','var(--green)',5000);
+}
+
+// ─── DETALLE DE UN INGRESADO SIN CÓMPUTO ──────────────────────────
+// La misma información que el detalle de un material computado —historial de
+// ingresos, proveedores, pedidos— salvo el cómputo y el % pendiente, que no
+// existen hasta pasarlo a computado. Agrupa todos los ingresos de ese nombre.
+function abrirSinCompDetalle(id){
+  var i=(D.matIngresos||[]).find(function(x){return x.id===id;});
+  if(!i)return;
+  _escudoToque();
+  S.matSinCompDetail=_normTxt(i.matNombre||'');S.matDetail=null;S.visitaDetail=null;S.mod='materiales';
+  render();
+  setTimeout(function(){window.scrollTo(0,0);},60);
+}
+function cerrarSinCompDetalle(){
+  _escudoToque();
+  S.matSinCompDetail=null;
+  render();
+  setTimeout(function(){window.scrollTo(0,0);},60);
+}
+function pasarSinCompClaveAComputado(clave){
+  var items=_sinCompItems().filter(function(i){return _normTxt(i.matNombre||'')===clave;});
+  if(!items.length)return;
+  _modalPasarAComputado(items,String(items[0].matNombre||'').trim());
+}
+function rSinCompDetail(mc,clave){
+  var ings=_sinCompItems().filter(function(i){return _normTxt(i.matNombre||'')===clave;});
+  if(!ings.length){S.matSinCompDetail=null;rMat(mc);return;}
+  var nombre=String(ings[0].matNombre||'').trim();
+  var fechaDe=function(i){return String(i.fechaIngreso||i.fecha||i.date||'');};
+  var dir=S.matIngSort==='ant'?1:-1;
+  ings=ings.slice().sort(function(a,b){return dir*fechaDe(a).localeCompare(fechaDe(b));});
+  var r=_resumenIngresos(ings);
+  var grupos=[...new Set(ings.map(function(i){return (i.grupo||'').trim();}).filter(Boolean))];
+  var peds=(D.matIngresos||[]).filter(function(i){
+    return i.projectId===S.proj&&(i.estado==='pedido'||i.estado==='a_pedir')&&!i.materialId&&_normTxt(i.matNombre||'')===clave;
+  });
+  var c=MC.materiales||'var(--purple)';
+  var h='<div class="flex items-center gap-8 mb-12">'
+    +'<button class="tbtn back-btn" aria-label="Volver a Materiales" onclick="cerrarSinCompDetalle()">'+I.chevL+'</button>'
+    +'<h2 class="fw8" style="font-size:16px;flex:1;min-width:0">'+esc(nombre)+'</h2></div>';
+  h+='<div class="card mb-12">';
+  h+='<div class="flex justify-between items-center mb-8 wrap gap-6"><span style="background:#ecfeff;color:var(--cyan);border:1px solid #a5f3fc;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:700">&#x1F4E6; Ingresado sin cómputo</span>'
+    +(grupos.length?'<span class="txxs tc3">&#x1F3D7; '+esc(grupos.join(', '))+'</span>':'')+'</div>';
+  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px">'
+    +'<div><div class="txxs tc3">Ingresado</div><div class="fw8" style="font-size:17px;color:var(--blue)">'+esc(r.totales.join(' · ')||'0')+'</div></div>'
+    +'<div><div class="txxs tc3">Ingresos</div><div class="fw8" style="font-size:17px">'+ings.length+'</div></div>'
+    +'<div><div class="txxs tc3">Primer ingreso</div><div class="ts fw6">'+esc(fmts(r.desde)||r.desde||'-')+'</div></div>'
+    +'<div><div class="txxs tc3">Último ingreso</div><div class="ts fw6">'+esc(fmts(r.hasta)||r.hasta||'-')+'</div></div>'
+    +'</div>';
+  if(r.proveedores.length)h+='<div class="txxs tc3"><strong>Proveedores:</strong> '+esc(r.proveedores.join(', '))+'</div>';
+  h+='<div class="flex gap-6 mt-10">'
+    +'<button class="btn btn-s" style="background:var(--purple);color:#fff;flex:1" onclick="pasarSinCompClaveAComputado('+_argAttr(clave)+')">&#x1F4CA; Pasar a computado</button>'
+    +'<button class="btn btn-sec btn-s" style="flex:1" onclick="vincularSinCompClave('+_argAttr(clave)+')">&#x1F517; Vincular / fusionar</button>'
+    +'</div></div>';
+  if(peds.length){
+    h+='<div class="card mb-12" style="border-left:3px solid var(--orange)"><div class="ts fw7 mb-8" style="color:var(--orange)">&#x1F4CB; Pedidos de este material ('+peds.length+')</div>';
+    peds.forEach(function(p){
+      h+='<div class="flex items-start justify-between gap-8" style="padding:8px 0;border-bottom:1px solid var(--gray-ll)"><div class="flex-1">'
+        +'<div class="ts fw6">'+(p.qty||0)+' '+esc(p.unit||'u')+' <span class="txxs" style="color:'+(p.estado==='a_pedir'?'#8b5cf6':'var(--orange)')+'">'+(p.estado==='a_pedir'?'A pedir':'Pedido')+'</span></div>'
+        +'<div class="txxs tc3 mt-2">'+esc(fmts(p.fecha||p.date)||'')+(p.proveedor?' | Prov: '+esc(p.proveedor):'')+'</div></div>'
+        +'<button class="btn btn-g btn-s" onclick="'+(p.estado==='a_pedir'?'editAPedir':'editPedidoRegistrado')+'(\''+p.id+'\')">'+I.edit+'</button></div>';
+    });
+    h+='</div>';
+  }
+  h+='<div class="card"><div class="flex justify-between items-center mb-8 wrap gap-6"><div class="ts fw7">Historial de ingresos ('+ings.length+')</div><div class="flex gap-4 items-center">'
+    +'<button class="btn btn-s '+(S.matIngSort!=='ant'?'btn-p':'btn-sec')+'" onclick="S.matIngSort=\'rec\';render()">&#x2193; Reciente</button>'
+    +'<button class="btn btn-s '+(S.matIngSort==='ant'?'btn-p':'btn-sec')+'" onclick="S.matIngSort=\'ant\';render()">&#x2191; Antiguo</button>'
+    +'</div></div>';
+  ings.forEach(function(i){
+    var _eid=i.ecoId||((D.economia||[]).find(function(e){return e.matIngresoId===i.id;})||{}).id;
+    h+='<div style="padding:10px 0;border-bottom:1px solid var(--gray-ll)"><div class="flex justify-between items-start"><div class="flex-1" style="min-width:0">'
+      +'<div class="ts fw6">+'+(parseFloat(i.qty)||0)+' '+esc(i.unit||'u')+(_normTxt(i.matNombre||'')===_normTxt(nombre)&&String(i.matNombre).trim()!==nombre?' <span class="txxs tc3">('+esc(i.matNombre)+')</span>':'')+'</div>'
+      +'<div class="txxs tc3 mt-2">'+esc(fmts(fechaDe(i))||fechaDe(i)||'')+(i.proveedor?' | Prov: '+esc(i.proveedor):'')+(i.remito?' | Remito: '+esc(i.remito):'')+'</div>'
+      +(i.observations?'<div class="txxs tc3 mt-1" style="white-space:pre-wrap">'+esc(i.observations)+'</div>':'')
+      +(i.sourceType==='formulario'&&i.cargadoPor?'<div class="txxs mt-1" style="color:#16a34a;font-weight:700">&#x1F464; '+esc(i.cargadoPor)+'</div>':'')
+      +(_eid?'<div class="txxs mt-2" style="color:var(--cyan)">&#x1F4B0; <button class="link-tag" style="font-size:11px;color:var(--cyan)" onclick="irAMovimiento(\''+_eid+'\')">Ver en Economía &#x2192;</button></div>':'')
+      +(i.photos&&i.photos.length?photoGrid(i.photos,'matIngresos',i.id):'')
+      +'</div><div class="flex gap-4 ml-8 flex-shrink-0 wrap">'
+      +'<button class="btn btn-g btn-s" onclick="editSinComp(\''+i.id+'\')" title="Editar">'+I.edit+'</button>'
+      +'<button class="btn btn-sec btn-s" style="font-size:10px;color:var(--orange)" onclick="retrocederAPedido(\''+i.id+'\')" title="Retroceder a Pedido">&larr; Pedido</button>'
+      +'<button class="btn btn-g btn-s" style="color:var(--red)" onclick="delMatIngreso(\''+i.id+'\')" title="Eliminar">'+I.trash+'</button>'
+      +'</div></div></div>';
+  });
+  h+='</div>';
+  mc.innerHTML=h;
 }
 
 function _alertBtn(tbl,id,on){
@@ -3375,7 +3523,7 @@ function renderShell(){
   const drv=D.driveConfig?.[S.proj];const cloudCol=drv?'var(--green)':'var(--pri)';
   const _pendAlerts=pA.filter(a=>!a.resolved).length; // mantener badge en tareas si hay alertas legacy
   const mods=[{id:'dashboard',label:'Panel',ic:'dash'},{id:'visitas',label:'Visitas',ic:'clip'},{id:'tareas',label:'Tareas',ic:'list',badge:pendT+_pendAlerts},{id:'materiales',label:'Materiales',ic:'pkg'},{id:'checklist',label:'Checklist',ic:'chklist'},{id:'documentos',label:'Documentos',ic:'file'},{id:'comentarios',label:'Comentarios',ic:'msg'},{id:'colaboradores',label:'Colaboradores',ic:'share'},{id:'bandeja',label:'Bandeja',ic:'inbox',badge:pendForms+pendCarpeta+pendMsgsColab+_nAlert},{id:'economia',label:'Economía',ic:'eco'},{id:'informes',label:'Informes',ic:'dl'},{id:'config',label:'Config',ic:'gear'}];
-  const mi=mods.map(m=>{const c=MC[m.id];const act=S.mod===m.id;return `<button class="smi${act?' act':''}" style="${act?'background:'+c+'08;color:'+c+';border-left-color:'+c:''}" onclick="S.mod='${m.id}';S.menu=false;S.visitaDetail=null;S.matDetail=null;render();"><span style="color:${act?c:'var(--text3)'}">${I[m.ic]||''}</span><span style="flex:1;text-align:left">${m.label}</span>${m.badge>0?`<span class="sbadge">${m.badge}</span>`:''}</button>`;}).join('');
+  const mi=mods.map(m=>{const c=MC[m.id];const act=S.mod===m.id;return `<button class="smi${act?' act':''}" style="${act?'background:'+c+'08;color:'+c+';border-left-color:'+c:''}" onclick="S.mod='${m.id}';S.menu=false;S.visitaDetail=null;S.matDetail=null;S.matSinCompDetail=null;render();"><span style="color:${act?c:'var(--text3)'}">${I[m.ic]||''}</span><span style="flex:1;text-align:left">${m.label}</span>${m.badge>0?`<span class="sbadge">${m.badge}</span>`:''}</button>`;}).join('');
   const allBnav=[
     {id:'dashboard',ic:'dash',l:'Panel'},
     {id:'visitas',ic:'clip',l:'Visitas'},
@@ -3407,7 +3555,7 @@ function renderShell(){
   <div class="ov${S.menu?' open':''}" onclick="S.menu=false;render();"><div class="smenu" onclick="event.stopPropagation()"><div class="smenu-hdr"><div class="flex items-center gap-10 mb-4"><span style="color:var(--pri)">${I.building}</span><span style="font-size:15px;font-weight:800">${p.name}</span></div><div class="txxs tc3">${p.client||''} ${p.location?'| '+p.location:''}</div></div><div style="flex:1;overflow-y:auto;padding:4px 0">${mi}</div><div style="padding:12px 16px;border-top:1px solid var(--gray-ll)"><button class="btn btn-g btn-s btn-w" style="color:var(--red)" onclick="D.user=null;sv();render();">${I.out} Cerrar sesion</button></div></div></div>
   <div class="mo${S.searchOpen?' open':''}" onclick="S.searchOpen=false;render();"><div class="mo-c" style="max-width:600px" onclick="event.stopPropagation()"><div class="mo-h"><h3>${I.search} Buscador</h3><button class="tbtn" onclick="S.searchOpen=false;render();">${I.x}</button></div><div class="searchbar"><span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--gray-l)">${I.search}</span><input class="fi" style="padding-left:38px" id="searchInput" placeholder="Buscar..." value="${S.searchQ||''}" oninput="S.searchQ=this.value;renderSR();"></div><div id="searchResults"></div></div></div>
   <div class="content" id="mc"></div>
-  <div class="bottomnav" ontouchstart="window._bnTX=event.changedTouches[0].clientX" ontouchend="var _dx=event.changedTouches[0].clientX-(window._bnTX||0);if(Math.abs(_dx)>40){navStep(_dx<0?1:-1)}"><button class="bnav" style="max-width:32px;min-width:32px;font-size:16px;opacity:${_bnavIdx<=0?'0.3':'1'}" onclick="navStep(-1)" title="Anterior">&#x276E;</button>${bnav.map(t=>{const act=S.mod===t.id;const c=act?MC[t.id]:'var(--gray-l)';return `<button class="bnav${act?' active':''}" style="color:${c}" onclick="S.mod='${t.id}';S.visitaDetail=null;S.matDetail=null;render();">${I[t.ic]}<span>${t.l}</span>${t.id==='alertas'&&actAl>0?'<span class="ndot"></span>':t.id==='bandeja'&&(pendForms+pendCarpeta+pendMsgsColab+_nAlert)>0?'<span class="nbadge" style="'+(_nAlert?'background:#dc2626':'')+'">'+(pendForms+pendCarpeta+pendMsgsColab+_nAlert)+'</span>':''}</button>`;}).join('')}<button class="bnav" style="max-width:32px;min-width:32px;font-size:16px;opacity:${_bnavIdx>=_allNavIds.length-1?'0.3':'1'}" onclick="navStep(1)" title="Siguiente">&#x276F;</button></div>`);
+  <div class="bottomnav" ontouchstart="window._bnTX=event.changedTouches[0].clientX" ontouchend="var _dx=event.changedTouches[0].clientX-(window._bnTX||0);if(Math.abs(_dx)>40){navStep(_dx<0?1:-1)}"><button class="bnav" style="max-width:32px;min-width:32px;font-size:16px;opacity:${_bnavIdx<=0?'0.3':'1'}" onclick="navStep(-1)" title="Anterior">&#x276E;</button>${bnav.map(t=>{const act=S.mod===t.id;const c=act?MC[t.id]:'var(--gray-l)';return `<button class="bnav${act?' active':''}" style="color:${c}" onclick="S.mod='${t.id}';S.visitaDetail=null;S.matDetail=null;S.matSinCompDetail=null;render();">${I[t.ic]}<span>${t.l}</span>${t.id==='alertas'&&actAl>0?'<span class="ndot"></span>':t.id==='bandeja'&&(pendForms+pendCarpeta+pendMsgsColab+_nAlert)>0?'<span class="nbadge" style="'+(_nAlert?'background:#dc2626':'')+'">'+(pendForms+pendCarpeta+pendMsgsColab+_nAlert)+'</span>':''}</button>`;}).join('')}<button class="bnav" style="max-width:32px;min-width:32px;font-size:16px;opacity:${_bnavIdx>=_allNavIds.length-1?'0.3':'1'}" onclick="navStep(1)" title="Siguiente">&#x276F;</button></div>`);
   renderModule(S.mod,p);
 }
 // Las pestañas (rTareas, rMat, rChecklist...) y sus refrescos parciales
@@ -3435,7 +3583,7 @@ function _installMorph(el){
     set:function(html){patchHTML(this,html);}
   });
 }
-function renderModule(mod,p){const mc=$('mc');if(!mc)return;if(S.visitaDetail){var _vck=(D.visitas||[]).find(function(x){return x.id===S.visitaDetail;});if(!_vck||_vck.projectId!==S.proj){S.visitaDetail=null;}else{rVisitaDetail(mc,S.visitaDetail);return;}}if(S.matDetail){rMatDetail(mc,S.matDetail);return;}switch(mod){case 'dashboard':rDash(mc,p);break;case 'visitas':rVisitas(mc);break;case 'tareas':rTareas(mc);break;case 'materiales':rMat(mc);break;case 'alertas':rAlertas(mc);break;case 'checklist':rChecklist(mc);break;case 'documentos':rDocs(mc);break;case 'comentarios':rComentarios(mc);break;case 'informes':rInformes(mc,p);break;case 'colaboradores':rColaboradores(mc,p);break;case 'bandeja':rBandeja(mc,p);break;case 'economia':rEconomia(mc,p);break;case 'config':rConfig(mc,p);break;}if(S.searchOpen)setTimeout(()=>{const si=$('searchInput');if(si)si.focus();},100);}
+function renderModule(mod,p){const mc=$('mc');if(!mc)return;if(S.visitaDetail){var _vck=(D.visitas||[]).find(function(x){return x.id===S.visitaDetail;});if(!_vck||_vck.projectId!==S.proj){S.visitaDetail=null;}else{rVisitaDetail(mc,S.visitaDetail);return;}}if(S.matDetail){rMatDetail(mc,S.matDetail);return;}if(S.matSinCompDetail){if(mod==='materiales'){rSinCompDetail(mc,S.matSinCompDetail);return;}S.matSinCompDetail=null;}switch(mod){case 'dashboard':rDash(mc,p);break;case 'visitas':rVisitas(mc);break;case 'tareas':rTareas(mc);break;case 'materiales':rMat(mc);break;case 'alertas':rAlertas(mc);break;case 'checklist':rChecklist(mc);break;case 'documentos':rDocs(mc);break;case 'comentarios':rComentarios(mc);break;case 'informes':rInformes(mc,p);break;case 'colaboradores':rColaboradores(mc,p);break;case 'bandeja':rBandeja(mc,p);break;case 'economia':rEconomia(mc,p);break;case 'config':rConfig(mc,p);break;}if(S.searchOpen)setTimeout(()=>{const si=$('searchInput');if(si)si.focus();},100);}
 
 function navStep(dir){
   const ids=['dashboard','visitas','tareas','materiales','economia','documentos','checklist','comentarios','bandeja','informes'];
@@ -3447,7 +3595,7 @@ function navStep(dir){
     cur=ci>=0?Math.min(ci,ids.length-1):0;
   }
   const next=cur+dir;
-  if(next>=0&&next<ids.length){S.mod=ids[next];S.visitaDetail=null;S.matDetail=null;render();}
+  if(next>=0&&next<ids.length){S.mod=ids[next];S.visitaDetail=null;S.matDetail=null;S.matSinCompDetail=null;render();}
 }
 // ═══════ SYNC MULTI-BACKEND ═══════
 // Estado de sincronización unificado
@@ -4422,7 +4570,7 @@ function exportVisitaPDF(vid){
     if(lD.length){
       _dHtml='<h2>Documentos ('+lD.length+')</h2>';
       lD.forEach(function(d){
-        const url=d.url||d.fileData||'';
+        const url=_docHref(d);
         _dHtml+=url?'<div class="it"><a href="'+url+'" target="_blank" style="color:#2563eb;text-decoration:underline;font-weight:500">'+d.name+(d.category?' ['+d.category+']':'')+' &#x2197;</a></div>'
           :'<div class="it">'+d.name+(d.category?' ['+d.category+']':'')+'</div>';
       });
@@ -5014,25 +5162,46 @@ function _guardarSinComp(id){
   render();toast('Material actualizado','var(--green)');
 }
 
+// 🔗 Vincular / fusionar un ingreso sin cómputo. Antes sólo ofrecía materiales
+// computados (con un prompt numerado): dos cargas del mismo material con
+// nombres distintos ("Hierro 8" y "Hierro del 8") no se podían juntar desde acá.
+// Ahora ofrece los dos destinos y actúa sobre todos los ingresos de ese nombre.
 function vincularSinComp(id){
   var i=(D.matIngresos||[]).find(function(x){return x.id===id;});
   if(!i)return;
-  var mats=pf('materiales').filter(function(m){return !m.visitaId;});
-  if(!mats.length){toast('No hay materiales computados para vincular','var(--orange)');return;}
-  var opts=mats.map(function(m,idx){return (idx+1)+'. '+m.name+' ('+( m.unit||'u')+')';}).join('\n');
-  var sel=prompt('Vincular a material computado:\n'+opts+'\n\nEscrib\u00ed el n\u00famero:');
-  if(!sel)return;
-  var idx=parseInt(sel)-1;
-  if(isNaN(idx)||idx<0||idx>=mats.length){toast('N\u00famero inv\u00e1lido','var(--red)');return;}
-  var mat=mats[idx];
-  i.materialId=mat.id;
-  i.matNombre=mat.name;
-  i.unit=mat.unit||i.unit;
-  i.updatedAt=nw(); // necesario para que el merge multi-dispositivo elija esta versión
-  audit('matIngresos','update','vinculado a '+mat.name);
-  sv();render();toast('Vinculado a: '+mat.name,'var(--green)');
+  vincularSinCompClave(_normTxt(i.matNombre||''));
 }
-
+function vincularSinCompClave(clave){
+  var o=_fusionOpciones();
+  var propio=o.sin.find(function(x){return x.clave===clave;});
+  if(!propio){toast('No se encontró el material','var(--orange)');return;}
+  var otros=o.sin.filter(function(x){return x.clave!==clave;});
+  var boton=function(x,sub){
+    return '<button class="btn btn-w btn-s mb-4 vinc-opt" data-n="'+esc(_normTxt(x.nombre))+'" style="justify-content:flex-start;background:var(--gray-ll);color:var(--text);text-align:left" onclick="_vincularSinCompA('+_argAttr(x.val)+','+_argAttr(clave)+')">'+esc(x.label)+(sub?'<span class="txxs tc3" style="margin-left:4px">'+sub+'</span>':'')+'</button>';
+  };
+  var h='<div class="mo-c"><div class="mo-h"><h3>&#x1F517; Vincular «'+esc(propio.nombre)+'»</h3><button class="tbtn" onclick="document.getElementById(\'vincSinCompM\').remove()">'+I.x+'</button></div>';
+  h+='<div class="txxs tc3 mb-8">'+propio.items.length+' ingreso(s) con este nombre. Elegí con qué material es el mismo.</div>';
+  h+='<input class="fi mb-8" placeholder="Buscar material..." oninput="var q=_normTxt(this.value);document.querySelectorAll(\'#vincSinCompM .vinc-opt\').forEach(function(b){b.style.display=(!q||b.getAttribute(\'data-n\').indexOf(q)>=0)?\'\':\'none\';})">';
+  h+='<div class="fl mb-4">📦 Fusionar con otro ingresado sin cómputo</div>';
+  h+=otros.length?otros.map(function(x){return boton(x,'');}).join(''):'<div class="txxs tc3 mb-8">No hay otros ingresados sin cómputo.</div>';
+  h+='<div class="fl mb-4 mt-8">✓ Sumar a un material computado</div>';
+  h+=o.comp.length?o.comp.map(function(x){return boton(x,'');}).join(''):'<div class="txxs tc3">No hay materiales computados.</div>';
+  h+='</div>';
+  var d=document.getElementById('vincSinCompM');if(d)d.remove();
+  d=document.createElement('div');d.className='mo open';d.id='vincSinCompM';d.innerHTML=h;
+  document.body.appendChild(d);
+}
+function _vincularSinCompA(destino,clave){
+  var d=document.getElementById('vincSinCompM');if(d)d.remove();
+  ejecutarFusionMat(destino,'s:'+clave); // pide confirmación y avisa si difieren las unidades
+  var siguen=_sinCompItems().some(function(i){return _normTxt(i.matNombre||'')===clave;});
+  // Si estaba mirando el detalle de ese material, seguirlo a su nuevo lugar.
+  if(!siguen&&S.matSinCompDetail===clave){
+    if(destino.indexOf('s:')===0)S.matSinCompDetail=destino.slice(2);
+    else{S.matSinCompDetail=null;S.matDetail=destino.slice(2);}
+    render();
+  }
+}
 function delMatIngreso(id){
   if(!confirm('\u00bfEliminar este registro de ingreso?'))return;
   D.matIngresos=(D.matIngresos||[]).filter(function(x){return x.id!==id;});
@@ -5209,7 +5378,7 @@ function renderMatItems(){
         _h+=_g.ungrouped.map(function(i){
           return '<div class="matrow" style="padding:8px 0;border-bottom:1px solid var(--gray-ll)">'
           +'<div class="matrow-txt">'
-          +'<div class="ts fw6">'+(i.matNombre||'Sin nombre')+_alertTag(i)+'</div>'
+          +'<div class="ts fw6" style="cursor:pointer" title="Ver historial de ingresos" onclick="abrirSinCompDetalle(\''+i.id+'\')">'+esc(i.matNombre||'Sin nombre')+' <span style="color:var(--cyan)">&#x203A;</span>'+_alertTag(i)+'</div>'
           +'<div class="txxs tc3 mt-2">'+_fmtNum(i.qty)+' '+(i.unit||'u')+(i.proveedor?' | '+esc(i.proveedor):'')+((i.fechaIngreso||i.fecha)?' | '+(fmts(i.fechaIngreso||i.fecha)||(i.fechaIngreso||i.fecha)):'')+'</div>'
           +(i.observations?'<div class="txxs tc3">'+esc(i.observations)+'</div>':'')
           +(i.sourceType==='formulario'&&i.cargadoPor?'<div class="txxs mt-1" style="color:#16a34a;font-weight:700">&#x1F464; '+esc(i.cargadoPor||i.sourceName||'')+(i.date?' · '+fmts(i.date):'')+'</div>':'')
@@ -6599,7 +6768,7 @@ function rDocs(mc){
   const docs=pf('documentos');const enl=pf('enlaces');const c=MC.documentos;
   mc.innerHTML=`${modHeader('documentos','Documentos',`<div class="flex gap-4"><button class="btn btn-sec btn-s" onclick="openM('newDocM')">${I.file} Archivo</button><button class="btn btn-s" style="background:${c};color:#fff" onclick="openM('newEnlM')">${I.link} Enlace</button></div>`)}
   <div class="card mb-8" style="padding:8px 12px"><div class="flex gap-6 items-center flex-wrap"><span class="txxs tc3">Ordenar:</span><button class="btn btn-s ${S.docSort===''?'btn-p':'btn-sec'}" onclick="S.docSort='';render()">Reciente</button><button class="btn btn-s ${S.docSort==='az'?'btn-p':'btn-sec'}" onclick="S.docSort='az';render()">A-Z</button><button class="btn btn-s ${S.docSort==='za'?'btn-p':'btn-sec'}" onclick="S.docSort='za';render()">Z-A</button><button class="btn btn-s ${S.docSort==='asc'?'btn-p':'btn-sec'}" onclick="S.docSort='asc';render()">Antigua</button></div></div>
-  ${docs.length?`<div class="mb-12"><div class="ts fw7 mb-8">Archivos (${docs.length})</div>${_sortArr(docs).map(d=>{const vN=d.visitaId?D.visitas.find(v=>v.id===d.visitaId)?.title:null;const docURL=d.fileData||d.url;const _du=encodeURIComponent(docURL||'');const _dn=encodeURIComponent(d.name||'documento');return `<div class="card" style="padding:12px"><div class="flex items-center gap-10"><span style="color:${c}">${I.file}</span><div class="flex-1" style="min-width:0"><div class="ts fw6 trun">${d.name}</div><div class="txxs tc3">${d.category?colBadge(d.category,c,true):''} ${fmts(d.date)}${d.fileName?' — '+d.fileName:''}${vN?` <span class="link-tag">${I.link} ${vN}</span>`:''}</div>${d.notes?`<div class="txxs tc3 mt-4">${d.notes}</div>`:''}</div>${docURL?`<button class="btn btn-sec btn-s" data-href="${_du}" data-name="${_dn}" onclick="event.stopPropagation();var _h=this.getAttribute('data-href'),_n=decodeURIComponent(this.getAttribute('data-name')||'doc');if(_h)openFileData(decodeURIComponent(_h),_n);" title="Ver archivo">${I.eye} Ver</button>`:''}<button class="btn btn-sec btn-s" onclick="event.stopPropagation();editDoc('${d.id}')" title="Editar nombre">${I.edit}</button><button class="tbtn" onclick="event.stopPropagation();if(confirmDel())delI('documentos','${d.id}')">${I.trash}</button><button class="btn btn-g btn-s" style="color:${d.starred?'#f59e0b':'#cbd5e1'}" onclick="toggleDocStar('documentos','${d.id}')" title="Favorito">&#x2605;</button></div></div>`;}).join('')}</div>`:''}
+  ${docs.length?`<div class="mb-12"><div class="ts fw7 mb-8">Archivos (${docs.length})</div>${_sortArr(docs).map(d=>{const vN=d.visitaId?D.visitas.find(v=>v.id===d.visitaId)?.title:null;const docURL=_docHref(d);const _du=encodeURIComponent(docURL||'');const _dn=encodeURIComponent(d.name||'documento');return `<div class="card" style="padding:12px"><div class="flex items-center gap-10"><span style="color:${c}">${I.file}</span><div class="flex-1" style="min-width:0"><div class="ts fw6 trun">${d.name}</div><div class="txxs tc3">${d.category?colBadge(d.category,c,true):''} ${fmts(d.date)}${d.fileName?' — '+d.fileName:''}${vN?` <span class="link-tag">${I.link} ${vN}</span>`:''}</div>${d.notes?`<div class="txxs tc3 mt-4">${d.notes}</div>`:''}</div>${docURL?`<button class="btn btn-sec btn-s" data-href="${_du}" data-name="${_dn}" onclick="event.stopPropagation();var _h=this.getAttribute('data-href'),_n=decodeURIComponent(this.getAttribute('data-name')||'doc');if(_h)openFileData(decodeURIComponent(_h),_n);" title="Ver archivo">${I.eye} Ver</button>`:''}<button class="btn btn-sec btn-s" onclick="event.stopPropagation();editDoc('${d.id}')" title="Editar nombre">${I.edit}</button><button class="tbtn" onclick="event.stopPropagation();if(confirmDel())delI('documentos','${d.id}')">${I.trash}</button><button class="btn btn-g btn-s" style="color:${d.starred?'#f59e0b':'#cbd5e1'}" onclick="toggleDocStar('documentos','${d.id}')" title="Favorito">&#x2605;</button></div></div>`;}).join('')}</div>`:''}
   ${enl.length?`<div class="mb-12"><div class="ts fw7 mb-8">Enlaces (${enl.length})</div>${_sortArr(enl).map(e=>{const _eu=encodeURIComponent(e.url||'');return `<div class="card" style="padding:12px"><div class="flex items-center gap-10"><span style="color:var(--blue)">${I.globe}</span><div class="flex-1 card-click" style="min-width:0" data-href="${_eu}" onclick="event.stopPropagation();var _h=this.getAttribute('data-href');if(_h)window.open(decodeURIComponent(_h),'_blank')"><div class="ts fw6 trun">${e.title||e.url} <span style="font-size:9px;color:var(--blue)">⧉</span></div>${e.description?`<div class="txxs tc3">${e.description}</div>`:''}<div class="txxs tc3">${fmts(e.date)}${e.url&&e.url.includes('drive.google')?` ${colBadge('Google Drive','var(--green)',true)}`:''}</div></div><button class="btn btn-sec btn-s" onclick="event.stopPropagation();editEnl('${e.id}')" title="Editar enlace">${I.edit}</button><button class="tbtn" onclick="event.stopPropagation();if(confirmDel())delI('enlaces','${e.id}')">${I.trash}</button><button class="btn btn-g btn-s" style="color:${e.starred?'#f59e0b':'#cbd5e1'}" onclick="event.stopPropagation();toggleDocStar('enlaces','${e.id}')" title="Favorito">&#x2605;</button></div></div>`;}).join('')}</div>`:''}
   ${!docs.length&&!enl.length?`<div class="empty"><span style="color:${c}">${I.file}</span><div class="ts mt-8">Sin documentos ni enlaces</div></div>`:''}
   <div class="mo" id="newDocM"><div class="mo-c"><div class="mo-h"><h3 style="color:${c}">Agregar Archivo</h3><button class="tbtn" onclick="closeM('newDocM')">${I.x}</button></div><div class="fg"><label class="fl">Nombre *</label><input class="fi" id="nd_n"></div><div class="fg"><label class="fl">Categoria</label><select class="fs" id="nd_c"><option value="">-</option>${DCT.map(c=>`<option>${c}</option>`).join('')}</select></div><div class="fg"><label class="fl">Archivo (PDF recomendado)</label><input type="file" id="nd_f" class="fi" style="padding:6px" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.png"></div><div class="fg"><label class="fl">URL alternativa</label><input class="fi" id="nd_u" placeholder="https://..."></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="nd_no"></textarea></div><button class="btn btn-w mt-8" style="background:${c};color:#fff" onclick="saveDocF()">Guardar</button></div></div>
@@ -6623,11 +6792,15 @@ async function saveDocF(){
     // Intentar subir a Drive en carpeta Documentos
     const _docFid=(S.proj&&GD.moduleFolders[S.proj+'_documentos'])||GD.imagesFolderId||null;
     if(GD.online && GD.accessToken && (_docFid||GD.imagesFolderId) && file.type.startsWith('image/')){
+      let _b64=null;
       try{
-        const b64=await new Promise(res=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.readAsDataURL(file);});
-        const result=await uploadImageToDrive(b64,'doc_'+uid()+'_'+file.name,_docFid);
+        _b64=await new Promise(res=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.readAsDataURL(file);});
+        const result=await uploadImageToDrive(_b64,'doc_'+uid()+'_'+file.name,_docFid);
         if(result&&result.url){ doc.url=result.url; doc.driveId=result.driveId; }
       }catch(e){}
+      // Si la subida fallaba, la imagen se perdía y el documento quedaba "sin
+      // archivo". Ahora se guarda en el dispositivo y la sincronización la sube.
+      if(!doc.driveId&&_b64&&fileSizeMB<=5){ doc.fileData=_b64; doc.url=_b64; }
     } else {
       // Guardar base64 solo si < 5 MB
       if(fileSizeMB <= 5){
