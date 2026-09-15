@@ -45,6 +45,9 @@ a{color:var(--blue);text-decoration:none}
 .mcs-opt{padding:10px 14px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--gray-ll);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mcs-opt:hover,.mcs-opt:active{background:var(--gray-ll)}
 .tbtn{background:none;border:none;padding:6px;display:flex;align-items:center;border-radius:8px;transition:background .15s}
+/* Flecha de volver: 44px de zona táctil. Con 28px el dedo caía al lado y el
+   toque no hacía nada, o había que intentar varias veces. */
+.back-btn{min-width:44px;min-height:44px;justify-content:center;margin-left:-8px;touch-action:manipulation}
 .tbtn:active{background:var(--gray-ll)}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 16px;border-radius:var(--rs);font-size:13px;font-weight:600;transition:all .15s;white-space:nowrap;background:none}
 .btn:active{transform:scale(.97)}
@@ -1387,7 +1390,19 @@ async function uploadImageToDrive(base64Data, fileName, folderId) {
 }
 
 // Process pending image uploads from IDB queue
-async function processPendingImages() {
+// Una sola subida a la vez. Ahora se dispara más seguido (después de cada
+// creación con fotos), y dos pasadas simultáneas podían subir la misma foto dos
+// veces. Si llega un pedido mientras hay una en curso, se repite al terminar.
+async function processPendingImages(){
+  if(GD._subiendoFotos){GD._repetirSubida=true;return;}
+  GD._subiendoFotos=true;
+  try{ await _processPendingImagesImpl(); }
+  finally{
+    GD._subiendoFotos=false;
+    if(GD._repetirSubida){GD._repetirSubida=false;setTimeout(function(){processPendingImages().catch(function(){});},500);}
+  }
+}
+async function _processPendingImagesImpl() {
   if (!GD.online || !GD.idbReady) return;
   const pending = await idbGetAll('pending');
   const imagePending = pending.filter(p => p.type === 'image');
@@ -2057,6 +2072,10 @@ function sv(){
   }
   if(GD.idbReady) saveToIDB().catch(function(e){console.warn('IDB sv:',e);});
   scheduleSync(2000);
+  // Fotos recién encoladas por readPhotos: se suben ahora, DESPUÉS de que el
+  // registro ya está en los datos. Si la subida terminaba antes, el reemplazo
+  // de la marca [foto:ID] por la URL de Drive no encontraba dónde aplicarse.
+  if(GD._fotosEnCola){GD._fotosEnCola=false;setTimeout(function(){processPendingImages().catch(function(){});},400);}
 }
 function audit(tbl,act,sum){
   D.auditLog.push({id:uid(),table:tbl,action:act,summary:sum,
@@ -2076,30 +2095,33 @@ async function readPhotos(inputId, modKey){
   var results=[];
   // Determine target Drive folder: module-specific folder or fallback to imagenes
   var fid=(modKey&&S.proj&&GD.moduleFolders[S.proj+'_'+modKey])||GD.imagesFolderId||null;
-  for(var i=0;i<files.length;i++){
-    var file=files[i];
-    var compressed=await new Promise(function(res){
+  // Antes: comprimía y SUBÍA a Drive cada foto, una por una, antes de crear el
+  // registro. Con varias fotos eran muchos segundos con el cartel abierto.
+  // Ahora: se comprimen en paralelo y se guardan primero en el dispositivo
+  // (IndexedDB, persistente). El registro se crea al instante con esa copia
+  // segura, y la subida a Drive arranca en segundo plano apenas se guarda (sv()).
+  var comprimidas=await Promise.all(files.map(function(file){
+    return new Promise(function(res){
       var rd=new FileReader();
-      rd.onload=async function(e){ res(await compressImage(e.target.result,1024,0.72)); };
+      rd.onload=async function(e){ try{ res(await compressImage(e.target.result,1024,0.72)); }catch(_){ res(e.target.result); } };
+      rd.onerror=function(){ res(null); };
       rd.readAsDataURL(file);
     });
-    // Si Drive disponible: subir como archivo a la carpeta del módulo
-    if(GD.online&&GD.accessToken&&(fid||GD.imagesFolderId)){
-      try{
-        var result=await uploadImageToDrive(compressed,'foto_'+uid()+'.jpg',fid);
-        if(result&&result.url){ results.push(result.url); continue; }
-      }catch(ex){ console.warn('Foto Drive upload failed:',ex); }
-    }
-    // Sin Drive: guardar en IDB y usar placeholder (processPendingImages lo subirá luego)
+  }));
+  for(var i=0;i<comprimidas.length;i++){
+    var compressed=comprimidas[i];
+    if(!compressed)continue;
     if(GD.idbReady){
       var imgId='img_'+uid();
       try{
-        await queueImageUpload(imgId,compressed,'foto_'+i+'.jpg',S.proj,fid);
-        results.push('[foto:'+imgId+']');
-        continue;
+        await queueImageUpload(imgId,compressed,'foto_'+uid()+'.jpg',S.proj,fid);
+        // queueImageUpload no avisa si falla: se confirma que la copia quedó
+        // escrita antes de reemplazar la foto por su marca.
+        var _escrita=await idbGet('images',imgId);
+        if(_escrita&&_escrita.data){ results.push('[foto:'+imgId+']'); GD._fotosEnCola=true; continue; }
       }catch(e){}
     }
-    // Último recurso: base64 local
+    // Sin IndexedDB: la foto queda en los datos y _rescueBase64BeforeSync la sube después.
     results.push(compressed);
   }
   return results;
@@ -3848,7 +3870,17 @@ async function setupDrive(){
 }
 function renderNewVisitaModal(){return `<div class="mo" id="newVisitaM"><div class="mo-c"><div class="mo-h"><h3 style="color:var(--blue)">Nueva Visita</h3><button class="tbtn" onclick="closeM('newVisitaM')">${I.x}</button></div><div class="fg"><label class="fl">Titulo *</label><input class="fi" id="nv_title" placeholder="Visita control armaduras"></div><div class="fg"><label class="fl">Fecha</label><input class="fi" id="nv_date" type="date" value="${td()}"></div><div class="fg"><label class="fl">Descripcion</label><textarea class="ft" id="nv_desc" enterkeyhint="enter" rows="4"></textarea></div><div class="fg"><label class="fl">Observaciones</label><textarea class="ft" id="nv_obs" enterkeyhint="enter" rows="4"></textarea></div><div class="fg"><label class="fl">Fotos</label><input type="file" accept="image/*" multiple id="nv_photos" class="fi" style="padding:6px"></div><button class="btn btn-w mt-8" style="background:var(--blue);color:#fff" onclick="saveVisita()">Crear Visita</button></div></div>`;}
 async function saveVisita(){
-  if(!requireWrite())return;const t=$('nv_title').value.trim();if(!t){toast('Titulo obligatorio','var(--red)');return;}const pu=await readPhotos('nv_photos','visitas');D.visitas.push({id:uid(),projectId:S.proj,title:t,date:$('nv_date').value||td(),description:$('nv_desc').value,observations:$('nv_obs').value,estado:'borrador',photos:pu.map(u=>mkPhoto(u,'')),updatedAt:nw()});audit('visitas','create',t);sv();closeM('newVisitaM');render();toast('Visita creada');}
+  if(!requireWrite())return;
+  // Un segundo toque mientras se preparan las fotos creaba la visita dos veces.
+  if(saveVisita._enCurso)return;
+  const t=$('nv_title').value.trim();if(!t){toast('Titulo obligatorio','var(--red)');return;}
+  saveVisita._enCurso=true;
+  try{
+    const pu=await readPhotos('nv_photos','visitas');
+    D.visitas.push({id:uid(),projectId:S.proj,title:t,date:$('nv_date').value||td(),description:$('nv_desc').value,observations:$('nv_obs').value,estado:'borrador',photos:pu.map(u=>mkPhoto(u,'')),updatedAt:nw()});
+    audit('visitas','create',t);sv();closeM('newVisitaM');render();toast('Visita creada');
+  }finally{saveVisita._enCurso=false;}
+}
 
 /* ===== MÓDULO: VISITAS DE OBRA ===== */
 function rVisitas(mc){
@@ -3856,14 +3888,14 @@ function rVisitas(mc){
   mc.innerHTML=`${modHeader('visitas','Visitas de Obra',`<button class="btn btn-s" style="background:${c};color:#fff" onclick="openM('newVisitaM')">${I.plus} Nueva</button>`)}
   ${!items.length?`<div class="empty"><span style="color:${c}">${I.clip}</span><div class="ts mt-8 mb-12">Sin visitas</div></div>`:items.map(v=>{
     const lT=D.tareas.filter(t=>t.visitaId===v.id).length;const lM=D.materiales.filter(m=>m.visitaId===v.id).length;const lA=D.alertas.filter(a=>a.visitaId===v.id).length;const pc=(v.photos||[]).length;
-    return `<div class="card card-click" style="border-left:3px solid ${c}" onclick="S.visitaDetail='${v.id}';render();"><div class="flex justify-between mb-4"><span class="txxs tc3">${I.cal} ${fmts(v.date)}</span>${colBadge(v.estado||'borrador',v.estado==='finalizada'?'var(--green)':'var(--blue)',true)}</div><div class="fw7 mb-4">${v.title}</div>${v.description?`<div class="ts tc3 mb-6" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${v.description}</div>`:''}<div class="flex gap-4 wrap txxs">${pc?`<span class="link-tag">${I.cam} ${pc}</span>`:''}${lT?`<span class="link-tag">${I.list} ${lT}</span>`:''}${lM?`<span class="link-tag">${I.pkg} ${lM}</span>`:''}${lA?`<span class="link-tag">${I.bell} ${lA}</span>`:''}</div></div>`;
+    return `<div class="card card-click" style="border-left:3px solid ${c}" onclick="_escudoToque();S.visitaDetail='${v.id}';render();"><div class="flex justify-between mb-4"><span class="txxs tc3">${I.cal} ${fmts(v.date)}</span>${colBadge(v.estado||'borrador',v.estado==='finalizada'?'var(--green)':'var(--blue)',true)}</div><div class="fw7 mb-4">${v.title}</div>${v.description?`<div class="ts tc3 mb-6" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${v.description}</div>`:''}<div class="flex gap-4 wrap txxs">${pc?`<span class="link-tag">${I.cam} ${pc}</span>`:''}${lT?`<span class="link-tag">${I.list} ${lT}</span>`:''}${lM?`<span class="link-tag">${I.pkg} ${lM}</span>`:''}${lA?`<span class="link-tag">${I.bell} ${lA}</span>`:''}</div></div>`;
   }).join('')}${renderNewVisitaModal()}`;
 }
 function rVisitaDetail(mc,vid){
   const v=D.visitas.find(x=>x.id===vid);if(!v){S.visitaDetail=null;render();return;}
   const lT=D.tareas.filter(t=>t.visitaId===vid);const lM=D.materiales.filter(m=>m.visitaId===vid);const lD=D.documentos.filter(d=>d.visitaId===vid);const lMI=(D.matIngresos||[]).filter(i=>i.visitaId===vid);
   mc.innerHTML=`
-  <div class="flex items-center gap-8 mb-12"><button class="tbtn" onclick="S.visitaDetail=null;render();">${I.chevL}</button><h2 class="fw8" style="font-size:16px;flex:1">Visita</h2><button class="btn btn-s btn-sec" onclick="exportVisitaPDF('${vid}')">${I.pdf} PDF</button><button class="btn btn-sec btn-s" onclick="shareFormContextual('visita','${vid}','Visita')" title="Compartir formulario">💬</button><button class="btn btn-g btn-s" onclick="editVisita('${vid}')">${I.edit}</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel('Eliminar visita?')){delVisita('${vid}')}">${I.trash}</button></div>
+  <div class="flex items-center gap-8 mb-12"><button class="tbtn back-btn" aria-label="Volver al listado de visitas" onclick="volverAVisitas(event)">${I.chevL}</button><h2 class="fw8" style="font-size:16px;cursor:pointer;padding:10px 8px 10px 0" onclick="volverAVisitas(event)">Visita</h2><div style="flex:1"></div><button class="btn btn-s btn-sec" onclick="exportVisitaPDF('${vid}')">${I.pdf} PDF</button><button class="btn btn-sec btn-s" onclick="shareFormContextual('visita','${vid}','Visita')" title="Compartir formulario">💬</button><button class="btn btn-g btn-s" onclick="editVisita('${vid}')">${I.edit}</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel('Eliminar visita?')){delVisita('${vid}')}">${I.trash}</button></div>
   <div class="card mb-12">
     <div class="flex justify-between mb-6"><span class="txxs tc3">${I.cal} ${fmt(v.date)}</span>${colBadge(v.estado||'borrador',v.estado==='finalizada'?'var(--green)':'var(--blue)',true)}</div>
     <div class="fw8 mb-8" style="font-size:17px">${v.title}</div>
@@ -4026,6 +4058,27 @@ function finalizeV(vid){const v=D.visitas.find(x=>x.id===vid);if(v){v.estado='fi
 // ═══════════════════════════════════════════════════════════════
 
 function reopenV(vid){const v=D.visitas.find(x=>x.id===vid);if(v){v.estado='borrador';v.updatedAt=nw();sv();render();toast('Reabierta');}}
+// Volver desde el detalle de una visita: SIEMPRE al listado de visitas.
+// La pantalla va arriba: render() conserva la altura de scroll (para que las
+// sincronizaciones no muevan la pantalla), y al pasar del detalle al listado
+// eso dejaba el listado desplazado. Se espera a que _keepScroll termine.
+// Escudo contra el "toque fantasma". Al tocar la flecha, la pantalla pasa al
+// listado en el mismo instante y el celular volvía a entregar el toque sobre lo
+// que quedó debajo del dedo: la tarjeta de la visita más reciente, que se abría
+// sola. Reproducido: tocar la flecha dejaba abierta la última visita. Durante
+// unos instantes después de navegar se descartan los toques.
+var _escudoHasta=0;
+document.addEventListener('click',function(e){
+  if(Date.now()<_escudoHasta){e.stopPropagation();e.preventDefault();}
+},true);
+function _escudoToque(ms){_escudoHasta=Date.now()+(ms||450);}
+function volverAVisitas(ev){
+  if(ev){try{ev.preventDefault();ev.stopPropagation();}catch(_){}}
+  _escudoToque();
+  S.visitaDetail=null;S.matDetail=null;S.mod='visitas';
+  render();
+  setTimeout(function(){window.scrollTo(0,0);},60);
+}
 function delVisita(vid){D.visitas=D.visitas.filter(x=>x.id!==vid);D.tareas.filter(t=>t.visitaId===vid).forEach(t=>t.visitaId=null);D.materiales.filter(m=>m.visitaId===vid).forEach(m=>m.visitaId=null);D.alertas.filter(a=>a.visitaId===vid).forEach(a=>a.visitaId=null);addTombstone('visitas',vid);audit('visitas','delete','');sv();S.visitaDetail=null;render();toast('Eliminada');}
 function editVisita(vid){const v=D.visitas.find(x=>x.id===vid);if(!v)return;let d=document.createElement('div');d.className='mo open';d.id='evM';d.innerHTML=`<div class="mo-c"><div class="mo-h"><h3>Editar Visita</h3><button class="tbtn" onclick="this.closest('.mo').remove()">${I.x}</button></div><div class="fg"><label class="fl">Titulo *</label><input class="fi" id="ev_t" value="${v.title||''}"></div><div class="fg"><label class="fl">Fecha</label><input class="fi" id="ev_d" type="date" value="${v.date||''}"></div><div class="fg"><label class="fl">Descripcion</label><textarea class="ft" id="ev_de" enterkeyhint="enter" rows="4">${v.description||''}</textarea></div><div class="fg"><label class="fl">Observaciones</label><textarea class="ft" id="ev_o" enterkeyhint="enter" rows="4">${v.observations||''}</textarea></div><button class="btn btn-w mt-8 btn-p" onclick="saveEV('${vid}')">Guardar</button></div>`;document.body.appendChild(d);}
 function saveEV(vid){const v=D.visitas.find(x=>x.id===vid);if(!v)return;const t=$('ev_t').value.trim();if(!t){toast('Titulo obligatorio','var(--red)');return;}v.title=t;v.date=$('ev_d').value;v.description=$('ev_de').value;v.observations=$('ev_o').value;v.updatedAt=nw();audit('visitas','update',t);sv();document.getElementById('evM')?.remove();render();toast('Actualizada');}
@@ -5077,7 +5130,7 @@ function renderMatItems(){
     _apedirH='<div class="card matsec" style="border-left:3px solid #8b5cf6">';
     _apedirH+='<div class="matsec-h">';
     _apedirH+='<button class="link-tag fw7" style="color:#8b5cf6;font-size:13px" onclick="S.matAPedirMin=!S.matAPedirMin;renderMatItems()">&#x1F4DD; A pedir ('+_apedir.length+')'+(S.matAPedirMin?' &#x25B6;':' &#x25BC;')+'</button>';
-    _apedirH+='<div class="flex gap-4"><button class="btn btn-s btn-sec" title="Agregar al calendario" onclick="exportMatItemsGCal(\'a_pedir\')">&#x1F4C5;</button><button class="btn btn-s btn-sec" onclick="openM(\'newAPedirM\')">'+ I.plus +' Nuevo</button></div></div>';
+    _apedirH+='<div class="flex gap-4"><button class="btn btn-s btn-sec" title="Agregar al calendario" onclick="exportMatItemsGCal(\'a_pedir\')">&#x1F4C5;</button><button class="btn btn-s btn-sec" title="Cargar varios de una vez" onclick="abrirIngresoMultiple(\'a_pedir\')">📝 Lista</button><button class="btn btn-s btn-sec" onclick="openM(\'newAPedirM\')">'+ I.plus +' Nuevo</button></div></div>';
     if(!S.matAPedirMin){
       var _apGrp=_buildMatGroups(_apedir);
       _apGrp.ungrouped.forEach(function(p){
@@ -5106,7 +5159,7 @@ function renderMatItems(){
     _pedH='<div class="card matsec" style="border-left:3px solid var(--orange)">';
     _pedH+='<div class="matsec-h">';
     _pedH+='<button class="link-tag fw7" style="color:var(--orange);font-size:13px" onclick="S.matPedMin=!S.matPedMin;renderMatItems()">&#x1F4CB; Pedidos ('+_peds.length+')'+(S.matPedMin?' &#x25B6;':' &#x25BC;')+'</button>';
-    _pedH+='<div class="flex gap-4"><button class="btn btn-s btn-sec" title="Agregar al calendario" onclick="exportMatItemsGCal(\'pedido\')">&#x1F4C5;</button><button class="btn btn-s btn-sec" onclick="openM(\'newPedidoM\')">' +I.plus+' Nuevo</button></div></div>';
+    _pedH+='<div class="flex gap-4"><button class="btn btn-s btn-sec" title="Agregar al calendario" onclick="exportMatItemsGCal(\'pedido\')">&#x1F4C5;</button><button class="btn btn-s btn-sec" title="Cargar varios de una vez" onclick="abrirIngresoMultiple(\'pedido\')">📝 Lista</button><button class="btn btn-s btn-sec" onclick="openM(\'newPedidoM\')">' +I.plus+' Nuevo</button></div></div>';
     if(!S.matPedMin){
       var _pedGrp=_buildMatGroups(_peds);
       _pedGrp.ungrouped.forEach(function(p){
@@ -5598,19 +5651,39 @@ function retrocederAPedido(itemId){
   toast((item.matNombre||'Material')+' ← vuelto a Pedido','var(--orange)');
 }
 
+// Selector del material del cómputo al que suma un pedido o un "a pedir".
+// Sin esto, un pedido enganchado por error a otro material ("Electrodos"
+// sumando a "Grancilla") no se podía corregir: había que borrarlo y recargarlo.
+function _selMatComputado(selId,actual){
+  var mats=pf('materiales').filter(function(m){return !m.visitaId;}).slice()
+    .sort(function(a,b){return String(a.name).localeCompare(String(b.name));});
+  return '<select class="fs" id="'+selId+'"><option value="">📦 Sin cómputo (no suma a ningún material)</option>'
+    +mats.map(function(m){return '<option value="'+esc(m.id)+'"'+(m.id===actual?' selected':'')+'>✓ '+esc(m.name)+' ('+esc(m.unit||'u')+')</option>';}).join('')
+    +'</select>';
+}
+// Unidades del selector. Si el registro tiene una que no está en la lista
+// ("bolsa 25kg"), se agrega: si no, el select mostraba la primera opción y al
+// guardar se pisaba la unidad real.
+function _optsUnidad(actual){
+  var l=UNI.slice();
+  if(actual&&l.indexOf(actual)<0)l.unshift(actual);
+  return l.map(function(u){return '<option'+(u===actual?' selected':'')+'>'+esc(u)+'</option>';}).join('');
+}
 function editAPedir(itemId){
   var item=(D.matIngresos||[]).find(function(i){return i.id===itemId;});
   if(!item)return;
   var d=document.createElement('div');d.className='mo open';d.id='editAPedirM';
+  // esc() en los valores: un nombre con comillas (2 1/2") cortaba el campo.
   d.innerHTML='<div class="mo-c"><div class="mo-h"><h3 style="color:#8b5cf6">&#x1F4DD; Editar A pedir</h3>'
     +'<button class="tbtn" onclick="document.getElementById(\'editAPedirM\').remove()">'+I.x+'</button></div>'
-    +'<div class="fg"><label class="fl">Nombre</label><input class="fi" id="eap_n" value="'+(item.matNombre||'')+'"></div>'
+    +'<div class="fg"><label class="fl">Nombre</label><input class="fi" id="eap_n" value="'+esc(item.matNombre||'').replace(/"/g,'&quot;')+'"></div>'
+    +'<div class="fg"><label class="fl">Suma al material del cómputo</label>'+_selMatComputado('eap_mat',item.materialId)+'</div>'
     +'<div class="fr"><div class="fg"><label class="fl">Cantidad</label><input class="fi" id="eap_q" type="number" value="'+(item.qty||0)+'"></div>'
-    +'<div class="fg"><label class="fl">Unidad</label><select class="fs" id="eap_u">'+UNI.map(function(u){return '<option'+(u===item.unit?' selected':'')+'>'+u+'</option>';}).join('')+'</select></div></div>'
-    +'<div class="fg"><label class="fl">Proveedor</label><input class="fi" id="eap_prov" value="'+(item.proveedor||'')+'"></div>'
+    +'<div class="fg"><label class="fl">Unidad</label><select class="fs" id="eap_u">'+_optsUnidad(item.unit)+'</select></div></div>'
+    +'<div class="fg"><label class="fl">Proveedor</label><input class="fi" id="eap_prov" value="'+esc(item.proveedor||'').replace(/"/g,'&quot;')+'"></div>'
     +'<div class="fg"><label class="fl">Fecha</label><input class="fi" id="eap_fecha" type="date" value="'+(item.fecha||td())+'"></div>'
     +'<div class="fg"><label class="fl">Grupo (opcional)</label>'+_pcHtml('eap_grupo',_matGrupoNames(),'Buscar o crear un grupo...',item.grupo||'')+'</div>'
-    +'<div class="fg"><label class="fl">Notas</label><textarea class="ft" id="eap_obs">'+(item.observations||'')+'</textarea></div>'
+    +'<div class="fg"><label class="fl">Notas</label><textarea class="ft" id="eap_obs">'+esc(item.observations||'')+'</textarea></div>'
     +'<div class="flex gap-6 mt-8">'
     +'<button class="btn btn-w" style="background:#8b5cf6;color:#fff;flex:1" onclick="saveEditAPedir(\''+itemId+'\')" >Guardar</button>'
     +'<button class="btn btn-w btn-sec" style="color:var(--orange)" onclick="pasarAPedido(\''+itemId+'\');document.getElementById(\'editAPedirM\').remove()">&#x2192; Pedido</button>'
@@ -5622,6 +5695,9 @@ function saveEditAPedir(itemId){
   var item=(D.matIngresos||[]).find(function(i){return i.id===itemId;});if(!item)return;
   var n=((document.getElementById('eap_n')||{}).value||'').trim();if(!n){toast('Nombre obligatorio','var(--red)');return;}
   item.matNombre=n;
+  item.materialId=((document.getElementById('eap_mat')||{}).value)||null;
+  var _eapMat=(D.materiales||[]).find(function(m){return m.id===item.materialId;});
+  item.unitEsNueva=_matUnitAt(_eapMat,(document.getElementById('eap_fecha')||{}).value||td()).nueva;
   item.qty=parseFloat((document.getElementById('eap_q')||{}).value)||0;
   item.unit=(document.getElementById('eap_u')||{}).value||'u';
   item.proveedor=(document.getElementById('eap_prov')||{}).value||'';
@@ -5637,13 +5713,14 @@ function editPedidoRegistrado(itemId){
   var d=document.createElement('div');d.className='mo open';d.id='editPedRegM';
   d.innerHTML='<div class="mo-c"><div class="mo-h"><h3 style="color:var(--orange)">&#x1F4CB; Editar Pedido</h3>'
     +'<button class="tbtn" onclick="document.getElementById(\'editPedRegM\').remove()">'+I.x+'</button></div>'
-    +'<div class="fg"><label class="fl">Nombre</label><input class="fi" id="epr_n" value="'+(item.matNombre||'')+'"></div>'
+    +'<div class="fg"><label class="fl">Nombre</label><input class="fi" id="epr_n" value="'+esc(item.matNombre||'').replace(/"/g,'&quot;')+'"></div>'
+    +'<div class="fg"><label class="fl">Suma al material del cómputo</label>'+_selMatComputado('epr_mat',item.materialId)+'</div>'
     +'<div class="fr"><div class="fg"><label class="fl">Cantidad</label><input class="fi" id="epr_q" type="number" value="'+(item.qty||0)+'"></div>'
-    +'<div class="fg"><label class="fl">Unidad</label><select class="fs" id="epr_u">'+UNI.map(function(u){return '<option'+(u===item.unit?' selected':'')+'>'+u+'</option>';}).join('')+'</select></div></div>'
-    +'<div class="fg"><label class="fl">Proveedor</label><input class="fi" id="epr_prov" value="'+(item.proveedor||'')+'"></div>'
+    +'<div class="fg"><label class="fl">Unidad</label><select class="fs" id="epr_u">'+_optsUnidad(item.unit)+'</select></div></div>'
+    +'<div class="fg"><label class="fl">Proveedor</label><input class="fi" id="epr_prov" value="'+esc(item.proveedor||'').replace(/"/g,'&quot;')+'"></div>'
     +'<div class="fg"><label class="fl">Fecha pedido</label><input class="fi" id="epr_fecha" type="date" value="'+(item.fecha||td())+'"></div>'
     +'<div class="fg"><label class="fl">Grupo (opcional)</label>'+_pcHtml('epr_grupo',_matGrupoNames(),'Buscar o crear un grupo...',item.grupo||'')+'</div>'
-    +'<div class="fg"><label class="fl">Notas</label><textarea class="ft" id="epr_obs">'+(item.observations||'')+'</textarea></div>'
+    +'<div class="fg"><label class="fl">Notas</label><textarea class="ft" id="epr_obs">'+esc(item.observations||'')+'</textarea></div>'
     +'<div class="flex gap-6 mt-8">'
     +'<button class="btn btn-w" style="background:var(--orange);color:#fff;flex:1" onclick="saveEditPedReg(\''+itemId+'\')" >Guardar</button>'
     +'<button class="btn btn-w btn-sec" style="color:var(--purple)" onclick="confirmarPedido(\''+itemId+'\');document.getElementById(\'editPedRegM\').remove()">&#x2713; Confirmar Ingreso</button>'
@@ -5655,6 +5732,9 @@ function saveEditPedReg(itemId){
   var item=(D.matIngresos||[]).find(function(i){return i.id===itemId;});if(!item)return;
   var n=((document.getElementById('epr_n')||{}).value||'').trim()||item.matNombre;
   item.matNombre=n;
+  item.materialId=((document.getElementById('epr_mat')||{}).value)||null;
+  var _eprMat=(D.materiales||[]).find(function(m){return m.id===item.materialId;});
+  item.unitEsNueva=_matUnitAt(_eprMat,(document.getElementById('epr_fecha')||{}).value||td()).nueva;
   item.qty=parseFloat((document.getElementById('epr_q')||{}).value)||0;
   item.unit=(document.getElementById('epr_u')||{}).value||'u';
   item.proveedor=(document.getElementById('epr_prov')||{}).value||'';
@@ -5743,7 +5823,8 @@ async function saveIng(){const mid=$('ni_mat')?.value;const q=parseFloat($('ni_q
 // remito. Cargarlos de a uno obligaba a repetir esos tres datos otras tantas
 // veces. Acá se cargan una sola vez y abajo va la lista.
 
-var _IM=[]; // filas en edición: [{nombre,qty,unit}]
+var _IM=[]; // filas en edición: [{nombre,qty,unit,matId,matManual}]
+var _IM_ESTADO='ingresado'; // cómo se carga la lista: a_pedir | pedido | ingresado
 
 function _normTxt(s){
   return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim();
@@ -5802,13 +5883,17 @@ function _parsearLineaMaterial(linea){
   return {nombre:t,qty:'',unit:''}; // sin cantidad: se completa a mano
 }
 
-function abrirIngresoMultiple(){
+function abrirIngresoMultiple(estado){
+  _IM_ESTADO=(estado==='a_pedir'||estado==='pedido')?estado:'ingresado';
   _IM=[{nombre:'',qty:'',unit:''},{nombre:'',qty:'',unit:''},{nombre:'',qty:'',unit:''}];
   var provs=[...new Set((D.matIngresos||[]).filter(function(x){return x.projectId===S.proj&&x.proveedor;}).map(function(x){return x.proveedor.trim();}))].sort();
-  var h='<div class="mo-c"><div class="mo-h"><h3 style="color:var(--purple)">&#x1F4E6; Ingreso por remito</h3><button class="tbtn" onclick="closeM(\'ingMultM\')">'+I.x+'</button></div>';
-  h+='<div class="txxs tc3 mb-10">Los datos del remito se cargan una vez y valen para todos los materiales de la lista.</div>';
+  var h='<div class="mo-c"><div class="mo-h"><h3 style="color:var(--purple)">&#x1F4DD; Carga por lista</h3><button class="tbtn" onclick="closeM(\'ingMultM\')">'+I.x+'</button></div>';
+  h+='<div class="txxs tc3 mb-10">Proveedor y fecha se cargan una vez y valen para toda la lista. En cada renglón elegís si suma a un material del cómputo o queda sin cómputo.</div>';
+  h+='<div class="fg"><label class="fl">Cargar como</label><select class="fs" id="im_estado" onchange="_IM_ESTADO=this.value;_imActualizarCampos()">'
+    +[['a_pedir','📝 A pedir'],['pedido','📋 Pedido'],['ingresado','📦 Ingresado (llegó a obra)']].map(function(o){return '<option value="'+o[0]+'"'+(o[0]===_IM_ESTADO?' selected':'')+'>'+o[1]+'</option>';}).join('')
+    +'</select></div>';
   h+='<div class="fr"><div class="fg"><label class="fl">Fecha</label><input class="fi" id="im_d" type="date" value="'+td()+'"></div>';
-  h+='<div class="fg"><label class="fl">Remito</label><input class="fi" id="im_rem" placeholder="N°"></div></div>';
+  h+='<div class="fg" data-im-solo-ingreso><label class="fl">Remito</label><input class="fi" id="im_rem" placeholder="N°"></div></div>';
   h+='<div class="fg"><label class="fl">Proveedor</label>'+_pcHtml('im_prov',provs,'Buscar o escribir proveedor...','')+'</div>';
   h+='<div class="fg"><label class="fl">Dictar o pegar la lista</label>'
     +'<textarea class="ft" id="im_txt" rows="4" placeholder="Un material por renglón:&#10;Cemento 50 bolsas&#10;Arena gruesa 10 m3&#10;Hierro del 8 x 24"></textarea>'
@@ -5816,13 +5901,35 @@ function abrirIngresoMultiple(){
   h+='<div class="fl mt-8">Materiales del remito</div><div id="im_filas"></div>';
   h+='<button class="btn btn-sec btn-s btn-w mt-4" onclick="imAgregarFila()">'+I.plus+' Agregar renglón</button>';
   h+='<div class="fg mt-8"><label class="fl">Observaciones</label><textarea class="ft" id="im_obs" rows="2"></textarea></div>';
-  h+='<div class="fg"><label class="fl">Fotos del remito</label><input type="file" accept="image/*" multiple id="im_ph" class="fi" style="padding:6px"></div>';
+  h+='<div class="fg" data-im-solo-ingreso><label class="fl">Fotos del remito</label><input type="file" accept="image/*" multiple id="im_ph" class="fi" style="padding:6px"></div>';
   h+='<button class="btn btn-w mt-8" style="background:var(--purple);color:#fff" id="im_btn" onclick="imRegistrar()">Registrar ingresos</button></div>';
   var d=document.getElementById('ingMultM');
   if(d)d.remove();
   d=document.createElement('div');d.className='mo open';d.id='ingMultM';d.innerHTML=h;
   document.body.appendChild(d);
   _imPintarFilas();
+  _imActualizarCampos();
+}
+/** Remito y fotos sólo tienen sentido para lo que ya llegó a obra. */
+function _imActualizarCampos(){
+  var ing=_IM_ESTADO==='ingresado';
+  document.querySelectorAll('#ingMultM [data-im-solo-ingreso]').forEach(function(el){el.style.display=ing?'':'none';});
+  var b=$('im_btn');
+  if(b)b.textContent=ing?'Registrar ingresos':(_IM_ESTADO==='pedido'?'Cargar pedidos':'Cargar a pedir');
+}
+/** Material del cómputo de un renglón: el elegido a mano o, si no, el que coincide por nombre. */
+function _imMatDeFila(f){
+  if(f.matManual)return f.matId||'';
+  var m=_matchMaterial(f.nombre);
+  return m?m.id:'';
+}
+function _imElegirMat(i,v){
+  if(!_IM[i])return;
+  _IM[i].matManual=true;
+  _IM[i].matId=v||'';
+  var m=(D.materiales||[]).find(function(x){return x.id===v;});
+  var u=$('im_u'+i);
+  if(m&&u){u.value=_matUnitAt(m,($('im_d')&&$('im_d').value)||td()).unit;_IM[i].unit=u.value;}
 }
 
 /** Guarda lo tipeado antes de volver a dibujar, para no perder nada. */
@@ -5838,13 +5945,15 @@ function _imPintarFilas(){
   var cont=$('im_filas');
   if(!cont)return;
   var nombres=pf('materiales').filter(function(m){return !m.visitaId;}).map(function(m){return m.name;}).sort();
+  var _matsIM=pf('materiales').filter(function(m){return !m.visitaId;}).slice().sort(function(a,b){return String(a.name).localeCompare(String(b.name));});
   cont.innerHTML=_IM.map(function(f,i){
-    var mat=_matchMaterial(f.nombre);
-    // Se avisa si el nombre no coincide con ningún material del cómputo: igual
-    // se puede cargar, entra como "Ingresado sin cómputo".
-    var marca=f.nombre?(mat
-      ?'<span class="txxs" style="color:var(--green)">&#x2713; '+esc(mat.name)+'</span>'
-      :'<span class="txxs" style="color:var(--cyan)">&#x1F4E6; sin cómputo</span>'):'';
+    // Cada renglón elige a qué material del cómputo suma. Arranca con el que
+    // coincide por nombre, pero se puede cambiar o dejar sin cómputo.
+    var _mid=_imMatDeFila(f);
+    var marca='<select class="fs" id="im_m'+i+'" onchange="_imElegirMat('+i+',this.value)" style="margin:0;font-size:12px">'
+      +'<option value="">📦 Sin cómputo</option>'
+      +_matsIM.map(function(m){return '<option value="'+esc(m.id)+'"'+(m.id===_mid?' selected':'')+'>✓ '+esc(m.name)+'</option>';}).join('')
+      +'</select>';
     return '<div style="border:1px solid var(--brd);border-radius:8px;padding:8px;margin-bottom:6px">'
       +'<div class="flex gap-6 items-center">'
       +'<div style="flex:1;min-width:0">'+_pcHtml('im_n'+i,nombres,'Material',f.nombre||'')+'</div>'
@@ -5891,40 +6000,54 @@ async function imRegistrar(){
   var obs=($('im_obs')&&$('im_obs').value)||'';
   var filas=_IM.filter(function(f){return (f.nombre||'').trim();});
   if(!filas.length){toast('Cargá al menos un material','var(--red)');return;}
-  var malas=filas.filter(function(f){return !(parseFloat(f.qty)>0);});
+  var estado=($('im_estado')&&$('im_estado').value)||_IM_ESTADO||'ingresado';
+  var esIngreso=estado==='ingresado';
+  // En "a pedir" la cantidad puede no saberse todavía; en pedidos e ingresos sí.
+  var malas=estado==='a_pedir'?[]:filas.filter(function(f){return !(parseFloat(f.qty)>0);});
   if(malas.length){toast('Falta la cantidad en '+malas.length+' renglón(es)','var(--red)',4000);return;}
 
   var btn=$('im_btn');
   if(btn){btn.disabled=true;btn.textContent='Registrando...';}
   // Las fotos del remito se leen UNA vez y se guardan en el primer ingreso: no
   // tiene sentido duplicar el mismo remito en diez registros.
-  var pu=await readPhotos('im_ph','materiales');
+  var pu=esIngreso?await readPhotos('im_ph','materiales'):[];
   if(!D.matIngresos)D.matIngresos=[];
   var creados=0,vinculados=0;
   filas.forEach(function(f,idx){
-    var mat=_matchMaterial(f.nombre);
+    var mid=_imMatDeFila(f);
+    var mat=mid?(D.materiales||[]).find(function(m){return m.id===mid;}):null;
     var u=mat?_matUnitAt(mat,fecha):{unit:(f.unit||'u'),nueva:false};
-    D.matIngresos.push({
+    var reg={
       id:uid(),projectId:S.proj,
-      materialId:mat?mat.id:'',
-      matNombre:mat?mat.name:f.nombre.trim(),
-      qty:parseFloat(f.qty),
+      materialId:mat?mat.id:(esIngreso?'':null),
+      // En ingresos manda el nombre del material (como el remito de siempre);
+      // en pedidos y "a pedir" se respeta lo escrito, igual que al cargar de a uno.
+      matNombre:(esIngreso&&mat)?mat.name:f.nombre.trim(),
+      qty:parseFloat(f.qty)||0,
       unit:(f.unit||'').trim()||u.unit||'u',
       unitEsNueva:mat?u.nueva:false,
-      estado:'ingresado',
-      date:fecha,fecha:fecha,fechaIngreso:fecha,
-      proveedor:prov,remito:remito,observations:obs,
-      photos:idx===0?pu.map(function(x){return mkPhoto(x,'');}):[],
+      estado:estado,fecha:fecha,
+      proveedor:prov,observations:obs,
       updatedAt:nw(),
-    });
+    };
+    if(esIngreso){
+      reg.date=fecha;reg.fechaIngreso=fecha;reg.remito=remito;
+      // Las fotos del remito se guardan una sola vez, en el primer ingreso.
+      reg.photos=idx===0?pu.map(function(x){return mkPhoto(x,'');}):[];
+    } else {
+      reg.date=td();
+      if(estado==='pedido')reg.fechaPedido=fecha;
+    }
+    D.matIngresos.push(reg);
     creados++;
     if(mat)vinculados++;
   });
-  audit('matIngresos','create_multiple',creados+' ingresos'+(remito?' · remito '+remito:''));
+  var etq={ingresado:'ingreso(s) registrados',a_pedir:'material(es) cargados en A pedir',pedido:'pedido(s) cargados'}[estado];
+  audit('matIngresos','create_multiple',creados+' '+estado+(remito?' · remito '+remito:''));
   sv();
   try{document.getElementById('ingMultM').remove();}catch(_){}
   render();
-  toast(creados+' ingreso(s) registrados'+(vinculados<creados?' · '+(creados-vinculados)+' sin cómputo':'')+' ✓','var(--green)',5000);
+  toast(creados+' '+etq+(vinculados<creados?' · '+(creados-vinculados)+' sin cómputo':'')+' ✓','var(--green)',5000);
 }
 
 // Material detail with history
@@ -6856,12 +6979,16 @@ async function readFilesWithLimit(inputId){
 
 async function saveCmt(){
   const t=$('nc_t').value.trim();if(!t){toast('Comentario obligatorio','var(--red)');return;}
-  const photos=await readPhotos('nc_ph','comentarios');
-  // Read archivos
-  const archivos=await readFilesWithLimit('nc_af');
-  const _ncDate=$('nc_date')?.value||td();
-  D.comentarios.push({id:uid(),projectId:S.proj,text:t,tipo:$('nc_tipo').value||'general',rubro:$('nc_r').value,etapa:$('nc_e').value,tareaId:$('nc_al')?.value||'',photos:photos.map(u=>mkPhoto(u,'')),archivos,date:_ncDate,updatedAt:nw()});
-  audit('comentarios','create',t.slice(0,30));sv();closeM('newCmtM');render();toast('Comentario guardado');
+  if(saveCmt._enCurso)return; // evita el comentario duplicado por doble toque
+  saveCmt._enCurso=true;
+  try{
+    // Fotos y archivos en paralelo: antes se esperaba a uno para empezar el otro.
+    const _res=await Promise.all([readPhotos('nc_ph','comentarios'),readFilesWithLimit('nc_af')]);
+    const photos=_res[0],archivos=_res[1];
+    const _ncDate=$('nc_date')?.value||td();
+    D.comentarios.push({id:uid(),projectId:S.proj,text:t,tipo:$('nc_tipo').value||'general',rubro:$('nc_r').value,etapa:$('nc_e').value,tareaId:$('nc_al')?.value||'',photos:photos.map(u=>mkPhoto(u,'')),archivos,date:_ncDate,updatedAt:nw()});
+    audit('comentarios','create',t.slice(0,30));sv();closeM('newCmtM');render();toast('Comentario guardado');
+  }finally{saveCmt._enCurso=false;}
 }
 
 function addCmtMedia(cmId, type){
