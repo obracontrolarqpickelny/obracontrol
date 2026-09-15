@@ -428,6 +428,17 @@ const btnS=acc=>({background:`${acc}22`,border:`1px solid ${acc}44`,color:acc,bo
 
 /* ── Helpers días hábiles ── */
 const isWeekend=(d,sabado=false)=>{const n=d.getDay();return n===0||(n===6&&!sabado);};
+/* Días hábiles de a hasta b, con signo: positivo si b es posterior (demora),
+   negativo si es anterior (adelanto), 0 si caen el mismo día. */
+const difHabiles=(a,b,sabado=false)=>{
+  const x=new Date(a),y=new Date(b);x.setHours(0,0,0,0);y.setHours(0,0,0,0);
+  if(+x===+y)return 0;
+  const sg=y>x?1:-1,lo=sg>0?x:y,hi=sg>0?y:x;
+  let n=0;const r=new Date(lo);r.setDate(r.getDate()+1);
+  while(r<=hi){if(!isWeekend(r,sabado))n++;r.setDate(r.getDate()+1);}
+  return sg*n;
+};
+const esFechaOk=s=>!!s&&/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(String(s).trim())&&!isNaN(pF(String(s).trim()).getTime());
 /* Días laborables entre dos fechas, inclusive ambas. Sirve para pasar de
    "quiero que termine el 30/10" a una duración en días. */
 const contarHabiles=(desde,hasta,sabado=false)=>{
@@ -1077,7 +1088,10 @@ const toRaw=t=>({id:t.id,rubroId:t.rubroId,item:t.item,und:t.und,qty:t.qty,
   ...(t.dias!=null?{dias:t.dias}:{}),
   ...(t.durManual!=null&&t.durManual!==''?{durManual:t.durManual}:{}),
   ...(t.solapa?{solapa:true}:{}),
-  ...(t.fIniManual?{fIniManual:t.fIniManual}:{})});
+  ...(t.fIniManual?{fIniManual:t.fIniManual}:{}),
+  ...(t.realIni?{realIni:t.realIni}:{}),
+  ...(t.realFin?{realFin:t.realFin}:{}),
+  ...(t.baseIni?{baseIni:t.baseIni,baseFin:t.baseFin}:{})});
 
 /* ══════════ PICKER DE RENDIMIENTOS ══════════ */
 function RendPicker({taskName,onApply,onClose}){
@@ -1564,8 +1578,9 @@ function GanttView({tc,setTareas,cfg,rubros,conflictos,proyecto,prof,nota='',rec
   const [edit,setEdit]=useState(null);   // {id,x,y} — el resto se lee de tc en vivo
   const abrirEdit=(t,ev)=>{
     const px=ev?Math.min(ev.clientX,window.innerWidth-280):80;
-    const py=ev?Math.min(ev.clientY+12,window.innerHeight-320):80;
+    const py=ev?Math.min(ev.clientY+12,window.innerHeight-430):80;
     setEdit({id:t.id,x:Math.max(8,px),y:Math.max(8,py),ini:t.fIniManual||'',
+      rIni:t.realIni||'',rFin:t.realFin||'',
       dur:String(isGL(t)?(t.dias||t.dFin||1):(t.durEsManual?t.dFin:'')),
       fin:''});
   };
@@ -1584,6 +1599,67 @@ function GanttView({tc,setTareas,cfg,rubros,conflictos,proyecto,prof,nota='',rec
     _upd(id,t=>esGL?{...t,dias:v}:{...t,durManual:v});
   };
   const gClearDur=id=>_upd(id,t=>{const{durManual,...r}=t;return r;});
+
+  /* ── Gantt REAL en paralelo al previsto ──
+     Lo real vive en cada tarea (realIni / realFin) y no toca el plan. Para proyectar
+     cómo sigue la obra se recalcula el cronograma clavando el inicio real y la
+     duración real (o, si está en curso, lo previsto o lo que ya lleva, lo que sea
+     mayor): las sucesoras se corren solas. Lo "previsto" contra lo que se compara
+     es la línea base congelada si existe; si no, el plan tal como está hoy. */
+  const VISTA_LS='obragestion_gantt_vista';
+  const [vista,setVistaSt]=useState(()=>{try{return localStorage.getItem(VISTA_LS)||'previsto';}catch{return'previsto';}});
+  const setVista=v=>{setVistaSt(v);setEdit(null);try{localStorage.setItem(VISTA_LS,v);}catch{}};
+  const hoy=useMemo(()=>{const d=new Date();d.setHours(0,0,0,0);return d;},[]);
+  const tcReal=useMemo(()=>{
+    const sab=!!cfg.sabado;
+    const adaptadas=tc.map(t=>{
+      if(!esFechaOk(t.realIni))return t;
+      const ini=pF(t.realIni);
+      const fin=esFechaOk(t.realFin)?pF(t.realFin):null;
+      const dur=fin&&fin>=ini?contarHabiles(ini,fin,sab)
+        :Math.max(t.dFin,hoy>=ini?contarHabiles(ini,hoy,sab):1);
+      const r={...t,fIniManual:t.realIni};
+      if(isGL(t))r.dias=dur;else r.durManual=dur;
+      return r;
+    });
+    return calcFechas(adaptadas,cfg.fechaInicio,cfg.hsDia,sab).map((c,i)=>{
+      const t=tc[i];
+      const estado=esFechaOk(t.realFin)?'terminado':esFechaOk(t.realIni)?'en curso':'sin iniciar';
+      return{...c,estado};
+    });
+  },[tc,cfg.fechaInicio,cfg.hsDia,cfg.sabado,hoy]);
+  const realPorId=useMemo(()=>{const m={};tcReal.forEach(r=>{m[r.id]=r;});return m;},[tcReal]);
+  const prevIni=t=>esFechaOk(t.baseIni)?pF(t.baseIni):t.fIni;
+  const prevFin=t=>esFechaOk(t.baseFin)?pF(t.baseFin):t.fFin;
+  const hayBase=tc.some(t=>esFechaOk(t.baseIni));
+  const hayReal=tc.some(t=>esFechaOk(t.realIni));
+  const gSetReal=(id,campo,v)=>_upd(id,t=>{
+    const s=String(v||'').trim();
+    if(!s){const r={...t};delete r[campo];if(campo==='realIni')delete r.realFin;return r;}
+    return{...t,[campo]:s};
+  });
+  const fijarLineaBase=()=>{
+    if(hayBase&&!window.confirm('Ya hay una línea base congelada. ¿Reemplazarla por el plan de hoy? Los desvíos se van a medir contra el plan nuevo.'))return;
+    const porId={};tc.forEach(t=>{porId[t.id]=t;});
+    setTareas(p=>p.map(t=>{const c=porId[t.id];return c?{...t,baseIni:fF(c.fIni),baseFin:fF(c.fFin)}:t;}));
+  };
+  const quitarLineaBase=()=>{
+    if(!window.confirm('¿Quitar la línea base? Los desvíos se van a medir contra el plan tal como esté.'))return;
+    setTareas(p=>p.map(t=>{const{baseIni,baseFin,...r}=t;return r;}));
+  };
+  /* Desvíos de un ítem, en días hábiles (+ demora, − adelanto) */
+  const desvio=t=>{
+    const r=realPorId[t.id];if(!r)return null;
+    const sab=!!cfg.sabado;
+    const pI=prevIni(t),pFn=prevFin(t);
+    return{
+      estado:r.estado,
+      dIni:r.estado==='sin iniciar'?difHabiles(pI,r.fIni,sab):difHabiles(pI,pF(t.realIni),sab),
+      dFin:difHabiles(pFn,r.fFin,sab),
+      durPrev:contarHabiles(pI,pFn,sab),durReal:r.dFin,
+      atrasadoSinIniciar:r.estado==='sin iniciar'&&pI<hoy,
+    };
+  };
   const errIds=new Set(conflictos.filter(e=>e.taskId).map(e=>e.taskId));
   const [showMoney,setShowMoney]=useState(true);
   const fi=pF(cfg.fechaInicio);
@@ -1593,11 +1669,16 @@ function GanttView({tc,setTareas,cfg,rubros,conflictos,proyecto,prof,nota='',rec
   const allDays=useMemo(()=>{
     const days=[];
     const d=new Date(pF(cfg.fechaInicio));
-    const l=tc.reduce((mx,t)=>t.fFin&&t.fFin>mx?t.fFin:mx,pF(cfg.fechaInicio));
+    let l=tc.reduce((mx,t)=>t.fFin&&t.fFin>mx?t.fFin:mx,pF(cfg.fechaInicio));
+    // En real / comparar, las demoras pueden terminar después del plan: el eje tiene que llegar
+    if(vista!=='previsto'){
+      tcReal.forEach(t=>{if(t.fFin&&t.fFin>l)l=t.fFin;});
+      tc.forEach(t=>{if(esFechaOk(t.baseFin)&&pF(t.baseFin)>l)l=pF(t.baseFin);});
+    }
     const end=new Date(l);end.setDate(end.getDate()+1);
     while(d<=end){days.push(new Date(d));d.setDate(d.getDate()+1);}
     return days;
-  },[cfg.fechaInicio,tc]);
+  },[cfg.fechaInicio,tc,tcReal,vista]);
 
   const isSatHalf=d=>!!cfg.sabado&&d.getDay()===6;
   const isWk=d=>{const n=d.getDay();return n===0||(n===6&&!cfg.sabado);};
@@ -2035,10 +2116,61 @@ function GanttView({tc,setTareas,cfg,rubros,conflictos,proyecto,prof,nota='',rec
     </div>
   );
 
+  /* Columna de nombres: fija al desplazarse. En el celular se angosta para que
+     quede lugar para las barras. */
+  const LBL=(typeof window!=='undefined'&&window.innerWidth<600)?140:215;
+  const RCOL=vista==='comparar'?50:38;
+  const rayado=c=>`repeating-linear-gradient(135deg,${c} 0 4px,${c}55 4px 8px)`;
+  const hoyIdx=allDays.findIndex(d=>+d===+hoy);
+  const hoyPx=hoyIdx>=0?dayPx[hoyIdx]+dayW(allDays[hoyIdx])/2:null;
+  const fmtD=n=>n>0?`+${n}`:String(n);
+  const colDes=n=>n>0?C.red:n<0?C.green:C.t3;
+
+  const resumen=(()=>{
+    if(vista==='previsto'||!tc.length)return null;
+    const sab=!!cfg.sabado;
+    const ds=tc.map(t=>({t,d:desvio(t)})).filter(x=>x.d);
+    const term=ds.filter(x=>x.d.estado==='terminado');
+    const curso=ds.filter(x=>x.d.estado==='en curso');
+    const iniciados=[...term,...curso];
+    const demorados=iniciados.filter(x=>x.d.dFin>0).length;
+    const adelantados=iniciados.filter(x=>x.d.dFin<0).length;
+    const finPrev=tc.reduce((m,t)=>{const f=prevFin(t);return f>m?f:m;},new Date(0));
+    const finProy=tcReal.reduce((m,t)=>t.fFin>m?t.fFin:m,new Date(0));
+    const sp=term.reduce((s,x)=>s+x.d.durPrev,0),sr=term.reduce((s,x)=>s+x.d.durReal,0);
+    return{
+      total:tc.length,term:term.length,curso:curso.length,demorados,adelantados,
+      enFecha:iniciados.length-demorados-adelantados,
+      sinArrancar:ds.filter(x=>x.d.atrasadoSinIniciar).length,
+      deberian:tc.filter(t=>prevFin(t)<hoy).length,
+      finPrev,finProy,dObra:difHabiles(finPrev,finProy,sab),
+      rinde:sp?Math.round(sr/sp*100):null,
+      top:iniciados.filter(x=>x.d.dFin!==0).sort((a,b)=>Math.abs(b.d.dFin)-Math.abs(a.d.dFin)).slice(0,5),
+    };
+  })();
+  const Tile=({lbl,val,sub,col})=>(
+    <div style={{background:C.surface,border:`1px solid ${C.border}`,borderLeft:`3px solid ${col}`,borderRadius:"8px",padding:"7px 10px",minWidth:0}}>
+      <div style={{fontSize:"8.5px",fontWeight:800,color:C.t3,letterSpacing:".5px",textTransform:"uppercase"}}>{lbl}</div>
+      <div style={{fontSize:"17px",fontWeight:800,color:col,fontFamily:"monospace",lineHeight:1.25}}>{val}</div>
+      {sub&&<div style={{fontSize:"9.5px",color:C.t2,lineHeight:1.3}}>{sub}</div>}
+    </div>
+  );
+
   return(
-    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:"10px",overflowX:"auto"}}>
-      <div style={{padding:"6px 12px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:"8px",background:C.surface}}>
-        <span style={{fontSize:"10px",color:C.t3,flex:1}}>Cronograma — vista semanal · días hábiles destacados</span>
+    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:"10px",overflow:"hidden"}}>
+      <div style={{padding:"6px 12px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:"8px",background:C.surface,flexWrap:"wrap"}}>
+        <div style={{display:"flex",border:`1px solid ${C.border}`,borderRadius:"7px",overflow:"hidden",flexShrink:0}}>
+          {[['previsto','📐 Previsto'],['real','🏗 Real'],['comparar','⚖ Comparar']].map(([k,l])=>(
+            <button key={k} onClick={()=>setVista(k)}
+              style={{border:"none",padding:"6px 10px",fontSize:"11px",fontWeight:700,cursor:"pointer",
+                background:vista===k?C.accent:C.card,color:vista===k?"#fff":C.t2}}>{l}</button>
+          ))}
+        </div>
+        <span style={{fontSize:"10px",color:C.t3,flex:1,minWidth:"120px"}}>
+          {vista==='previsto'?'Cronograma — vista semanal · días hábiles destacados'
+            :vista==='real'?'Lo que pasa en obra · rayado = proyección'
+            :'Arriba lo previsto, abajo lo real · rayado = proyección'}
+        </span>
         <Btn onClick={()=>setShowMoney(v=>!v)} accent={showMoney?C.violet:C.t3} sm>
           {showMoney?'💰 Ocultar montos':'📊 Solo barras'}
         </Btn>
@@ -2047,16 +2179,65 @@ function GanttView({tc,setTareas,cfg,rubros,conflictos,proyecto,prof,nota='',rec
         <Btn onClick={()=>exportGanttPDF(true)} accent={C.violet} sm
           title="Rubro e ítem en cada fila">📋 PDF detallado</Btn>
       </div>
+      {resumen&&(
+        <div style={{padding:"10px 12px",borderBottom:`1px solid ${C.border}`}}>
+          {!hayReal&&(
+            <div style={{fontSize:"11px",color:C.t1,marginBottom:"8px",background:"var(--edit-bg)",border:"1px solid var(--edit-border)",borderRadius:"6px",padding:"6px 9px",lineHeight:1.45}}>
+              Tocá una barra para marcar lo real. Con un toque: <b>▶ Arrancó hoy</b>, <b>■ Terminó hoy</b> o <b>✓ Como estaba previsto</b>.
+              Lo que venga después se corre solo.
+            </div>
+          )}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(135px,1fr))",gap:"7px"}}>
+            <Tile lbl="Fin de obra" col={colDes(resumen.dObra)}
+              val={resumen.dObra===0?'En fecha':`${fmtD(resumen.dObra)} d`}
+              sub={`Previsto ${fF(resumen.finPrev)} · proyectado ${fF(resumen.finProy)}`}/>
+            <Tile lbl="Avance" col={C.blue} val={`${resumen.term}/${resumen.total}`}
+              sub={`${resumen.curso} en curso · a hoy deberían ir ${resumen.deberian} terminados`}/>
+            <Tile lbl="Desvíos" col={resumen.demorados?C.red:C.green}
+              val={`${resumen.demorados} ▲ ${resumen.adelantados} ▼`}
+              sub={`con demora / adelantados · ${resumen.enFecha} en fecha`}/>
+            <Tile lbl="Sin arrancar" col={resumen.sinArrancar?C.orange:C.t3} val={resumen.sinArrancar}
+              sub="ya tendrían que haber empezado"/>
+            {resumen.rinde!=null&&(
+              <Tile lbl="Duración real" col={resumen.rinde>100?C.red:C.green} val={`${resumen.rinde}%`}
+                sub="de lo previsto, en lo terminado"/>
+            )}
+          </div>
+          {resumen.top.length>0&&(
+            <div style={{display:"flex",flexWrap:"wrap",gap:"5px",marginTop:"8px",alignItems:"center"}}>
+              <span style={{fontSize:"9px",fontWeight:800,color:C.t3,letterSpacing:".5px"}}>MAYORES DESVÍOS</span>
+              {resumen.top.map(({t,d})=>(
+                <span key={t.id} onClick={e=>abrirEdit(t,e)}
+                  style={{cursor:"pointer",fontSize:"10px",padding:"2px 7px",borderRadius:"10px",
+                    background:`${colDes(d.dFin)}14`,border:`1px solid ${colDes(d.dFin)}44`,color:colDes(d.dFin),fontWeight:700}}>
+                  #{t.id} {t.item.length>22?t.item.slice(0,22)+'…':t.item} {fmtD(d.dFin)} d
+                </span>
+              ))}
+            </div>
+          )}
+          <div style={{display:"flex",flexWrap:"wrap",gap:"6px",marginTop:"8px",alignItems:"center",fontSize:"10px",color:C.t3}}>
+            <span style={{flex:1,minWidth:"160px"}}>
+              {hayBase?'📌 Se compara contra la línea base congelada.':'Se compara contra el plan actual. Si vas a reprogramar, congelalo antes para no perder la referencia.'}
+            </span>
+            <Btn onClick={fijarLineaBase} accent={C.blue} sm>{hayBase?'📌 Actualizar línea base':'📌 Congelar previsto'}</Btn>
+            {hayBase&&<Btn onClick={quitarLineaBase} accent={C.t3} sm>Quitar</Btn>}
+          </div>
+        </div>
+      )}
       {conflictos.length>0&&(
         <div style={{padding:"8px 14px",background:`${C.red}0d`,borderBottom:`1px solid ${C.red}33`}}>
           <span style={{fontWeight:700,color:C.red,fontSize:"11px"}}>⚠ Gantt con errores — </span>
           <span style={{color:C.t3,fontSize:"10px"}}>Los ítems con conflicto se muestran en rojo y pueden tener fechas incorrectas</span>
         </div>
       )}
-      <div style={{padding:"12px",minWidth:"600px"}}>
+      <div style={{overflowX:"auto"}}>
+      {/* width:max-content: cada fila mide lo que el cronograma entero, así el
+          sticky de la columna de nombres no se suelta al ir a semanas lejanas. */}
+      <div style={{padding:"12px",width:"max-content",minWidth:"100%",boxSizing:"border-box"}}>
         {/* Encabezado: semanas con costos */}
         <div style={{display:"flex",alignItems:"flex-start",marginBottom:"4px",gap:"8px"}}>
-          <div style={{width:"215px",minWidth:"215px",flexShrink:0}}/>
+          <div style={{width:LBL+"px",minWidth:LBL+"px",flexShrink:0,alignSelf:"stretch",
+            position:"sticky",left:0,zIndex:3,background:C.card}}/>
           <div style={{position:"relative",width:totalW+"px",height:"58px",flexShrink:0}}>
             {weeks.map((wk,wi)=>{
               const lastI=wk.days[wk.days.length-1];
@@ -2089,7 +2270,7 @@ function GanttView({tc,setTareas,cfg,rubros,conflictos,proyecto,prof,nota='',rec
               );
             })}
           </div>
-          <div style={{width:"38px",flexShrink:0}}/>
+          <div style={{width:RCOL+"px",flexShrink:0}}/>
         </div>
 
         {/* Filas de tareas */}
@@ -2106,12 +2287,34 @@ function GanttView({tc,setTareas,cfg,rubros,conflictos,proyecto,prof,nota='',rec
              divisoria tenue. Con la franja sola, al cruzar un cronograma ancho se
              perdía igual el renglón. */
           const zebra=fila%2===1;
+          const r=realPorId[t.id];
+          const d=vista!=='previsto'?desvio(t):null;
+          /* Tramos de la barra real: lleno = ya pasó, rayado = proyección */
+          const tramosReal=()=>{
+            if(!r)return[];
+            const out=[];
+            getSegs(r.fIni,r.fFin).forEach(seg=>{
+              const l=gLeft(seg.s),rt=gRight(seg.e);
+              const lleno=r.estado==='terminado'||(r.estado==='en curso'&&seg.e<=hoy);
+              const proy=r.estado==='sin iniciar'||(r.estado==='en curso'&&seg.s>hoy);
+              if(lleno)out.push({l,w:rt-l,bg:col,op:.9});
+              else if(proy)out.push({l,w:rt-l,bg:rayado(col),op:r.estado==='sin iniciar'?.6:.9});
+              else{const m=gRight(hoy);out.push({l,w:m-l,bg:col,op:.9});out.push({l:m,w:rt-m,bg:rayado(col),op:.9});}
+            });
+            return out;
+          };
+          const badge=d&&(d.estado==='sin iniciar'
+            ?(d.dFin!==0?{txt:`~${fmtD(d.dFin)}`,col:colDes(d.dFin),tip:'Todavía no arrancó; así se corre por lo que pasó antes'}:null)
+            :{txt:d.dFin===0?'✓':fmtD(d.dFin),col:colDes(d.dFin),
+              tip:`${d.estado==='terminado'?'Terminó':'Proyecta terminar'} ${d.dFin===0?'en fecha':Math.abs(d.dFin)+' d hábiles '+(d.dFin>0?'tarde':'antes')} · arrancó ${d.dIni===0?'en fecha':(d.dIni>0?'+':'')+d.dIni+' d'}`});
           return(
             <div key={t.id} title={detalle}
               style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"2px",
                 background:zebra?`${C.t3}26`:"transparent",borderRadius:"4px",
                 borderBottom:`1px solid ${C.t3}1f`}}>
-              <div style={{width:"215px",minWidth:"215px",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",gap:"4px"}}>
+              <div style={{width:LBL+"px",minWidth:LBL+"px",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",gap:"4px",
+                position:"sticky",left:0,zIndex:2,alignSelf:"stretch",background:zebra?"#eceff3":C.card,
+                boxShadow:"5px 0 6px -5px rgba(15,23,42,.25)",paddingRight:"4px",boxSizing:"border-box"}}>
                 <span style={{fontFamily:"monospace",fontSize:"9px",color:C.t3,minWidth:"16px",textAlign:"center"}}>{t.id}</span>
                 {/* Rubro arriba y el ítem debajo: en pantalla siempre se ve el detalle.
                     El resumen por rubro solo queda para el PDF del cliente. */}
@@ -2127,11 +2330,11 @@ function GanttView({tc,setTareas,cfg,rubros,conflictos,proyecto,prof,nota='',rec
                   </span>
                 </span>
               </div>
-              <div style={{width:totalW+"px",flexShrink:0,height:"14px",
+              <div style={{width:totalW+"px",flexShrink:0,height:vista==='comparar'?"22px":"14px",
                 backgroundColor:`${C.border}33`,backgroundImage:wkBg,
                 borderRadius:"3px",position:"relative",cursor:"pointer"}}
                 onClick={e=>abrirEdit(t,e)}>
-                {getSegs(t.fIni,t.fFin).map((seg,si)=>{
+                {vista==='previsto'&&getSegs(t.fIni,t.fFin).map((seg,si)=>{
                   const sl=gLeft(seg.s);
                   const sw=Math.max(2,gRight(seg.e)-sl);
                   return(
@@ -2140,11 +2343,33 @@ function GanttView({tc,setTareas,cfg,rubros,conflictos,proyecto,prof,nota='',rec
                       title={detalle+"\n(clic para editar)"}/>
                   );
                 })}
+                {vista==='comparar'&&getSegs(prevIni(t),prevFin(t)).map((seg,si)=>{
+                  const sl=gLeft(seg.s);
+                  return(
+                    <div key={'p'+si} style={{position:"absolute",left:sl+"px",width:Math.max(2,gRight(seg.e)-sl)+"px",
+                      top:"2px",height:"6px",background:col,opacity:.35,borderRadius:"2px"}}
+                      title={`Previsto: ${fF(prevIni(t))} → ${fF(prevFin(t))}`}/>
+                  );
+                })}
+                {vista!=='previsto'&&tramosReal().map((s,si)=>(
+                  <div key={'r'+si} style={{position:"absolute",left:s.l+"px",width:Math.max(2,s.w)+"px",
+                    top:vista==='comparar'?"10px":0,height:vista==='comparar'?"10px":"100%",
+                    background:s.bg,opacity:s.op,borderRadius:"3px"}}
+                    title={`${r.estado==='sin iniciar'?'Proyectado':'Real'}: ${fF(r.fIni)} → ${fF(r.fFin)}${r.estado==='en curso'?' (en curso)':''}\n(tocá para marcar lo real)`}/>
+                ))}
+                {vista!=='previsto'&&hoyPx!=null&&(
+                  <div style={{position:"absolute",left:hoyPx+"px",top:0,bottom:0,width:"2px",background:C.red,opacity:.55,pointerEvents:"none"}}/>
+                )}
               </div>
-              <div style={{width:"38px",flexShrink:0,fontSize:"9px",color:C.t3,textAlign:"right",fontFamily:"monospace"}}>{t.dFin}d</div>
+              <div style={{width:RCOL+"px",flexShrink:0,fontSize:"9px",color:C.t3,textAlign:"right",fontFamily:"monospace"}}>
+                {vista==='comparar'
+                  ?(badge&&<span title={badge.tip} style={{color:badge.col,fontWeight:800,fontSize:"10px"}}>{badge.txt}</span>)
+                  :`${(vista==='real'&&r?r:t).dFin}d`}
+              </div>
             </div>
           );
         })}
+      </div>
       </div>
 
       {/* Panelito de edición rápida al tocar una barra — compacto, sin fondo negro.
@@ -2159,6 +2384,79 @@ function GanttView({tc,setTareas,cfg,rubros,conflictos,proyecto,prof,nota='',rec
         const setDur=v=>{setEdit(e=>({...e,dur:v}));const n=Math.round(+v);if(String(v).trim()!==''&&n>=1)gSetDur(t.id,n,esGL);};
         const setFin=v=>{setEdit(e=>({...e,fin:v}));if(okFecha(v)){const d=contarHabiles(t.fIni,pF(v),!!cfg.sabado);gSetDur(t.id,d,esGL);setEdit(e=>({...e,fin:v,dur:String(d)}));}};
         const lbl={fontSize:'8px',fontWeight:800,letterSpacing:'.5px',color:C.t3,display:'block',marginBottom:'2px'};
+        const caja=hijos=>(
+          <>
+            <div onClick={()=>setEdit(null)}
+              style={{position:'fixed',inset:0,zIndex:998,background:'transparent'}}/>
+            <div onKeyDown={ev=>{if(ev.key==='Enter'&&ev.target.tagName!=='TEXTAREA')setEdit(null);}}
+              style={{position:'fixed',left:edit.x+'px',top:edit.y+'px',width:'268px',zIndex:999,
+                background:C.card,border:`1px solid ${C.border}`,borderRadius:'8px',
+                boxShadow:'0 8px 28px rgba(15,23,42,.22)',padding:'10px 11px',fontSize:'11px'}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:'6px',gap:'6px'}}>
+                <b style={{color:rub?.color||C.t1,fontSize:'11px'}}>#{t.id} · {t.item}</b>
+                <span onClick={()=>setEdit(null)} style={{cursor:'pointer',color:C.t3,fontSize:'13px',lineHeight:1}}>✕</span>
+              </div>
+              {hijos}
+            </div>
+          </>
+        );
+        if(vista!=='previsto'){
+          /* Marcar lo real: lo más común va en un toque; las fechas a mano se aplican al tipear */
+          const r=realPorId[t.id],d=desvio(t);
+          const hoyS=fF(hoy);
+          const pI=prevIni(t),pFn=prevFin(t);
+          const iniVigente=esFechaOk(edit.rIni)?edit.rIni:(t.realIni||'');
+          const finInvalida=esFechaOk(edit.rFin)&&esFechaOk(iniVigente)&&pF(edit.rFin)<pF(iniVigente);
+          const setRI=v=>{setEdit(e=>({...e,rIni:v}));
+            if(!String(v).trim()){gSetReal(t.id,'realIni','');setEdit(e=>({...e,rIni:'',rFin:''}));}
+            else if(esFechaOk(v))gSetReal(t.id,'realIni',v);};
+          const setRF=v=>{setEdit(e=>({...e,rFin:v}));
+            if(!String(v).trim())gSetReal(t.id,'realFin','');
+            else if(esFechaOk(v)&&esFechaOk(iniVigente)&&pF(v)>=pF(iniVigente))gSetReal(t.id,'realFin',v);};
+          const marcar=(ini,fin)=>{
+            _upd(t.id,x=>{const n={...x,realIni:ini};if(fin)n.realFin=fin;else delete n.realFin;return n;});
+            setEdit(e=>({...e,rIni:ini,rFin:fin||''}));
+          };
+          const qb=(txt,fn,c,tip)=>(
+            <button onClick={fn} title={tip}
+              style={{flex:1,border:`1px solid ${c}55`,background:`${c}14`,color:c,borderRadius:'6px',
+                padding:'6px 4px',fontSize:'10.5px',fontWeight:800,cursor:'pointer',whiteSpace:'nowrap'}}>{txt}</button>
+          );
+          return caja(<>
+            <div style={{fontSize:'9.5px',color:C.t2,lineHeight:1.5,marginBottom:'8px'}}>
+              <div><span style={{color:C.t3}}>Previsto:</span> {fF(pI)} → {fF(pFn)} · {contarHabiles(pI,pFn,!!cfg.sabado)} d{hayBase?' (línea base)':''}</div>
+              {r&&<div><span style={{color:C.t3}}>{r.estado==='sin iniciar'?'Proyectado:':'Real:'}</span> {fF(r.fIni)} → {r.estado==='en curso'?`en curso (proy. ${fF(r.fFin)})`:fF(r.fFin)} · {r.dFin} d</div>}
+              {d&&(d.estado!=='sin iniciar'||d.dFin!==0)&&(
+                <div style={{fontWeight:700}}>
+                  {d.estado!=='sin iniciar'&&<span style={{color:colDes(d.dIni)}}>Inicio {d.dIni===0?'en fecha':fmtD(d.dIni)+' d'}</span>}
+                  {d.estado!=='sin iniciar'&&' · '}
+                  <span style={{color:colDes(d.dFin)}}>Fin {d.dFin===0?'en fecha':fmtD(d.dFin)+' d'}</span>
+                </div>
+              )}
+            </div>
+            <div style={{display:'flex',gap:'5px',marginBottom:'5px'}}>
+              {qb('▶ Arrancó hoy',()=>marcar(hoyS,''),C.blue,'Inicio real = hoy, queda en curso')}
+              {qb('■ Terminó hoy',()=>marcar(t.realIni||(pI<=hoy?fF(pI):hoyS),hoyS),C.green,'Fin real = hoy. Si no tenía inicio, toma el previsto')}
+            </div>
+            <div style={{display:'flex',gap:'5px',marginBottom:'9px'}}>
+              {qb('✓ Como estaba previsto',()=>marcar(fF(pI),fF(pFn)),C.violet,'Inicio y fin reales iguales a lo previsto')}
+            </div>
+            <label style={lbl}>INICIO REAL (DD/MM/AAAA)</label>
+            <div style={{display:'flex',gap:'5px',alignItems:'center',marginBottom:'7px'}}>
+              <FInp value={edit.rIni} onChange={setRI} ph={fF(pI)}/>
+              {t.realIni&&<button onClick={()=>setRI('')} style={{...btnS(C.t3),whiteSpace:'nowrap'}} title="Borrar lo real de este ítem">↺</button>}
+            </div>
+            <label style={lbl}>FIN REAL (vacío = en curso)</label>
+            <div style={{display:'flex',gap:'5px',alignItems:'center'}}>
+              <FInp value={edit.rFin} onChange={setRF} ph={esFechaOk(iniVigente)?'en curso':'primero el inicio'}/>
+              {t.realFin&&<button onClick={()=>setRF('')} style={{...btnS(C.t3),whiteSpace:'nowrap'}} title="Volver a en curso">↺</button>}
+            </div>
+            {finInvalida&&<div style={{fontSize:'9px',color:C.red,marginTop:'4px'}}>El fin no puede ser antes del inicio.</div>}
+            <div style={{fontSize:'8px',color:C.t3,marginTop:'6px'}}>
+              No cambia lo previsto. Lo que sigue se corre solo. ESC o ENTER cierran.
+            </div>
+          </>);
+        }
         return(
           <>
             <div onClick={()=>setEdit(null)}
@@ -3593,6 +3891,7 @@ Van dentro de "tarea" o de los "campos" de "editar_tarea":
 - "durManual": fija la duración a mano en un ítem NO-GL, pisando el cálculo de horas ÷ cuadrilla. "" vuelve al automático. Usalo cuando el usuario diga "esa tarea son 5 días" y no quiera que se recalcule.
 - "solapa": true = arranca junto con su predecesora en vez de esperar a que termine.
 - "fIniManual": "DD/MM/AAAA" para clavar la fecha de inicio de ese ítem. "" la libera.
+- "realIni" / "realFin": "DD/MM/AAAA" con lo que PASÓ en obra (Gantt real). No tocan lo previsto. Usalos cuando diga "la excavación arrancó el 16" o "terminamos las bases ayer". "" los borra. Sin realFin el ítem queda en curso.
 Ejemplo: {"tipo":"tarea","rubro":"Instalaciones","item":"Tramitación de medidor","und":"gl","qty":1,"dias":15}
 
 ── NOMBRE DE OBRA Y DATOS DE LOS PDF ──
@@ -3913,7 +4212,7 @@ function AsistenteChat({tareas,setTareas,rubros,setRubros,grupos,setGrupos,cfg,s
       const r=rubros.find(x=>x.id===t.rubroId);
       const pn=String(t.pred||'').split(',').filter(Boolean)
         .map(n=>{const p=tareas.find(x=>String(x.id)===n.trim());return p?p.item:n.trim();}).join(', ');
-      return `#${t.id} [${r?r.nombre:'?'}] ${t.item} — ${t.qty} ${t.und} | hsOf ${t.hsOf} hsAy ${t.hsAy} | ${t.nOf} of + ${t.nAy} ay${t.dias!=null?` | dias ${t.dias}`:''}${t.solapa?' | SOLAPA':''}${t.fIniManual?` | inicio fijado ${t.fIniManual}`:''}${pn?` | tras: ${pn}`:''}${t.obs?` | obs: ${t.obs}`:''}`;
+      return `#${t.id} [${r?r.nombre:'?'}] ${t.item} — ${t.qty} ${t.und} | hsOf ${t.hsOf} hsAy ${t.hsAy} | ${t.nOf} of + ${t.nAy} ay${t.dias!=null?` | dias ${t.dias}`:''}${t.solapa?' | SOLAPA':''}${t.fIniManual?` | inicio fijado ${t.fIniManual}`:''}${t.realIni?` | REAL ${t.realIni}→${t.realFin||'en curso'}`:''}${pn?` | tras: ${pn}`:''}${t.obs?` | obs: ${t.obs}`:''}`;
     }).join('\n'):'(el plan está vacío)';
     const tieneIncr=r=>r.incr!==undefined&&r.incr!==null&&r.incr!=='';
     const recTxt=rec.length?rec.map(r=>`- [${r.item}] ${r.rec}: ${r.qty} ${r.und} x $${r.pu} = $${(+r.qty||0)*(+r.pu||0)}${tieneIncr(r)?` | incr propio ${+r.incr||0}%`:''}`).join('\n'):'(sin materiales cargados)';
@@ -4058,7 +4357,7 @@ ${cuadTxt}`;
            pasara. Si el modelo mandaba un campo mal escrito, no cambiaba nada y el
            log igual decía que sí. Ahora se anota qué cambió de verdad y se avisa de
            los campos que no existen. */
-        const CAMPOS_OK=['item','qty','und','obs','hsOf','hsAy','nOf','nAy','pred','rubro','dias','durManual','solapa','fIniManual'];
+        const CAMPOS_OK=['item','qty','und','obs','hsOf','hsAy','nOf','nAy','pred','rubro','dias','durManual','solapa','fIniManual','realIni','realFin'];
         const desconocidos=Object.keys(c).filter(k=>!CAMPOS_OK.includes(k));
         const cambios=[];
         const setNum=(k,et)=>{if(c[k]==null)return;const v=+c[k];if(v!==+t[k]){cambios.push(`${et} ${t[k]}→${v}`);t[k]=v;}};
@@ -4091,6 +4390,12 @@ ${cuadTxt}`;
           const v=String(c.fIniManual).trim();
           if(v!==(t.fIniManual||'')){cambios.push(`inicio fijado → ${v||'(libre)'}`);if(v)t.fIniManual=v;else delete t.fIniManual;}
         }
+        [['realIni','inicio real'],['realFin','fin real']].forEach(([k,nom])=>{
+          if(c[k]==null)return;
+          const v=String(c[k]).trim();
+          if(v&&!esFechaOk(v)){fallos.push(`Editar «${nombreOriginal}»: ${nom} "${v}" no es una fecha DD/MM/AAAA.`);return;}
+          if(v!==(t[k]||'')){cambios.push(`${nom} → ${v||'(borrado)'}`);if(v)t[k]=v;else delete t[k];}
+        });
         if(desconocidos.length)
           fallos.push(`Editar «${nombreOriginal}»: no existen los campos ${desconocidos.map(k=>`"${k}"`).join(', ')}. Se ignoraron. Los válidos son: ${CAMPOS_OK.join(', ')}.`);
         if(cambios.length)log.push(`${nombreOriginal}: ${cambios.join(' · ')}`);
