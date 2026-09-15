@@ -62,6 +62,14 @@ a{color:var(--blue);text-decoration:none}
 .stico{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .stval{font-size:22px;font-weight:800;line-height:1}
 .stlbl{font-size:11px;color:var(--text3);font-weight:500;margin-top:2px}
+/* Tarjetas del panel más bajas: con los zócalos de alertas y novedades arriba,
+   los accesos a + Visita / + Tarea tienen que seguir entrando sin scrollear. */
+.dash-stats{gap:7px}
+.dash-stats .stat{padding:8px 11px;gap:10px}
+.dash-stats .stico{width:32px;height:32px;border-radius:9px}
+.dash-stats .stico svg{width:17px;height:17px}
+.dash-stats .stval{font-size:18px}
+.dash-stats .stlbl{font-size:10.5px;margin-top:1px}
 .bg{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap;line-height:1.3}
 .bg-s{padding:2px 8px;font-size:10px}
 .bg-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
@@ -3129,9 +3137,7 @@ function _zocaloAlertas(){
 // Son las mismas tres fuentes que cuenta la pestaña Pendientes, para que el
 // número del zócalo y el de la bandeja nunca digan cosas distintas.
 function _bandejaNovedades(){
-  var informes=(D.formulariosPendientes||[]).filter(function(x){
-    return x.estado==='pendiente'&&(x.projectId||x.obraId)===S.proj;
-  }).length;
+  var informes=_formsDeObra().filter(function(x){return x.estado==='pendiente';}).length;
   var archivos=(D.carpetas||[]).filter(function(cp){return cp.projectId===S.proj;})
     .reduce(function(s,cp){
       return s+(cp.archivos||[]).filter(function(f){return f.subidoPor==='col'&&f.visto===false;}).length;
@@ -3336,7 +3342,7 @@ function createProj(){const n=$('pN').value.trim();if(!n){toast('Nombre obligato
 // ═══════ SHELL ═══════
 function renderShell(){
   const p=D.projects.find(x=>x.id===S.proj);if(!p){S.proj=null;render();return;}
-  const pT=pf('tareas');const pA=pf('alertas');const pendT=pT.filter(t=>t.status==='pendiente'||t.status==='en curso').length;const actAl=pA.filter(a=>!a.resolved).length;const pendForms=(D.formulariosPendientes||[]).filter(x=>(x.projectId||x.obraId)===S.proj&&x.estado==='pendiente').length;const pendCarpeta=(D.carpetas||[]).filter(function(cp){return cp.projectId===S.proj;}).reduce(function(sum,cp){return sum+(cp.archivos||[]).filter(function(f){return f.subidoPor==='col'&&f.visto===false;}).length;},0);const pendMsgsColab=(D.mensajesColab||[]).filter(function(m){return m.proyectoId===S.proj&&m.estadoColab==='completado';}).length;const _nAlert=_alertaCount();
+  const pT=pf('tareas');const pA=pf('alertas');const pendT=pT.filter(t=>t.status==='pendiente'||t.status==='en curso').length;const actAl=pA.filter(a=>!a.resolved).length;const pendForms=_formsDeObra().filter(x=>x.estado==='pendiente').length;const pendCarpeta=(D.carpetas||[]).filter(function(cp){return cp.projectId===S.proj;}).reduce(function(sum,cp){return sum+(cp.archivos||[]).filter(function(f){return f.subidoPor==='col'&&f.visto===false;}).length;},0);const pendMsgsColab=(D.mensajesColab||[]).filter(function(m){return m.proyectoId===S.proj&&m.estadoColab==='completado';}).length;const _nAlert=_alertaCount();
   const drv=D.driveConfig?.[S.proj];const cloudCol=drv?'var(--green)':'var(--pri)';
   const _pendAlerts=pA.filter(a=>!a.resolved).length; // mantener badge en tareas si hay alertas legacy
   const mods=[{id:'dashboard',label:'Panel',ic:'dash'},{id:'visitas',label:'Visitas',ic:'clip'},{id:'tareas',label:'Tareas',ic:'list',badge:pendT+_pendAlerts},{id:'materiales',label:'Materiales',ic:'pkg'},{id:'checklist',label:'Checklist',ic:'chklist'},{id:'documentos',label:'Documentos',ic:'file'},{id:'comentarios',label:'Comentarios',ic:'msg'},{id:'colaboradores',label:'Colaboradores',ic:'share'},{id:'bandeja',label:'Bandeja',ic:'inbox',badge:pendForms+pendCarpeta+pendMsgsColab+_nAlert},{id:'economia',label:'Economía',ic:'eco'},{id:'informes',label:'Informes',ic:'dl'},{id:'config',label:'Config',ic:'gear'}];
@@ -3770,7 +3776,7 @@ function rDash(mc,p){
   mc.innerHTML=`
   ${_zocaloAlertas()}${_zocaloBandeja()}
   <div class="card hero mb-12"><div class="flex justify-between items-start"><div><div class="hero-sm">Obra activa</div><div class="hero-lg">${p.name}</div></div>${colBadge(p.status,SC[p.status]||'#94a3b8')}</div><div class="flex gap-10 mt-8 ts tc3 wrap">${p.client?`<span>${I.user} ${p.client}</span>`:''}${p.location?`<span>${I.pin} ${p.location}</span>`:''}${p.startDate?`<span>${I.cal} ${fmts(p.startDate)}</span>`:''}</div></div>
-  <div class="g2 mb-12">
+  <div class="g2 dash-stats mb-10">
     <div class="card stat card-click" onclick="S.mod='visitas';render()"><div class="stico" style="background:var(--blue-bg);color:var(--blue)">${I.clip}</div><div><div class="stval" style="color:var(--blue)">${pV.length}</div><div class="stlbl">Visitas</div></div></div>
     <div class="card stat card-click" onclick="S.mod='tareas';render()"><div class="stico" style="background:var(--cyan-bg);color:var(--cyan)">${I.list}</div><div><div class="stval" style="color:var(--cyan)">${pend}</div><div class="stlbl">Tareas pend.</div></div></div>
     <div class="card stat card-click" onclick="S.mod='materiales';render()"><div class="stico" style="background:var(--purple-bg);color:var(--purple)">${I.pkg}</div><div><div class="stval" style="color:var(--purple)">${pM.length}</div><div class="stlbl">Materiales</div></div></div>
@@ -3781,9 +3787,9 @@ function rDash(mc,p){
     <div class="card stat card-click" onclick="S.mod='informes';render()"><div class="stico" style="background:var(--pri-bg);color:var(--pri)">${I.dl}</div><div><div class="stval" style="color:var(--pri)">${pf('auditLog').length}</div><div class="stlbl">Acciones</div></div></div>
     <div class="card stat card-click" onclick="S.mod='colaboradores';render()"><div class="stico" style="background:#f0fdf4;color:var(--green)">${I.share}</div><div><div class="stval" style="color:var(--green)">${pf('colaboradores').length}</div><div class="stlbl">Colaboradores</div></div></div>
   </div>
+  <div class="g2 mb-12" style="gap:8px"><button class="btn btn-p btn-s btn-w" onclick="openM('newVisitaM')">${I.clip} + Visita</button><button class="btn btn-sec btn-s btn-w" onclick="S.mod='tareas';render();setTimeout(()=>openM('newTareaM'),100)">${I.list} + Tarea</button></div>
   ${over>0?`<div class="alrt alrt-r mb-12 pointer" onclick="S.mod='tareas';render();">${I.warn}<div class="flex-1"><div class="fw7 ts">${over} tarea${over>1?'s':''} vencida${over>1?'s':''}</div></div>${I.chev}</div>`:''}
   ${lastV?`<div class="card mb-12 card-click" onclick="S.visitaDetail='${lastV.id}';S.mod='visitas';render();" style="border-left:3px solid var(--blue)"><div class="txxs tc3 mb-4">Ultima visita</div><div class="ts fw7">${lastV.title||'Sin titulo'}</div><div class="txxs tc3">${fmts(lastV.date)}</div></div>`:''}
-  <div class="g2 mt-12" style="gap:8px"><button class="btn btn-p btn-s btn-w" onclick="openM('newVisitaM')">${I.clip} + Visita</button><button class="btn btn-sec btn-s btn-w" onclick="S.mod='tareas';render();setTimeout(()=>openM('newTareaM'),100)">${I.list} + Tarea</button></div>
   ${renderNewVisitaModal()}
   <!-- Drive Setup Modal -->
   <div class="mo" id="driveSetupM"><div class="mo-c">
@@ -6520,7 +6526,7 @@ function rComentarios(mc){
     ${S.cmtSearch?`<button class="btn btn-sec btn-s" onclick="S.cmtSearch='';if($('cmt_search'))$('cmt_search').value='';renderCmtItems()">✕</button>`:''}
   </div>
   <!-- FILTRO RUBRO -->
-  <div class="filters mb-6"><button class="btn btn-s ${!S.cmtFilter?'btn-p':'btn-sec'}" onclick="S.cmtFilter='';renderCmtItems()">Todos</button>${RUB.slice(0,6).map(r=>`<button class="btn btn-s ${S.cmtFilter===r?'btn-p':'btn-sec'}" onclick="S.cmtFilter='${r}';renderCmtItems()">${r}</button>`).join('')}</div>
+  <div class="filters mb-6"><button class="btn btn-s ${!S.cmtFilter?'btn-p':'btn-sec'}" data-cmtrub="" onclick="S.cmtFilter='';renderCmtItems()">Todos</button>${RUB.slice(0,6).map(r=>`<button class="btn btn-s ${S.cmtFilter===r?'btn-p':'btn-sec'}" data-cmtrub="${esc(r)}" onclick="S.cmtFilter='${r}';renderCmtItems()">${r}</button>`).join('')}</div>
   <!-- ORDEN + ESTADO -->
   <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">
     <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
@@ -6565,6 +6571,11 @@ function renderCmtItems(){saveUIState();
   _sb('cmt_tp_all',!S.cmtTipoFilter);
   _sb('cmt_tp_pro',S.cmtTipoFilter==='propietario');
   _sb('cmt_tp_gen',S.cmtTipoFilter==='general');
+  // Chips de rubro: los dibuja rComentarios, pero el clic sólo redibuja la
+  // lista. Sin esto el filtro se aplicaba y el naranja quedaba en el anterior.
+  document.querySelectorAll('[data-cmtrub]').forEach(function(b){
+    b.className='btn btn-s '+(((b.getAttribute('data-cmtrub')||'')===(S.cmtFilter||''))?'btn-p':'btn-sec');
+  });
   // Actualizar zona de botones PDF
   var _pdfEl=$('cmt_pdf_btns');
   if(_pdfEl){
@@ -9751,8 +9762,8 @@ function _bandejaBodyHtml(){
   var c2='#0d9488';
   var tab=S.bandejaTab;
   var q=S.bandejaSearch.trim();
-  var all=(D.formulariosPendientes||[]).filter(function(x){return x.estado!=='eliminado'&&x.estado!=='papelera';}).slice().sort(function(a,b){return new Date(b.receivedAt||b.fecha||0)-new Date(a.receivedAt||a.fecha||0);});
-  var papeleraItems=(D.formulariosPendientes||[]).filter(function(x){return x.estado==='papelera';}).slice().sort(function(a,b){return new Date(b.updatedAt||0)-new Date(a.updatedAt||0);});
+  var all=_formsDeObra().filter(function(x){return x.estado!=='eliminado'&&x.estado!=='papelera';}).slice().sort(function(a,b){return new Date(b.receivedAt||b.fecha||0)-new Date(a.receivedAt||a.fecha||0);});
+  var papeleraItems=_formsDeObra().filter(function(x){return x.estado==='papelera';}).slice().sort(function(a,b){return new Date(b.updatedAt||0)-new Date(a.updatedAt||0);});
   var pendientes=all.filter(function(x){return x.estado==='pendiente'&&_formMatch(x,q);});
   var procesados=all.filter(function(x){return x.estado!=='pendiente'&&_formMatch(x,q);});
   var papelera=papeleraItems.filter(function(x){return _formMatch(x,q);});
@@ -9837,8 +9848,28 @@ function _bandejaBodyHtml(){
       ?(papelera.length?papelera.map(renderPapeleraCard).join(''):'<div class="empty">'+I.checkc+'<div class="ts mt-8">'+(q?'Sin resultados para "'+esc(q)+'"':'Papelera vacía')+'</div></div>')
       :(procesados.length?procesados.map(renderCard).join(''):'<div class="empty"><div class="ts mt-8">'+(q?'Sin resultados para "'+esc(q)+'"':'Sin informes procesados aún')+'</div></div>'));
 }
+// A qué obra pertenece un informe recibido. La bandeja no filtraba por obra: en
+// "casa PICKELNY GARCIA" aparecían informes de "ampliación FEMENIA RUIZ".
+// Se usa el id de obra del informe; si no lo trae, la obra del colaborador que
+// lo mandó; y si tampoco, el nombre de la obra.
+function _formEsDeObra(f,pid){
+  pid=pid||S.proj;
+  if(!f)return false;
+  var id=f.obraId||f.projectId||f.proyectoId;
+  if(id)return id===pid;
+  var co=(D.colaboradores||[]).find(function(c){return c.id===(f.token||f.colabId);});
+  if(co&&co.projectId)return co.projectId===pid;
+  var p=(D.projects||[]).find(function(x){return x.id===pid;});
+  if(f.obraName&&p)return _normTxt(f.obraName)===_normTxt(p.name);
+  // Sin ningún dato de obra no hay forma de ubicarlo: se muestra antes que
+  // esconderlo y que nadie lo vea nunca.
+  return true;
+}
+function _formsDeObra(){
+  return (D.formulariosPendientes||[]).filter(function(f){return _formEsDeObra(f);});
+}
 function _bandejaCounts(){
-  var all=(D.formulariosPendientes||[]).filter(function(x){return x.estado!=='eliminado'&&x.estado!=='papelera';});
+  var all=_formsDeObra().filter(function(x){return x.estado!=='eliminado'&&x.estado!=='papelera';});
   var newCarpeta=0;
   (D.carpetas||[]).filter(function(cp){return cp.projectId===S.proj;}).forEach(function(cp){
     if((cp.archivos||[]).some(function(f){return f.subidoPor==='col'&&f.visto===false;}))newCarpeta++;
@@ -9846,7 +9877,7 @@ function _bandejaCounts(){
   return {
     pendientes:all.filter(function(x){return x.estado==='pendiente';}).length,
     procesados:all.filter(function(x){return x.estado!=='pendiente';}).length,
-    papelera:(D.formulariosPendientes||[]).filter(function(x){return x.estado==='papelera';}).length,
+    papelera:_formsDeObra().filter(function(x){return x.estado==='papelera';}).length,
     newCarpeta:newCarpeta,
     completedMsgs:(D.mensajesColab||[]).filter(function(m){return m.proyectoId===S.proj&&m.estadoColab==='completado';}).length
   };
