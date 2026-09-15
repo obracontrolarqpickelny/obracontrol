@@ -64,12 +64,19 @@ a{color:var(--blue);text-decoration:none}
 .stlbl{font-size:11px;color:var(--text3);font-weight:500;margin-top:2px}
 /* Tarjetas del panel más bajas: con los zócalos de alertas y novedades arriba,
    los accesos a + Visita / + Tarea tienen que seguir entrando sin scrollear. */
-.dash-stats{gap:7px}
-.dash-stats .stat{padding:8px 11px;gap:10px}
-.dash-stats .stico{width:32px;height:32px;border-radius:9px}
-.dash-stats .stico svg{width:17px;height:17px}
-.dash-stats .stval{font-size:18px}
-.dash-stats .stlbl{font-size:10.5px;margin-top:1px}
+/* Cada .card trae margin-bottom:10px, que dentro de la grilla se sumaba al gap y
+   dejaba mucho aire entre filas. Se saca ese margen y ese espacio pasa a la
+   tarjeta: más grande, con una separación chica pero visible, y el bloque
+   entero ocupa lo mismo que antes. */
+/* .g2.dash-stats y no .dash-stats: la regla general .g2{gap:10px} está más
+   abajo en el archivo y, con la misma especificidad, ganaba por orden. */
+.g2.dash-stats{gap:8px}
+.dash-stats .card{margin-bottom:0}
+.dash-stats .stat{padding:9px 12px;gap:11px}
+.dash-stats .stico{width:38px;height:38px;border-radius:10px}
+.dash-stats .stico svg{width:20px;height:20px}
+.dash-stats .stval{font-size:21px}
+.dash-stats .stlbl{font-size:11px;margin-top:2px}
 .bg{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap;line-height:1.3}
 .bg-s{padding:2px 8px;font-size:10px}
 .bg-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
@@ -3776,7 +3783,7 @@ function rDash(mc,p){
   mc.innerHTML=`
   ${_zocaloAlertas()}${_zocaloBandeja()}
   <div class="card hero mb-12"><div class="flex justify-between items-start"><div><div class="hero-sm">Obra activa</div><div class="hero-lg">${p.name}</div></div>${colBadge(p.status,SC[p.status]||'#94a3b8')}</div><div class="flex gap-10 mt-8 ts tc3 wrap">${p.client?`<span>${I.user} ${p.client}</span>`:''}${p.location?`<span>${I.pin} ${p.location}</span>`:''}${p.startDate?`<span>${I.cal} ${fmts(p.startDate)}</span>`:''}</div></div>
-  <div class="g2 dash-stats mb-10">
+  <div class="g2 dash-stats mb-12">
     <div class="card stat card-click" onclick="S.mod='visitas';render()"><div class="stico" style="background:var(--blue-bg);color:var(--blue)">${I.clip}</div><div><div class="stval" style="color:var(--blue)">${pV.length}</div><div class="stlbl">Visitas</div></div></div>
     <div class="card stat card-click" onclick="S.mod='tareas';render()"><div class="stico" style="background:var(--cyan-bg);color:var(--cyan)">${I.list}</div><div><div class="stval" style="color:var(--cyan)">${pend}</div><div class="stlbl">Tareas pend.</div></div></div>
     <div class="card stat card-click" onclick="S.mod='materiales';render()"><div class="stico" style="background:var(--purple-bg);color:var(--purple)">${I.pkg}</div><div><div class="stval" style="color:var(--purple)">${pM.length}</div><div class="stlbl">Materiales</div></div></div>
@@ -3788,7 +3795,7 @@ function rDash(mc,p){
     <div class="card stat card-click" onclick="S.mod='colaboradores';render()"><div class="stico" style="background:#f0fdf4;color:var(--green)">${I.share}</div><div><div class="stval" style="color:var(--green)">${pf('colaboradores').length}</div><div class="stlbl">Colaboradores</div></div></div>
   </div>
   <div class="g2 mb-12" style="gap:8px"><button class="btn btn-p btn-s btn-w" onclick="openM('newVisitaM')">${I.clip} + Visita</button><button class="btn btn-sec btn-s btn-w" onclick="S.mod='tareas';render();setTimeout(()=>openM('newTareaM'),100)">${I.list} + Tarea</button></div>
-  ${over>0?`<div class="alrt alrt-r mb-12 pointer" onclick="S.mod='tareas';render();">${I.warn}<div class="flex-1"><div class="fw7 ts">${over} tarea${over>1?'s':''} vencida${over>1?'s':''}</div></div>${I.chev}</div>`:''}
+  ${over>0?`<div class="alrt alrt-r mb-12 pointer" onclick="abrirTareaVencida()">${I.warn}<div class="flex-1"><div class="fw7 ts">${over} tarea${over>1?'s':''} vencida${over>1?'s':''}</div></div>${I.chev}</div>`:''}
   ${lastV?`<div class="card mb-12 card-click" onclick="S.visitaDetail='${lastV.id}';S.mod='visitas';render();" style="border-left:3px solid var(--blue)"><div class="txxs tc3 mb-4">Ultima visita</div><div class="ts fw7">${lastV.title||'Sin titulo'}</div><div class="txxs tc3">${fmts(lastV.date)}</div></div>`:''}
   ${renderNewVisitaModal()}
   <!-- Drive Setup Modal -->
@@ -4793,6 +4800,20 @@ function delI(tbl,id){
   addTombstone(tbl,id);
   audit(tbl,'delete','');sv();render();
 }
+// Desde el aviso "tarea vencida" del panel: va a Tareas y abre directamente la
+// tarea. Si hay varias vencidas, abre la más atrasada y avisa cuántas son.
+function abrirTareaVencida(){
+  var venc=pf('tareas').filter(function(t){
+    return (t.status==='pendiente'||t.status==='en curso')&&t.dueDate&&dd(td(),t.dueDate)<0;
+  }).sort(function(a,b){return String(a.dueDate).localeCompare(String(b.dueDate));});
+  S.mod='tareas';S.visitaDetail=null;S.matDetail=null;
+  render();
+  if(!venc.length)return;
+  setTimeout(function(){
+    editTarea(venc[0].id);
+    if(venc.length>1)toast('Tenés '+venc.length+' tareas vencidas — abrí la más atrasada','var(--orange)',4500);
+  },120);
+}
 function editTarea(id){
   const t=D.tareas.find(x=>x.id===id);if(!t)return;
   const exPh=(t.photos&&t.photos.length)
@@ -5402,20 +5423,54 @@ function saveEditExistente(itemId){
 }
 
 
+// ─── FUSIONAR MATERIALES ──────────────────────────────────────────
+// Antes sólo fusionaba computados entre sí. Un mismo material cargado con dos
+// nombres ("Hierro 8" y "Hierro del 8") quedaba duplicado para siempre si
+// alguno era un ingreso sin cómputo. Ahora se puede fusionar:
+//   computado  ← computado      (como antes: se suman los cómputos)
+//   computado  ← sin cómputo    (los ingresos pasan a contar en su balance)
+//   sin cómputo ← sin cómputo   (se unifica el nombre; siguen sin cómputo)
+// Lo que no se permite es conservar un sin cómputo y eliminar un computado,
+// porque se perdería el cómputo cargado.
+function _fusionOpciones(){
+  var comp=pf('materiales').filter(function(m){return !m.visitaId;}).map(function(m){
+    return {val:'m:'+m.id,tipo:'m',id:m.id,nombre:m.name,unit:m.unit||'u',
+            label:m.name+' ('+(m.category||'General')+')'};
+  });
+  var grupos={};
+  _sinCompItems().forEach(function(i){
+    var k=_normTxt(i.matNombre||'');
+    if(!k)return;
+    if(!grupos[k])grupos[k]={val:'s:'+k,tipo:'s',clave:k,nombre:String(i.matNombre).trim(),items:[]};
+    grupos[k].items.push(i);
+  });
+  var sin=Object.keys(grupos).sort().map(function(k){
+    var g=grupos[k];
+    g.unidades=[...new Set(g.items.map(function(i){return (i.unit||'u').trim();}))];
+    g.label=g.nombre+' · '+g.items.length+' ingreso'+(g.items.length>1?'s':'')+' ('+g.unidades.join(', ')+')';
+    return g;
+  });
+  return {comp:comp,sin:sin};
+}
+function _fusionBuscar(val){
+  var o=_fusionOpciones();
+  return o.comp.concat(o.sin).find(function(x){return x.val===val;})||null;
+}
 function abrirFusionMat(){
-  const mats=pf('materiales').filter(m=>!m.visitaId);
-  if(mats.length<2){toast('Necesitás al menos 2 materiales','var(--orange)');return;}
-  const d=document.createElement('div');d.className='mo open';d.id='fusionMatM';
-  const closeBtn='<button class="tbtn" onclick="document.getElementById(\'fusionMatM\').remove()">'+I.x+'</button>';
-  const opts=mats.map(m=>'<option value="'+m.id+'">'+m.name+' ('+( m.category||'General')+')</option>').join('');
+  var o=_fusionOpciones();
+  if(o.comp.length+o.sin.length<2){toast('Necesitás al menos 2 materiales','var(--orange)');return;}
+  var opts='<option value="">-- Seleccionar --</option>';
+  if(o.comp.length)opts+='<optgroup label="Computados">'+o.comp.map(function(x){return '<option value="'+esc(x.val)+'">'+esc(x.label)+'</option>';}).join('')+'</optgroup>';
+  if(o.sin.length)opts+='<optgroup label="Ingresados sin cómputo">'+o.sin.map(function(x){return '<option value="'+esc(x.val)+'">📦 '+esc(x.label)+'</option>';}).join('')+'</optgroup>';
+  var d=document.getElementById('fusionMatM');
+  if(d)d.remove();
+  d=document.createElement('div');d.className='mo open';d.id='fusionMatM';
   d.innerHTML='<div class="mo-c">'
-    +'<div class="mo-h"><h3 style="color:#8b5cf6">&#x1F501; Fusionar Materiales</h3>'+closeBtn+'</div>'
+    +'<div class="mo-h"><h3 style="color:#8b5cf6">&#x1F501; Fusionar Materiales</h3><button class="tbtn" onclick="document.getElementById(\'fusionMatM\').remove()">'+I.x+'</button></div>'
     +'<div style="background:#f5f3ff;border-left:3px solid #8b5cf6;border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px">'
-    +'Fusiona 2 materiales en uno. El primero se conserva; el segundo se elimina y sus movimientos se migran.</div>'
-    +'<div class="fg"><label class="fl">Material a CONSERVAR *</label>'
-    +'<select class="fs" id="fus_keep"><option value="">-- Seleccionar --</option>'+opts+'</select></div>'
-    +'<div class="fg"><label class="fl">Material a ELIMINAR (duplicado) *</label>'
-    +'<select class="fs" id="fus_del"><option value="">-- Seleccionar --</option>'+opts+'</select></div>'
+    +'Junta dos materiales que son el mismo. Podés fusionar computados entre sí, un ingresado sin cómputo dentro de un computado, o dos sin cómputo entre sí (por ejemplo "Hierro 8" y "Hierro del 8").</div>'
+    +'<div class="fg"><label class="fl">Material a CONSERVAR *</label><select class="fs" id="fus_keep">'+opts+'</select></div>'
+    +'<div class="fg"><label class="fl">Material a ELIMINAR (duplicado) *</label><select class="fs" id="fus_del">'+opts+'</select></div>'
     +'<div id="fus_preview"></div>'
     +'<div class="flex gap-6 mt-8">'
     +'<button class="btn btn-w" style="background:#8b5cf6;color:#fff;flex:1" onclick="previewFusionMat()">&#x1F50D; Previsualizar</button>'
@@ -5425,44 +5480,65 @@ function abrirFusionMat(){
 }
 
 function previewFusionMat(){
-  const keepId=$('fus_keep')?.value;
-  const delId=$('fus_del')?.value;
-  if(!keepId||!delId){toast('Seleccioná ambos materiales','var(--orange)');return;}
-  if(keepId===delId){toast('Seleccioná materiales distintos','var(--red)');return;}
-  const keep=(D.materiales||[]).find(m=>m.id===keepId);
-  const del=(D.materiales||[]).find(m=>m.id===delId);
+  var kv=$('fus_keep')&&$('fus_keep').value;
+  var dv=$('fus_del')&&$('fus_del').value;
+  if(!kv||!dv){toast('Seleccioná ambos materiales','var(--orange)');return;}
+  if(kv===dv){toast('Seleccioná materiales distintos','var(--red)');return;}
+  var keep=_fusionBuscar(kv),del=_fusionBuscar(dv);
   if(!keep||!del)return;
-  const ings=(D.matIngresos||[]).filter(i=>i.materialId===delId).length;
-  const prev=$('fus_preview');
-  if(prev){
-    prev.innerHTML='<div style="background:#fff7ed;border-left:3px solid var(--orange);border-radius:6px;padding:10px 12px;margin-top:8px">'
-      +'<div class="ts fw7 mb-6">Resultado de la fusión:</div>'
-      +'<div class="txxs tc3">✔ Se conserva: <strong>'+keep.name+'</strong></div>'
-      +'<div class="txxs tc3">🗑 Se elimina: <strong>'+del.name+'</strong></div>'
-      +'<div class="txxs tc3">↩ Se migran: <strong>'+ings+' movimiento(s)</strong></div>'
-      +'<div class="txxs tc3">Cómputo final: <strong>'+((keep.computado||0)+(del.computado||0))+'</strong> (suma de ambos)</div>'
-      +'<button class="btn btn-w mt-8" style="background:var(--red);color:#fff;width:100%" '
-      +'onclick="ejecutarFusionMat(\''+keepId+'\',\''+delId+'\')">⚠ Confirmar Fusión (irreversible)</button>'
-      +'</div>';
+  if(keep.tipo==='s'&&del.tipo==='m'){
+    toast('Para no perder el cómputo, conservá el computado y eliminá el sin cómputo','var(--orange)',5000);
+    return;
   }
+  var movs=del.tipo==='m'?(D.matIngresos||[]).filter(function(i){return i.materialId===del.id;}).length:del.items.length;
+  var h='<div style="background:#fff7ed;border-left:3px solid var(--orange);border-radius:6px;padding:10px 12px;margin-top:8px">'
+    +'<div class="ts fw7 mb-6">Resultado de la fusión:</div>'
+    +'<div class="txxs tc3">✔ Se conserva: <strong>'+esc(keep.nombre)+'</strong>'+(keep.tipo==='s'?' (sin cómputo)':'')+'</div>'
+    +'<div class="txxs tc3">🗑 Desaparece: <strong>'+esc(del.nombre)+'</strong>'+(del.tipo==='s'?' (sin cómputo)':'')+'</div>'
+    +'<div class="txxs tc3">↩ Se pasan: <strong>'+movs+' ingreso(s)</strong></div>';
+  if(keep.tipo==='m'&&del.tipo==='m')h+='<div class="txxs tc3">Cómputo final: <strong>'+(((D.materiales||[]).find(function(m){return m.id===keep.id;})||{}).computado||0)+' + '+(((D.materiales||[]).find(function(m){return m.id===del.id;})||{}).computado||0)+'</strong> (suma de ambos)</div>';
+  if(keep.tipo==='m'&&del.tipo==='s')h+='<div class="txxs tc3">Esos ingresos pasan a contar en el balance de <strong>'+esc(keep.nombre)+'</strong>.</div>';
+  if(keep.tipo==='s'&&del.tipo==='s')h+='<div class="txxs tc3">Todos quedan con el nombre <strong>'+esc(keep.nombre)+'</strong> y siguen sin cómputo.</div>';
+  // Aviso de unidades distintas: la fusión no convierte cantidades.
+  var uK=keep.tipo==='m'?[keep.unit]:keep.unidades;
+  var uD=del.tipo==='m'?[del.unit]:del.unidades;
+  var distintas=uD.filter(function(u){return uK.map(_normTxt).indexOf(_normTxt(u))<0;});
+  if(distintas.length)h+='<div class="txxs mt-4" style="color:var(--orange)">⚠ Unidades distintas ('+esc(uK.join(', '))+' vs '+esc(uD.join(', '))+'): las cantidades no se convierten, revisalas después.</div>';
+  h+='<button class="btn btn-w mt-8" style="background:var(--red);color:#fff;width:100%" onclick="ejecutarFusionMat('+_argAttr(kv)+','+_argAttr(dv)+')">⚠ Confirmar fusión</button></div>';
+  var prev=$('fus_preview');
+  if(prev)prev.innerHTML=h;
 }
 
-function ejecutarFusionMat(keepId,delId){
-  if(!confirm('¿Fusionar? Acción irreversible.'))return;
-  const keep=(D.materiales||[]).find(m=>m.id===keepId);
-  const del=(D.materiales||[]).find(m=>m.id===delId);
-  if(!keep||!del){toast('Error','var(--red)');return;}
-  keep.computado=(keep.computado||0)+(del.computado||0);
-  keep.updatedAt=nw();
-  (D.matIngresos||[]).forEach(function(i){if(i.materialId===delId){i.materialId=keepId;i.matNombre=keep.name;i.updatedAt=nw();}});
-  D.materiales=(D.materiales||[]).filter(m=>m.id!==delId);
-  addTombstone('materiales',delId);
-  audit('materiales','merge',keep.name+' <- '+del.name);
+function ejecutarFusionMat(kv,dv){
+  var keep=_fusionBuscar(kv),del=_fusionBuscar(dv);
+  if(!keep||!del){toast('No se encontraron los materiales','var(--red)');return;}
+  if(keep.tipo==='s'&&del.tipo==='m')return;
+  if(!confirm('¿Fusionar "'+del.nombre+'" dentro de "'+keep.nombre+'"?'))return;
+  var nombreFinal=keep.nombre;
+  if(keep.tipo==='m'){
+    var km=(D.materiales||[]).find(function(m){return m.id===keep.id;});
+    if(!km){toast('No se encontró el material','var(--red)');return;}
+    nombreFinal=km.name;
+    if(del.tipo==='m'){
+      var dm=(D.materiales||[]).find(function(m){return m.id===del.id;});
+      if(!dm)return;
+      km.computado=(km.computado||0)+(dm.computado||0);
+      km.updatedAt=nw();
+      (D.matIngresos||[]).forEach(function(i){if(i.materialId===dm.id){i.materialId=km.id;i.matNombre=km.name;i.updatedAt=nw();}});
+      D.materiales=(D.materiales||[]).filter(function(m){return m.id!==dm.id;});
+      addTombstone('materiales',dm.id);
+    } else {
+      del.items.forEach(function(i){i.materialId=km.id;i.matNombre=km.name;i.updatedAt=nw();});
+    }
+  } else {
+    del.items.forEach(function(i){i.matNombre=keep.nombre;i.updatedAt=nw();});
+  }
+  audit('materiales','merge',nombreFinal+' <- '+del.nombre);
   sv();
-  const el=document.getElementById('fusionMatM');
+  var el=document.getElementById('fusionMatM');
   if(el)el.remove();
   render();
-  toast('Fusión completada: '+keep.name,'var(--green)',4000);
+  toast('Fusión completada: '+nombreFinal,'var(--green)',4000);
 }
 
 
@@ -9969,10 +10045,12 @@ function _bandejaBodyHtml(){
     var obraNm=sub.obraName||(D.projects&&D.projects.find(function(p2){return p2.id===(sub.obraId||sub.projectId);})||{}).name||'';
     var _regColab=(D.colaboradores||[]).find(function(c){return c.id===sub.token;});
     var _dispName=_regColab?_regColab.name:sub.ayudante||'?';
-    var btns='<div class="flex gap-4" style="flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">'
-      +'<button class="btn btn-g btn-s" style="font-size:10px" onclick="restaurarFormulario(\''+sub.id+'\',\'pendiente\')">↩ A pendientes</button>'
-      +'<button class="btn btn-g btn-s" style="font-size:10px" onclick="restaurarFormulario(\''+sub.id+'\',\'historial\')">↩ A historial</button>'
-      +'<button class="btn btn-s" style="font-size:10px;background:#dc2626;color:#fff" onclick="eliminarFormularioDefinitivo(\''+sub.id+'\')">🗑 Eliminar def.</button>'
+    // Botones uno arriba del otro: en fila se comían el ancho y la columna con
+    // los datos del informe quedaba flaca y altísima.
+    var btns='<div style="flex-shrink:0;display:flex;flex-direction:column;gap:4px;align-items:stretch">'
+      +'<button class="btn btn-g btn-s" style="font-size:10px;white-space:nowrap;justify-content:flex-start" onclick="restaurarFormulario(\''+sub.id+'\',\'pendiente\')">↩ A pendientes</button>'
+      +'<button class="btn btn-g btn-s" style="font-size:10px;white-space:nowrap;justify-content:flex-start" onclick="restaurarFormulario(\''+sub.id+'\',\'historial\')">↩ A historial</button>'
+      +'<button class="btn btn-s" style="font-size:10px;white-space:nowrap;background:#dc2626;color:#fff" onclick="eliminarFormularioDefinitivo(\''+sub.id+'\')">🗑 Eliminar def.</button>'
       +'</div>';
     return '<div class="card" style="border-left:3px solid var(--gray-l);padding:12px;margin-bottom:8px"><div class="flex justify-between items-start gap-8"><div style="flex:1;min-width:0"><div class="ts fw7">👤 '+esc(_dispName)+(obraNm?'<span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:6px">🏗 '+esc(obraNm)+'</span>':'')+'</div><div class="txxs tc3 mt-2">📅 '+fmts(sub.receivedAt||sub.fecha||'')+'</div><div class="txxs mt-6" style="color:var(--text2);line-height:1.6">'+subSummary(sub)+'</div></div>'+btns+'</div></div>';
   }
@@ -10014,17 +10092,26 @@ function _bandejaBodyHtml(){
 }
 // A qué obra pertenece un informe recibido. La bandeja no filtraba por obra: en
 // "casa PICKELNY GARCIA" aparecían informes de "ampliación FEMENIA RUIZ".
-// Se usa el id de obra del informe; si no lo trae, la obra del colaborador que
-// lo mandó; y si tampoco, el nombre de la obra.
+// Orden: el id de obra del informe (si existe en esta app), después el NOMBRE
+// de obra que trae el informe, y recién después la obra del colaborador.
+// El nombre va antes que el colaborador a propósito: un mismo colaborador
+// (por ejemplo "Estudio") manda informes de varias obras, y tomar la obra del
+// colaborador ubicaba en PICKELNY un informe que decía FEMENIA.
 function _formEsDeObra(f,pid){
   pid=pid||S.proj;
   if(!f)return false;
+  var obras=D.projects||[];
   var id=f.obraId||f.projectId||f.proyectoId;
-  if(id)return id===pid;
+  if(id&&obras.some(function(x){return x.id===id;}))return id===pid;
+  if(f.obraName){
+    var n=_normTxt(f.obraName);
+    var porNombre=obras.find(function(x){return _normTxt(x.name)===n;});
+    if(porNombre)return porNombre.id===pid;
+  }
   var co=(D.colaboradores||[]).find(function(c){return c.id===(f.token||f.colabId);});
   if(co&&co.projectId)return co.projectId===pid;
-  var p=(D.projects||[]).find(function(x){return x.id===pid;});
-  if(f.obraName&&p)return _normTxt(f.obraName)===_normTxt(p.name);
+  // Trae un id de obra que no existe acá y nada más: no es de esta obra.
+  if(id)return id===pid;
   // Sin ningún dato de obra no hay forma de ubicarlo: se muestra antes que
   // esconderlo y que nadie lo vea nunca.
   return true;
