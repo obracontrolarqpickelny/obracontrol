@@ -27,9 +27,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .name-sub{font-size:13px;color:var(--text2);margin-bottom:20px;line-height:1.5}
 
 /* tabs */
-.tabs-wrap{background:var(--white);border-bottom:1px solid var(--brd);padding:0 8px;overflow-x:auto;-webkit-overflow-scrolling:touch;display:flex;gap:2px;position:sticky;top:57px;z-index:19}
-.tab{flex-shrink:0;padding:10px 14px;border:none;background:none;font-size:12px;font-weight:600;color:var(--text3);cursor:pointer;border-bottom:3px solid transparent;display:flex;align-items:center;gap:5px;white-space:nowrap;transition:color .15s}
-.tab.active{color:var(--teal);border-bottom-color:var(--teal)}
+/* Pestañas en grilla de 3 columnas: las 9 quedan a la vista de un vistazo, sin
+   barra que deslizar a derecha e izquierda. */
+.tabs-wrap{background:var(--white);border-bottom:1px solid var(--brd);padding:6px 8px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;position:sticky;top:57px;z-index:19}
+.tab{min-width:0;padding:7px 4px;border:1px solid var(--brd);background:var(--gray-ll);border-radius:8px;font-size:11.5px;font-weight:600;color:var(--text2);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:background .15s,color .15s}
+.tab.active{color:#fff;background:var(--teal);border-color:var(--teal)}
 .tab-badge{display:inline-flex;align-items:center;justify-content:center;background:var(--green);color:#fff;border-radius:10px;font-size:9px;font-weight:800;min-width:16px;height:16px;padding:0 4px}
 .tab-count{display:inline-flex;align-items:center;justify-content:center;background:var(--teal);color:#fff;border-radius:10px;font-size:9px;font-weight:800;min-width:16px;height:16px;padding:0 4px}
 
@@ -135,7 +137,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
   <!-- Tabs -->
   <div class="tabs-wrap">
-    <button class="tab active" id="tab-msg" onclick="showTab('msg')">💬 Mensaje</button>
+    <button class="tab active" id="tab-msg" onclick="showTab('msg')">💬 Comentarios</button>
     <button class="tab" id="tab-mov" onclick="showTab('mov')">💰 Movimientos<span class="tab-badge" id="badge-mov" style="display:none">✓</span><span class="tab-count" id="count-mov" style="display:none"></span></button>
     <button class="tab" id="tab-tar" onclick="showTab('tar')">📋 Tareas<span class="tab-badge" id="badge-tar" style="display:none">✓</span><span class="tab-count" id="count-tar" style="display:none"></span></button>
     <button class="tab" id="tab-mex" onclick="showTab('mex')">📦 Existentes<span class="tab-badge" id="badge-mex" style="display:none">✓</span><span class="tab-count" id="count-mex" style="display:none"></span></button>
@@ -153,11 +155,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <!-- Scrollable form area -->
   <div class="form-body">
 
-    <!-- Tab: Mensaje general -->
+    <!-- Tab: Comentarios — misma forma que "Nuevo comentario" de la app, para
+         que al aceptarlos entren tal cual a la pestaña Comentarios de la obra. -->
     <div class="tab-pane active" id="pane-msg">
-      <div class="card">
-        <div class="fg"><label class="fl" style="margin-bottom:6px">Mensaje / comentario general</label><textarea class="ft" id="msg_general" rows="5" placeholder="Escribí aquí el resumen del día, novedades o comentarios para el arquitecto..."></textarea></div>
-      </div>
+      <div id="list-cmt"></div>
+      <button class="btn-add" onclick="addItem('cmt')">+ Agregar comentario</button>
     </div>
 
     <!-- Tab: Movimientos -->
@@ -363,6 +365,13 @@ var colabName='';
 var sessionId=_uid();
 var sendCount=0;
 var doneTabMap={mov:false,tar:false,mex:false,mpe:false,chk:false,mrec:false};
+// Mismas listas que el formulario de Comentarios de la app principal.
+var RUB_F=['Estructura','Mamposteria','Inst. Sanitaria','Inst. Electrica','Inst. Gas','Revoques','Pisos','Pintura','Carpinteria','Cubierta','Otro'];
+var ETAPAS_F=['Excavacion','Fundaciones','Estructura','Mamposteria','Instalaciones','Revoques','Contrapisos','Pisos','Revestimientos','Pintura','Carpinteria','Cubierta','Terminaciones','Otro'];
+// Fecha local (no UTC): de noche en Argentina toISOString ya daba el día siguiente.
+function _hoyLocal(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+// La pestaña arranca con un comentario listo para escribir, como el formulario de la app.
+function _asegurarComentarioVacio(){var l=$('list-cmt');if(l&&!l.querySelector('.item-card'))addItem('cmt');}
 var counters={mov:0,tar:0,mex:0,mpe:0,mrec:0};
 var photoMap={};  // key → dataUrl
 var allPhotos=[];
@@ -602,6 +611,7 @@ function showFormScreen(){
   $('hdrObra').textContent=OBRA_NAME||'Obra';
   $('hdrCollab').textContent='Hola, '+colabName+' 👋';
   _mostrarBienvenida('screenForm');
+  _asegurarComentarioVacio();
   sendCount=parseInt(TOKEN?localStorage.getItem('oc_v_'+TOKEN)||'0':'0');
   if(TOKEN&&OBRA_ID){var cb=$('carpetaBar');if(cb)cb.style.display='block';}
   // Init bandeja badge
@@ -843,9 +853,17 @@ function updateCount(type){
 }
 
 function buildItemHTML(type,idx){
-  var label={mov:'Movimiento',tar:'Tarea',mex:'Material existente',mpe:'Material pedido',mrec:'Material recibido'}[type]||'Ítem';
+  var label={cmt:'Comentario',mov:'Movimiento',tar:'Tarea',mex:'Material existente',mpe:'Material pedido',mrec:'Material recibido'}[type]||'Ítem';
   var num=(counters[type]||1);
   var hdr='<div class="item-hdr"><span class="item-label">'+label+' '+(idx+1)+'</span><button class="btn-del" onclick="removeItem(\''+type+'\','+idx+')">✕</button></div>';
+  if(type==='cmt') return hdr+
+    '<div class="fg"><label class="fl">Tipo</label><select class="fs" id="cmt_'+idx+'_tipo"><option value="general">General / Decisión / Recordatorio</option><option value="propietario">Comentario del Propietario</option></select></div>'+
+    '<div class="fg"><label class="fl">Comentario *</label><textarea class="ft" id="cmt_'+idx+'_texto" placeholder="Escribir..."></textarea></div>'+
+    '<div class="fr"><div class="fg"><label class="fl">Rubro</label><select class="fs" id="cmt_'+idx+'_rubro">'+RUB_F.map(function(r){return '<option>'+r+'</option>';}).join('')+'</select></div>'+
+    '<div class="fg"><label class="fl">Etapa</label><select class="fs" id="cmt_'+idx+'_etapa"><option value="">-</option>'+ETAPAS_F.map(function(e){return '<option>'+e+'</option>';}).join('')+'</select></div></div>'+
+    '<div class="fg"><label class="fl">📅 Fecha del comentario</label><input class="fi" id="cmt_'+idx+'_fecha" type="date" value="'+_hoyLocal()+'"></div>'+
+    '<div class="fg"><label class="fl">Foto (opcional)</label><input type="file" accept="image/*" id="cmt_'+idx+'_foto" onchange="prevFoto(\'cmt_'+idx+'_foto\',\'cmt_'+idx+'_prev\');" style="font-size:13px;width:100%"><img id="cmt_'+idx+'_prev" class="photo-prev"></div>'+
+    '<div class="fg" id="cmt_'+idx+'_captionWrap" style="display:none"><label class="fl">Comentario de la foto</label><input class="fi" id="cmt_'+idx+'_caption" placeholder="¿Qué muestra esta foto?"></div>';
   if(type==='mov') return hdr+
     '<div class="fg"><label class="fl">Tipo</label><select class="fs" id="mov_'+idx+'_tipo"><option value="ingreso">💵 Ingreso</option><option value="egreso">💸 Egreso</option></select></div>'+
     '<div class="fg"><label class="fl">Monto *</label><input class="fi" id="mov_'+idx+'_monto" type="number" step="0.01" min="0" placeholder="0.00" inputmode="decimal"></div>'+
@@ -934,6 +952,7 @@ function collectData(){
     estado:'pendiente',
     tabsDone:Object.keys(doneTabMap).filter(function(k){return doneTabMap[k];}),
     mensajeGeneral:v('msg_general')||'',
+    comentarios:[],
     movimientos:[],
     tareas:[],
     materialesExistentes:[],
@@ -942,6 +961,18 @@ function collectData(){
     checklist:null,
   };
   allPhotos=[];
+
+  // comentarios (misma forma que "Nuevo comentario" de la app)
+  var cmtList=$('list-cmt');
+  if(cmtList) cmtList.querySelectorAll('.item-card').forEach(function(el){
+    var idx=parseInt(el.id.split('-').pop());
+    var texto=v('cmt_'+idx+'_texto');
+    if(texto){
+      var foto=photoMap['cmt_'+idx+'_foto']||null;
+      if(foto) allPhotos.push(foto);
+      data.comentarios.push({tipo:v('cmt_'+idx+'_tipo')||'general',texto:texto,rubro:v('cmt_'+idx+'_rubro')||'Otro',etapa:v('cmt_'+idx+'_etapa')||'',fecha:v('cmt_'+idx+'_fecha')||_hoyLocal(),foto:foto,fotoNota:v('cmt_'+idx+'_caption')});
+    }
+  });
 
   // movimientos
   var movList=$('list-mov');
@@ -1015,7 +1046,7 @@ function collectData(){
 }
 
 function hasContent(data){
-  return data.mensajeGeneral||data.movimientos.length||data.tareas.length||data.materialesExistentes.length||data.materialesPedidos.length||data.materialesIngresados.length||data.checklist;
+  return data.mensajeGeneral||(data.comentarios&&data.comentarios.length)||data.movimientos.length||data.tareas.length||data.materialesExistentes.length||data.materialesPedidos.length||data.materialesIngresados.length||data.checklist;
 }
 
 // ── Envío al servidor propio ─────────────
@@ -1182,10 +1213,12 @@ function _saveFormHist(data,deepLink,enviadoServidor){
     var noP=JSON.parse(JSON.stringify(data));
     noP.movimientos&&noP.movimientos.forEach(function(m){m.foto=null;});
     noP.tareas&&noP.tareas.forEach(function(t){t.foto=null;});
+    noP.comentarios&&noP.comentarios.forEach(function(c){c.foto=null;});
     noP.materialesExistentes&&noP.materialesExistentes.forEach(function(m){m.foto=null;});
     if(noP.checklist)noP.checklist.foto=null;
     var pts=[];
     if(data.mensajeGeneral)pts.push('💬 '+data.mensajeGeneral.slice(0,40));
+    if((data.comentarios||[]).length)pts.push('💬 '+data.comentarios.length+' comentario'+(data.comentarios.length>1?'s':''));
     if((data.movimientos||[]).length)pts.push('💰 '+data.movimientos.length+' mov.');
     if((data.tareas||[]).length)pts.push('📋 '+data.tareas.length+' tarea'+(data.tareas.length>1?'s':''));
     if(data.checklist&&data.checklist.titulo)pts.push('✅ '+data.checklist.titulo);
@@ -1210,6 +1243,7 @@ function _verHistorialItem(idx){
   if(!d){h+='<div style="font-size:12px;color:var(--text3)">Sin datos guardados (informe antiguo). Podés reenviarlo para ver el contenido.</div>';}
   else{
     if(d.mensajeGeneral)h+='<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px;margin-bottom:8px"><div style="font-size:11px;font-weight:700;color:#16a34a;margin-bottom:4px">💬 Mensaje general</div><div style="font-size:12px">'+esc(d.mensajeGeneral)+'</div></div>';
+    if((d.comentarios||[]).length){h+='<div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:4px">💬 Comentarios ('+d.comentarios.length+')</div>';d.comentarios.forEach(function(c){h+='<div style="background:var(--gray-ll);border-radius:7px;padding:8px;margin-bottom:4px;font-size:12px"><div style="font-size:10px;color:var(--text3);margin-bottom:2px">'+(c.tipo==='propietario'?'👤 Propietario':'💬 General')+' · '+esc(c.rubro||'')+(c.etapa?' · '+esc(c.etapa):'')+'</div>'+esc(c.texto||'')+'</div>';});}
     if((d.movimientos||[]).length){h+='<div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:4px">💰 Movimientos ('+d.movimientos.length+')</div>';d.movimientos.forEach(function(m){h+='<div style="background:var(--gray-ll);border-radius:7px;padding:8px;margin-bottom:4px;font-size:12px">'+(m.tipo==='ingreso'?'💵 +$':'💸 -$')+esc(String(m.monto||0))+' — '+esc(m.concepto||'')+(m.proveedor?' ('+esc(m.proveedor)+')':'')+'</div>';});}
     if((d.tareas||[]).length){h+='<div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:4px;margin-top:8px">📋 Tareas ('+d.tareas.length+')</div>';d.tareas.forEach(function(t){h+='<div style="background:var(--gray-ll);border-radius:7px;padding:8px;margin-bottom:4px;font-size:12px"><div style="font-weight:700">'+esc(t.titulo||'')+'</div>'+(t.descripcion?'<div style="color:var(--text3);margin-top:2px;font-size:11px">'+esc(t.descripcion)+'</div>':'')+'</div>';});}
     if((d.materialesExistentes||[]).length){h+='<div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:4px;margin-top:8px">📦 Material existente ('+d.materialesExistentes.length+')</div>';d.materialesExistentes.forEach(function(m){h+='<div style="background:var(--gray-ll);border-radius:7px;padding:8px;margin-bottom:4px;font-size:12px">'+esc(m.nombre||'')+' · '+esc(String(m.cantidad||0))+' '+esc(m.unidad||'u')+'</div>';});}
@@ -1295,10 +1329,10 @@ function nuevoFormulario(){
   sessionId=_uid();
   sendCount=0;
   doneTabMap={mov:false,tar:false,mex:false,mpe:false,mrec:false,chk:false};
-  counters={mov:0,tar:0,mex:0,mpe:0,mrec:0};
+  counters={cmt:0,mov:0,tar:0,mex:0,mpe:0,mrec:0};
   photoMap={};allPhotos=[];
 
-  ['mov','tar','mex','mpe','mrec'].forEach(function(t){
+  ['cmt','mov','tar','mex','mpe','mrec'].forEach(function(t){
     var _l=$('list-'+t);if(_l)_l.innerHTML='';
     var _c=$('count-'+t);if(_c){_c.style.display='none';_c.textContent='';}
     var _b=$('badge-'+t);if(_b)_b.style.display='none';
@@ -1316,6 +1350,7 @@ function nuevoFormulario(){
   $('screenSuccess').classList.remove('active');
   $('screenForm').classList.add('active');
   showTab('msg');
+  _asegurarComentarioVacio();
   $('errBanner').style.display='none';
   window.scrollTo(0,0);
 }

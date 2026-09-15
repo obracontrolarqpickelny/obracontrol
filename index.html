@@ -75,7 +75,7 @@ a{color:var(--blue);text-decoration:none}
    abajo en el archivo y, con la misma especificidad, ganaba por orden. */
 .g2.dash-stats{gap:8px}
 .dash-stats .card{margin-bottom:0}
-.dash-stats .stat{padding:9px 12px;gap:11px}
+.dash-stats .stat{padding:10.5px 12px;gap:11px}
 .dash-stats .stico{width:38px;height:38px;border-radius:10px}
 .dash-stats .stico svg{width:20px;height:20px}
 .dash-stats .stval{font-size:21px}
@@ -6814,6 +6814,9 @@ function renderCmtItems(){saveUIState();
     if(cm.etapa)h+=colBadge(cm.etapa,'var(--blue)',true);
     if(done)h+='<span style="background:#16a34a;color:#fff;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px">✓ Realizado</span>';
     h+=_alertTag(cm);
+    // Comentario que llegó desde el formulario de un colaborador: se muestra de
+    // quién es, así queda visible la asociación entre las dos pestañas.
+    if(cm.sourceType==='formulario'&&(cm.cargadoPor||cm.sourceName))h+='<span style="font-size:9px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:1px 6px;color:#16a34a;font-weight:700;white-space:nowrap">&#x1F464; '+esc(cm.cargadoPor||cm.sourceName)+'</span>';
     h+='</div><span class="txxs tc3" style="flex-shrink:0">'+fmts(cm.date)+'</span></div>';
     // Texto
     h+='<div class="ts mb-6" style="'+(done?'text-decoration:line-through;color:#94a3b8':'')+'">'+cm.text+'</div>';
@@ -9339,6 +9342,7 @@ function _chipsInforme(f){
   // [ícono, cantidad, singular, plural]
   var c=[
     ['💬',f.mensajeGeneral?1:0,'mensaje','mensajes'],
+    ['🗨️',n(f.comentarios),'comentario','comentarios'],
     ['💰',n(f.movimientos),'movimiento','movimientos'],
     ['📋',n(f.tareas),'tarea','tareas'],
     ['✅',nChk,'checklist','checklists'],
@@ -10106,7 +10110,7 @@ function _rAyudantes(p){
 // ═══════════════════════════════════════════════════════════
 function _formTexto(sub){
   // Todo el texto buscable de un informe, para el buscador de la Bandeja.
-  var partes=[sub.ayudante,sub.mensajeGeneral,sub.obraName];
+  var partes=[sub.ayudante,sub.mensajeGeneral,sub.obraName].concat((sub.comentarios||[]).map(function(c){return (c&&c.texto)||'';}));
   (sub.movimientos||[]).forEach(function(m){partes.push(m.concepto);});
   (sub.tareas||[]).forEach(function(t){partes.push(t.titulo,t.descripcion);});
   (sub.materialesExistentes||[]).forEach(function(m){partes.push(m.nombre,m.notas);});
@@ -10138,6 +10142,7 @@ function _bandejaBodyHtml(){
     if(sub.tareas!==undefined){
       var pts=[];
       if(sub.mensajeGeneral)pts.push('💬 '+sub.mensajeGeneral.slice(0,60)+(sub.mensajeGeneral.length>60?'…':''));
+      if(sub.comentarios&&sub.comentarios.length)pts.push('💬 '+sub.comentarios.length+' comentario'+(sub.comentarios.length>1?'s':''));
       if(sub.movimientos&&sub.movimientos.length)pts.push('💰 '+sub.movimientos.length+' movimiento'+(sub.movimientos.length>1?'s':''));
       if(sub.tareas&&sub.tareas.length)pts.push('📋 '+sub.tareas.length+' tarea'+(sub.tareas.length>1?'s':''));
       if(sub.materialesExistentes&&sub.materialesExistentes.length)pts.push('📦 '+sub.materialesExistentes.length);
@@ -10318,6 +10323,22 @@ function incorporarFormularioModal(id){
     if(msgDone)h+='<div class="txxs mt-6" style="color:var(--green)">✓ En Comentarios del propietario'+((D.colaboradores||[]).some(function(c){return c.id===sub.token;})?' y en Mensajes':'')+'</div>';
     h+='</div>';
   }
+  if(sub.comentarios&&sub.comentarios.length){
+    var anyCmt=sub.comentarios.some(function(_,i){return sub.itemsInc.indexOf('cmt_'+i)<0;});
+    h+='<div class="card" style="padding:10px;margin-bottom:8px;border-left:3px solid #0d9488">';
+    h+='<div class="flex items-center justify-between mb-8"><span class="ts fw7" style="color:#0d9488">💬 Comentarios</span>'+_sBtn('cmt',anyCmt)+'</div>';
+    sub.comentarios.forEach(function(c,i){
+      var key='cmt_'+i;var done=sub.itemsInc.indexOf(key)>=0;
+      h+='<div class="flex items-start gap-8" style="padding:6px 0;border-bottom:1px solid var(--gray-ll);opacity:'+(done?'0.5':'1')+'">';
+      h+=_iBtn(key,done);
+      h+='<div class="flex-1 min-w-0"><div class="txxs fw7" style="color:var(--text3)">'+(c.tipo==='propietario'?'👤 Propietario':'💬 General')+' · '+esc(c.rubro||'')+(c.etapa?' · '+esc(c.etapa):'')+(c.fecha?' · '+esc(fmts(c.fecha)||c.fecha):'')+'</div>'
+        +'<div class="ts" style="white-space:pre-wrap;line-height:1.45">'+esc(c.texto||'')+'</div>'
+        +((c.foto&&String(c.foto).indexOf('[')!==0)?'<img src="'+c.foto+'" style="width:64px;height:64px;object-fit:cover;border-radius:6px;margin-top:4px">':'')
+        +(done?'<div class="txxs mt-4" style="color:var(--green)">✓ En Comentarios de la obra</div>':'')+'</div>';
+      h+='</div>';
+    });
+    h+='</div>';
+  }
   if(sub.movimientos&&sub.movimientos.length){
     var anyMov=sub.movimientos.some(function(_,i){return sub.itemsInc.indexOf('mov_'+i)<0;});
     h+='<div class="card" style="padding:10px;margin-bottom:8px">';
@@ -10433,6 +10454,7 @@ function _getAllFormKeys(sub){
   var keys=[];
   if(sub.tareas!==undefined){
     if(sub.mensajeGeneral)keys.push('msg_0');
+    if(sub.comentarios)sub.comentarios.forEach(function(_,i){keys.push('cmt_'+i);});
     if(sub.movimientos)sub.movimientos.forEach(function(_,i){keys.push('mov_'+i);});
     if(sub.tareas)sub.tareas.forEach(function(_,i){keys.push('tar_'+i);});
     if(sub.materialesExistentes)sub.materialesExistentes.forEach(function(_,i){keys.push('mex_'+i);});
@@ -10455,6 +10477,25 @@ function _doIncItem(sub,key){
     if(_coMsg){
       if(!_coMsg.notas)_coMsg.notas=[];
       _coMsg.notas.unshift({texto:sub.mensajeGeneral,fecha:sub.receivedAt||sub.fecha||nw(),de:'colab'});
+    }
+  } else if(type==='cmt'){
+    // Comentario del formulario → pestaña Comentarios de la obra, con los mismos
+    // campos que "Nuevo comentario". Queda asociado al informe (sourceId) y al
+    // colaborador que lo mandó, y también se registra en sus Mensajes.
+    var cm=(sub.comentarios||[])[idx];if(!cm||!cm.texto)return;
+    D.comentarios=D.comentarios||[];
+    var _cmId=uid();
+    D.comentarios.push({id:_cmId,projectId:pid,text:cm.texto,
+      tipo:cm.tipo==='propietario'?'propietario':'general',
+      rubro:cm.rubro||'Otro',etapa:cm.etapa||'',tareaId:'',
+      photos:cm.foto?[{url:cm.foto,caption:cm.fotoNota||''}]:[],archivos:[],
+      cargadoPor:by,sourceType:'formulario',sourceName:by,sourceId:sub.id,colabId:sub.token||'',
+      date:cm.fecha||String(sub.fecha||nw()).slice(0,10),updatedAt:nw()});
+    audit('comentarios','create','form: '+String(cm.texto).slice(0,30));
+    var _coCm=(D.colaboradores||[]).find(function(c){return c.id===sub.token;});
+    if(_coCm){
+      if(!_coCm.notas)_coCm.notas=[];
+      _coCm.notas.unshift({texto:'💬 '+cm.texto,fecha:sub.receivedAt||sub.fecha||nw(),de:'colab',comentarioId:_cmId});
     }
   } else if(type==='mov'){
     var m=(sub.movimientos||[])[idx];if(!m)return;
