@@ -372,6 +372,33 @@ function $(id){return document.getElementById(id);}
 function v(id){var el=$(id);return el?el.value.trim():'';}
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
+// ── Bienvenida ──────────────────────────
+// La primera vez que el colaborador entra se le explica para qué es esto.
+// Se muestra una sola vez por colaborador (se recuerda en este dispositivo).
+function _mostrarBienvenida(screenId){
+  if(!TOKEN)return;
+  try{if(localStorage.getItem('oc_bienv_'+TOKEN))return;}catch(_){}
+  var body=document.querySelector('#'+screenId+' .form-body');
+  if(!body||document.getElementById('ocBienv'))return;
+  var d=document.createElement('div');
+  d.id='ocBienv';d.className='card';
+  d.style.cssText='border:1.5px solid #99f6e4;background:linear-gradient(135deg,#f0fdfa,#fff)';
+  d.innerHTML='<div style="font-size:30px;line-height:1;margin-bottom:6px">👋</div>'
+    +'<div style="font-size:16px;font-weight:800;margin-bottom:6px">¡Bienvenido/a'+(colabName?', '+esc(colabName):'')+'!</div>'
+    +'<div style="font-size:13px;color:var(--text2);line-height:1.55">'
+    +'Este es tu espacio de trabajo compartido con el estudio'+(OBRA_NAME?' para la obra <strong>'+esc(OBRA_NAME)+'</strong>':'')+'.<br><br>'
+    +'Desde acá podés <strong>enviar</strong> información de todo tipo: mensajes, movimientos de dinero, tareas, materiales, checklists, fotos y archivos. '
+    +'Y también vas a <strong>recibir</strong> lo que el arquitecto te comparta, en tu <strong>Bandeja</strong> y en tu <strong>Carpeta</strong>.<br><br>'
+    +'Todo lo que cargues llega directo y queda registrado, para que trabajemos de forma colaborativa y ordenada.'
+    +'</div>'
+    +'<button class="btn btn-pri" style="margin-top:12px" onclick="_cerrarBienvenida()">Entendido, empezar →</button>';
+  body.insertBefore(d,body.firstChild);
+}
+function _cerrarBienvenida(){
+  try{localStorage.setItem('oc_bienv_'+TOKEN,'1');}catch(_){}
+  var d=document.getElementById('ocBienv');if(d)d.remove();
+}
+
 // ── Init ────────────────────────────────
 function init(){
   if(MODE==='carpeta'){
@@ -380,6 +407,7 @@ function init(){
     $('carpetaObraName').textContent=OBRA_NAME||'Obra';
     var storedName=TOKEN?localStorage.getItem('oc_n_'+TOKEN):'';
     if(storedName){$('carpetaColabSub').textContent='Hola, '+storedName+' 👋';colabName=storedName;}
+    _mostrarBienvenida('screenCarpeta');
     _avisarAcceso();
     return;
   }
@@ -573,6 +601,7 @@ function showFormScreen(){
   _avisarAcceso();
   $('hdrObra').textContent=OBRA_NAME||'Obra';
   $('hdrCollab').textContent='Hola, '+colabName+' 👋';
+  _mostrarBienvenida('screenForm');
   sendCount=parseInt(TOKEN?localStorage.getItem('oc_v_'+TOKEN)||'0':'0');
   if(TOKEN&&OBRA_ID){var cb=$('carpetaBar');if(cb)cb.style.display='block';}
   // Init bandeja badge

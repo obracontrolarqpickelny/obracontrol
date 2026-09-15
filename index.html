@@ -8617,7 +8617,9 @@ function openPerfilColab(colabId,tab){
   if(tab==='carpeta'){
     // reuse carpeta render logic
     var cp=getCarpeta(colabId);var archivos=cp.archivos||[];
-    var _pendMsgs=(D.mensajesColab||[]).filter(function(m){return m.colabId===colabId&&m.proyectoId===S.proj&&m.estadoColab==='nuevo';}).length;
+    _consolidarAvisosCarpeta(colabId);
+    var _pendList=(D.mensajesColab||[]).filter(function(m){return m.colabId===colabId&&m.proyectoId===S.proj&&m.estadoColab==='nuevo';});
+    var _pendMsgs=_pendList.length;
     h+='<div class="flex gap-6 mb-10 flex-wrap">';
     h+='<label class="btn btn-sec btn-s" style="cursor:pointer;display:flex;align-items:center;gap:5px">'+I.plus+' Subir<input type="file" multiple style="display:none" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.dwg,.zip" onchange="uploadArqCarpeta(\''+colabId+'\',this)"></label>';
     if(co.phone)h+='<button class="btn btn-sec btn-s" onclick="shareCarpetaUrl(\''+colabId+'\')">📤 Compartir</button>';
@@ -8626,7 +8628,7 @@ function openPerfilColab(colabId,tab){
     if(_pendMsgs>0&&co.phone){
       h+='<div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:8px;padding:10px 12px;margin-bottom:10px;display:flex;align-items:center;gap:10px">';
       h+='<span style="font-size:18px">🔔</span>';
-      h+='<div style="flex:1;font-size:12px;color:#92400e"><strong>'+_pendMsgs+' notificación'+(_pendMsgs>1?'es':'')+' pendiente'+(_pendMsgs>1?'s':'')+' de enviar.</strong><br>El colaborador no las vio todavía.</div>';
+      h+='<div style="flex:1;font-size:12px;color:#92400e"><strong>Sin avisar todavía:</strong><br>'+_lineasAvisosColab(_pendList,colabId).map(esc).join('<br>')+'<div style="margin-top:2px;opacity:.85">El colaborador no lo vio todavía.</div></div>';
       h+='<button class="btn btn-s" style="background:#d97706;color:#fff;flex-shrink:0" onclick="notificarColabWA(\''+colabId+'\')">📲 Notificar</button>';
       h+='</div>';
     }
@@ -8647,7 +8649,7 @@ function openPerfilColab(colabId,tab){
       var docs=sorted.filter(function(f){return !f.tipo||!f.tipo.startsWith('image/');});
       if(imgs.length){
         if(docs.length)h+='<div class="txxs fw7 tc3 mb-6">📸 Fotos ('+imgs.length+')</div>';
-        window._cLBImgs=imgs.map(function(f){return {data:f.data,nombre:f.nombre,fecha:f.fecha,id:f.id};});
+        window._cLBImgs=imgs.map(function(f){return {data:_resolveImg(f.data),nombre:f.nombre,fecha:f.fecha,id:f.id,descripcion:f.descripcion||''};});
         h+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:16px">';
         imgs.forEach(function(f,idx){
           var upBy=f.subidoPor==='col'?'👷':'🏗';
@@ -8700,6 +8702,7 @@ function openPerfilColab(colabId,tab){
         h+='<div style="flex:1"><div class="ts fw7">'+esc(f.ayudante||'Colaborador')+'</div>';
         h+='<div class="txxs tc3 mt-2">📅 '+fmts(f.receivedAt||f.fecha||'')+'</div>';
         if(f.version&&f.version>1)h+='<div class="txxs tc3">Versión '+f.version+'</div>';
+        h+=_chipsInforme(f);
         h+='</div>';
         h+='<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">';
         h+='<span style="background:'+estadoCol+'22;color:'+estadoCol+';border-radius:8px;padding:2px 8px;font-size:10px;font-weight:700">'+estadoLabel+'</span>';
@@ -8709,6 +8712,7 @@ function openPerfilColab(colabId,tab){
     }
 
   } else if(tab==='bandeja'){
+    _consolidarAvisosCarpeta(colabId);
     var msgs=(D.mensajesColab||[]).filter(function(m){return m.colabId===colabId&&m.proyectoId===S.proj;}).slice().reverse();
     if(!msgs.length){
       h+='<div class="empty">📥<div class="ts mt-8">Bandeja vacía</div><div class="txxs tc3 mt-4">Usá el botón ✅ para asignar tareas o checklists a este colaborador.</div></div>';
@@ -8722,11 +8726,38 @@ function openPerfilColab(colabId,tab){
         // Header
         h+='<div class="flex justify-between items-start gap-8 mb-6">';
         h+='<div style="flex:1"><div class="ts fw7">'+esc(m.titulo||'Sin título')+'</div>';
-        h+='<div class="txxs tc3 mt-2">'+({checklist:'✅ Checklist',tarea:'📋 Tarea',nota:'📝 Nota'}[m.tipo]||m.tipo)+' · '+fmts(m.fechaEnvio)+'</div>';
-        if(m.nota)h+='<div class="txxs mt-4 tc3" style="font-style:italic">'+esc(m.nota)+'</div>';
+        var _esCarp=_esAvisoCarpeta(m);
+        h+='<div class="txxs tc3 mt-2">'+(_esCarp?'📁 Carpeta':({checklist:'✅ Checklist',tarea:'📋 Tarea',nota:'📝 Nota'}[m.tipo]||m.tipo))+' · '+fmts(m.fechaEnvio)+'</div>';
+        if(m.nota&&!_esCarp)h+='<div class="txxs mt-4 tc3" style="font-style:italic">'+esc(m.nota)+'</div>';
         h+='</div>';
         h+='<span style="background:'+ec+'22;color:'+ec+';border-radius:8px;padding:2px 8px;font-size:10px;font-weight:700;flex-shrink:0;white-space:nowrap">'+(eL[m.estadoColab]||m.estadoColab)+'</span>';
         h+='</div>';
+        // Aviso de carpeta: antes era sólo el nombre del archivo en cursiva, sin
+        // forma de ver la foto ni su nota. Ahora se ven las miniaturas (tocando
+        // se abren en grande con la nota) y los documentos con su descarga.
+        if(_esCarp){
+          var _fsAv=_archivosDeAviso(m,colabId);
+          var _imAv=_fsAv.filter(_esImagenArch),_dcAv=_fsAv.filter(function(f){return !_esImagenArch(f);});
+          if(_imAv.length){
+            h+='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:8px">';
+            _imAv.forEach(function(f,i){
+              var _src=_resolveImg(f.data),_ok=_src&&_src.indexOf('[')!==0;
+              h+='<div onclick="verArchivoAviso(\''+m.id+'\',\''+colabId+'\','+i+')" title="'+esc(f.nombre)+'" style="position:relative;padding-bottom:100%;border-radius:6px;overflow:hidden;background:var(--gray-ll);cursor:pointer">'
+                +(_ok?'<img src="'+_src+'" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover">':'<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:16px">☁️</div>')
+                +(f.descripcion?'<span style="position:absolute;bottom:2px;right:2px;background:rgba(0,0,0,.6);color:#fff;border-radius:4px;font-size:9px;padding:0 3px">📝</span>':'')
+                +'</div>';
+            });
+            h+='</div>';
+          }
+          _dcAv.forEach(function(f){
+            h+='<div style="display:flex;align-items:center;gap:6px;background:var(--gray-ll);border-radius:8px;padding:6px 8px;margin-bottom:6px">'
+              +'<span style="font-size:18px">📄</span><div style="flex:1;min-width:0"><div class="txxs fw7 trun">'+esc(f.nombre)+'</div>'
+              +(f.descripcion?'<div class="txxs tc3">📝 '+esc(f.descripcion)+'</div>':'')+'</div>'
+              +'<a href="'+_resolveImg(f.data)+'" download="'+esc(f.nombre)+'" class="btn btn-sec btn-s" style="padding:4px 8px;text-decoration:none">⬇</a></div>';
+          });
+          if(!_fsAv.length)h+='<div class="txxs tc3 mb-6">Los archivos de este aviso ya no están en la carpeta.</div>';
+          h+='<button onclick="openPerfilColab(\''+colabId+'\',\'carpeta\')" style="border:none;background:none;color:var(--teal);font-size:11px;font-weight:700;cursor:pointer;padding:0;margin-bottom:8px">📁 Abrir la carpeta →</button>';
+        }
         // Content: expand checklist items or task details
         if(m.tipo==='checklist'&&m.entidadId){
           var chEnt=(D.checklists||[]).find(function(c){return c.id===m.entidadId;});
@@ -8934,7 +8965,7 @@ function openCarpeta(colabId){
       var docs=sorted.filter(function(f){return !f.tipo||!f.tipo.startsWith('image/');});
       if(imgs.length){
         if(docs.length)h+='<div class="txxs fw7 tc3 mb-6">📸 Fotos ('+imgs.length+')</div>';
-        window._cLBImgs=imgs.map(function(f){return {data:f.data,nombre:f.nombre,fecha:f.fecha,id:f.id};});
+        window._cLBImgs=imgs.map(function(f){return {data:_resolveImg(f.data),nombre:f.nombre,fecha:f.fecha,id:f.id,descripcion:f.descripcion||''};});
         h+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:16px">';
         imgs.forEach(function(f,idx){
           var upBy=f.subidoPor==='col'?'👷':'🏗';
@@ -8981,29 +9012,161 @@ function openCarpeta(colabId){
 function fileToDataUrl(file){
   return new Promise(function(res,rej){var r=new FileReader();r.onload=function(){res(r.result);};r.onerror=function(){rej(r.error);};r.readAsDataURL(file);});
 }
+// ─── AVISOS DE CARPETA AL COLABORADOR ─────────────────────────────
+// Cada subida creaba su propio aviso "1 archivo nuevo en tu carpeta", así que
+// dos subidas seguidas llegaban como dos renglones iguales en vez de "2 fotos
+// nuevas". Ahora hay un único aviso pendiente por colaborador que acumula los
+// archivos, guarda cuáles son (para poder abrirlos) y separa fotos de documentos.
+function _esAvisoCarpeta(m){
+  return !!m&&m.tipo==='nota'&&(m.carpeta===true||/en tu carpeta/.test(m.titulo||''));
+}
+function _esImagenArch(a){return !!(a&&a.tipo&&String(a.tipo).indexOf('image/')===0);}
+/** Los archivos reales de un aviso. Los avisos viejos sólo tenían los nombres en el texto. */
+function _archivosDeAviso(m,colabId){
+  var arch=(getCarpeta(colabId).archivos)||[];
+  if(m.archivoIds&&m.archivoIds.length){
+    return m.archivoIds.map(function(id){return arch.find(function(a){return a.id===id;});}).filter(Boolean);
+  }
+  var nombres=String(m.nota||'').split(', ').map(function(s){return s.trim();}).filter(Boolean);
+  return arch.filter(function(a){return nombres.indexOf(a.nombre)>=0;});
+}
+function _recalcAvisoCarpeta(m,colabId){
+  var fs=_archivosDeAviso(m,colabId);
+  var nF=fs.filter(_esImagenArch).length,nD=fs.length-nF;
+  var partes=[];
+  if(nF)partes.push(nF+' foto'+(nF>1?'s':'')+' nueva'+(nF>1?'s':''));
+  if(nD)partes.push(nD+' documento'+(nD>1?'s':'')+' nuevo'+(nD>1?'s':''));
+  m.carpeta=true;
+  m.archivoIds=fs.map(function(f){return f.id;});
+  if(fs.length){
+    m.titulo='📁 '+partes.join(' y ')+' en tu carpeta';
+    var nom=fs.map(function(f){return f.nombre;});
+    m.nota=nom.slice(0,3).join(', ')+(nom.length>3?' y '+(nom.length-3)+' más':'');
+  }
+  m.updatedAt=nw();
+}
+/** Junta en uno todos los avisos de carpeta que el colaborador todavía no vio. */
+function _consolidarAvisosCarpeta(colabId){
+  var avisos=(D.mensajesColab||[]).filter(function(m){
+    return m.colabId===colabId&&m.proyectoId===S.proj&&m.estadoColab==='nuevo'&&_esAvisoCarpeta(m);
+  });
+  if(avisos.length<2)return false;
+  avisos.sort(function(a,b){return String(a.fechaEnvio||'').localeCompare(String(b.fechaEnvio||''));});
+  var ids=[];
+  avisos.forEach(function(m){
+    _archivosDeAviso(m,colabId).forEach(function(f){if(ids.indexOf(f.id)<0)ids.push(f.id);});
+  });
+  if(!ids.length)return false; // los archivos ya no están: no hay nada que juntar
+  var base=avisos[avisos.length-1]; // el más reciente queda, con la fecha de la última subida
+  base.archivoIds=ids;
+  _recalcAvisoCarpeta(base,colabId);
+  var quitar={};
+  avisos.forEach(function(m){if(m!==base){quitar[m.id]=true;addTombstone('mensajesColab',m.id);}});
+  D.mensajesColab=D.mensajesColab.filter(function(m){return !quitar[m.id];});
+  return true;
+}
+function _agregarAvisoCarpeta(colabId,ids){
+  if(!D.mensajesColab)D.mensajesColab=[];
+  var prev=D.mensajesColab.find(function(m){
+    return m.colabId===colabId&&m.proyectoId===S.proj&&m.estadoColab==='nuevo'&&_esAvisoCarpeta(m);
+  });
+  if(prev){
+    prev.archivoIds=(prev.archivoIds&&prev.archivoIds.length?prev.archivoIds:_archivosDeAviso(prev,colabId).map(function(f){return f.id;})).concat(ids);
+    prev.fechaEnvio=nw();
+    _recalcAvisoCarpeta(prev,colabId);
+  } else {
+    var m={id:uid(),proyectoId:S.proj,colabId:colabId,tipo:'nota',entidadId:null,carpeta:true,
+      archivoIds:ids.slice(),titulo:'',nota:'',urgencia:'baja',fechaEnvio:nw(),updatedAt:nw(),
+      estadoColab:'nuevo',respuesta:null,fechaRespuesta:null};
+    _recalcAvisoCarpeta(m,colabId);
+    D.mensajesColab.push(m);
+  }
+  _consolidarAvisosCarpeta(colabId);
+}
+/** Renglones agrupados por tipo: "📸 2 fotos nuevas", "📋 1 tarea: ...". */
+function _lineasAvisosColab(msgs,colabId){
+  var nF=0,nD=0,sueltos=0,otras=[];
+  msgs.forEach(function(m){
+    if(!_esAvisoCarpeta(m)){otras.push(m);return;}
+    var fs=_archivosDeAviso(m,colabId);
+    if(fs.length)fs.forEach(function(f){if(_esImagenArch(f))nF++;else nD++;});
+    else sueltos+=parseInt((String(m.titulo||'').match(/(\d+)/)||[])[1],10)||1;
+  });
+  var l=[];
+  if(nF)l.push('📸 '+nF+' foto'+(nF>1?'s':'')+' nueva'+(nF>1?'s':'')+' en tu carpeta');
+  if(nD)l.push('📄 '+nD+' documento'+(nD>1?'s':'')+' nuevo'+(nD>1?'s':'')+' en tu carpeta');
+  if(sueltos)l.push('📁 '+sueltos+' archivo'+(sueltos>1?'s':'')+' nuevo'+(sueltos>1?'s':'')+' en tu carpeta');
+  var titulos=function(arr){
+    var t=arr.map(function(m){return String(m.titulo||'').trim();}).filter(Boolean);
+    return t.length?': '+t.slice(0,3).join(', ')+(t.length>3?' y '+(t.length-3)+' más':''):'';
+  };
+  var chk=otras.filter(function(m){return m.tipo==='checklist';});
+  var tar=otras.filter(function(m){return m.tipo==='tarea';});
+  var res=otras.filter(function(m){return m.tipo!=='checklist'&&m.tipo!=='tarea';});
+  if(chk.length)l.push('✅ '+chk.length+' checklist'+(chk.length>1?'s':'')+titulos(chk));
+  if(tar.length)l.push('📋 '+tar.length+' tarea'+(tar.length>1?'s':'')+titulos(tar));
+  res.forEach(function(m){l.push('📝 '+String(m.titulo||'Nota').trim());});
+  return l;
+}
+/** Abre en grande las fotos de un aviso, con su nota. */
+function verArchivoAviso(msgId,colabId,idx){
+  var m=(D.mensajesColab||[]).find(function(x){return x.id===msgId;});
+  if(!m)return;
+  var imgs=_archivosDeAviso(m,colabId).filter(_esImagenArch);
+  if(!imgs.length){toast('Esa foto ya no está en la carpeta','var(--orange)');return;}
+  window._cLBImgs=imgs.map(function(f){return {data:_resolveImg(f.data),nombre:f.nombre,fecha:f.fecha,id:f.id,descripcion:f.descripcion||''};});
+  openCarpetaLightbox(idx||0);
+}
+
+// ─── ÍCONOS DE CONTENIDO DE UN INFORME ────────────────────────────
+function _contarFotosInforme(o,prof){
+  if(!o||prof>6)return 0;
+  if(typeof o==='string')return (o.indexOf('data:image')===0||o.indexOf('[foto:')===0||o.indexOf('drive.google.com/thumbnail')>=0)?1:0;
+  if(typeof o!=='object')return 0;
+  var s=0;
+  for(var k in o){if(k!=='_entidad')s+=_contarFotosInforme(o[k],prof+1);}
+  return s;
+}
+/** Qué trae un informe, de un vistazo: 💰 3 · 📋 1 · ✅ 2 · 📸 4 */
+function _chipsInforme(f){
+  if(!f)return '';
+  if(f.mode==='visto')return '<div class="txxs tc3 mt-4">👁 Abrió el link</div>';
+  var n=function(a){return Array.isArray(a)?a.length:0;};
+  var nChk=n(f.checklists)||((f.checklist&&(f.checklist.titulo||n(f.checklist.items)))?1:0);
+  // [ícono, cantidad, singular, plural]
+  var c=[
+    ['💬',f.mensajeGeneral?1:0,'mensaje','mensajes'],
+    ['💰',n(f.movimientos),'movimiento','movimientos'],
+    ['📋',n(f.tareas),'tarea','tareas'],
+    ['✅',nChk,'checklist','checklists'],
+    ['📦',n(f.materialesExistentes),'material existente','materiales existentes'],
+    ['🔔',n(f.materialesPedidos),'material a pedir','materiales a pedir'],
+    ['📬',n(f.materialesIngresados),'material ingresado','materiales ingresados'],
+    ['📁',n(f.archivos),'archivo','archivos'],
+    ['📸',_contarFotosInforme(f,0),'foto','fotos'],
+  ].filter(function(x){return x[1]>0;});
+  if(!c.length)return '<div class="txxs tc3 mt-4">Sin contenido</div>';
+  return '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">'+c.map(function(x){
+    return '<span title="'+x[1]+' '+(x[1]===1?x[2]:x[3])+'" style="display:inline-flex;align-items:center;gap:3px;background:var(--gray-ll);border:1px solid var(--brd);border-radius:10px;padding:1px 7px;font-size:11px;font-weight:700;color:var(--text2);white-space:nowrap">'+x[0]+' '+(x[0]==='💬'?'':x[1])+'</span>';
+  }).join('')+'</div>';
+}
+
 async function uploadArqCarpeta(colabId,input){
   if(!input.files||!input.files.length)return;
-  var cp=getCarpeta(colabId);var added=0;var nombres=[];
+  var cp=getCarpeta(colabId);var added=0;var nombres=[];var nuevosIds=[];
   toast('Procesando archivos...','var(--pri)');
   for(var i=0;i<input.files.length;i++){
     var f=input.files[i];
     if(f.size>8*1024*1024){toast(f.name+' supera 8MB, omitido','var(--orange)');continue;}
     try{
       var data=f.type.startsWith('image/')?await compressImage(await fileToDataUrl(f),1400,0.75):await fileToDataUrl(f);
-      cp.archivos.push({id:uid(),nombre:f.name,tipo:f.type||'application/octet-stream',data:data,fecha:nw(),subidoPor:'arq',descripcion:''});
-      nombres.push(f.name);added++;
+      var _nid=uid();
+      cp.archivos.push({id:_nid,nombre:f.name,tipo:f.type||'application/octet-stream',data:data,fecha:nw(),subidoPor:'arq',descripcion:''});
+      nombres.push(f.name);nuevosIds.push(_nid);added++;
     }catch(e){toast('Error en '+f.name+': '+e.message,'var(--red)');}
   }
-  if(added){
-    // Crear notificación automática en bandeja del colaborador
-    if(!D.mensajesColab)D.mensajesColab=[];
-    D.mensajesColab.push({
-      id:uid(),proyectoId:S.proj,colabId:colabId,tipo:'nota',entidadId:null,
-      titulo:'📁 '+added+' archivo'+(added>1?'s':'')+' nuevo'+(added>1?'s':'')+' en tu carpeta',
-      nota:nombres.slice(0,3).join(', ')+(nombres.length>3?' y '+(nombres.length-3)+' más':''),
-      urgencia:'baja',fechaEnvio:nw(),updatedAt:nw(),estadoColab:'nuevo',respuesta:null,fechaRespuesta:null
-    });
-  }
+  // Un solo aviso pendiente por colaborador, que acumula lo que se va subiendo.
+  if(added)_agregarAvisoCarpeta(colabId,nuevosIds);
   sv();render();
   openPerfilColab(colabId,'carpeta');
   if(added)toast(added+' archivo'+(added>1?'s':'')+' subido'+(added>1?'s':'')+' ✓','var(--green)',3000);
@@ -9045,6 +9208,7 @@ function openCarpetaLightbox(idx){
   var h='<button onclick="document.getElementById(\'carpetaLB\').remove()" style="position:absolute;top:12px;right:12px;border:none;background:rgba(255,255,255,.2);color:#fff;border-radius:50%;width:36px;height:36px;font-size:18px;cursor:pointer;z-index:1">✕</button>';
   h+='<img src="'+f.data+'" style="max-width:92vw;max-height:68vh;object-fit:contain;border-radius:10px">';
   h+='<div style="color:rgba(255,255,255,.8);font-size:11px;margin-top:10px;text-align:center">'+esc(f.nombre)+'<br><span style="color:rgba(255,255,255,.5)">'+fmts(f.fecha)+'</span></div>';
+  if(f.descripcion)h+='<div style="color:#fff;font-size:13px;margin-top:8px;max-width:92vw;text-align:center;white-space:pre-wrap;background:rgba(255,255,255,.12);border-radius:8px;padding:8px 12px">📝 '+esc(f.descripcion)+'</div>';
   h+='<div style="display:flex;gap:10px;margin-top:14px;align-items:center">';
   if(idx>0)h+='<button onclick="openCarpetaLightbox('+(idx-1)+')" style="border:none;background:rgba(255,255,255,.18);color:#fff;border-radius:10px;padding:8px 16px;font-size:14px;cursor:pointer">← Ant.</button>';
   h+='<button onclick="dlImg(\''+f.data+'\',\''+esc(f.nombre)+'\')" style="border:none;background:#16a34a;color:#fff;border-radius:10px;padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer">⬇ Descargar</button>';
@@ -10408,6 +10572,7 @@ function shareFormColaborador(colId){
   // NO cambiar estado aquí — se cambia solo cuando el colaborador abre el link
 }
 function notificarColabWA(colabId){
+  _consolidarAvisosCarpeta(colabId);
   var co=(D.colaboradores||[]).find(function(c){return c.id===colabId;});if(!co||!co.phone)return;
   var p=(D.projects||[]).find(function(x){return x.id===S.proj;});
   var msgs=(D.mensajesColab||[]).filter(function(m){return m.colabId===colabId&&m.proyectoId===S.proj;});
@@ -10428,8 +10593,10 @@ function notificarColabWA(colabId){
   var msgsParam=enrichedMsgs.length?'&msgs='+encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(enrichedMsgs))))):'';
   var url=baseUrl+'?token='+encodeURIComponent(co.id)+'&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p&&p.name||'')+'&colName='+encodeURIComponent(co.name||'')+(SYNC.archTel?'&tel='+encodeURIComponent(SYNC.archTel):'')+'&sw=1&se='+(SYNC.sendEmail?'1':'0')+_apiUrlParams()+msgsParam;
   var pendMsgs=msgs.filter(function(m){return m.estadoColab==='nuevo';});
-  var resumen=pendMsgs.map(function(m){return '• '+esc(m.titulo);}).slice(0,5).join('\n');
-  var texto='Hola '+(co.name||'')+' 👋 Tenés '+(pendMsgs.length)+' notificación'+(pendMsgs.length>1?'es':'')+' nueva'+(pendMsgs.length>1?'s':'')+' en ObraControl — obra '+(p?p.name:'')+':'+(resumen?'\n'+resumen:'')+'\n\nIngresá con este link:\n'+url;
+  // Agrupado por tipo ("📸 2 fotos nuevas" y no dos renglones de "1 archivo").
+  // Sin esc(): es texto para WhatsApp, no HTML, y "&" salía como "&amp;".
+  var resumen=_lineasAvisosColab(pendMsgs,colabId).map(function(l){return '• '+l;}).join('\n');
+  var texto='Hola '+(co.name||'')+' 👋 Tenés novedades en ObraControl — obra '+(p?p.name:'')+':'+(resumen?'\n'+resumen:'')+'\n\nIngresá con este link:\n'+url;
   window.open('whatsapp://send?phone='+co.phone.replace(/[^0-9]/g,'')+'&text='+encodeURIComponent(texto),'_blank');
 }
 function openColabPortal(colId){
