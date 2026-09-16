@@ -3036,10 +3036,82 @@ function _itemsSinCompDeGrupo(key){
 }
 
 /** Resumen de un conjunto de ingresos: cuánto entró, de quiénes y entre qué fechas. */
-function _resumenIngresos(items){
-  var porUnidad={},provs={},fechas=[];
+// Unidad comparable: "Barra" y "barras", "kg" y "Kgs", "lts" y "litros" son la
+// misma. Sin esto un material cargado dos veces no se sumaba ("7 Barra · 16 barras").
+function _unidadClave(u){
+  var s=_normTxt(u||'u').replace(/[.\s]+/g,'');
+  var mapa={kgs:'kg',kilo:'kg',kilos:'kg',kilogramo:'kg',kilogramos:'kg',
+    lt:'l',lts:'l',litro:'l',litros:'l',un:'u',unid:'u',unidad:'u',unidades:'u',
+    mt:'m',mts:'m',metro:'m',metros:'m','m²':'m2','m³':'m3'};
+  if(mapa[s])return mapa[s];
+  if(s.length>3&&s.charAt(s.length-1)==='s')s=s.slice(0,-1); // plural: barras→barra, bolsas→bolsa
+  return s;
+}
+// Texto buscable de un registro: todos sus campos de texto y números, incluidas
+// notas, detalles y observaciones. Quedan afuera archivos (base64), links e ids.
+function _textoBuscable(o,prof){
+  prof=prof||0;
+  if(o==null||prof>4)return '';
+  if(typeof o==='number')return String(o);
+  if(typeof o==='string'){
+    if(o.indexOf('data:')===0||/^https?:\/\//.test(o)||o.indexOf('[foto')===0)return '';
+    return o;
+  }
+  if(Array.isArray(o))return o.map(function(x){return _textoBuscable(x,prof+1);}).join(' ');
+  if(typeof o==='object'){
+    var t=[];
+    for(var k in o){
+      if(/^(id|updatedAt|url|data|fileData|imagen)$|Id$/.test(k))continue;
+      t.push(_textoBuscable(o[k],prof+1));
+    }
+    return t.join(' ');
+  }
+  return '';
+}
+/** Busca todas las palabras, sin importar acentos ni mayúsculas, en cualquier campo. */
+function _coincideBusqueda(o,q){
+  var palabras=_normTxt(q).split(' ').filter(Boolean);
+  if(!palabras.length)return true;
+  var t=_normTxt(_textoBuscable(o));
+  return palabras.every(function(w){return t.indexOf(w)>=0;});
+}
+/**
+ * Ingresos sin cómputo agrupados por nombre: los que tienen el mismo nombre son
+ * el mismo material. Antes cada ingreso era un renglón, así que después de
+ * fusionar "Hierro del 6" seguía apareciendo dos veces con dos cantidades.
+ * Cada ingreso se conserva igual (fecha, proveedor, remito): se ven en el historial.
+ */
+function _filasSinComp(items){
+  var mapa={},orden=[];
   items.forEach(function(i){
-    var u=(i.unit||'u').trim();
+    var k=_normTxt(i.matNombre||'');
+    if(!mapa[k]){mapa[k]={clave:k,nombre:String(i.matNombre||'Sin nombre').trim(),items:[]};orden.push(k);}
+    mapa[k].items.push(i);
+  });
+  return orden.map(function(k){return mapa[k];});
+}
+function _filaSinCompAgregada(fila,borde){
+  var r=_resumenIngresos(fila.items);
+  var i0=fila.items[0];
+  return '<div class="matrow" style="padding:8px 0;'+(borde==='border-top'?'border-top':'border-bottom')+':1px solid var(--gray-ll)">'
+    +'<div class="matrow-txt">'
+    +'<div class="ts fw6" style="cursor:pointer" title="Ver historial de ingresos" onclick="abrirSinCompDetalle(\''+i0.id+'\')">'+esc(fila.nombre)+' <span style="color:var(--cyan)">&#x203A;</span></div>'
+    +'<div class="txxs tc3 mt-2"><strong style="color:var(--text2)">'+esc(r.totales.join(' · '))+'</strong> · '+fila.items.length+' ingresos'+(r.hasta?' | último '+esc(fmts(r.hasta)||r.hasta):'')+'</div>'
+    +(r.proveedores.length?'<div class="txxs tc3">'+esc(r.proveedores.join(', '))+'</div>':'')
+    +'</div>'
+    +'<div class="matrow-acts">'
+    +'<button class="btn btn-g btn-s" style="font-size:10px" onclick="asignarGrupoSinComp(\''+i0.id+'\')" title="Agrupar con otros">&#x1F3D7;</button>'
+    +'<button class="btn btn-g btn-s" style="font-size:10px;color:var(--purple)" onclick="pasarSinCompClaveAComputado('+_argAttr(fila.clave)+')" title="Pasar a computado">&#x1F4CA;</button>'
+    +'<button class="btn btn-g btn-s" style="font-size:10px" onclick="vincularSinCompClave('+_argAttr(fila.clave)+')" title="Vincular o fusionar con otro material">&#x1F517;</button>'
+    +'<button class="btn btn-sec btn-s" style="font-size:10px" onclick="abrirSinCompDetalle(\''+i0.id+'\')" title="Ver cada ingreso">&#x1F4CB; Historial</button>'
+    +'</div></div>';
+}
+function _resumenIngresos(items){
+  var porUnidad={},etiqueta={},provs={},fechas=[];
+  items.forEach(function(i){
+    var uOrig=(i.unit||'u').trim();
+    var u=_unidadClave(uOrig);
+    if(!etiqueta[u])etiqueta[u]=uOrig;
     porUnidad[u]=(porUnidad[u]||0)+(parseFloat(i.qty)||0);
     if(i.proveedor&&i.proveedor.trim())provs[i.proveedor.trim()]=true;
     var f=i.fechaIngreso||i.fecha||i.date;
@@ -3047,7 +3119,7 @@ function _resumenIngresos(items){
   });
   fechas.sort();
   return {
-    totales:Object.keys(porUnidad).map(function(u){return _fmtNum(porUnidad[u])+' '+u;}),
+    totales:Object.keys(porUnidad).map(function(u){return _fmtNum(porUnidad[u])+' '+etiqueta[u];}),
     proveedores:Object.keys(provs).sort(),
     desde:fechas[0]||'',hasta:fechas[fechas.length-1]||'',
   };
@@ -3072,7 +3144,9 @@ function _renderSinCompGroupCard(key,group){
   h+='</div>';
   if(!collapsed){
     h+='<div class="mt-8">';
-    group.items.forEach(function(i){
+    _filasSinComp(group.items).forEach(function(fila){
+      if(fila.items.length>1){h+=_filaSinCompAgregada(fila,'border-top');return;}
+      var i=fila.items[0];
       h+='<div style="padding:6px 0;border-top:1px solid var(--gray-ll)"><div class="matrow">';
       h+='<div class="matrow-txt"><div class="ts fw6" style="cursor:pointer" title="Ver historial de ingresos" onclick="abrirSinCompDetalle(\''+i.id+'\')">'+esc(i.matNombre||'Sin nombre')+' <span style="color:var(--cyan)">&#x203A;</span>'+_alertTag(i)+_notaBadge('matIngresos',i.id,'observations')+'</div>';
       h+='<div class="txxs tc3 mt-2">'+_fmtNum(i.qty)+' '+esc(i.unit||'u')+(i.proveedor?' | '+esc(i.proveedor):'')+((i.fechaIngreso||i.fecha)?' | '+esc(fmts(i.fechaIngreso||i.fecha)||(i.fechaIngreso||i.fecha)):'')+'</div>';
@@ -3121,6 +3195,11 @@ function _setGrupoSinComp(id,nombre){
   if(!i)return;
   i.grupo=(nombre||'').trim();
   i.updatedAt=nw();
+  // Todos los ingresos con el mismo nombre son el mismo material: van juntos al grupo.
+  var _cl=_normTxt(i.matNombre||'');
+  _sinCompItems().forEach(function(x){
+    if(x!==i&&_normTxt(x.matNombre||'')===_cl){x.grupo=i.grupo;x.updatedAt=nw();}
+  });
   audit('matIngresos','grupo',i.matNombre||'');
   sv();
   try{document.getElementById('grpSinCompM').remove();}catch(_){}
@@ -3902,7 +3981,7 @@ function renderSR(){
     {t:'comentarios',f:['text','rubro','etapa'],               l:'Comentario',    c:'var(--orange)', m:'comentarios',   nav:()=>`S.mod='comentarios';`},
     {t:'documentos', f:['name','notes','fileName','category'], l:'Documento',     c:'var(--slate)',  m:'documentos',    nav:(x)=>x.visitaId?`S.visitaDetail='${x.visitaId}';S.mod='visitas';`:`S.mod='documentos';`},
     {t:'checklists', f:['title'],                              l:'Checklist',     c:'var(--pink)',   m:'checklist',     nav:(x)=>x.visitaId?`S.visitaDetail='${x.visitaId}';S.mod='visitas';`:`S.mod='checklist';`},
-    {t:'economia',   f:['concepto','proveedor','medioPago'],   l:'Economía',      c:'var(--cyan)',   m:'economia',      nav:()=>`S.mod='economia';S.ecoFilter=q;`},
+    {t:'economia',   f:['concepto','proveedor','medioPago','detalle','rubro','item'],   l:'Economía',      c:'var(--cyan)',   m:'economia',      nav:()=>`S.mod='economia';S.ecoFilter=q;`},
     {t:'colaboradores',f:['name','email','role'],              l:'Colaborador',   c:'var(--green)',  m:'colaboradores', nav:()=>`S.mod='colaboradores';`},
     {t:'enlaces',    f:['title','url','description'],          l:'Enlace',        c:'var(--blue)',   m:'documentos',    nav:()=>`S.mod='documentos';`},
   ];
@@ -5077,8 +5156,8 @@ function rMat(mc){
   let items=allItems;
   if(S.matCatFilter)items=items.filter(m=>(m.category||'General')===S.matCatFilter);
   if(S.matFilter){
-    const q=S.matFilter.toLowerCase();
-    items=items.filter(m=>(m.name||'').toLowerCase().includes(q)||(m.category||'').toLowerCase().includes(q)||(m.notes||'').toLowerCase().includes(q));
+    const q=S.matFilter;
+    items=items.filter(m=>_coincideBusqueda(m,q)||(D.matIngresos||[]).some(i=>i.materialId===m.id&&_coincideBusqueda(i,q)));
   }
   const hasFilter=S.matFilter||S.matCatFilter;
   // Build display categories from filtered items
@@ -5094,7 +5173,7 @@ function rMat(mc){
   <!-- FILTROS MATERIALES -->
   <div class="card mb-12" style="padding:12px">
     <div class="flex gap-6 mb-8 items-center">
-      <input class="fi" id="mat_search" placeholder="Buscar material..." value="${S.matFilter||''}" oninput="S.matFilter=this.value;renderMatItems()" style="flex:1">
+      <input class="fi" id="mat_search" placeholder="Buscar en materiales, notas, proveedores..." value="${S.matFilter||''}" oninput="S.matFilter=this.value;renderMatItems()" style="flex:1">
       ${S.matFilter?`<button class="btn btn-sec btn-s" onclick="S.matFilter='';if($('mat_search'))$('mat_search').value='';renderMatItems()">✕</button>`:''}
     </div>
     ${cats_all.length>1?`<div class="flex gap-4 wrap mb-8">
@@ -5241,7 +5320,9 @@ function renderMatItems(){
   const ings=pf('matIngresos');const c=MC.materiales;
   let items=allItems;
   if(S.matCatFilter)items=items.filter(m=>(m.category||'General')===S.matCatFilter);
-  if(S.matFilter){const q=S.matFilter.toLowerCase();items=items.filter(m=>(m.name||'').toLowerCase().includes(q)||(m.category||'').toLowerCase().includes(q)||(m.notes||'').toLowerCase().includes(q));}
+  // Busca en todo el material (nombre, categoría, notas, nota) y en sus ingresos
+  // (proveedor, remito, observaciones). Antes sólo nombre, categoría y notas.
+  if(S.matFilter){const q=S.matFilter;items=items.filter(m=>_coincideBusqueda(m,q)||ings.some(i=>i.materialId===m.id&&_coincideBusqueda(i,q)));}
   const hasFilter=S.matFilter||S.matCatFilter;
   const cats={};
   // Build enriched items with pct before sorting
@@ -5269,6 +5350,7 @@ function renderMatItems(){
   // Existentes — más recientes primero
   var _exist=(D.matIngresos||[]).filter(function(i){return i.projectId===S.proj&&i.estado==='existente';})
     .sort(function(a,b){return (b.updatedAt||b.date||'').localeCompare(a.updatedAt||a.date||'');});
+  if(S.matFilter)_exist=_exist.filter(function(i){return _coincideBusqueda(i,S.matFilter);});
   var _existH='';
   if(_exist.length){
     _existH='<div class="card matsec" style="border-left:3px solid var(--green);background:var(--green-bg)">';
@@ -5294,6 +5376,7 @@ function renderMatItems(){
   }
   // ── Sección A pedir ────────────────────────────────────────────
   var _apedir=(D.matIngresos||[]).filter(function(i){return i.projectId===S.proj&&i.estado==='a_pedir';});
+  if(S.matFilter)_apedir=_apedir.filter(function(i){return _coincideBusqueda(i,S.matFilter);});
   var _apedirH='';
   if(_apedir.length){
     _apedirH='<div class="card matsec" style="border-left:3px solid #8b5cf6">';
@@ -5322,6 +5405,7 @@ function renderMatItems(){
     _apedirH+='</div>';
   }
   var _peds=(D.matIngresos||[]).filter(function(i){return i.projectId===S.proj&&i.estado==='pedido';});
+  if(S.matFilter)_peds=_peds.filter(function(i){return _coincideBusqueda(i,S.matFilter);});
 
   var _pedH='';
   if(_peds.length){
@@ -5355,14 +5439,14 @@ function renderMatItems(){
   // Ingresados sin cómputo — SIEMPRE calcular, no solo cuando items.length==0
   const _allMatIds=new Set(allItems.map(function(m){return m.id;}));
   const _sinComp=(D.matIngresos||[]).filter(function(i){
-    return (i.estado==='ingresado'||!i.estado)&&(!i.materialId||!_allMatIds.has(i.materialId))&&i.projectId===S.proj;
+    return (i.estado==='ingresado'||!i.estado)&&(!i.materialId||!_allMatIds.has(i.materialId))&&i.projectId===S.proj&&(!S.matFilter||_coincideBusqueda(i,S.matFilter));
   });
   var _sinCompH='';
   if(_sinComp.length>0){
     _sinCompH='<div class="card matsec" style="border-left:3px solid var(--cyan)">'
       +'<div class="matsec-h">'
       +'<button class="link-tag fw7" style="color:var(--cyan);font-size:13px" onclick="S.matSinCompMin=!S.matSinCompMin;renderMatItems()">'
-      +'&#x1F4E6; Ingresados sin c\u00f3mputo ('+_sinComp.length+')'
+      +'&#x1F4E6; Ingresados sin c\u00f3mputo ('+_filasSinComp(_sinComp).length+')'
       +(S.matSinCompMin?' &#x25B6;':' &#x25BC;')
       +'</button>'
       +'</div>'
@@ -5373,9 +5457,12 @@ function renderMatItems(){
         var _g=_buildMatGroups(_sinComp);
         var _h='';
         Object.keys(_g.groups).sort().forEach(function(k){_h+=_renderSinCompGroupCard(k,_g.groups[k]);});
-        if(_g.ungrouped.length&&Object.keys(_g.groups).length)
-          _h+='<div class="txxs tc3 fw7 mt-8 mb-4">Sin agrupar ('+_g.ungrouped.length+')</div>';
-        _h+=_g.ungrouped.map(function(i){
+        var _filasSueltas=_filasSinComp(_g.ungrouped);
+        if(_filasSueltas.length&&Object.keys(_g.groups).length)
+          _h+='<div class="txxs tc3 fw7 mt-8 mb-4">Sin agrupar ('+_filasSueltas.length+')</div>';
+        _h+=_filasSueltas.map(function(fila){
+          if(fila.items.length>1)return _filaSinCompAgregada(fila,'border-bottom');
+          var i=fila.items[0];
           return '<div class="matrow" style="padding:8px 0;border-bottom:1px solid var(--gray-ll)">'
           +'<div class="matrow-txt">'
           +'<div class="ts fw6" style="cursor:pointer" title="Ver historial de ingresos" onclick="abrirSinCompDetalle(\''+i.id+'\')">'+esc(i.matNombre||'Sin nombre')+' <span style="color:var(--cyan)">&#x203A;</span>'+_alertTag(i)+'</div>'
@@ -5724,7 +5811,7 @@ function previewFusionMat(){
   // Aviso de unidades distintas: la fusión no convierte cantidades.
   var uK=keep.tipo==='m'?[keep.unit]:keep.unidades;
   var uD=del.tipo==='m'?[del.unit]:del.unidades;
-  var distintas=uD.filter(function(u){return uK.map(_normTxt).indexOf(_normTxt(u))<0;});
+  var distintas=uD.filter(function(u){return uK.map(_unidadClave).indexOf(_unidadClave(u))<0;});
   if(distintas.length)h+='<div class="txxs mt-4" style="color:var(--orange)">⚠ Unidades distintas ('+esc(uK.join(', '))+' vs '+esc(uD.join(', '))+'): las cantidades no se convierten, revisalas después.</div>';
   h+='<button class="btn btn-w mt-8" style="background:var(--red);color:#fff;width:100%" onclick="ejecutarFusionMat('+_argAttr(kv)+','+_argAttr(dv)+')">⚠ Confirmar fusión</button></div>';
   var prev=$('fus_preview');
@@ -7845,10 +7932,9 @@ function rEconomia(mc,p){
   if(S.ecoSingleId){items=items.filter(e=>e.id===S.ecoSingleId);}  // navegación desde Materiales
   else{
     if(S.ecoTipoFilter)items=items.filter(e=>e.tipo===S.ecoTipoFilter);
-    if(S.ecoFilter)items=items.filter(e=>{
-      const q=S.ecoFilter.toLowerCase();
-      return (e.concepto||'').toLowerCase().includes(q)||(e.proveedor||'').toLowerCase().includes(q)||(e.medioPago||'').toLowerCase().includes(q)||(e.rubro||'').toLowerCase().includes(q)||(e.item||'').toLowerCase().includes(q);
-    });
+    // Busca en todo el movimiento, incluida la nota (detalle). Antes la nota no
+    // se revisaba: "electrodos" escrito en la nota no aparecía.
+    if(S.ecoFilter)items=items.filter(e=>_coincideBusqueda(e,S.ecoFilter));
     if(S.ecoFechaDesde)items=items.filter(e=>(e.fecha||e.date||'')>=S.ecoFechaDesde);
     if(S.ecoFechaHasta)items=items.filter(e=>(e.fecha||e.date||'')<=S.ecoFechaHasta);
     if(S.ecoRubroFilter){
@@ -7875,7 +7961,7 @@ function rEconomia(mc,p){
   <!-- FILTROS -->
   <div class="card mb-12" style="padding:10px 12px">
     <div class="flex gap-6 items-center mb-8">
-      <input class="fi" id="eco_search" placeholder="🔍 Buscar concepto, proveedor, rubro..." value="${S.ecoFilter||''}" oninput="S.ecoFilter=this.value;renderEcoItems()" style="flex:1;margin:0">
+      <input class="fi" id="eco_search" placeholder="🔍 Buscar en todo: concepto, notas, proveedor..." value="${S.ecoFilter||''}" oninput="S.ecoFilter=this.value;renderEcoItems()" style="flex:1;margin:0">
       ${S.ecoFilter?`<button class="btn btn-sec btn-s" onclick="S.ecoFilter='';if($('eco_search'))$('eco_search').value='';renderEcoItems()">✕</button>`:''}
       <button class="btn btn-sec btn-s" onclick="var p=$('eco_filtros_extra');if(p)p.style.display=p.style.display==='none'?'flex':'none'" style="white-space:nowrap">⚙ Filtros${(S.ecoTipoFilter||S.ecoSort)?'<span style="background:var(--cyan);color:#fff;border-radius:8px;padding:0 5px;font-size:10px;margin-left:4px">!</span>':''}</button>
     </div>
@@ -8005,8 +8091,7 @@ function renderEcoItems(){
   else{
     if(S.ecoTipoFilter)items=items.filter(e=>e.tipo===S.ecoTipoFilter);
     if(S.ecoFilter){
-      const q=S.ecoFilter.toLowerCase();
-      items=items.filter(e=>(e.concepto||'').toLowerCase().includes(q)||(e.proveedor||'').toLowerCase().includes(q)||(e.medioPago||'').toLowerCase().includes(q)||(e.rubro||'').toLowerCase().includes(q)||(e.item||'').toLowerCase().includes(q));
+      items=items.filter(e=>_coincideBusqueda(e,S.ecoFilter));
     }
     if(S.ecoFechaDesde)items=items.filter(e=>(e.fecha||e.date||'')>=S.ecoFechaDesde);
     if(S.ecoFechaHasta)items=items.filter(e=>(e.fecha||e.date||'')<=S.ecoFechaHasta);
