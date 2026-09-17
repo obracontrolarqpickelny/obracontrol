@@ -2976,6 +2976,7 @@ function _renderMatGroupCard(key,group,estado){
       h+='</div><div class="matrow-acts">';
       h+=_alertBtn('matIngresos',p.id,p.alerta);
       h+='<button class="btn btn-sec btn-s" style="font-size:10px" onclick="'+editFn+'(\''+p.id+'\')">'+I.edit+'</button>';
+      h+='<button class="btn btn-sec btn-s" style="font-size:10px;color:var(--blue)" title="Vincular con una visita" onclick="vincularVisitaMat(\''+p.id+'\')">&#x1F4CB;</button>';
       h+='<button class="btn btn-sec btn-s" style="font-size:10px;color:var(--red)" onclick="delMatItem(\''+p.id+'\')">'+I.trash+'</button>';
       h+='</div></div></div>';
     });
@@ -4114,7 +4115,7 @@ function rVisitas(mc){
   const items=[...pf('visitas')].sort((a,b)=>(b.date||'').localeCompare(a.date||''));const c=MC.visitas;
   mc.innerHTML=`${modHeader('visitas','Visitas de Obra',`<button class="btn btn-s" style="background:${c};color:#fff" onclick="openM('newVisitaM')">${I.plus} Nueva</button>`)}
   ${!items.length?`<div class="empty"><span style="color:${c}">${I.clip}</span><div class="ts mt-8 mb-12">Sin visitas</div></div>`:items.map(v=>{
-    const lT=D.tareas.filter(t=>t.visitaId===v.id).length;const lM=D.materiales.filter(m=>m.visitaId===v.id).length;const lA=D.alertas.filter(a=>a.visitaId===v.id).length;const pc=(v.photos||[]).length;
+    const lT=D.tareas.filter(t=>t.visitaId===v.id).length;const lM=D.materiales.filter(m=>m.visitaId===v.id).length+(D.matIngresos||[]).filter(i=>i.visitaId===v.id).length;const lA=D.alertas.filter(a=>a.visitaId===v.id).length;const pc=(v.photos||[]).length;
     return `<div class="card card-click" style="border-left:3px solid ${c}" onclick="_escudoToque();S.visitaDetail='${v.id}';render();"><div class="flex justify-between mb-4"><span class="txxs tc3">${I.cal} ${fmts(v.date)}</span>${colBadge(v.estado||'borrador',v.estado==='finalizada'?'var(--green)':'var(--blue)',true)}</div><div class="fw7 mb-4">${v.title}</div>${v.description?`<div class="ts tc3 mb-6" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${v.description}</div>`:''}<div class="flex gap-4 wrap txxs">${pc?`<span class="link-tag">${I.cam} ${pc}</span>`:''}${lT?`<span class="link-tag">${I.list} ${lT}</span>`:''}${lM?`<span class="link-tag">${I.pkg} ${lM}</span>`:''}${lA?`<span class="link-tag">${I.bell} ${lA}</span>`:''}</div></div>`;
   }).join('')}${renderNewVisitaModal()}`;
 }
@@ -4134,7 +4135,7 @@ function rVisitaDetail(mc,vid){
   ${v.archivos&&v.archivos.length?`<div class="card mb-12"><div class="ts fw7 mb-8">${I.file} Archivos adjuntos (${v.archivos.length})</div>${v.archivos.map((f,fi)=>`<div class="flex items-center gap-6" style="padding:6px 0;border-bottom:1px solid var(--gray-ll)"><span style="color:var(--slate);flex-shrink:0">${I.file}</span><div class="flex-1 ts fw6 trun" style="min-width:0">${f.name}</div><button class="btn btn-sec btn-s" onclick="event.stopPropagation();viewArchivo('visitas','${vid}','${f.id||''}')" style="flex-shrink:0">👁</button><button class="btn btn-sec btn-s" onclick="event.stopPropagation();delVisitaArchivo('${vid}',${fi})" style="color:var(--red);flex-shrink:0" title="Eliminar archivo">${I.trash}</button></div>`).join('')}</div>`:''}
   <!-- Linked entities -->
   <div class="card mb-12"><div class="flex justify-between items-center mb-8"><div class="ts fw7" style="color:var(--cyan)">${I.list} Tareas (${lT.length})</div><button class="btn btn-s btn-sec" onclick="openM('lkTM');setTimeout(function(){_renderEncChips('lt_enc','lt_enc_chips');},80)">${I.plus}</button></div>${lT.length?lT.map(t=>`<div style="padding:6px 0;border-bottom:1px solid var(--gray-ll)"><div class="flex items-center gap-4"><div class="flex-1"><div class="ts fw6" style="${t.status==='completada'?'text-decoration:line-through;color:var(--gray-l)':''}">${t.title}</div>${t.description?`<div class="txxs tc3 mt-2" style="white-space:pre-wrap">${t.description}</div>`:''}<div class="txxs tc3 mt-2">${priBadge(t.priority,true)} ${stBadge(t.status,true)}${t.dueDate?' | '+fmts(t.dueDate):''}${t.encargado?` | <span style="color:var(--cyan)">👤 ${t.encargado}</span>`:''}</div></div><button class="btn btn-g btn-s" title="Calendario" onclick="exportTareaGCal('${t.id}')">&#128197;</button><button class="btn btn-g btn-s" onclick="editTarea('${t.id}')">${I.edit}</button><button class="btn btn-g btn-s" style="color:${t.status==='completada'?'var(--gray-l)':'var(--green)'}" onclick="updT('${t.id}','${t.status==='completada'?'pendiente':'completada'}')" title="${t.status==='completada'?'Reabrir':'Completar'}">${t.status==='completada'?'&#x21A9;':I.check}</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delI('tareas','${t.id}')">${I.trash}</button>${(t.photos&&t.photos.filter(function(p){var u=typeof p==='string'?p:p.url;return u&&!u.startsWith('[');}).length)?'<div style="margin-top:4px">'+photoGrid(t.photos,'tareas',t.id)+'</div>':''}</div></div>`).join(''):'<div class="txxs tc3">Sin tareas</div>'}</div>
-  <div class="card mb-12"><div class="flex justify-between items-center mb-8"><div class="ts fw7" style="color:var(--purple)">${I.pkg} Materiales (${lM.length+lMI.length})</div><button class="btn btn-s btn-sec" onclick="openLkMM('${vid}')">${I.plus}</button></div>${lM.length?lM.map(m=>`<div style="padding:6px 0;border-bottom:1px solid var(--gray-ll)"><div class="flex items-center gap-4"><div class="flex-1"><div class="ts fw6">${m.name}</div><div class="txxs tc3 mt-2">${m.qty||0} ${m.unit||''} ${m.visitaTipo?colBadge(m.visitaTipo==='a_pedir'?'A pedir':'Existente',m.visitaTipo==='a_pedir'?'var(--orange)':'var(--green)',true):''}${m.notes?` | ${m.notes}`:''}</div></div><button class="btn btn-g btn-s" onclick="editMatVisita('${m.id}')">${I.edit}</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel('¿Quitar?')){D.materiales=D.materiales.filter(x=>x.id!=='${m.id}');addTombstone('materiales','${m.id}');sv();render();}">${I.trash}</button></div>${m.photos&&m.photos.length?photoGrid(m.photos,'materiales',m.id):''}</div>`).join(''):''}${!lM.length&&!lMI.length?'<div class="txxs tc3">Sin materiales</div>':''}${lMI.length?`<div style="margin-top:8px;border-top:1px solid var(--gray-ll);padding-top:8px"><div class="txxs fw7 mb-4" style="color:var(--green)">&#x2713; Ingresos/Existentes cargados</div>`+lMI.map(i=>`<div style="padding:4px 0;border-bottom:1px solid var(--gray-ll)"><div class="flex items-center gap-4"><div class="flex-1"><div class="ts fw6">${i.matNombre}</div><div class="txxs tc3 mt-2">${i.qty||0} ${i.unit||''} ${i.estado==='ingresado'?'<span style="color:var(--green)">&#x2713; Ingresado</span>':i.estado==='pedido'?'<span style="color:var(--orange)">&#x1F4CB; Pedido</span>':i.estado==='a_pedir'?'<span style="color:var(--orange)">A pedir</span>':'<span style="color:var(--green)">Existente</span>'}${i.fechaNecesaria?` | <span style="color:var(--orange)">&#128197; ${fmts(i.fechaNecesaria)}</span>`:''}${i.observations?' | '+i.observations:''}</div></div><button class="btn btn-g btn-s" onclick="editLMI('${i.id}')">${I.edit}</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel('¿Quitar material?')){D.matIngresos=D.matIngresos.filter(x=>x.id!=='${i.id}');addTombstone('matIngresos','${i.id}');sv();render();}">${I.trash}</button></div></div>`).join('')+`</div>`:''}</div>
+  <div class="card mb-12"><div class="flex justify-between items-center mb-8"><div class="ts fw7" style="color:var(--purple)">${I.pkg} Materiales (${lM.length+lMI.length})</div><div class="flex gap-4"><button class="btn btn-s btn-sec" title="Vincular materiales a pedir o existentes ya cargados" onclick="vincularMatAVisita('${vid}')">&#x1F517;</button><button class="btn btn-s btn-sec" title="Cargar un material nuevo en esta visita" onclick="openLkMM('${vid}')">${I.plus}</button></div></div>${lM.length?lM.map(m=>`<div style="padding:6px 0;border-bottom:1px solid var(--gray-ll)"><div class="flex items-center gap-4"><div class="flex-1"><div class="ts fw6">${m.name}</div><div class="txxs tc3 mt-2">${m.qty||0} ${m.unit||''} ${m.visitaTipo?colBadge(m.visitaTipo==='a_pedir'?'A pedir':'Existente',m.visitaTipo==='a_pedir'?'var(--orange)':'var(--green)',true):''}${m.notes?` | ${m.notes}`:''}</div></div><button class="btn btn-g btn-s" onclick="editMatVisita('${m.id}')">${I.edit}</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel('¿Quitar?')){D.materiales=D.materiales.filter(x=>x.id!=='${m.id}');addTombstone('materiales','${m.id}');sv();render();}">${I.trash}</button></div>${m.photos&&m.photos.length?photoGrid(m.photos,'materiales',m.id):''}</div>`).join(''):''}${!lM.length&&!lMI.length?'<div class="txxs tc3">Sin materiales</div>':''}${lMI.length?`<div style="margin-top:8px;border-top:1px solid var(--gray-ll);padding-top:8px"><div class="txxs fw7 mb-4" style="color:var(--green)">&#x2713; Ingresos/Existentes cargados</div>`+lMI.map(i=>`<div style="padding:4px 0;border-bottom:1px solid var(--gray-ll)"><div class="flex items-center gap-4"><div class="flex-1"><div class="ts fw6">${i.matNombre}</div><div class="txxs tc3 mt-2">${i.qty||0} ${i.unit||''} ${i.estado==='ingresado'?'<span style="color:var(--green)">&#x2713; Ingresado</span>':i.estado==='pedido'?'<span style="color:var(--orange)">&#x1F4CB; Pedido</span>':i.estado==='a_pedir'?'<span style="color:var(--orange)">A pedir</span>':'<span style="color:var(--green)">Existente</span>'}${i.fechaNecesaria?` | <span style="color:var(--orange)">&#128197; ${fmts(i.fechaNecesaria)}</span>`:''}${i.observations?' | '+i.observations:''}</div></div><button class="btn btn-g btn-s" onclick="editLMI('${i.id}')">${I.edit}</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel('¿Quitar material?')){D.matIngresos=D.matIngresos.filter(x=>x.id!=='${i.id}');addTombstone('matIngresos','${i.id}');sv();render();}">${I.trash}</button></div></div>`).join('')+`</div>`:''}</div>
   <div class="card mb-12"><div class="flex justify-between items-center mb-8"><div class="ts fw7" style="color:var(--slate)">${I.file} Adjuntos (${lD.length})</div><button class="btn btn-s btn-sec" onclick="openM('lkDM')">${I.plus}</button></div>${lD.length?lD.map(d=>`<div class="flex items-center gap-8" style="padding:6px 0;border-bottom:1px solid var(--gray-ll)"><span style="color:var(--slate);flex-shrink:0">${I.file}</span><div class="flex-1 ts fw6 trun">${d.name}</div>${d.url?`<a href="${d.url}" target="_blank" onclick="event.stopPropagation()" class="btn btn-sec btn-s" style="flex-shrink:0">${I.eye} Ver</a>`:''}<button class="btn btn-g btn-s" style="color:var(--red);flex-shrink:0" onclick="if(confirmDel('¿Quitar?')){D.documentos=D.documentos.filter(x=>x.id!=='${d.id}');addTombstone('documentos','${d.id}');sv();render();}">${I.trash}</button></div>`).join(''):'<div class="txxs tc3">Sin adjuntos</div>'}</div>
   <!-- Checklist de visita -->
   ${(()=>{const vChk=D.checklists.filter(ch=>ch.visitaId===vid);const genChk=pf('checklists').filter(ch=>!ch.visitaId);return `<div class="card mb-12"><div class="flex justify-between items-center mb-8"><div class="ts fw7" style="color:var(--pink)">${I.chklist} Checklist (${vChk.length})</div><button class="btn btn-s btn-sec" onclick="openM('lkCkM')">+ Nueva</button></div>${vChk.length?vChk.map(ch=>{const dn=ch.items.filter(i=>i.done).length;const tot=ch.items.length;return `<div style="padding:8px 0;border-bottom:1px solid var(--gray-ll)"><div class="flex justify-between items-center mb-4"><div class="ts fw6">${ch.title}</div><div class="flex items-center gap-6"><div class="txxs tc3">${dn}/${tot}</div><button class="btn btn-g btn-s" style="color:var(--orange);padding:2px 6px;font-size:10px" onclick="unlinkChkFromVisita('${ch.id}')" title="Desvincular checklist">✕ Desvincular</button></div></div>${ch.items.map(it=>`<div class="chk-item" style="padding:4px 0"><div class="chk-box${it.done?' checked':''}" onclick="togC('${ch.id}','${it.id}')" style="width:18px;height:18px;flex-shrink:0">${it.done?I.check:''}</div><div class="chk-text${it.done?' done':''} ts flex-1">${it.text}</div><button class="btn btn-g btn-s" style="padding:2px 4px;flex-shrink:0" onclick="editChkItem('${ch.id}','${it.id}')">${I.edit}</button><button class="btn btn-g btn-s" style="padding:2px 4px;flex-shrink:0" onclick="if(confirmDel())dCI('${ch.id}','${it.id}')">${I.trash}</button></div>`).join('')}</div>`; }).join(''):''}${genChk.length?`<div class="mt-8 txxs tc3">Vincular del general: ${genChk.map(ch=>`<button class="btn btn-s btn-sec" style="margin:2px" onclick="linkChkToVisita('${ch.id}','${vid}')">${ch.title}</button>`).join('')}</div>`:'<div class="txxs tc3">Sin checklists generales</div>'}</div>`;})()}
@@ -4327,6 +4328,91 @@ async function saveLT(vid){
   sv();closeM('lkTM');render();
   toast('Tarea creada'+(pu.length?' con '+pu.length+' foto(s)':'')+' — vinculada a visita');
 }
+// ─── VINCULAR MATERIALES CON UNA VISITA ───────────────────────────
+// Los materiales ya guardaban a qué visita pertenecen y la fila lo mostraba,
+// pero no había forma de asignarlo: sólo quedaba vinculado lo que se cargaba
+// desde la visita misma. Ahora se puede desde las dos puntas.
+
+/** Desde el material: elegir a qué visita pertenece (o quitarle la visita). */
+function vincularVisitaMat(id){
+  var it=(D.matIngresos||[]).find(function(x){return x.id===id;});
+  if(!it)return;
+  var visitas=pf('visitas').slice().sort(function(a,b){return String(b.date||'').localeCompare(String(a.date||''));});
+  var h='<div class="mo-c"><div class="mo-h"><h3 style="color:var(--blue)">&#x1F4CB; Vincular con una visita</h3><button class="tbtn" onclick="document.getElementById(\'vincVisM\').remove()">'+I.x+'</button></div>';
+  h+='<div class="ts fw7 mb-4">'+esc(it.matNombre||'Sin nombre')+'</div>';
+  h+='<div class="txxs tc3 mb-10">'+(it.estado==='existente'?'Material existente en obra':'Material a pedir')+'. Elegí en qué visita se registró.</div>';
+  if(!visitas.length)h+='<div class="txxs tc3">Esta obra todavía no tiene visitas cargadas.</div>';
+  visitas.forEach(function(v){
+    var act=it.visitaId===v.id;
+    h+='<button class="btn btn-w btn-s mb-4" style="justify-content:flex-start;text-align:left;'+(act?'background:var(--blue);color:#fff':'background:var(--gray-ll);color:var(--text)')+'" onclick="_setVisitaMat(\''+it.id+'\',\''+v.id+'\')">'
+      +esc(v.title||'Visita')+' <span class="txxs" style="opacity:.8;margin-left:4px">'+esc(fmts(v.date)||'')+'</span>'+(act?' &#x2713;':'')+'</button>';
+  });
+  if(it.visitaId)h+='<button class="btn btn-w btn-sec mt-8" style="color:var(--red)" onclick="_setVisitaMat(\''+it.id+'\',\'\')">Quitar la visita</button>';
+  h+='</div>';
+  var d=document.getElementById('vincVisM');if(d)d.remove();
+  d=document.createElement('div');d.className='mo open';d.id='vincVisM';d.innerHTML=h;
+  document.body.appendChild(d);
+}
+function _setVisitaMat(id,vid){
+  var it=(D.matIngresos||[]).find(function(x){return x.id===id;});
+  if(!it)return;
+  it.visitaId=vid||null;
+  it.updatedAt=nw();
+  audit('matIngresos','visita',(it.matNombre||'')+(vid?' → vinculado':' → sin visita'));
+  sv();
+  try{document.getElementById('vincVisM').remove();}catch(_){}
+  render();
+  var v=vid?(D.visitas||[]).find(function(x){return x.id===vid;}):null;
+  toast(v?('Vinculado a: '+(v.title||'la visita')):'Vínculo con la visita quitado','var(--green)');
+}
+
+/** Desde la visita: marcar varios materiales existentes o a pedir de una vez. */
+function vincularMatAVisita(vid){
+  var v=(D.visitas||[]).find(function(x){return x.id===vid;});
+  if(!v)return;
+  var items=(D.matIngresos||[]).filter(function(i){
+    return i.projectId===S.proj&&(i.estado==='a_pedir'||i.estado==='existente');
+  }).sort(function(a,b){return String(b.fecha||b.date||'').localeCompare(String(a.fecha||a.date||''));});
+  var h='<div class="mo-c"><div class="mo-h"><h3 style="color:var(--purple)">&#x1F4E6; Vincular materiales</h3><button class="tbtn" onclick="document.getElementById(\'vincMatVisM\').remove()">'+I.x+'</button></div>';
+  h+='<div class="txxs tc3 mb-8">Marcá los materiales a pedir o existentes que correspondan a <strong>'+esc(v.title||'esta visita')+'</strong>.</div>';
+  if(!items.length){
+    h+='<div class="txxs tc3">No hay materiales a pedir ni existentes cargados en esta obra.</div>';
+  } else {
+    h+='<input class="fi mb-8" placeholder="Buscar material..." oninput="var q=_normTxt(this.value);document.querySelectorAll(\'#vincMatVisM .vm-op\').forEach(function(l){l.style.display=(!q||l.getAttribute(\'data-n\').indexOf(q)>=0)?\'\':\'none\';})">';
+    items.forEach(function(i){
+      var otra=i.visitaId&&i.visitaId!==vid?((D.visitas||[]).find(function(x){return x.id===i.visitaId;})||{}).title:'';
+      h+='<label class="vm-op" data-n="'+esc(_normTxt((i.matNombre||'')+' '+(i.proveedor||'')+' '+(i.observations||'')))+'" style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid var(--gray-ll);cursor:pointer">'
+        +'<input type="checkbox" data-mat="'+i.id+'"'+(i.visitaId===vid?' checked':'')+' style="margin-top:3px;width:18px;height:18px;flex-shrink:0">'
+        +'<span style="flex:1;min-width:0"><span class="ts fw6">'+esc(i.matNombre||'Sin nombre')+'</span>'
+        +'<span class="txxs tc3" style="display:block">'+(i.qty?_fmtNum(i.qty)+' '+esc(i.unit||'u'):'-')
+        +' · '+(i.estado==='a_pedir'?'📝 A pedir':'✓ Existente')
+        +((i.fecha||i.date)?' · '+esc(fmts(i.fecha||i.date)||''):'')
+        +(otra?' · <span style="color:var(--orange)">ya está en: '+esc(otra)+'</span>':'')+'</span></span></label>';
+    });
+    h+='<button class="btn btn-p btn-w mt-10" onclick="_guardarMatDeVisita(\''+vid+'\')">Vincular seleccionados</button>';
+  }
+  h+='</div>';
+  var d=document.getElementById('vincMatVisM');if(d)d.remove();
+  d=document.createElement('div');d.className='mo open';d.id='vincMatVisM';d.innerHTML=h;
+  document.body.appendChild(d);
+}
+function _guardarMatDeVisita(vid){
+  var cajas=document.querySelectorAll('#vincMatVisM input[data-mat]');
+  var suma=0,quitados=0;
+  cajas.forEach(function(c){
+    var it=(D.matIngresos||[]).find(function(x){return x.id===c.getAttribute('data-mat');});
+    if(!it)return;
+    if(c.checked&&it.visitaId!==vid){it.visitaId=vid;it.updatedAt=nw();suma++;}
+    // Sólo se desvincula lo que estaba en ESTA visita: lo de otra visita no se toca.
+    else if(!c.checked&&it.visitaId===vid){it.visitaId=null;it.updatedAt=nw();quitados++;}
+  });
+  if(suma||quitados)audit('matIngresos','visita',suma+' vinculados · '+quitados+' quitados');
+  sv();
+  try{document.getElementById('vincMatVisM').remove();}catch(_){}
+  render();
+  toast(suma+' vinculado(s)'+(quitados?' · '+quitados+' quitado(s)':''),'var(--green)');
+}
+
 function openLkMM(vid){
   openM('lkMM');
   setTimeout(()=>{
@@ -5369,6 +5455,7 @@ function renderMatItems(){
       if(e.visitaId){var _vn=D.visitas.find(function(v){return v.id===e.visitaId;});_existH+='<div class="txxs mt-1" style="color:var(--blue)">&#x26D3; <button class="link-tag" style="font-size:10px" onclick="S.visitaDetail=\''+e.visitaId+'\';S.mod=\'visitas\';render();">'+(_vn?_vn.title:'Visita')+'</button></div>';}
       _existH+='</div><div class="matrow-acts">';
       _existH+='<button class="btn btn-sec btn-s" style="font-size:10px" onclick="editExistente(\''+e.id+'\')">' +I.edit+'</button>';
+      _existH+='<button class="btn btn-sec btn-s" style="font-size:10px;color:var(--blue)" title="Vincular con una visita" onclick="vincularVisitaMat(\''+e.id+'\')">&#x1F4CB;</button>';
       _existH+='<button class="btn btn-sec btn-s" style="font-size:10px;color:var(--red)" onclick="delMatItem(\''+e.id+'\')">' +I.trash+'</button>';
       _existH+='</div></div></div>';
     });
@@ -5396,6 +5483,7 @@ function renderMatItems(){
       _apedirH+='</div><div class="matrow-acts">';
       _apedirH+=_alertBtn('matIngresos',p.id,p.alerta);
       _apedirH+='<button class="btn btn-sec btn-s" style="font-size:10px" onclick="editAPedir(\''+p.id+'\')">'+I.edit+'</button>';
+      _apedirH+='<button class="btn btn-sec btn-s" style="font-size:10px;color:var(--blue)" title="Vincular con una visita" onclick="vincularVisitaMat(\''+p.id+'\')">&#x1F4CB;</button>';
       _apedirH+='<button class="btn btn-s" style="background:var(--orange);color:#fff;font-size:10px" onclick="pasarAPedido(\''+p.id+'\')">&rarr; Pedido</button>';
       _apedirH+='<button class="btn btn-sec btn-s" style="font-size:10px;color:var(--red)" onclick="delMatItem(\''+p.id+'\')">' +I.trash+'</button>';
       _apedirH+='</div></div></div>';
@@ -5427,6 +5515,7 @@ function renderMatItems(){
       _pedH+='</div><div class="matrow-acts">';
       _pedH+=_alertBtn('matIngresos',p.id,p.alerta);
       _pedH+='<button class="btn btn-sec btn-s" style="font-size:10px" onclick="editPedidoRegistrado(\''+p.id+'\')">'+ I.edit +'</button>';
+      _pedH+='<button class="btn btn-sec btn-s" style="font-size:10px;color:var(--blue)" title="Vincular con una visita" onclick="vincularVisitaMat(\''+p.id+'\')">&#x1F4CB;</button>';
       _pedH+='<button class="btn btn-ok btn-s" style="font-size:10px;white-space:nowrap" onclick="confirmarPedido(\''+p.id+'\')">&#x2713; Ingresado</button>';
       _pedH+='<button class="btn btn-sec btn-s" style="font-size:10px;color:#8b5cf6;white-space:nowrap" onclick="retrocederAPedir(\''+p.id+'\')" title="Retroceder a A pedir">&larr; A pedir</button>';
       _pedH+='<button class="btn btn-sec btn-s" style="font-size:10px;color:var(--red)" onclick="delMatItem(\''+p.id+'\')">' +I.trash+'</button>';
