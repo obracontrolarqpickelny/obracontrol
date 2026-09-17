@@ -8788,7 +8788,12 @@ async function saveEco(){
   }
     if($('eco_doble')&&$('eco_doble').checked){
     var _inv=_etipo==='egreso'?'ingreso':'egreso';
-    D.economia.push({id:uid(),projectId:S.proj,tipo:_inv,concepto:'[Doble] '+concepto,monto:parseFloat(monto)||0,fecha:_efecha,medioPago:$('eco_medio')?.value||'',proveedor:_eprov,interno:!!($('eco_interno')?.checked),date:nw(),updatedAt:nw()});
+    // Se emparejan: así el espejo se puede quitar desde la edición y sigue al
+    // original si despues cambia el monto o la fecha.
+    var _dobId=uid();
+    D.economia.push({id:_dobId,projectId:S.proj,tipo:_inv,concepto:'[Doble] '+concepto,monto:parseFloat(monto)||0,fecha:_efecha,medioPago:$('eco_medio')?.value||'',proveedor:_eprov,interno:!!($('eco_interno')?.checked),dobleDe:_eid,date:nw(),updatedAt:nw()});
+    var _origEco=(D.economia||[]).find(function(x){return x.id===_eid;});
+    if(_origEco)_origEco.dobleId=_dobId;
   }
 audit('economia','create',concepto.slice(0,30));sv();closeM('newEcoM');render();toast('Movimiento registrado');
 }
@@ -8929,6 +8934,27 @@ function editEco(id){
   ${item.imagen?`<div class="fg"><label class="fl">Imagen actual</label><div class="flex gap-6"><button class="btn btn-sec btn-s" onclick="verEco('${id}')">Ver imagen adjunta</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="delEcoImagen('${id}');this.closest('.mo').remove()" title="Eliminar imagen">✕ Eliminar</button></div></div>`:''}
   <div class="fg"><label class="fl">Nueva imagen</label><input type="file" accept="image/*,application/pdf" id="eeq_img" class="fi" style="padding:6px"></div>
   <div class="fg"><label class="fl" style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="eeq_interno" style="width:16px;height:16px"${item.interno?' checked':''}> <span>&#x1F512; Privado (no aparece en PDF para cliente)</span></label></div>
+  ${(function(){
+    // Doble registro: al editar no estaba, así que un movimiento ya cargado no
+    // se podía convertir. Si ya tiene su contrapartida, se muestra y se puede quitar.
+    var _par=item.dobleId?(D.economia||[]).find(function(x){return x.id===item.dobleId;}):null;
+    if(!_par&&item.dobleDe)_par=(D.economia||[]).find(function(x){return x.id===item.dobleDe;});
+    if(_par){
+      return '<div class="fg"><div style="background:#ecfeff;border-left:3px solid var(--cyan);border-radius:6px;padding:10px 12px">'
+        +'<div class="txxs fw7 mb-4" style="color:var(--cyan)">&#x1F500; Doble registro</div>'
+        +'<div class="txxs tc3">Su contrapartida es <strong>'+esc(_par.concepto||'')+'</strong> ('+(_par.tipo==='ingreso'?'↑ ingreso':'↓ egreso')+' de $'+_fmtNum(_par.monto||0)+'). Al guardar se actualiza con el mismo monto y fecha, para que el saldo siga neutro.</div>'
+        +'<button class="btn btn-sec btn-s mt-8" style="color:var(--red)" onclick="quitarDobleEco(\''+id+'\')">&#x2716; Quitar el doble registro</button>'
+        +'</div></div>';
+    }
+    return '<div class="fg"><label class="fl" style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="eeq_doble" style="width:16px;height:16px"><span>&#x1F500; Convertir en doble registro (crea la contrapartida, saldo neutro)</span></label></div>';
+  })()}
+  ${_mi?'':`<div class="fg" style="border-top:1px solid var(--gray-ll);padding-top:12px;margin-top:8px"><label class="fl" style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="eeq_es_mat" style="width:16px;height:16px" onchange="toggleEEcoMatPanel()"><span>&#x1F4E6; Este movimiento es un material (vincular con Materiales)</span></label></div>
+  <div id="eeq_mat_panel" style="display:none;background:#f5f3ff;border-radius:8px;padding:12px;margin-top:8px">
+    <div class="fg"><label class="fl">Material del cómputo</label><select class="fs" id="eeq_mat_id" onchange="eecoMatSelectChange()"><option value="">-- Nuevo material (escribir nombre abajo) --</option>${pf('materiales').filter(m=>!m.visitaId).map(m=>`<option value="${m.id}">${esc(m.name)} (${esc(m.unit||'u')})</option>`).join('')}</select></div>
+    <div class="fg" id="eeq_mat_nombre_wrap"><label class="fl">Nombre del material nuevo</label><input class="fi" id="eeq_mat_nombre" value="${esc(item.concepto||'')}"></div>
+    <div class="fr"><div class="fg"><label class="fl">Cantidad *</label><input class="fi" id="eeq_mat_qty_new" type="number" min="0" step="0.01" placeholder="0"></div><div class="fg"><label class="fl">Unidad</label><select class="fs" id="eeq_mat_unit_new">${UNI.map(u=>`<option>${u}</option>`).join('')}</select></div></div>
+    <div class="fg"><label class="fl">Estado</label><select class="fs" id="eeq_mat_estado_new"><option value="pedido">&#x1F4CB; Pedido (a confirmar ingreso)</option><option value="ingresado" selected>&#x2713; Comprado / Ingresado</option></select></div>
+  </div>`}
     ${_matVincBlock}
   <button class="btn btn-w mt-8" style="background:var(--cyan);color:#fff" onclick="saveEEco('${id}')">Guardar</button></div>`;
   document.body.appendChild(d);
@@ -8939,6 +8965,34 @@ function editEco(id){
     setupAC('eeq_rubro',_acRubros());
     setupAC('eeq_item',_acItems($('eeq_rubro')?.value));
   },80);
+}
+function toggleEEcoMatPanel(){
+  var cb=$('eeq_es_mat'),p=$('eeq_mat_panel');
+  if(p)p.style.display=(cb&&cb.checked)?'block':'none';
+}
+function eecoMatSelectChange(){
+  var sel=$('eeq_mat_id'),w=$('eeq_mat_nombre_wrap');
+  if(w)w.style.display=(sel&&sel.value)?'none':'';
+  var m=(D.materiales||[]).find(function(x){return x.id===(sel&&sel.value);});
+  var u=$('eeq_mat_unit_new');
+  if(m&&u&&m.unit)u.value=m.unit;
+}
+/** Elimina el movimiento espejo y deja el otro como un movimiento común. */
+function quitarDobleEco(id){
+  var it=(D.economia||[]).find(function(x){return x.id===id;});
+  if(!it)return;
+  var espejo=it.dobleDe?it:(D.economia||[]).find(function(x){return x.id===it.dobleId;});
+  var original=it.dobleDe?(D.economia||[]).find(function(x){return x.id===it.dobleDe;}):it;
+  if(!espejo){toast('No se encontró la contrapartida','var(--orange)');return;}
+  if(!confirm('¿Eliminar el movimiento espejo "'+(espejo.concepto||'')+'"?\n\nEl otro queda como un movimiento común.'))return;
+  D.economia=(D.economia||[]).filter(function(x){return x.id!==espejo.id;});
+  addTombstone('economia',espejo.id);
+  if(original&&original.id!==espejo.id){delete original.dobleId;delete original.dobleDe;original.updatedAt=nw();}
+  audit('economia','doble_quitado',espejo.concepto||'');
+  sv();
+  try{document.getElementById('eecoM').remove();}catch(_){}
+  render();
+  toast('Doble registro quitado','var(--green)');
 }
 function selEEcoTipo(tipo){
   const h=$('eeq_tipo');if(h)h.value=tipo;
@@ -8997,6 +9051,24 @@ async function saveEEco(id){
   item.rubro=_eeVals.rubro;item.item=_eeVals.item;item.detalle=_eeVals.detalle;
   if(_eeImagen){item.imagen=_eeImagen.url;item.imagenDeletedAt=_eeImagen.deletedAt;}
   item.updatedAt=nw();
+  // Doble registro: crearlo si se tildó, o mantener la contrapartida al día
+  // (mismo monto y fecha, tipo invertido) para que el saldo siga neutro.
+  var _parId=item.dobleId||item.dobleDe;
+  var _par=_parId?(D.economia||[]).find(function(x){return x.id===_parId;}):null;
+  if(_par){
+    _par.tipo=item.tipo==='egreso'?'ingreso':'egreso';
+    _par.monto=item.monto;_par.fecha=item.fecha;
+    _par.medioPago=item.medioPago;_par.proveedor=item.proveedor;_par.interno=item.interno;
+    if(item.dobleId)_par.concepto='[Doble] '+item.concepto;
+    _par.updatedAt=nw();
+  } else if($('eeq_doble')&&$('eeq_doble').checked){
+    var _dobId=uid();
+    D.economia.push({id:_dobId,projectId:item.projectId||S.proj,
+      tipo:item.tipo==='egreso'?'ingreso':'egreso',concepto:'[Doble] '+item.concepto,
+      monto:item.monto,fecha:item.fecha,medioPago:item.medioPago,proveedor:item.proveedor,
+      interno:item.interno,dobleDe:item.id,date:nw(),updatedAt:nw()});
+    item.dobleId=_dobId;
+  }
   // Propagar cambios al matIngreso vinculado
   var _miSync=(D.matIngresos||[]).find(function(mi){return mi.ecoId===id;});
   if(_miSync){
@@ -9010,6 +9082,28 @@ async function saveEEco(id){
     var _nu=$('eeq_mat_unit')?.value;
     if(_nu) _miSync.unit=_nu;
     _miSync.updatedAt=nw();
+  }
+  // Vincular con Materiales desde la edición (antes sólo se podía al crearlo)
+  if(!_miSync&&$('eeq_es_mat')&&$('eeq_es_mat').checked){
+    var _mSel=$('eeq_mat_id')?$('eeq_mat_id').value:'';
+    var _mMat=_mSel?(D.materiales||[]).find(function(m){return m.id===_mSel;}):null;
+    var _mQty=parseFloat(($('eeq_mat_qty_new')||{}).value||'0')||0;
+    if(_mQty>0){
+      if(!D.matIngresos)D.matIngresos=[];
+      var _nmi=uid();
+      D.matIngresos.push({id:_nmi,projectId:item.projectId||S.proj,
+        materialId:_mMat?_mMat.id:null,
+        matNombre:_mMat?_mMat.name:((($('eeq_mat_nombre')||{}).value||'').trim()||item.concepto),
+        qty:_mQty,unit:(($('eeq_mat_unit_new')||{}).value)||(_mMat&&_mMat.unit)||'u',
+        proveedor:item.proveedor,fecha:item.fecha,
+        observations:'Desde Economía: '+item.concepto,
+        estado:(($('eeq_mat_estado_new')||{}).value)||'ingresado',
+        ecoId:item.id,date:nw(),updatedAt:nw()});
+      item.matIngresoId=_nmi;
+      _miSync=D.matIngresos[D.matIngresos.length-1];
+    } else {
+      toast('Poné la cantidad para vincular el material','var(--orange)',4000);
+    }
   }
   audit('economia','update',concepto.slice(0,30));
   sv();document.getElementById('eecoM')?.remove();render();
