@@ -4037,7 +4037,7 @@ function rDash(mc,p){
     <div class="card stat card-click" onclick="S.mod='visitas';render()"><div class="stico" style="background:var(--blue-bg);color:var(--blue)">${I.clip}</div><div><div class="stval" style="color:var(--blue)">${pV.length}</div><div class="stlbl">Visitas</div></div></div>
     <div class="card stat card-click" onclick="S.mod='tareas';render()"><div class="stico" style="background:var(--cyan-bg);color:var(--cyan)">${I.list}</div><div><div class="stval" style="color:var(--cyan)">${pend}</div><div class="stlbl">Tareas pend.</div></div></div>
     <div class="card stat card-click" onclick="S.mod='materiales';render()"><div class="stico" style="background:var(--purple-bg);color:var(--purple)">${I.pkg}</div><div><div class="stval" style="color:var(--purple)">${pM.length}</div><div class="stlbl">Materiales</div></div></div>
-    <div class="card stat card-click" onclick="S.mod='economia';render()"><div class="stico" style="background:var(--cyan-bg);color:var(--cyan)">${I.eco}</div><div><div class="stval" style="color:var(--cyan)">${pf('economia').filter(e=>!e.interno).length}</div><div class="stlbl">Movimientos</div></div></div>
+    <div class="card stat card-click" onclick="S.mod='economia';render()"><div class="stico" style="background:var(--cyan-bg);color:var(--cyan)">${I.eco}</div><div><div class="stval" style="color:var(--cyan)">${pf('economia').length}</div><div class="stlbl">Movimientos</div></div></div>
     <div class="card stat card-click" onclick="S.mod='checklist';render()"><div class="stico" style="background:var(--pink-bg);color:var(--pink)">${I.chklist}</div><div><div class="stval" style="color:var(--pink)">${pf('checklists').filter(c=>!c.visitaId).length}</div><div class="stlbl">Checklists</div></div></div>
     <div class="card stat card-click" onclick="S.mod='documentos';render()"><div class="stico" style="background:var(--gray-ll);color:var(--slate)">${I.file}</div><div><div class="stval" style="color:var(--slate)">${pf('documentos').length+pf('enlaces').length}</div><div class="stlbl">Docs+Links</div></div></div>
     <div class="card stat card-click" onclick="S.mod='comentarios';render()"><div class="stico" style="background:var(--orange-bg);color:var(--orange)">${I.msg}</div><div><div class="stval" style="color:var(--orange)">${pf('comentarios').length}</div><div class="stlbl">Comentarios</div></div></div>
@@ -8093,14 +8093,19 @@ function deleteProj(){
 function rEconomia(mc,p){
   if(!D.economia)D.economia=[];
   const all=pf('economia');
-  const allVisible=all.filter(function(e){return !e.interno;}); // excluir privados del saldo visible
+  // Los movimientos privados se VEN acá (con su candado) y suman al saldo: son
+  // privados frente al cliente, no frente a vos. Antes esta lista los filtraba y
+  // el movimiento no aparecía en ningún lado; renderEcoItems, en cambio, sí los
+  // mostraba, así que la misma lista cambiaba según se filtrara o no.
+  // Quienes siguen sin verlos: el PDF y el Excel, el informe al cliente y el log.
+  const allVisible=all;
   const c=MC.economia;
   // MEDIOS: global constant
   // Build concept list for filter
   const conceptos=[...new Set(all.map(e=>e.concepto).filter(Boolean))].sort();
   const proveedores=[...new Set(all.map(e=>e.proveedor).filter(Boolean))].sort();
   // Apply filters
-  let items=allVisible; // base sin internos para el saldo visible
+  let items=allVisible;
   if(S.ecoSingleId){items=items.filter(e=>e.id===S.ecoSingleId);}  // navegación desde Materiales
   else{
     if(S.ecoTipoFilter)items=items.filter(e=>e.tipo===S.ecoTipoFilter);
@@ -8164,6 +8169,7 @@ function rEconomia(mc,p){
     <div class="flex justify-between items-center">
       <div>
         <div class="txxs fw7 tc3" style="text-transform:uppercase;letter-spacing:.8px">${hasFilter?'Saldo filtrado':'Saldo total'}</div>
+        ${(function(){var _np=items.filter(function(e){return e.interno;}).length;return _np?'<div class="txxs" style="color:#64748b;margin-top:2px">&#x1F512; Incluye '+_np+' privado'+(_np>1?'s':'')+' — no salen en el PDF ni en el Excel</div>':'';})()}
         <div class="fw8" style="font-size:28px;color:${saldo>=0?'var(--green)':'var(--red)'};line-height:1.1">$${saldo.toLocaleString('es-AR')}</div>
         ${hasFilter?`<div class="txxs fw6 mt-4" style="color:var(--gray)">Total obra: $${(allIng-allEgr).toLocaleString('es-AR')}</div>`:''}
       </div>
@@ -8294,6 +8300,7 @@ function renderEcoItems(){
     sc.innerHTML=`<div class="flex justify-between items-center">
       <div>
         <div class="txxs fw7 tc3" style="text-transform:uppercase;letter-spacing:.8px">${hasFilter?'Saldo filtrado':'Saldo total'}</div>
+        ${(function(){var _np=items.filter(function(e){return e.interno;}).length;return _np?'<div class="txxs" style="color:#64748b;margin-top:2px">&#x1F512; Incluye '+_np+' privado'+(_np>1?'s':'')+' — no salen en el PDF ni en el Excel</div>':'';})()}
         <div class="fw8" style="font-size:28px;color:${saldoCol};line-height:1.1">$${saldo.toLocaleString('es-AR')}</div>
         ${hasFilter?`<div class="txxs fw6 mt-4" style="color:var(--gray)">Total obra: $${(allIng-allEgr).toLocaleString('es-AR')}</div>`:''}
       </div>
@@ -8377,7 +8384,7 @@ function renderEcoDistrib(){
   body.style.display='block';body.style.marginTop='12px';
   // Use egresos respecting active date filter
   var egrs=pf('economia').filter(function(e){
-    if(e.tipo!=='egreso'||e.interno)return false;
+    if(e.tipo!=='egreso')return false; // los privados cuentan en la vista de la app
     var d=e.fecha||e.date||'';
     if(S.ecoFechaDesde&&d<S.ecoFechaDesde)return false;
     if(S.ecoFechaHasta&&d>S.ecoFechaHasta)return false;
@@ -8535,7 +8542,7 @@ function _calcEcoMetros(){
   var m2=parseFloat((document.getElementById('eco_m2_input')||{}).value||0)||0;
   var vM2=parseFloat((document.getElementById('eco_vm2_input')||{}).value||0)||0;
   var totalObra=m2*vM2;
-  var egrs=pf('economia').filter(function(e){return e.tipo==='egreso'&&!e.interno;});
+  var egrs=pf('economia').filter(function(e){return e.tipo==='egreso';}); // incluye privados: es tu vista
   var totalGastado=egrs.reduce(function(s,e){return s+(parseFloat(e.monto)||0);},0);
   if(!totalObra){
     calcDiv.innerHTML='<div class="txxs tc3" style="font-style:italic">Ingres&#xE1; m&#xB2; y valor/m&#xB2; para ver el avance de la obra</div>';
@@ -9999,7 +10006,9 @@ function exportEcoPDF(includeDistrib,includeRubroCol,includeMetros){
   const all=pf('economia');
   let items=all.filter(e=>!e.interno);
   if(S.ecoTipoFilter)items=items.filter(e=>e.tipo===S.ecoTipoFilter);
-  if(S.ecoFilter){const q=S.ecoFilter.toLowerCase();items=items.filter(e=>(e.concepto||'').toLowerCase().includes(q)||(e.proveedor||'').toLowerCase().includes(q)||(e.medioPago||'').toLowerCase().includes(q)||(e.rubro||'').toLowerCase().includes(q)||(e.item||'').toLowerCase().includes(q));}
+  // Mismo buscador que la pantalla (también mira notas): si no, lo filtrado en
+  // pantalla y lo exportado no coincidían.
+  if(S.ecoFilter)items=items.filter(e=>_coincideBusqueda(e,S.ecoFilter));
   if(S.ecoFechaDesde)items=items.filter(e=>(e.fecha||e.date||'')>=S.ecoFechaDesde);
   if(S.ecoFechaHasta)items=items.filter(e=>(e.fecha||e.date||'')<=S.ecoFechaHasta);
   items=_ecoSortItems(items);
@@ -10162,7 +10171,9 @@ function exportEcoCSV(){
   const p=D.projects.find(x=>x.id===S.proj);
   let items=pf('economia').filter(e=>!e.interno);
   if(S.ecoTipoFilter)items=items.filter(e=>e.tipo===S.ecoTipoFilter);
-  if(S.ecoFilter){const q=S.ecoFilter.toLowerCase();items=items.filter(e=>(e.concepto||'').toLowerCase().includes(q)||(e.proveedor||'').toLowerCase().includes(q)||(e.rubro||'').toLowerCase().includes(q)||(e.item||'').toLowerCase().includes(q));}
+  // Mismo buscador que la pantalla (también mira notas), para que lo exportado
+  // coincida con lo que se ve filtrado.
+  if(S.ecoFilter)items=items.filter(e=>_coincideBusqueda(e,S.ecoFilter));
   if(S.ecoFechaDesde)items=items.filter(e=>(e.fecha||e.date||'')>=S.ecoFechaDesde);
   if(S.ecoFechaHasta)items=items.filter(e=>(e.fecha||e.date||'')<=S.ecoFechaHasta);
   items=_ecoSortItems(items);
