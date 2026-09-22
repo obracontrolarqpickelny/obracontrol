@@ -5393,8 +5393,8 @@ function rMat(mc){
   <div class="mo" id="newMatM"><div class="mo-c"><div class="mo-h"><h3 style="color:${c}">Nuevo Material</h3><button class="tbtn" onclick="closeM('newMatM')">${I.x}</button></div><div class="fg"><label class="fl">Material *</label><input class="fi" id="nm_n"></div><div class="fr"><div class="fg"><label class="fl">Computado</label><input class="fi" id="nm_comp" type="number" min="0" placeholder="Cantidad prevista"></div><div class="fg"><label class="fl">Unidad</label><select class="fs" id="nm_u">${UNI.map(u=>`<option>${u}</option>`).join('')}</select></div></div><div class="fg"><label class="fl">Categoría</label><select class="fs" id="nm_c">${MATCAT.map(c=>`<option>${c}</option>`).join('')}</select></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="nm_no"></textarea></div><div class="fg"><label class="fl">Fotos</label><input type="file" accept="image/*" multiple id="nm_ph" class="fi" style="padding:6px"></div><button class="btn btn-w mt-8" style="background:${c};color:#fff" onclick="saveMat()">Guardar</button></div></div>
   <div class="mo" id="newIngM"><div class="mo-c"><div class="mo-h"><h3 style="color:${c}">Ingreso de Material</h3><button class="tbtn" onclick="closeM('newIngM')">${I.x}</button></div><button class="btn btn-sec btn-s btn-w mb-10" style="color:#7c3aed" onclick="closeM('newIngM');abrirIngresoMultiple()">&#x1F4E6; ¿Llegaron varios? Cargar el remito entero</button>${allItems.length?`<div class="fg"><label class="fl">Material *</label>${_mcsHtml('ni_mat',allItems,'Buscar material...',null)}<div id="ni_uinfo" style="display:none"></div></div>`:'<div class="ts tc3 mb-12">Primero carga materiales en el cómputo</div>'}<div class="fr"><div class="fg"><label class="fl">Cantidad *</label><input class="fi" id="ni_q" type="number" min="0" oninput="_unidadInfo('ni')"></div><div class="fg"><label class="fl">Fecha</label><input class="fi" id="ni_d" type="date" value="${td()}" onchange="_unidadInfo('ni')"></div></div><div class="fg"><label class="fl">Proveedor</label>${_pcHtml('ni_prov',_provList,'Buscar o escribir proveedor...')}</div><div class="fg"><label class="fl">Remito</label><input class="fi" id="ni_rem"></div><div class="fg"><label class="fl">Observaciones</label><textarea class="ft" id="ni_obs"></textarea></div><div class="fg"><label class="fl">Fotos del ingreso</label><input type="file" accept="image/*" multiple id="ni_ph" class="fi" style="padding:6px"></div><button class="btn btn-w mt-8" style="background:${c};color:#fff" onclick="saveIng()">Registrar</button>
 </div></div>
-  <div class="mo" id="newPedidoM"><div class="mo-c"><div class="mo-h"><h3 style="color:var(--orange)">&#x1F4CB; Nuevo Pedido</h3><button class="tbtn" onclick="closeM('newPedidoM')">${I.x}</button></div><div style="background:#fff7ed;border-left:3px solid var(--orange);border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px">Los pedidos <strong>no computan</strong> como ingresados. Se convierten en ingreso con un clic cuando lleguen.</div><div class="fg"><label class="fl">Material del c&oacute;mputo (opcional)</label>${_mcsHtml('np_mat',allItems,'Buscar o dejar vacío...','— Ninguno —')}<div id="np_uinfo" style="display:none"></div></div><div class="fg"><label class="fl">Nombre libre</label><input class="fi" id="np_nombre" placeholder="Si no est&aacute; en el c&oacute;mputo..."></div><div class="fr"><div class="fg"><label class="fl">Cantidad *</label><input class="fi" id="np_q" type="number" min="0" step="0.01" oninput="_unidadInfo('np')"></div><div class="fg"><label class="fl">Unidad</label><select class="fs" id="np_u">${UNI.map(u=>`<option>${u}</option>`).join('')}</select></div></div><div class="fg"><label class="fl">Proveedor</label>${_pcHtml('np_prov',_provList,'Buscar o escribir proveedor...')}</div><div class="fg"><label class="fl">Fecha pedido</label><input class="fi" id="np_fecha" type="date" value="${td()}" onchange="_unidadInfo('np')"></div><div class="fg"><label class="fl">Grupo (opcional)</label>${_pcHtml('np_grupo',_grupoNames,'Buscar o crear un grupo...')}<div class="txxs tc3 mt-2">Agrupá varios materiales bajo el mismo nombre para no ver un listado tan largo.</div></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="np_obs"></textarea></div><button class="btn btn-w mt-8" style="background:var(--orange);color:#fff" onclick="savePedido()">Registrar Pedido</button></div></div>
-  <div class="mo" id="newAPedirM"><div class="mo-c"><div class="mo-h"><h3 style="color:#8b5cf6">&#x1F4DD; A pedir</h3><button class="tbtn" onclick="closeM('newAPedirM')">${I.x}</button></div><div style="background:#f5f3ff;border-left:3px solid #8b5cf6;border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px">Material pendiente de pedido. Pas&aacute;lo a Pedido cuando se solicite.</div><div class="fg"><label class="fl">Material del c&oacute;mputo (opcional)</label>${_mcsHtml('nap_mat',allItems,'Buscar o dejar vacío...','— Ninguno —')}<div id="nap_uinfo" style="display:none"></div></div><div class="fg"><label class="fl">Nombre</label><input class="fi" id="nap_nombre" placeholder="Nombre del material"></div><div class="fr"><div class="fg"><label class="fl">Cantidad</label><input class="fi" id="nap_q" type="number" min="0" step="0.01" oninput="_unidadInfo('nap')"></div><div class="fg"><label class="fl">Unidad</label><select class="fs" id="nap_u">${UNI.map(u=>`<option>${u}</option>`).join('')}</select></div></div><div class="fg"><label class="fl">Proveedor sugerido</label>${_pcHtml('nap_prov',_provList,'Buscar o escribir proveedor...')}</div><div class="fg"><label class="fl">Fecha estimada</label><input class="fi" id="nap_fecha" type="date" value="${td()}" onchange="_unidadInfo('nap')"></div><div class="fg"><label class="fl">Grupo (opcional)</label>${_pcHtml('nap_grupo',_grupoNames,'Buscar o crear un grupo...')}<div class="txxs tc3 mt-2">Agrupá varios materiales bajo el mismo nombre para no ver un listado tan largo.</div></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="nap_obs"></textarea></div><button class="btn btn-w mt-8" style="background:#8b5cf6;color:#fff" onclick="saveAPedir()">Registrar A pedir</button></div></div>
+  <div class="mo" id="newPedidoM"><div class="mo-c"><div class="mo-h"><h3 style="color:var(--orange)">&#x1F4CB; Nuevo Pedido</h3><button class="tbtn" onclick="closeM('newPedidoM')">${I.x}</button></div><button class="btn btn-sec btn-s btn-w mb-10" style="color:var(--orange)" onclick="closeM('newPedidoM');abrirIngresoMultiple('pedido')">&#x1F4DD; ¿Son varios? Cargar por lista</button><div style="background:#fff7ed;border-left:3px solid var(--orange);border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px">Los pedidos <strong>no computan</strong> como ingresados. Se convierten en ingreso con un clic cuando lleguen.</div><div class="fg"><label class="fl">Material del c&oacute;mputo (opcional)</label>${_mcsHtml('np_mat',allItems,'Buscar o dejar vacío...','— Ninguno —')}<div id="np_uinfo" style="display:none"></div></div><div class="fg"><label class="fl">Nombre libre</label><input class="fi" id="np_nombre" placeholder="Si no est&aacute; en el c&oacute;mputo..."></div><div class="fr"><div class="fg"><label class="fl">Cantidad *</label><input class="fi" id="np_q" type="number" min="0" step="0.01" oninput="_unidadInfo('np')"></div><div class="fg"><label class="fl">Unidad</label><select class="fs" id="np_u">${UNI.map(u=>`<option>${u}</option>`).join('')}</select></div></div><div class="fg"><label class="fl">Proveedor</label>${_pcHtml('np_prov',_provList,'Buscar o escribir proveedor...')}</div><div class="fg"><label class="fl">Fecha pedido</label><input class="fi" id="np_fecha" type="date" value="${td()}" onchange="_unidadInfo('np')"></div><div class="fg"><label class="fl">Grupo (opcional)</label>${_pcHtml('np_grupo',_grupoNames,'Buscar o crear un grupo...')}<div class="txxs tc3 mt-2">Agrupá varios materiales bajo el mismo nombre para no ver un listado tan largo.</div></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="np_obs"></textarea></div><button class="btn btn-w mt-8" style="background:var(--orange);color:#fff" onclick="savePedido()">Registrar Pedido</button></div></div>
+  <div class="mo" id="newAPedirM"><div class="mo-c"><div class="mo-h"><h3 style="color:#8b5cf6">&#x1F4DD; A pedir</h3><button class="tbtn" onclick="closeM('newAPedirM')">${I.x}</button></div><button class="btn btn-sec btn-s btn-w mb-10" style="color:#8b5cf6" onclick="closeM('newAPedirM');abrirIngresoMultiple('a_pedir')">&#x1F4DD; ¿Son varios? Cargar por lista</button><div style="background:#f5f3ff;border-left:3px solid #8b5cf6;border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px">Material pendiente de pedido. Pas&aacute;lo a Pedido cuando se solicite.</div><div class="fg"><label class="fl">Material del c&oacute;mputo (opcional)</label>${_mcsHtml('nap_mat',allItems,'Buscar o dejar vacío...','— Ninguno —')}<div id="nap_uinfo" style="display:none"></div></div><div class="fg"><label class="fl">Nombre</label><input class="fi" id="nap_nombre" placeholder="Nombre del material"></div><div class="fr"><div class="fg"><label class="fl">Cantidad</label><input class="fi" id="nap_q" type="number" min="0" step="0.01" oninput="_unidadInfo('nap')"></div><div class="fg"><label class="fl">Unidad</label><select class="fs" id="nap_u">${UNI.map(u=>`<option>${u}</option>`).join('')}</select></div></div><div class="fg"><label class="fl">Proveedor sugerido</label>${_pcHtml('nap_prov',_provList,'Buscar o escribir proveedor...')}</div><div class="fg"><label class="fl">Fecha estimada</label><input class="fi" id="nap_fecha" type="date" value="${td()}" onchange="_unidadInfo('nap')"></div><div class="fg"><label class="fl">Grupo (opcional)</label>${_pcHtml('nap_grupo',_grupoNames,'Buscar o crear un grupo...')}<div class="txxs tc3 mt-2">Agrupá varios materiales bajo el mismo nombre para no ver un listado tan largo.</div></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="nap_obs"></textarea></div><button class="btn btn-w mt-8" style="background:#8b5cf6;color:#fff" onclick="saveAPedir()">Registrar A pedir</button></div></div>
   <div class="mo" id="newExistenteM"><div class="mo-c"><div class="mo-h"><h3 style="color:var(--green)">&#x2713; Registrar Existente</h3><button class="tbtn" onclick="closeM('newExistenteM')">${I.x}</button></div><div style="background:var(--green-bg);border-left:3px solid var(--green);border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px">Material ya disponible en obra — no genera pedido ni ingreso.</div><div class="fg"><label class="fl">Material del c&oacute;mputo (opcional)</label>${_mcsHtml('nex_mat',allItems,'Buscar o dejar vacío...','— Ninguno —')}<div id="nex_uinfo" style="display:none"></div></div><div class="fg"><label class="fl">Nombre</label><input class="fi" id="nex_nombre" placeholder="Nombre del material existente"></div><div class="fr"><div class="fg"><label class="fl">Cantidad</label><input class="fi" id="nex_q" type="number" min="0" step="0.01" oninput="_unidadInfo('nex')"></div><div class="fg"><label class="fl">Unidad</label><select class="fs" id="nex_u">${UNI.map(u=>`<option>${u}</option>`).join('')}</select></div></div><div class="fg"><label class="fl">Fecha</label><input class="fi" id="nex_fecha" type="date" value="${td()}" onchange="_unidadInfo('nex')"></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="nex_obs"></textarea></div><button class="btn btn-w mt-8" style="background:var(--green);color:#fff" onclick="saveExistente()">Registrar Existente</button></div></div>`;
   // Sincrónico a propósito. Con setTimeout, entre que rMat deja la lista en
   // "Cargando..." y que se rellena, el navegador alcanza a calcular el layout
@@ -6328,23 +6328,42 @@ function _parsearLineaMaterial(linea){
   // "12 l hidrofugo", donde la "unidad" se comía medio nombre. Una unidad
   // conocida puede llevar un calificador pegado ("bolsas 25kg"); si no está en
   // la lista, se acepta una sola palabra suelta y nada más.
-  var UC='(?:u|un|unid|unidades?|kg|kgs|gr|grs|g|tn|t|m|m2|m3|ml|mts?|cm|mm|lts?|litros?|l|bolsas?|pallets?|rollos?|cajas?|barras?|chapas?|tiras?|baldes?|tambores?|tambor|pares?|jgo|juegos?|piezas?|placas?|planchas?|hs|horas?|dias?|global|gl)';
+  // Unidades de medida: siempre valen como unidad ("12 l hidrofugo").
+  var UMED='(?:u|un|unid|unidades?|kg|kgs|gr|grs|g|tn|t|m|m2|m3|ml|mts?|metros?|cm|mm|lts?|litros?|l|hs|horas?|dias?|global|gl)';
+  // Envases y piezas: valen como unidad SOLO si despues viene "de". Si no, son
+  // parte del nombre: "50 bolsas de cemento" es cemento, pero "12 chapas
+  // sinusoidales" es un material que se llama "chapas sinusoidales".
+  var UCONT='(?:bolsas?|pallets?|rollos?|cajas?|latas?|tachos?|barras?|chapas?|tiras?|baldes?|tambores?|tambor|pares?|jgo|juegos?|piezas?|placas?|planchas?)';
+  var UC='(?:'+UMED+'|'+UCONT+')';
   var U='(?:'+UC+'(?:\\s+\\S+)?|[a-zA-ZáéíóúñÁÉÍÓÚÑ][\\wáéíóúñÁÉÍÓÚÑ°"\'\\/.]*)';
-  var m;
-  // <nombre> [x|:|-] <cantidad> [unidad]
-  m=t.match(new RegExp('^(.+?)\\s*(?:[x×:\\-,]|\\s)\\s*(\\d+(?:[.,]\\d+)?)\\s*('+U+')?$','i'));
-  if(m&&_normTxt(m[1])){
-    return {nombre:m[1].replace(/[x×:\-,]\s*$/,'').trim(),
-            qty:parseFloat(m[2].replace(',','.')),
-            unit:(m[3]||'').trim()};
+  var num='(\\d+(?:[.,]\\d+)?)';
+  function _n(x){return parseFloat(String(x).replace(',','.'));}
+  // <nombre> [x|:|-] <cantidad> [unidad]  →  "Cemento 50 bolsas", "Hierro del 8 x 24"
+  function porNombre(){
+    var m=t.match(new RegExp('^(.+?)\\s*(?:[x×:\\-,]|\\s)\\s*'+num+'\\s*('+U+')?$','i'));
+    if(!m||!_normTxt(m[1]))return null;
+    var nom=m[1].replace(/[x×:\-,]\s*$/,'').trim(),uni=(m[3]||'').trim();
+    // "Clavos de 2 pulgadas": el numero es parte de la medida del material, no una
+    // cantidad. Se reconoce porque el nombre termina en "de/del" y lo que sigue al
+    // numero no es una unidad conocida. En ese caso se deja el renglon entero.
+    if(uni&&!new RegExp('^'+UC+'$','i').test(uni.split(/\s+/)[0])&&/\bdel?$/i.test(nom))return null;
+    return {nombre:nom,qty:_n(m[2]),unit:uni};
   }
-  // <cantidad> [unidad] [de] <nombre> — acá la unidad tiene que ser conocida sí
-  // o sí: cualquier palabra valdría y se llevaría puesto el nombre.
-  m=t.match(new RegExp('^(\\d+(?:[.,]\\d+)?)\\s*('+UC+')?\\s*(?:de\\s+)?(.+)$','i'));
-  if(m&&_normTxt(m[3])){
-    return {nombre:m[3].trim(),qty:parseFloat(m[1].replace(',','.')),unit:(m[2]||'').trim()};
+  // <cantidad> [unidad] [de] <nombre>  →  "50 bolsas de cemento", "10 m3 arena"
+  function porCantidad(){
+    var m=t.match(new RegExp('^'+num+'\\s*('+UMED+')\\s+(?:de\\s+)?(.+)$','i'));
+    if(m&&_normTxt(m[3]))return {nombre:m[3].trim(),qty:_n(m[1]),unit:m[2].trim()};
+    m=t.match(new RegExp('^'+num+'\\s*('+UCONT+')\\s+de\\s+(.+)$','i'));
+    if(m&&_normTxt(m[3]))return {nombre:m[3].trim(),qty:_n(m[1]),unit:m[2].trim()};
+    // Cantidad y nada mas que se pueda leer como unidad: todo el resto es nombre.
+    m=t.match(new RegExp('^'+num+'\\s+(.+)$'));
+    if(m&&_normTxt(m[2]))return {nombre:m[2].trim(),qty:_n(m[1]),unit:''};
+    return null;
   }
-  return {nombre:t,qty:'',unit:''}; // sin cantidad: se completa a mano
+  // Si el renglon arranca con un numero, ese numero es la cantidad. Probar primero
+  // el otro patron se llevaba puesto el 50 de "2 planchuelas 50mm".
+  var r=/^\d/.test(t)?(porCantidad()||porNombre()):(porNombre()||porCantidad());
+  return r||{nombre:t,qty:'',unit:''}; // sin cantidad: se completa a mano
 }
 
 function abrirIngresoMultiple(estado){
@@ -6359,6 +6378,8 @@ function abrirIngresoMultiple(estado){
   h+='<div class="fr"><div class="fg"><label class="fl">Fecha</label><input class="fi" id="im_d" type="date" value="'+td()+'"></div>';
   h+='<div class="fg" data-im-solo-ingreso><label class="fl">Remito</label><input class="fi" id="im_rem" placeholder="N°"></div></div>';
   h+='<div class="fg"><label class="fl">Proveedor</label>'+_pcHtml('im_prov',provs,'Buscar o escribir proveedor...','')+'</div>';
+  h+='<div class="fg" data-im-solo-pedido><label class="fl">Grupo (opcional)</label>'+_pcHtml('im_grupo',_matGrupoNames(),'Buscar o crear un grupo...','')
+    +'<div class="txxs tc3 mt-2">Se le aplica a toda la lista.</div></div>';
   h+='<div class="fg"><label class="fl">Dictar o pegar la lista</label>'
     +'<textarea class="ft" id="im_txt" rows="4" placeholder="Un material por renglón:&#10;Cemento 50 bolsas&#10;Arena gruesa 10 m3&#10;Hierro del 8 x 24"></textarea>'
     +'<button class="btn btn-sec btn-s btn-w mt-4" onclick="imInterpretarLista()">&#x2193; Pasar a la lista</button></div>';
@@ -6378,6 +6399,8 @@ function abrirIngresoMultiple(estado){
 function _imActualizarCampos(){
   var ing=_IM_ESTADO==='ingresado';
   document.querySelectorAll('#ingMultM [data-im-solo-ingreso]').forEach(function(el){el.style.display=ing?'':'none';});
+  // El grupo sirve para ordenar lo que todavía no llegó (A pedir / Pedido).
+  document.querySelectorAll('#ingMultM [data-im-solo-pedido]').forEach(function(el){el.style.display=ing?'none':'';});
   var b=$('im_btn');
   if(b)b.textContent=ing?'Registrar ingresos':(_IM_ESTADO==='pedido'?'Cargar pedidos':'Cargar a pedir');
 }
@@ -6462,6 +6485,7 @@ async function imRegistrar(){
   var prov=($('im_prov')&&$('im_prov').value||'').trim();
   var remito=($('im_rem')&&$('im_rem').value||'').trim();
   var obs=($('im_obs')&&$('im_obs').value)||'';
+  var grupo=($('im_grupo')&&$('im_grupo').value||'').trim();
   var filas=_IM.filter(function(f){return (f.nombre||'').trim();});
   if(!filas.length){toast('Cargá al menos un material','var(--red)');return;}
   var estado=($('im_estado')&&$('im_estado').value)||_IM_ESTADO||'ingresado';
@@ -6500,6 +6524,7 @@ async function imRegistrar(){
       reg.photos=idx===0?pu.map(function(x){return mkPhoto(x,'');}):[];
     } else {
       reg.date=td();
+      reg.grupo=grupo||null;
       if(estado==='pedido')reg.fechaPedido=fecha;
     }
     D.matIngresos.push(reg);
