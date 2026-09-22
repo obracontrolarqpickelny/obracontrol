@@ -2821,12 +2821,16 @@ function _resetMatModal(prefix){
   var info=$(prefix+'_uinfo');if(info){info.innerHTML='';info.style.display='none';}
   var ph=$(prefix+'_ph');if(ph)ph.value='';
 }
+// Abrir y cerrar un cartel cambia lo que queda debajo del dedo, y el celular
+// volvía a entregar ese mismo toque sobre lo nuevo: al tocar "Crear Visita" se
+// abría OTRA visita, la que quedaba bajo el botón. El escudo descarta ese toque.
 function openM(id){
+  _escudoToque();
   var pfx=_MATM_PREFIX[id];
   if(pfx)_resetMatModal(pfx);
   $(id)?.classList.add('open');
 }
-function closeM(id){$(id)?.classList.remove('open');}
+function closeM(id){_escudoToque();$(id)?.classList.remove('open');}
 function badge(txt,cls,sm){return `<span class="bg${sm?' bg-s':''} ${cls}">${txt}</span>`;}
 function priBadge(p,s){return badge(p,'pri-'+(p||'media'),s);}
 function stBadge(st,s){return badge(st,st==='pendiente'?'st-pendiente':st==='en curso'?'st-encurso':st==='completada'?'st-completada':'st-cancelada',s);}
@@ -4073,7 +4077,7 @@ function rDash(mc,p){
   </div>
   <div class="g2 mb-12" style="gap:8px"><button class="btn btn-p btn-s btn-w" onclick="openM('newVisitaM')">${I.clip} + Visita</button><button class="btn btn-sec btn-s btn-w" onclick="S.mod='tareas';render();setTimeout(()=>openM('newTareaM'),100)">${I.list} + Tarea</button></div>
   ${over>0?`<div class="alrt alrt-r mb-12 pointer" onclick="abrirTareaVencida()">${I.warn}<div class="flex-1"><div class="fw7 ts">${over} tarea${over>1?'s':''} vencida${over>1?'s':''}</div></div>${I.chev}</div>`:''}
-  ${lastV?`<div class="card mb-12 card-click" onclick="S.visitaDetail='${lastV.id}';S.mod='visitas';render();" style="border-left:3px solid var(--blue)"><div class="txxs tc3 mb-4">Ultima visita</div><div class="ts fw7">${lastV.title||'Sin titulo'}</div><div class="txxs tc3">${fmts(lastV.date)}</div></div>`:''}
+  ${lastV?`<div class="card mb-12 card-click" onclick="_escudoToque();S.visitaDetail='${lastV.id}';S.mod='visitas';render();" style="border-left:3px solid var(--blue)"><div class="txxs tc3 mb-4">Ultima visita</div><div class="ts fw7">${lastV.title||'Sin titulo'}</div><div class="txxs tc3">${fmts(lastV.date)}</div></div>`:''}
   ${renderNewVisitaModal()}
   <!-- Drive Setup Modal -->
   <div class="mo" id="driveSetupM"><div class="mo-c">
@@ -4132,8 +4136,13 @@ async function saveVisita(){
   saveVisita._enCurso=true;
   try{
     const pu=await readPhotos('nv_photos','visitas');
-    D.visitas.push({id:uid(),projectId:S.proj,title:t,date:$('nv_date').value||td(),description:$('nv_desc').value,observations:$('nv_obs').value,estado:'borrador',photos:pu.map(u=>mkPhoto(u,'')),updatedAt:nw()});
-    audit('visitas','create',t);sv();closeM('newVisitaM');render();toast('Visita creada');
+    const _nuevaId=uid();
+    D.visitas.push({id:_nuevaId,projectId:S.proj,title:t,date:$('nv_date').value||td(),description:$('nv_desc').value,observations:$('nv_obs').value,estado:'borrador',photos:pu.map(u=>mkPhoto(u,'')),updatedAt:nw()});
+    audit('visitas','create',t);sv();closeM('newVisitaM');
+    // Queda abierta la visita recién creada: es donde se siguen cargando fotos,
+    // tareas y materiales. Antes quedaba el listado y había que buscarla.
+    S.mod='visitas';S.visitaDetail=_nuevaId;S.matDetail=null;S.matSinCompDetail=null;
+    render();toast('Visita creada');
   }finally{saveVisita._enCurso=false;}
 }
 
@@ -5562,7 +5571,7 @@ function renderMatItems(){
       _existH+='<div class="ts fw6">'+(e.matNombre||mn&&mn.name||'Sin nombre')+_notaBadge('matIngresos',e.id,'observations')+'</div>';
       _existH+='<div class="txxs tc3 mt-2">'+(e.qty?e.qty+' '+(e.unit||'u'):'-')+(e.fecha?' | '+fmts(e.fecha):'')+(e.proveedor?' | '+e.proveedor:'')+'</div>';
       if(mn&&mn.name!==e.matNombre)_existH+='<div class="txxs mt-1" style="color:var(--purple)">&#x1F4E6; '+mn.name+'</div>';
-      if(e.visitaId){var _vn=D.visitas.find(function(v){return v.id===e.visitaId;});_existH+='<div class="txxs mt-1" style="color:var(--blue)">&#x26D3; <button class="link-tag" style="font-size:10px" onclick="S.visitaDetail=\''+e.visitaId+'\';S.mod=\'visitas\';render();">'+(_vn?_vn.title:'Visita')+'</button></div>';}
+      if(e.visitaId){var _vn=D.visitas.find(function(v){return v.id===e.visitaId;});_existH+='<div class="txxs mt-1" style="color:var(--blue)">&#x26D3; <button class="link-tag" style="font-size:10px" onclick="_escudoToque();S.visitaDetail=\''+e.visitaId+'\';S.mod=\'visitas\';render();">'+(_vn?_vn.title:'Visita')+'</button></div>';}
       _existH+='</div><div class="matrow-acts">';
       _existH+='<button class="btn btn-sec btn-s" style="font-size:10px" onclick="editExistente(\''+e.id+'\')">' +I.edit+'</button>';
       _existH+='<button class="btn btn-sec btn-s" style="font-size:10px;color:var(--blue)" title="Vincular con una visita" onclick="vincularVisitaMat(\''+e.id+'\')">&#x1F4CB;</button>';
@@ -5589,7 +5598,7 @@ function renderMatItems(){
       _apedirH+='<div class="txxs tc3 mt-2">'+(p.qty?p.qty+' '+(p.unit||''):'-')+(p.proveedor?' | '+p.proveedor:'')+(p.fecha?' | '+fmts(p.fecha):'')+'</div>';
       if(mn)_apedirH+='<div class="txxs mt-2" style="color:var(--purple)">&#x1F4E6; '+mn.name+'</div>';
       if(p.sourceType==='formulario'&&p.cargadoPor)_apedirH+='<div class="txxs mt-1" style="color:#16a34a;font-weight:700">&#x1F464; '+esc(p.cargadoPor||p.sourceName||'')+(p.date?' · '+fmts(p.date):'')+'</div>';
-      if(p.visitaId){var _vn=D.visitas.find(function(v){return v.id===p.visitaId;});_apedirH+='<div class="txxs mt-1" style="color:var(--blue)">&#x1F4CB; '+'<button class="link-tag" style="font-size:10px" onclick="S.visitaDetail=\''+p.visitaId+'\';;S.mod=\'visitas\';render();">'+(_vn?_vn.title:'Visita')+'</button></div>';}
+      if(p.visitaId){var _vn=D.visitas.find(function(v){return v.id===p.visitaId;});_apedirH+='<div class="txxs mt-1" style="color:var(--blue)">&#x1F4CB; '+'<button class="link-tag" style="font-size:10px" onclick="_escudoToque();S.visitaDetail=\''+p.visitaId+'\';;S.mod=\'visitas\';render();">'+(_vn?_vn.title:'Visita')+'</button></div>';}
       _apedirH+='</div><div class="matrow-acts">';
       _apedirH+=_alertBtn('matIngresos',p.id,p.alerta);
       _apedirH+='<button class="btn btn-sec btn-s" style="font-size:10px" onclick="editAPedir(\''+p.id+'\')">'+I.edit+'</button>';
@@ -5621,7 +5630,7 @@ function renderMatItems(){
       _pedH+='<div class="txxs tc3 mt-2">'+p.qty+' '+(p.unit||'')+(p.proveedor?' | '+p.proveedor:'')+(p.fecha?' | '+fmts(p.fecha):'')+'</div>';
       if(mn) _pedH+='<div class="txxs mt-2" style="color:var(--purple)">&#x1F4E6; '+mn.name+'</div>';
       if(p.sourceType==='formulario'&&p.cargadoPor)_pedH+='<div class="txxs mt-1" style="color:#16a34a;font-weight:700">&#x1F464; '+esc(p.cargadoPor||p.sourceName||'')+(p.date?' · '+fmts(p.date):'')+'</div>';
-      if(p.visitaId){var _pvn=D.visitas.find(function(v){return v.id===p.visitaId;});_pedH+='<div class="txxs mt-1" style="color:var(--blue)">&#x1F4CB; '+'<button class="link-tag" style="font-size:10px" onclick="S.visitaDetail=\''+p.visitaId+'\';;S.mod=\'visitas\';render();">'+(_pvn?_pvn.title:'Visita')+'</button></div>';}
+      if(p.visitaId){var _pvn=D.visitas.find(function(v){return v.id===p.visitaId;});_pedH+='<div class="txxs mt-1" style="color:var(--blue)">&#x1F4CB; '+'<button class="link-tag" style="font-size:10px" onclick="_escudoToque();S.visitaDetail=\''+p.visitaId+'\';;S.mod=\'visitas\';render();">'+(_pvn?_pvn.title:'Visita')+'</button></div>';}
       _pedH+='</div><div class="matrow-acts">';
       _pedH+=_alertBtn('matIngresos',p.id,p.alerta);
       _pedH+='<button class="btn btn-sec btn-s" style="font-size:10px" onclick="editPedidoRegistrado(\''+p.id+'\')">'+ I.edit +'</button>';
@@ -5690,7 +5699,7 @@ function renderMatItems(){
   // Filas compactas: el nombre y el % comparten renglón, la barra queda fina y
   // los tres números van en una línea sola. Así entran bastantes más materiales
   // en la pantalla del celular sin perder ningún dato.
-  el.innerHTML=_existH+_sinCompH+_apedirH+_pedH+Object.entries(cats).map(([cat,mats])=>`<div class="mb-12"><div class="ts fw7 mb-6" style="color:var(--purple)">${cat} (${mats.length})</div>${mats.map(m=>{const col=m.status==='ok'?'var(--green)':m.status==='limit'?'var(--orange)':m.status==='under'?'var(--blue)':'var(--gray-l)';return `<div class="card card-click matrow-compact" onclick="S.matDetail='${m.id}';render();">
+  el.innerHTML=_existH+_sinCompH+_apedirH+_pedH+Object.entries(cats).map(([cat,mats])=>`<div class="mb-12"><div class="ts fw7 mb-6" style="color:var(--purple)">${cat} (${mats.length})</div>${mats.map(m=>{const col=m.status==='ok'?'var(--green)':m.status==='limit'?'var(--orange)':m.status==='under'?'var(--blue)':'var(--gray-l)';return `<div class="card card-click matrow-compact" onclick="_escudoToque();S.matDetail='${m.id}';render();">
     <div class="flex justify-between items-center gap-8"><div class="fw6 mat-nm">${m.name}${m.photos&&m.photos.length?`<span class="txxs tc3" style="font-weight:400;margin-left:5px">${I.cam}${m.photos.length}</span>`:''}</div>${m.computado?`<div class="fw8 mat-pct" style="color:${col}">${m.pct}%</div>`:''}</div>
     ${m.computado?`<div class="prog prog-slim"><div class="prog-bar" style="width:${m.computado>0?Math.min(m.totalIng/m.computado*100,100):0}%;background:${col}"></div></div><div class="flex justify-between mat-nums"><span>Comp: ${m.computado} ${m.unit||''}</span><span>Ing: ${m.totalIng}</span><span style="color:${col}">Falta: ${Math.max(m.computado-m.totalIng,0)}</span></div>`:`<div class="mat-nums tc3">${m.qty||0} ${m.unit||''}</div>`}
   </div>`;}).join('')}</div>`).join('');
@@ -6603,7 +6612,7 @@ function rMatDetail(mc,mid){
   const col=comp===0?'var(--gray-l)':pct>=100?'var(--green)':pct>=80?'var(--orange)':'var(--blue)';
   mc.innerHTML=`
   <div class="flex items-center gap-8 mb-12">
-    <button class="tbtn" onclick="S.matDetail=null;render();">${I.chevL}</button>
+    <button class="tbtn" onclick="_escudoToque();S.matDetail=null;render();">${I.chevL}</button>
     <h2 class="fw8" style="font-size:16px;flex:1">${m.name}</h2>
     <button class="btn btn-s btn-sec" onclick="exportMatDetailPDF('${mid}')">PDF</button><button class="btn btn-g btn-s" onclick="editMat('${mid}')">${I.edit}</button>
     <button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel('Eliminar material y todos sus ingresos?')){D.materiales=D.materiales.filter(x=>x.id!=='${mid}');addTombstone('materiales','${mid}');(D.matIngresos||[]).filter(x=>x.materialId==='${mid}').forEach(x=>addTombstone('matIngresos',x.id));D.matIngresos=(D.matIngresos||[]).filter(x=>x.materialId!=='${mid}');sv();S.matDetail=null;render();toast('Eliminado');}">${I.trash}</button>
@@ -6625,7 +6634,7 @@ function rMatDetail(mc,mid){
     </div>
     ${_noteEdit?`<textarea class="ft" id="mnd_${mid}" style="font-size:12px;min-height:56px" placeholder="Agregar nota..." onblur="saveMatNote('${mid}',this.value);S.matNoteEditing=null;render()">${m.matNote||''}</textarea>`:m.matNote?`<div style="font-size:12px;color:var(--text2);white-space:pre-wrap;line-height:1.5">${m.matNote}</div>`:`<button class="btn btn-sec btn-s" onclick="S.matNoteEditing='${mid}';render()">+ Agregar nota</button>`}
   </div>
-  ${existentes.length?`<div class="card mb-12" style="border-left:3px solid var(--green)"><div class="flex justify-between items-center mb-8"><div class="ts fw7" style="color:var(--green)">&#x2713; Existente (${existentes.length} registros)</div></div>${existentes.map(e=>{const vn=e.visitaId?D.visitas.find(v=>v.id===e.visitaId)?.title:null;return `<div style='padding:8px 0;border-bottom:1px solid var(--gray-ll)'><div class='flex justify-between items-center'><div><span class='ts fw6'>${e.qty||0} ${m.unit||''}</span><span class='txxs tc3 ml-8'>${fmts(e.date)}</span>${vn?`<div class='txxs mt-1' style='color:var(--blue)'>&#x1F4CB; <button class='link-tag' onclick=\"S.visitaDetail='${e.visitaId}';S.mod='visitas';render();\">${vn}</button></div>`:''}</div><div class='flex gap-4'><button class='btn btn-sec btn-s' style='font-size:10px' onclick=\"editExistente('${e.id}')\">✎</button><button class='btn btn-sec btn-s' style='font-size:10px;color:var(--red)' onclick=\"delMatItem('${e.id}')\">✕</button></div></div></div>`}).join('')}</div>`:''}
+  ${existentes.length?`<div class="card mb-12" style="border-left:3px solid var(--green)"><div class="flex justify-between items-center mb-8"><div class="ts fw7" style="color:var(--green)">&#x2713; Existente (${existentes.length} registros)</div></div>${existentes.map(e=>{const vn=e.visitaId?D.visitas.find(v=>v.id===e.visitaId)?.title:null;return `<div style='padding:8px 0;border-bottom:1px solid var(--gray-ll)'><div class='flex justify-between items-center'><div><span class='ts fw6'>${e.qty||0} ${m.unit||''}</span><span class='txxs tc3 ml-8'>${fmts(e.date)}</span>${vn?`<div class='txxs mt-1' style='color:var(--blue)'>&#x1F4CB; <button class='link-tag' onclick=\"_escudoToque();S.visitaDetail='${e.visitaId}';S.mod='visitas';render();\">${vn}</button></div>`:''}</div><div class='flex gap-4'><button class='btn btn-sec btn-s' style='font-size:10px' onclick=\"editExistente('${e.id}')\">✎</button><button class='btn btn-sec btn-s' style='font-size:10px;color:var(--red)' onclick=\"delMatItem('${e.id}')\">✕</button></div></div></div>`}).join('')}</div>`:''}
   ${pedsMat.length?`<div class="card mb-12" style="border-left:3px solid var(--orange)"><div class="flex justify-between items-center mb-8"><div class="ts fw7" style="color:var(--orange)">&#x1F4CB; Pedidos de este material (${pedsMat.length})</div></div>${pedsMat.map(p=>`<div style="padding:8px 0;border-bottom:1px solid var(--gray-ll)"><div class="flex items-start justify-between gap-8"><div class="flex-1"><div class="ts fw6">${p.qty} ${m.unit||''}</div><div class="txxs tc3 mt-2">${fmts(p.fecha||p.date)}${p.proveedor?' | Prov: '+p.proveedor:''}${p.observations?' | '+p.observations:''}</div></div><div class="flex gap-4 flex-shrink-0"><button class="btn btn-ok btn-s" style="white-space:nowrap" onclick="confirmarPedido('${p.id}')">&#x2713; Ingresado</button><button class="btn btn-sec btn-s" style="font-size:10px;color:#8b5cf6" onclick="retrocederAPedir('${p.id}')" title="Retroceder a A pedir">&larr; A pedir</button></div></div></div>`).join('')}</div>`:''}
   <div class="card">
     <div class="flex justify-between items-center mb-8 wrap gap-6">
@@ -6800,7 +6809,7 @@ function rAlertas(mc){
   const act=items.filter(a=>!a.resolved);const res=items.filter(a=>a.resolved);
   mc.innerHTML=`${modHeader('alertas','Alertas',`<button class="btn btn-s" style="background:${c};color:#fff" onclick="openM('newAlertM')">${I.plus} Nueva</button>`)}
   ${auto.length?`<div class="mb-12"><div class="txs fw6 tc3 mb-8">Automaticas</div>${auto.map(a=>`<div class="alrt ${a.cls}">${I.warn}<div class="flex-1"><div class="ts fw6">${a.type}</div><div class="txxs">${a.msg}</div></div></div>`).join('')}</div>`:''}
-  ${act.map(a=>{const vN=a.visitaId?D.visitas.find(v=>v.id===a.visitaId)?.title:null;return `<div class="card" style="padding:12px">${priBadge(a.priority||'media',true)}<div class="ts mt-4">${a.message}</div>${a.dueDate?`<div class="txxs tc3 mt-4">${I.cal} Vence: ${fmts(a.dueDate)}</div>`:''} ${a.photos&&a.photos.length?photoGrid(a.photos,'alertas',a.id):''} ${a.archivos&&a.archivos.length?`<div class="mt-4">${a.archivos.map(f=>`<div class="flex items-center gap-6 txxs tc3"><span>${I.file}</span><span style="color:var(--slate);flex:1">${f.name}</span><button class="btn btn-sec btn-s" onclick="event.stopPropagation();viewArchivo('alertas','${a.id}','${f.id||f.name||''}')">👁</button><button class="btn btn-sec btn-s" onclick="event.stopPropagation();delArchivo('alertas','${a.id}','${f.id||f.name||''}')" style="color:var(--red)">${I.trash}</button></div>`).join('')}</div>`:''}<div class="flex gap-4 mt-6 items-center wrap"><span class="txxs tc3">${fmts(a.date)}</span>${vN?`<span class="link-tag" onclick="S.visitaDetail='${a.visitaId}';S.mod='visitas';render();">${I.link} ${vN}</span>`:''}<button class="btn btn-ok btn-s" style="margin-left:auto" onclick="resA('${a.id}')">Resolver</button><button class="btn btn-sec btn-s" onclick="editAlerta('${a.id}')">${I.edit}</button><button class="btn btn-sec btn-s" onclick="exportAlertaGCal('${a.id}')" title="Google Calendar">&#128197;</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delI('alertas','${a.id}')">${I.trash}</button></div></div>`;}).join('')}
+  ${act.map(a=>{const vN=a.visitaId?D.visitas.find(v=>v.id===a.visitaId)?.title:null;return `<div class="card" style="padding:12px">${priBadge(a.priority||'media',true)}<div class="ts mt-4">${a.message}</div>${a.dueDate?`<div class="txxs tc3 mt-4">${I.cal} Vence: ${fmts(a.dueDate)}</div>`:''} ${a.photos&&a.photos.length?photoGrid(a.photos,'alertas',a.id):''} ${a.archivos&&a.archivos.length?`<div class="mt-4">${a.archivos.map(f=>`<div class="flex items-center gap-6 txxs tc3"><span>${I.file}</span><span style="color:var(--slate);flex:1">${f.name}</span><button class="btn btn-sec btn-s" onclick="event.stopPropagation();viewArchivo('alertas','${a.id}','${f.id||f.name||''}')">👁</button><button class="btn btn-sec btn-s" onclick="event.stopPropagation();delArchivo('alertas','${a.id}','${f.id||f.name||''}')" style="color:var(--red)">${I.trash}</button></div>`).join('')}</div>`:''}<div class="flex gap-4 mt-6 items-center wrap"><span class="txxs tc3">${fmts(a.date)}</span>${vN?`<span class="link-tag" onclick="_escudoToque();S.visitaDetail='${a.visitaId}';S.mod='visitas';render();">${I.link} ${vN}</span>`:''}<button class="btn btn-ok btn-s" style="margin-left:auto" onclick="resA('${a.id}')">Resolver</button><button class="btn btn-sec btn-s" onclick="editAlerta('${a.id}')">${I.edit}</button><button class="btn btn-sec btn-s" onclick="exportAlertaGCal('${a.id}')" title="Google Calendar">&#128197;</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delI('alertas','${a.id}')">${I.trash}</button></div></div>`;}).join('')}
   ${!auto.length&&!act.length?`<div class="empty"><span style="color:${c}">${I.bell}</span><div class="ts mt-8">Sin alertas</div></div>`:''}
   ${res.length?`<div class="mt-12"><button class="btn btn-g btn-s btn-w" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">Resueltas (${res.length})</button><div style="display:none">${res.map(a=>`<div class="card mt-6" style="padding:10px;opacity:.5"><div class="ts" style="text-decoration:line-through">${a.message}</div><div class="flex gap-4 mt-4"><button class="btn btn-g btn-s" onclick="resA2('${a.id}')">Reabrir</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delI('alertas','${a.id}')">${I.trash}</button></div></div>`).join('')}</div></div>`:''}
   <div class="mo" id="newAlertM"><div class="mo-c"><div class="mo-h"><h3 style="color:${c}">Nueva Alerta</h3><button class="tbtn" onclick="closeM('newAlertM')">${I.x}</button></div><div class="fg"><label class="fl">Mensaje *</label><textarea class="ft" id="na_m"></textarea></div>${priSelector('na_p','media')}<div class="fg"><label class="fl">Fecha vencimiento</label><input class="fi" id="na_due" type="date"></div><div class="fg"><label class="fl">Fotos</label><input type="file" accept="image/*" multiple id="na_ph" class="fi" style="padding:6px"></div><div class="fg"><label class="fl">Archivos adjuntos</label><input type="file" multiple id="na_af" class="fi" style="padding:6px"></div><button class="btn btn-w mt-8" style="background:${c};color:#fff" onclick="saveAlert()">Crear</button></div></div>`;
