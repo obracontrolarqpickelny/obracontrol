@@ -3620,7 +3620,7 @@ function abrirBandejaObra(pid,tab){
   S.visitaDetail=null;S.matDetail=null;S.matSinCompDetail=null;
   render();
 }
-function renderProjects(){const pjs=D.projects;let h='';if(!pjs.length){h=`<div class="empty">${I.building}<div style="font-size:14px;margin:16px 0">No hay obras</div><button class="btn btn-p" onclick="openM('newProjM')">${I.plus} Crear obra</button></div>`;}else{h=pjs.map(p=>{const v=D.visitas.filter(x=>x.projectId===p.id);const t=D.tareas.filter(x=>x.projectId===p.id);const pe=t.filter(x=>x.status!=='completada'&&x.status!=='cancelada').length;return `<div class="card card-click" onclick="S.proj='${p.id}';S.mod='dashboard';S.visitaDetail=null;S.matDetail=null;render();"><div class="flex justify-between items-center mb-6"><div class="fw7" style="font-size:15px">${p.name}</div>${colBadge(p.status,SC[p.status]||'#94a3b8',true)}</div><div class="flex gap-8 ts tc3 mb-8 wrap">${p.client?`<span>${I.user} ${p.client}</span>`:''}${p.location?`<span>${I.pin} ${p.location}</span>`:''}</div><div class="flex gap-12 txxs tc3 items-center" style="flex-wrap:wrap;row-gap:4px"><span>${v.length} visitas</span><span>${t.length} tareas</span>${pe?`<span style="color:var(--pri)">${pe} pend</span>`:''}${_chipsInicioObra(p.id)}<a href="https://obracontrolarqpickelny.github.io/obracontrol/obragestion_proasistente.html?obra=${encodeURIComponent(p.name)}&proj=${encodeURIComponent(p.id)}" target="_blank" onclick="event.stopPropagation()" style="margin-left:auto;font-size:10px;color:#d97706;text-decoration:none;padding:2px 8px;border:1px solid #d9770644;border-radius:4px;background:#d977060d;font-weight:600">🔗 ObraGestión ↗</a></div></div>`;}).join('');}app.innerHTML=`<div style="min-height:100vh;padding:16px;background:var(--bg)"><div style="max-width:600px;margin:0 auto"><div class="flex items-center justify-between mb-16" style="padding-top:16px"><div class="flex items-center gap-12"><div style="width:46px;height:46px;border-radius:14px;background:linear-gradient(135deg,#D97706,#F59E0B);display:flex;align-items:center;justify-content:center;color:#fff;box-shadow:0 4px 14px #D9770630">${I.building}</div><div><div style="font-size:22px;font-weight:800">ObraControl</div><div class="ts tc3">Hola, ${D.user?.name||''}</div></div></div><div style="display:flex;gap:4px;align-items:center"><span id="syncIndicator" class="sync-dot" onclick="showDrivePanel()" title="Estado sincronización" style="cursor:pointer">○</span><button class="tbtn" onclick="showDrivePanel()" style="color:${SYNC.method?"var(--green)":"var(--pri)"}" title="Sincronización Drive">${I.cloud}</button><button class="tbtn" onclick="D.user=null;sv();render();" style="color:var(--gray-l)">${I.out}</button></div></div><div class="flex justify-between items-center mb-12"><h2 style="font-size:16px;font-weight:700">Mis Obras</h2><button class="btn btn-p btn-s" onclick="openM('newProjM')">${I.plus} Nueva</button></div>${h}</div></div><div class="mo" id="newProjM"><div class="mo-c"><div class="mo-h"><h3>Nueva Obra</h3><button class="tbtn" onclick="closeM('newProjM')">${I.x}</button></div><div class="fg"><label class="fl">Nombre *</label><input class="fi" id="pN" placeholder="Ej: Casa Gomez"></div><div class="fg"><label class="fl">Cliente</label><input class="fi" id="pCl"></div><div class="fg"><label class="fl">Ubicacion</label><input class="fi" id="pLoc"></div><div class="fr"><div class="fg"><label class="fl">Director</label><input class="fi" id="pDir"></div><div class="fg"><label class="fl">Capataz</label><input class="fi" id="pCap"></div></div><div class="fr"><div class="fg"><label class="fl">Inicio</label><input class="fi" id="pSt" type="date" value="${td()}"></div><div class="fg"><label class="fl">Fin</label><input class="fi" id="pEn" type="date"></div></div><div class="fg"><label class="fl">Estado</label><select class="fs" id="pSta"><option>En curso</option><option>Pausada</option><option>Finalizada</option><option>Por iniciar</option></select></div><button class="btn btn-p btn-w mt-8" onclick="createProj()">Crear Obra</button></div></div>`;}
+function renderProjects(){const pjs=D.projects;let h='';if(!pjs.length){h=`<div class="empty">${I.building}<div style="font-size:14px;margin:16px 0">No hay obras</div><button class="btn btn-p" onclick="openM('newProjM')">${I.plus} Crear obra</button></div>`;}else{h=pjs.map(p=>{const v=D.visitas.filter(x=>x.projectId===p.id);const t=D.tareas.filter(x=>x.projectId===p.id);const pe=t.filter(x=>x.status!=='completada'&&x.status!=='cancelada').length;return `<div class="card card-click" onclick="S.proj='${p.id}';S.mod='dashboard';S.visitaDetail=null;S.matDetail=null;render();"><div class="flex justify-between items-center mb-6"><div class="fw7" style="font-size:15px">${p.name}</div>${colBadge(p.status,SC[p.status]||'#94a3b8',true)}</div><div class="flex gap-8 ts tc3 mb-8 wrap">${p.client?`<span>${I.user} ${p.client}</span>`:''}${p.location?`<span>${I.pin} ${p.location}</span>`:''}</div><div class="txxs tc3" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 8px;align-items:center"><span>${v.length} visitas</span><span>${t.length} tareas</span><span style="color:${pe?'var(--pri)':'var(--gray-l)'}">${pe} pend</span>${_chipsInicioObra(p.id)}<a href="https://obracontrolarqpickelny.github.io/obracontrol/obragestion_proasistente.html?obra=${encodeURIComponent(p.name)}&proj=${encodeURIComponent(p.id)}" target="_blank" onclick="event.stopPropagation()" style="justify-self:end;font-size:10px;color:#d97706;text-decoration:none;padding:2px 8px;border:1px solid #d9770644;border-radius:4px;background:#d977060d;font-weight:600;white-space:nowrap">🔗 ObraGestión ↗</a></div></div>`;}).join('');}app.innerHTML=`<div style="min-height:100vh;padding:16px;background:var(--bg)"><div style="max-width:600px;margin:0 auto"><div class="flex items-center justify-between mb-16" style="padding-top:16px"><div class="flex items-center gap-12"><div style="width:46px;height:46px;border-radius:14px;background:linear-gradient(135deg,#D97706,#F59E0B);display:flex;align-items:center;justify-content:center;color:#fff;box-shadow:0 4px 14px #D9770630">${I.building}</div><div><div style="font-size:22px;font-weight:800">ObraControl</div><div class="ts tc3">Hola, ${D.user?.name||''}</div></div></div><div style="display:flex;gap:4px;align-items:center"><span id="syncIndicator" class="sync-dot" onclick="showDrivePanel()" title="Estado sincronización" style="cursor:pointer">○</span><button class="tbtn" onclick="showDrivePanel()" style="color:${SYNC.method?"var(--green)":"var(--pri)"}" title="Sincronización Drive">${I.cloud}</button><button class="tbtn" onclick="D.user=null;sv();render();" style="color:var(--gray-l)">${I.out}</button></div></div><div class="flex justify-between items-center mb-12"><h2 style="font-size:16px;font-weight:700">Mis Obras</h2><button class="btn btn-p btn-s" onclick="openM('newProjM')">${I.plus} Nueva</button></div>${h}</div></div><div class="mo" id="newProjM"><div class="mo-c"><div class="mo-h"><h3>Nueva Obra</h3><button class="tbtn" onclick="closeM('newProjM')">${I.x}</button></div><div class="fg"><label class="fl">Nombre *</label><input class="fi" id="pN" placeholder="Ej: Casa Gomez"></div><div class="fg"><label class="fl">Cliente</label><input class="fi" id="pCl"></div><div class="fg"><label class="fl">Ubicacion</label><input class="fi" id="pLoc"></div><div class="fr"><div class="fg"><label class="fl">Director</label><input class="fi" id="pDir"></div><div class="fg"><label class="fl">Capataz</label><input class="fi" id="pCap"></div></div><div class="fr"><div class="fg"><label class="fl">Inicio</label><input class="fi" id="pSt" type="date" value="${td()}"></div><div class="fg"><label class="fl">Fin</label><input class="fi" id="pEn" type="date"></div></div><div class="fg"><label class="fl">Estado</label><select class="fs" id="pSta"><option>En curso</option><option>Pausada</option><option>Finalizada</option><option>Por iniciar</option></select></div><button class="btn btn-p btn-w mt-8" onclick="createProj()">Crear Obra</button></div></div>`;}
 function createProj(){const n=$('pN').value.trim();if(!n){toast('Nombre obligatorio','var(--red)');return;}D.projects.push({id:uid(),name:n,client:$('pCl').value,location:$('pLoc').value,director:$('pDir').value,capataz:$('pCap').value,startDate:$('pSt').value,endDate:$('pEn').value,status:$('pSta').value,createdAt:td(),updatedAt:nw()});sv();S.proj=D.projects[D.projects.length-1].id;S.mod='dashboard';render();toast('Obra creada');}
 
 // ═══════ SHELL ═══════
@@ -8125,7 +8125,8 @@ function rEconomia(mc,p){
   // el movimiento no aparecía en ningún lado; renderEcoItems, en cambio, sí los
   // mostraba, así que la misma lista cambiaba según se filtrara o no.
   // Quienes siguen sin verlos: el PDF y el Excel, el informe al cliente y el log.
-  const allVisible=all;
+  // Por defecto se ven; el interruptor 🔒 permite mirar el saldo sin ellos.
+  const allVisible=(S.ecoVerPrivados!==false)?all:all.filter(function(e){return !e.interno;});
   const c=MC.economia;
   // MEDIOS: global constant
   // Build concept list for filter
@@ -8196,7 +8197,13 @@ function rEconomia(mc,p){
     <div class="flex justify-between items-center">
       <div>
         <div class="txxs fw7 tc3" style="text-transform:uppercase;letter-spacing:.8px">${hasFilter?'Saldo filtrado':'Saldo total'}</div>
-        ${(function(){var _np=items.filter(function(e){return e.interno;}).length;return _np?'<div class="txxs" style="color:#64748b;margin-top:2px">&#x1F512; Incluye '+_np+' privado'+(_np>1?'s':'')+' — no salen en el PDF ni en el Excel</div>':'';})()}
+        ${(function(){
+          var _np=all.filter(function(e){return e.interno;}).length;
+          if(!_np)return '';
+          var _ver=S.ecoVerPrivados!==false;
+          return '<div class="txxs" style="color:#64748b;margin-top:2px;white-space:nowrap">&#x1F512; '+_np+' privado'+(_np>1?'s':'')+' '
+            +'<button class="link-tag" style="font-size:10px" onclick="S.ecoVerPrivados='+(_ver?'false':'true')+';render()" title="'+(_ver?'Ver el saldo sin los privados':'Volver a incluirlos')+'">'+(_ver?'ocultar':'ver')+'</button></div>';
+        })()}
         <div class="fw8" style="font-size:28px;color:${saldo>=0?'var(--green)':'var(--red)'};line-height:1.1">$${saldo.toLocaleString('es-AR')}</div>
         ${hasFilter?`<div class="txxs fw6 mt-4" style="color:var(--gray)">Total obra: $${(allIng-allEgr).toLocaleString('es-AR')}</div>`:''}
       </div>
@@ -8291,7 +8298,7 @@ function renderEcoItems(){
   })();
   // Re-render only the items list, keeping the filter input focused
   const all=pf('economia');
-  let items=all;
+  let items=(S.ecoVerPrivados!==false)?all:all.filter(function(e){return !e.interno;});
   if(S.ecoSingleId){items=items.filter(e=>e.id===S.ecoSingleId);}
   else{
     if(S.ecoTipoFilter)items=items.filter(e=>e.tipo===S.ecoTipoFilter);
@@ -8327,7 +8334,13 @@ function renderEcoItems(){
     sc.innerHTML=`<div class="flex justify-between items-center">
       <div>
         <div class="txxs fw7 tc3" style="text-transform:uppercase;letter-spacing:.8px">${hasFilter?'Saldo filtrado':'Saldo total'}</div>
-        ${(function(){var _np=items.filter(function(e){return e.interno;}).length;return _np?'<div class="txxs" style="color:#64748b;margin-top:2px">&#x1F512; Incluye '+_np+' privado'+(_np>1?'s':'')+' — no salen en el PDF ni en el Excel</div>':'';})()}
+        ${(function(){
+          var _np=all.filter(function(e){return e.interno;}).length;
+          if(!_np)return '';
+          var _ver=S.ecoVerPrivados!==false;
+          return '<div class="txxs" style="color:#64748b;margin-top:2px;white-space:nowrap">&#x1F512; '+_np+' privado'+(_np>1?'s':'')+' '
+            +'<button class="link-tag" style="font-size:10px" onclick="S.ecoVerPrivados='+(_ver?'false':'true')+';render()" title="'+(_ver?'Ver el saldo sin los privados':'Volver a incluirlos')+'">'+(_ver?'ocultar':'ver')+'</button></div>';
+        })()}
         <div class="fw8" style="font-size:28px;color:${saldoCol};line-height:1.1">$${saldo.toLocaleString('es-AR')}</div>
         ${hasFilter?`<div class="txxs fw6 mt-4" style="color:var(--gray)">Total obra: $${(allIng-allEgr).toLocaleString('es-AR')}</div>`:''}
       </div>
@@ -9846,6 +9859,7 @@ function _agregarAvisoCarpeta(colabId,ids){
     D.mensajesColab.push(m);
   }
   _consolidarAvisosCarpeta(colabId);
+  _publicarBandejaColab(colabId);
 }
 /** Renglones agrupados por tipo: "📸 2 fotos nuevas", "📋 1 tarea: ...". */
 function _lineasAvisosColab(msgs,colabId){
@@ -10020,18 +10034,25 @@ function openEcoPDFDialog(){
   <div class="fg"><label class="fl" style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="pdf_incl_distrib" style="width:16px;height:16px" checked> <span>&#x1F4CA; Incluir distribución de egresos por rubro</span></label></div>
   <div class="fg"><label class="fl" style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="pdf_incl_rubro_col" style="width:16px;height:16px" checked> <span>Incluir columnas Rubro / Ítem en la tabla</span></label></div>
   <div class="fg"><label class="fl" style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="pdf_incl_metros" style="width:16px;height:16px" checked> <span>&#x1F4D0; Incluir m&#xE9;tricas por m&#xB2;</span></label></div>
-  <button class="btn btn-w mt-8" style="background:var(--cyan);color:#fff" onclick="exportEcoPDF($('pdf_incl_distrib')?.checked,$('pdf_incl_rubro_col')?.checked,$('pdf_incl_metros')?.checked);this.closest('.mo').remove()">Generar PDF</button></div>`;
+  <div class="fg"><label class="fl">&#x1F512; Movimientos privados</label><select class="fs" id="pdf_priv">
+    <option value="sin">No incluirlos — PDF para el cliente</option>
+    <option value="con">Incluirlos — uso interno</option>
+    <option value="solo">S&#xF3;lo los privados</option>
+  </select><div class="txxs tc3 mt-2">Si los incluye, el PDF sale marcado como uso interno.</div></div>
+  <button class="btn btn-w mt-8" style="background:var(--cyan);color:#fff" onclick="exportEcoPDF($('pdf_incl_distrib')?.checked,$('pdf_incl_rubro_col')?.checked,$('pdf_incl_metros')?.checked,$('pdf_priv')?.value);this.closest('.mo').remove()">Generar PDF</button></div>`;
   document.body.appendChild(d);
 }
 
-function exportEcoPDF(includeDistrib,includeRubroCol,includeMetros){
+function exportEcoPDF(includeDistrib,includeRubroCol,includeMetros,privados){
   if(includeDistrib===undefined)includeDistrib=true;
   if(includeRubroCol===undefined)includeRubroCol=true;
   if(includeMetros===undefined)includeMetros=true;
+  // 'sin' (por defecto) = PDF para el cliente · 'con' = uso interno · 'solo' = sólo privados
+  if(privados!=='con'&&privados!=='solo')privados='sin';
   try{
   const p=D.projects.find(x=>x.id===S.proj);
   const all=pf('economia');
-  let items=all.filter(e=>!e.interno);
+  let items=privados==='con'?all.slice():privados==='solo'?all.filter(e=>e.interno):all.filter(e=>!e.interno);
   if(S.ecoTipoFilter)items=items.filter(e=>e.tipo===S.ecoTipoFilter);
   // Mismo buscador que la pantalla (también mira notas): si no, lo filtrado en
   // pantalla y lo exportado no coincidían.
@@ -10044,6 +10065,8 @@ function exportEcoPDF(includeDistrib,includeRubroCol,includeMetros){
   const saldo=tIng-tEgr;
   // Build filter note
   var filterParts=[];
+  // Queda escrito en el PDF: si lleva privados, no es para el cliente.
+  if(privados!=='sin')filterParts.push(privados==='solo'?'⚠ USO INTERNO — sólo movimientos privados':'⚠ USO INTERNO — incluye movimientos privados');
   if(S.ecoFechaDesde||S.ecoFechaHasta)filterParts.push((S.ecoFechaDesde?fmt(S.ecoFechaDesde):'inicio')+' — '+(S.ecoFechaHasta?fmt(S.ecoFechaHasta):'hoy'));
   if(S.ecoTipoFilter)filterParts.push('Solo '+S.ecoTipoFilter+'s');
   if(S.ecoFilter)filterParts.push('"'+S.ecoFilter+'"');
@@ -11388,8 +11411,43 @@ function shareFormColaborador(colId){
   window.open('whatsapp://send?phone='+co.phone.replace(/[^0-9]/g,'')+'&text='+msg,'_blank');
   // NO cambiar estado aquí — se cambia solo cuando el colaborador abre el link
 }
+// Mensajes de un colaborador con los datos completos de la tarea/checklist,
+// sin las fotos en base64 (para que entren en el link y en el servidor).
+function _msgsColabEnriquecidos(colabId){
+  var msgs=(D.mensajesColab||[]).filter(function(m){return m.colabId===colabId&&m.proyectoId===S.proj;});
+  return msgs.map(function(m){
+    var ent=null;
+    if(m.tipo==='tarea')ent=(D.tareas||[]).find(function(t){return t.id===m.entidadId;})||null;
+    else if(m.tipo==='checklist')ent=(D.checklists||[]).find(function(c){return c.id===m.entidadId;})||null;
+    if(!ent)return m;
+    try{
+      var ec=JSON.parse(JSON.stringify(ent));
+      if(ec.photos)ec.photos=ec.photos.map(function(ph){return typeof ph==='string'?null:{url:(ph.url&&ph.url.startsWith('data:'))?null:ph.url,caption:ph.caption};}).filter(Boolean);
+      if(ec.checklistId){var _chk=(D.checklists||[]).find(function(c){return c.id===ec.checklistId;})||null;if(_chk)ec._checklist=JSON.parse(JSON.stringify(_chk));}
+      return Object.assign({},m,{_entidad:ec});
+    }catch(_e){return m;}
+  });
+}
+/**
+ * Publica la bandeja del colaborador en el servidor, para que le llegue sin
+ * depender del link: antes, si se le asignaba algo después de mandarle el link,
+ * con el link viejo no veía nada. Silencioso y sin bloquear: si no hay servidor
+ * configurado, todo sigue funcionando como antes (por el link).
+ */
+function _publicarBandejaColab(colabId){
+  try{
+    if(!SYNC.apiUrl||!SYNC.apiSecret||!colabId)return;
+    fetch(SYNC.apiUrl,{
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'}, // evita el preflight CORS
+      body:JSON.stringify({secreto:SYNC.apiSecret,accion:'bandeja',token:colabId,
+        mensajes:_msgsColabEnriquecidos(colabId)}),
+    }).catch(function(){});
+  }catch(_){}
+}
 function notificarColabWA(colabId){
   _consolidarAvisosCarpeta(colabId);
+  _publicarBandejaColab(colabId);
   var co=(D.colaboradores||[]).find(function(c){return c.id===colabId;});if(!co||!co.phone)return;
   var p=(D.projects||[]).find(function(x){return x.id===S.proj;});
   var msgs=(D.mensajesColab||[]).filter(function(m){return m.colabId===colabId&&m.proyectoId===S.proj;});
@@ -11996,6 +12054,7 @@ function confirmarShareToInbox(tipo,entidadId,titulo){
   if(!D.mensajesColab)D.mensajesColab=[];
   D.mensajesColab.push({id:uid(),proyectoId:S.proj,colabId:colId,tipo:tipo,entidadId:entidadId,titulo:titulo,nota:nota,urgencia:urg,fechaEnvio:nw(),updatedAt:nw(),estadoColab:'nuevo',respuesta:null,fechaRespuesta:null});
   sv();
+  _publicarBandejaColab(colId); // que le llegue aunque use un link anterior
   document.getElementById('stiMod')?.remove();
   var co=(D.colaboradores||[]).find(function(c){return c.id===colId;});
   toast('Asignado a '+(co&&co.name||'colaborador')+' ✓','var(--teal)',2500);

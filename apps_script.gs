@@ -42,6 +42,15 @@ function _inbox() {
   return _carpeta(_raiz(), '_BANDEJA');
 }
 
+/**
+ * Bandeja del colaborador: lo que el arquitecto le asigna (tareas, checklists,
+ * avisos de carpeta). Antes esto viajaba SOLO dentro del link; si el arquitecto
+ * asignaba algo después, el colaborador con el link viejo no veía nada.
+ */
+function _carpetaBandejaColab() {
+  return _carpeta(_raiz(), '_BANDEJA_COLAB');
+}
+
 /** Carpeta navegable ObraControl_Datos/<obra>/<colaborador>/ */
 function _carpetaColab(obraName, colabName) {
   var obra = _carpeta(_raiz(), obraName || 'Obra sin nombre');
@@ -82,6 +91,21 @@ function doPost(e) {
 
     if (String(body.secreto || '') !== SECRETO) {
       return _json({ ok: false, error: 'Clave incorrecta.' });
+    }
+
+    // El arquitecto publica la bandeja de un colaborador (no es un informe).
+    if (body.accion === 'bandeja') {
+      var tk = String(body.token || '');
+      if (!tk) return _json({ ok: false, error: 'Falta el colaborador.' });
+      var carpBandeja = _carpetaBandejaColab();
+      var nombreB = tk + '.json';
+      var viejoB = _archivoPorNombre(carpBandeja, nombreB);
+      if (viejoB) viejoB.setTrashed(true);
+      carpBandeja.createFile(Utilities.newBlob(
+        JSON.stringify({ token: tk, mensajes: body.mensajes || [], actualizado: new Date().toISOString() }),
+        'application/json', nombreB
+      ));
+      return _json({ ok: true, guardados: (body.mensajes || []).length });
     }
 
     var payload = body.payload;
@@ -220,6 +244,20 @@ function doGet(e) {
 
     if (String(p.secreto || '') !== SECRETO) {
       return _json({ ok: false, error: 'Clave incorrecta.' });
+    }
+
+    // El colaborador pide su bandeja (lo que el arquitecto le asignó).
+    if (accion === 'bandeja') {
+      var tkg = String(p.token || '');
+      if (!tkg) return _json({ ok: false, error: 'Falta el colaborador.' });
+      var fb = _archivoPorNombre(_carpetaBandejaColab(), tkg + '.json');
+      if (!fb) return _json({ ok: true, mensajes: [] });
+      try {
+        var datos = JSON.parse(fb.getBlob().getDataAsString());
+        return _json({ ok: true, mensajes: datos.mensajes || [], actualizado: datos.actualizado || '' });
+      } catch (err) {
+        return _json({ ok: true, mensajes: [] });
+      }
     }
 
     // Lista liviana de informes pendientes (sin fotos).

@@ -358,6 +358,54 @@ var INBOX_MSGS=[];
 try{if(MSGS_RAW)INBOX_MSGS=JSON.parse(decodeURIComponent(escape(atob(MSGS_RAW))));}catch(e){console.warn('msgs parse:',e);}
 var INBOX_RESP={};  // msgId → {respuesta, done}
 
+// La bandeja viajaba SOLO en el link: si el arquitecto asignaba algo después,
+// con el link viejo no aparecía nada. Ahora se guarda en el teléfono y, si hay
+// servidor configurado, se baja sola al abrir.
+var _INBOX_KEY='oc_inbox_'+(TOKEN||'anon');
+function _guardarInboxLocal(){try{localStorage.setItem(_INBOX_KEY,JSON.stringify(INBOX_MSGS));}catch(_){}}
+function _restaurarInboxLocal(){
+  try{
+    var s=localStorage.getItem(_INBOX_KEY);
+    if(!s)return;
+    var g=JSON.parse(s)||[];
+    if(!INBOX_MSGS.length){INBOX_MSGS=g;return;}
+    var porId={};INBOX_MSGS.forEach(function(m){if(m&&m.id)porId[m.id]=1;});
+    g.forEach(function(m){if(m&&m.id&&!porId[m.id])INBOX_MSGS.push(m);});
+  }catch(_){}
+}
+function _fusionarInbox(lista){
+  if(!lista)return false;
+  var porId={};INBOX_MSGS.forEach(function(m){if(m&&m.id)porId[m.id]=m;});
+  var hubo=false;
+  lista.forEach(function(m){
+    if(!m||!m.id)return;
+    if(!porId[m.id]){INBOX_MSGS.push(m);hubo=true;}
+    else{for(var k in m){if(k!=='id')porId[m.id][k]=m[k];}}
+  });
+  _guardarInboxLocal();
+  return hubo;
+}
+function _actualizarBadgeBandeja(){
+  var pend=INBOX_MSGS.filter(function(m){return !(INBOX_RESP[m.id]&&INBOX_RESP[m.id].done);}).length;
+  var cnt=$('count-bdj'),bdg=$('badge-bdj');
+  if(cnt){
+    cnt.textContent=INBOX_MSGS.length;
+    cnt.style.display=INBOX_MSGS.length?'inline-flex':'none';
+    cnt.style.background=pend?'var(--red)':'var(--teal)'; // en rojo mientras haya pendientes
+  }
+  if(bdg)bdg.style.display='none'; // el número en rojo ya avisa
+}
+function _traerBandejaServidor(){
+  if(!API_URL||!TOKEN)return;
+  var u=API_URL+(API_URL.indexOf('?')<0?'?':'&')+'action=bandeja&token='+encodeURIComponent(TOKEN)+'&secreto='+encodeURIComponent(API_SEC);
+  fetch(u).then(function(r){return r.json();}).then(function(j){
+    if(!j||!j.ok||!j.mensajes)return;
+    _fusionarInbox(j.mensajes);
+    _actualizarBadgeBandeja();
+    if(currentTab==='bdj')renderBandeja();
+  }).catch(function(){});
+}
+
 var UNITS=['u','kg','m','m2','m3','l','bolsa 20kg','bolsa 25kg','bolsa 40kg','bolsa 50kg','balde','rollo','caja','barra','paq','gl'];
 var unitOpts=UNITS.map(function(u){return '<option value="'+u+'">'+u+'</option>';}).join('');
 
@@ -615,10 +663,10 @@ function showFormScreen(){
   sendCount=parseInt(TOKEN?localStorage.getItem('oc_v_'+TOKEN)||'0':'0');
   if(TOKEN&&OBRA_ID){var cb=$('carpetaBar');if(cb)cb.style.display='block';}
   // Init bandeja badge
-  if(INBOX_MSGS.length){
-    var cnt=$('count-bdj');if(cnt){cnt.textContent=INBOX_MSGS.length;cnt.style.display='inline-flex';}
-    var bdg=$('badge-bdj');if(bdg)bdg.style.display='inline-flex';
-  }
+  _restaurarInboxLocal();
+  if(INBOX_MSGS.length)_guardarInboxLocal();
+  _actualizarBadgeBandeja();
+  _traerBandejaServidor();
 }
 function openCarpetaTab(){
   var url=window.location.pathname+'?mode=carpeta&obra='+encodeURIComponent(OBRA_ID)+'&token='+encodeURIComponent(TOKEN)+'&obraName='+encodeURIComponent(OBRA_NAME)+(ARCH_TEL?'&tel='+encodeURIComponent(ARCH_TEL):'')+_apiParams();
@@ -798,9 +846,7 @@ function renderBandeja(){
   }
   el.innerHTML=h;
   // Update badge
-  var bdg=$('badge-bdj');var cnt=$('count-bdj');
-  if(bdg)bdg.style.display=pendingCount>0?'inline-flex':'none';
-  if(cnt){cnt.textContent=INBOX_MSGS.length;cnt.style.display=INBOX_MSGS.length>0?'inline-flex':'none';}
+  _actualizarBadgeBandeja();
 }
 
 function toggleBandejaChkItem(msgId,idx){
