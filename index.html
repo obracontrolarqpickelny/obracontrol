@@ -3623,7 +3623,7 @@ function abrirBandejaObra(pid,tab){
   S.visitaDetail=null;S.matDetail=null;S.matSinCompDetail=null;
   render();
 }
-function renderProjects(){const pjs=D.projects;let h='';if(!pjs.length){h=`<div class="empty">${I.building}<div style="font-size:14px;margin:16px 0">No hay obras</div><button class="btn btn-p" onclick="openM('newProjM')">${I.plus} Crear obra</button></div>`;}else{h=pjs.map(p=>{const v=D.visitas.filter(x=>x.projectId===p.id);const t=D.tareas.filter(x=>x.projectId===p.id);const pe=t.filter(x=>x.status!=='completada'&&x.status!=='cancelada').length;return `<div class="card card-click" onclick="S.proj='${p.id}';S.mod='dashboard';S.visitaDetail=null;S.matDetail=null;render();"><div class="flex justify-between items-center mb-6"><div class="fw7" style="font-size:15px">${p.name}</div>${colBadge(p.status,SC[p.status]||'#94a3b8',true)}</div><div class="flex gap-8 ts tc3 mb-8 wrap">${p.client?`<span>${I.user} ${p.client}</span>`:''}${p.location?`<span>${I.pin} ${p.location}</span>`:''}</div><div class="txxs tc3" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 8px;align-items:center"><span>${v.length} visitas</span><span>${t.length} tareas</span><span style="color:${pe?'var(--pri)':'var(--gray-l)'}">${pe} pend</span>${_chipsInicioObra(p.id)}<a href="https://obracontrolarqpickelny.github.io/obracontrol/obragestion_proasistente.html?obra=${encodeURIComponent(p.name)}&proj=${encodeURIComponent(p.id)}" target="_blank" onclick="event.stopPropagation()" style="justify-self:end;font-size:10px;color:#d97706;text-decoration:none;padding:2px 8px;border:1px solid #d9770644;border-radius:4px;background:#d977060d;font-weight:600;white-space:nowrap">🔗 ObraGestión ↗</a></div></div>`;}).join('');}app.innerHTML=`<div style="min-height:100vh;padding:16px;background:var(--bg)"><div style="max-width:600px;margin:0 auto"><div class="flex items-center justify-between mb-16" style="padding-top:16px"><div class="flex items-center gap-12"><div style="width:46px;height:46px;border-radius:14px;background:linear-gradient(135deg,#D97706,#F59E0B);display:flex;align-items:center;justify-content:center;color:#fff;box-shadow:0 4px 14px #D9770630">${I.building}</div><div><div style="font-size:22px;font-weight:800">ObraControl</div><div class="ts tc3">Hola, ${D.user?.name||''}</div></div></div><div style="display:flex;gap:4px;align-items:center"><span id="syncIndicator" class="sync-dot" onclick="showDrivePanel()" title="Estado sincronización" style="cursor:pointer">○</span><button class="tbtn" onclick="showDrivePanel()" style="color:${SYNC.method?"var(--green)":"var(--pri)"}" title="Sincronización Drive">${I.cloud}</button><button class="tbtn" onclick="D.user=null;sv();render();" style="color:var(--gray-l)">${I.out}</button></div></div><div class="flex justify-between items-center mb-12"><h2 style="font-size:16px;font-weight:700">Mis Obras</h2><button class="btn btn-p btn-s" onclick="openM('newProjM')">${I.plus} Nueva</button></div>${h}</div></div><div class="mo" id="newProjM"><div class="mo-c"><div class="mo-h"><h3>Nueva Obra</h3><button class="tbtn" onclick="closeM('newProjM')">${I.x}</button></div><div class="fg"><label class="fl">Nombre *</label><input class="fi" id="pN" placeholder="Ej: Casa Gomez"></div><div class="fg"><label class="fl">Cliente</label><input class="fi" id="pCl"></div><div class="fg"><label class="fl">Ubicacion</label><input class="fi" id="pLoc"></div><div class="fr"><div class="fg"><label class="fl">Director</label><input class="fi" id="pDir"></div><div class="fg"><label class="fl">Capataz</label><input class="fi" id="pCap"></div></div><div class="fr"><div class="fg"><label class="fl">Inicio</label><input class="fi" id="pSt" type="date" value="${td()}"></div><div class="fg"><label class="fl">Fin</label><input class="fi" id="pEn" type="date"></div></div><div class="fg"><label class="fl">Estado</label><select class="fs" id="pSta"><option>En curso</option><option>Pausada</option><option>Finalizada</option><option>Por iniciar</option></select></div><button class="btn btn-p btn-w mt-8" onclick="createProj()">Crear Obra</button></div></div>`;}
+function renderProjects(){const pjs=D.projects.filter(p=>!p.cerrada);const _cerr=D.projects.filter(p=>p.cerrada);let h='';if(!pjs.length){h=`<div class="empty">${I.building}<div style="font-size:14px;margin:16px 0">${_cerr.length?'No hay obras activas':'No hay obras'}</div><button class="btn btn-p" onclick="openM('newProjM')">${I.plus} Crear obra</button></div>`;}else{h=pjs.map(p=>{const v=D.visitas.filter(x=>x.projectId===p.id);const t=D.tareas.filter(x=>x.projectId===p.id);const pe=t.filter(x=>x.status!=='completada'&&x.status!=='cancelada').length;return `<div class="card card-click" onclick="S.proj='${p.id}';S.mod='dashboard';S.visitaDetail=null;S.matDetail=null;render();"><div class="flex justify-between items-center mb-6"><div class="fw7" style="font-size:15px">${p.name}</div>${colBadge(p.status,SC[p.status]||'#94a3b8',true)}</div><div class="flex gap-8 ts tc3 mb-8 wrap">${p.client?`<span>${I.user} ${p.client}</span>`:''}${p.location?`<span>${I.pin} ${p.location}</span>`:''}</div><div class="txxs tc3" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 8px;align-items:center"><span>${v.length} visitas</span><span>${t.length} tareas</span><span style="color:${pe?'var(--pri)':'var(--gray-l)'}">${pe} pend</span>${_chipsInicioObra(p.id)}<a href="https://obracontrolarqpickelny.github.io/obracontrol/obragestion_proasistente.html?obra=${encodeURIComponent(p.name)}&proj=${encodeURIComponent(p.id)}" target="_blank" onclick="event.stopPropagation()" style="justify-self:end;font-size:10px;color:#d97706;text-decoration:none;padding:2px 8px;border:1px solid #d9770644;border-radius:4px;background:#d977060d;font-weight:600;white-space:nowrap">🔗 ObraGestión ↗</a></div></div>`;}).join('');}h+=_seccionObrasCerradas(_cerr);app.innerHTML=`<div style="min-height:100vh;padding:16px;background:var(--bg)"><div style="max-width:600px;margin:0 auto"><div class="flex items-center justify-between mb-16" style="padding-top:16px"><div class="flex items-center gap-12"><div style="width:46px;height:46px;border-radius:14px;background:linear-gradient(135deg,#D97706,#F59E0B);display:flex;align-items:center;justify-content:center;color:#fff;box-shadow:0 4px 14px #D9770630">${I.building}</div><div><div style="font-size:22px;font-weight:800">ObraControl</div><div class="ts tc3">Hola, ${D.user?.name||''}</div></div></div><div style="display:flex;gap:4px;align-items:center"><span id="syncIndicator" class="sync-dot" onclick="showDrivePanel()" title="Estado sincronización" style="cursor:pointer">○</span><button class="tbtn" onclick="showDrivePanel()" style="color:${SYNC.method?"var(--green)":"var(--pri)"}" title="Sincronización Drive">${I.cloud}</button><button class="tbtn" onclick="D.user=null;sv();render();" style="color:var(--gray-l)">${I.out}</button></div></div><div class="flex justify-between items-center mb-12"><h2 style="font-size:16px;font-weight:700">Mis Obras</h2><div style="display:flex;gap:6px"><button class="btn btn-sec btn-s" onclick="document.getElementById('abrirObraF').click()" title="Abrir una obra desde su archivo de respaldo">📂 Abrir archivo</button><button class="btn btn-p btn-s" onclick="openM('newProjM')">${I.plus} Nueva</button></div><input type="file" id="abrirObraF" style="display:none" onchange="abrirArchivoObra(this)"></div>${h}</div></div><div class="mo" id="newProjM"><div class="mo-c"><div class="mo-h"><h3>Nueva Obra</h3><button class="tbtn" onclick="closeM('newProjM')">${I.x}</button></div><div class="fg"><label class="fl">Nombre *</label><input class="fi" id="pN" placeholder="Ej: Casa Gomez"></div><div class="fg"><label class="fl">Cliente</label><input class="fi" id="pCl"></div><div class="fg"><label class="fl">Ubicacion</label><input class="fi" id="pLoc"></div><div class="fr"><div class="fg"><label class="fl">Director</label><input class="fi" id="pDir"></div><div class="fg"><label class="fl">Capataz</label><input class="fi" id="pCap"></div></div><div class="fr"><div class="fg"><label class="fl">Inicio</label><input class="fi" id="pSt" type="date" value="${td()}"></div><div class="fg"><label class="fl">Fin</label><input class="fi" id="pEn" type="date"></div></div><div class="fg"><label class="fl">Estado</label><select class="fs" id="pSta"><option>En curso</option><option>Pausada</option><option>Finalizada</option><option>Por iniciar</option></select></div><button class="btn btn-p btn-w mt-8" onclick="createProj()">Crear Obra</button></div></div>`;}
 function createProj(){const n=$('pN').value.trim();if(!n){toast('Nombre obligatorio','var(--red)');return;}D.projects.push({id:uid(),name:n,client:$('pCl').value,location:$('pLoc').value,director:$('pDir').value,capataz:$('pCap').value,startDate:$('pSt').value,endDate:$('pEn').value,status:$('pSta').value,createdAt:td(),updatedAt:nw()});sv();S.proj=D.projects[D.projects.length-1].id;S.mod='dashboard';render();toast('Obra creada');}
 
 // ═══════ SHELL ═══════
@@ -4061,7 +4061,7 @@ function rDash(mc,p){
   const over=pT.filter(t=>(t.status==='pendiente'||t.status==='en curso')&&t.dueDate&&dd(td(),t.dueDate)<0).length;
   const lastV=pV.length?[...pV].sort((a,b)=>(b.date||'').localeCompare(a.date||''))[0]:null;
   mc.innerHTML=`
-  ${_zocaloAlertas()}${_zocaloBandeja()}
+  ${_bannerObraCerrada(p)}${_zocaloAlertas()}${_zocaloBandeja()}
   <div class="card hero mb-12"><div class="flex justify-between items-start"><div><div class="hero-sm">Obra activa</div><div class="hero-lg">${p.name}</div></div>${colBadge(p.status,SC[p.status]||'#94a3b8')}</div><div class="flex gap-10 mt-8 ts tc3 wrap">${p.client?`<span>${I.user} ${p.client}</span>`:''}${p.location?`<span>${I.pin} ${p.location}</span>`:''}${p.startDate?`<span>${I.cal} ${fmts(p.startDate)}</span>`:''}</div></div>
   <div class="g2 dash-stats mb-12">
     <div class="card stat card-click" onclick="S.mod='visitas';render()"><div class="stico" style="background:var(--blue-bg);color:var(--blue)">${I.clip}</div><div><div class="stval" style="color:var(--blue)">${pV.length}</div><div class="stlbl">Visitas</div></div></div>
@@ -8110,7 +8110,7 @@ function rConfig(mc,p){
   [].concat(pf('visitas'),pf('tareas'),pf('materiales'),pf('matIngresos')).forEach(function(it){
     (it.photos||[]).forEach(function(p){var u=typeof p==='string'?p:(p.url||'');if(u.startsWith('data:'))_b64n++;});
   });
-mc.innerHTML=`${modHeader('config','Configuracion')}<div class="card mb-12"><div class="flex justify-between items-center mb-8"><div class="ts fw7">Datos de la obra</div><button class="btn btn-sec btn-s" onclick="openM('editProjM')">${I.edit} Editar</button></div><div class="ts tc3 lh18"><strong>Nombre:</strong> ${p.name}<br><strong>Cliente:</strong> ${p.client||'-'}<br><strong>Ubicacion:</strong> ${p.location||'-'}<br><strong>Director:</strong> ${p.director||'-'}<br><strong>Capataz:</strong> ${p.capataz||'-'}<br><strong>Inicio:</strong> ${fmts(p.startDate)||'-'}<br><strong>Fin:</strong> ${fmts(p.endDate)||'-'}<br><strong>Estado:</strong> ${p.status}</div></div><div class="card mb-12"><div class="ts fw7 mb-8">Estadisticas</div><div class="ts tc3 lh18">Visitas: ${pf('visitas').length} | Tareas: ${pf('tareas').length} | Materiales: ${pf('materiales').length} | Ingresos: ${pf('matIngresos').length} | Alertas: ${pf('alertas').length} | Comentarios: ${pf('comentarios').length} | Docs: ${pf('documentos').length} | Enlaces: ${pf('enlaces').length}</div></div><div class="card mb-12" style="border-left:4px solid #0d9488"><div class="ts fw7 mb-8" style="color:#0d9488">&#x1F4F1; Informes de campo</div><div class="txxs tc3 mb-12">Cuando compartís el link con un colaborador, los informes te llegan por los canales que tengas activos.</div><div class="flex items-center gap-8 mb-10"><div class="flex-1"><label class="fl">Tu WhatsApp</label><input class="fi" id="cfg_arch_tel" type="tel" value="${SYNC.archTel||''}" placeholder="+549..." onblur="saveArchContact('tel',this.value)"></div><button class="btn btn-s" style="margin-top:18px;min-width:80px;font-size:11px;background:${SYNC.sendWA?'var(--green)':'var(--gray-ll)'};color:${SYNC.sendWA?'#fff':'var(--text2)'}" onclick="toggleSendChannel('wa')">${SYNC.sendWA?'&#x2713; Activo':'Inactivo'}</button></div><div class="flex items-center gap-8 mb-12"><div class="flex-1"><label class="fl">Tu email</label><input class="fi" id="cfg_arch_mail" type="email" value="${SYNC.archEmail||''}" placeholder="tu@email.com" onblur="saveArchContact('mail',this.value)"></div><button class="btn btn-s" style="margin-top:18px;min-width:80px;font-size:11px;background:${SYNC.sendEmail?'var(--green)':'var(--gray-ll)'};color:${SYNC.sendEmail?'#fff':'var(--text2)'}" onclick="toggleSendChannel('email')">${SYNC.sendEmail?'&#x2713; Activo':'Inactivo'}</button></div><div class="txxs tc3">Los envíos llegan como un link. Al tocarlo la app muestra los datos en la Bandeja de entrada.</div></div><div class="card mb-12" style="border-left:4px solid var(--green)"><div class="ts fw7 mb-8" style="color:var(--green)">&#x1F680; Servidor propio (recomendado)</div><div class="txxs tc3 mb-12">Con esto los informes y las fotos te llegan solos, sin depender de WhatsApp. Se guardan en tu Google Drive. Instrucciones en el archivo INSTALAR_BACKEND.md.</div><div class="fg"><label class="fl">URL del Apps Script (termina en /exec)</label><input class="fi" id="cfg_api_url" value="${SYNC.apiUrl||''}" placeholder="https://script.google.com/macros/s/..../exec" onblur="saveApiCfg('url',this.value)"></div><div class="fg"><label class="fl">Clave secreta (la misma del script)</label><input class="fi" id="cfg_api_sec" value="${SYNC.apiSecret||''}" placeholder="tu clave" onblur="saveApiCfg('sec',this.value)"></div><div class="flex gap-6"><button class="btn btn-sec btn-s" style="flex:1" onclick="probarServidor()">&#x1F50C; Probar conexión</button><button class="btn btn-s" style="flex:1;background:var(--green);color:#fff" onclick="revisarServidor(true)">&#x1F4E5; Buscar informes</button></div>${SYNC.apiUrl&&SYNC.apiSecret?'<div class="txxs mt-8" style="color:var(--green);font-weight:700">&#x2713; Activo — se revisa solo al abrir la app</div>':'<div class="txxs mt-8 tc3">Sin configurar: los informes siguen dependiendo de WhatsApp.</div>'}</div>v><div class="card mb-12" style="border-left:4px solid #6366f1"><div class="ts fw7 mb-8" style="color:#6366f1">🔒 Protección con PIN</div><div class="txxs tc3 mb-12">Solo vos podés acceder a la app. Al abrir desde cualquier dispositivo se pedirá el PIN.</div>${(function(){var _p=localStorage.getItem('oc_pin');if(_p){return '<div class="txxs mb-10" style="color:var(--green);font-weight:700">✓ PIN activo ('+_p.length+' dígitos)</div><div class="flex gap-6"><input class="fi" id="cfg_pin_new" type="password" name="new-pin" autocomplete="new-password" inputmode="numeric" maxlength="8" placeholder="Nuevo PIN" style="flex:1;margin:0"><button class="btn btn-s" style="background:#6366f1;color:#fff;white-space:nowrap" onclick="var v=$(\'cfg_pin_new\').value.trim();if(v.length>=4)savePin(v);else toast(\'Mínimo 4 dígitos\',\'var(--red)\')">Cambiar</button></div><div class="txxs tc3 mt-8">'+(_pinDevOk()?'Este dispositivo está recordado: no se pide el PIN al abrir.':'Este dispositivo no está recordado: se pide el PIN en cada apertura.')+'</div><button class="btn btn-sec btn-s btn-w mt-4" onclick="olvidarDispositivo()">Olvidar este dispositivo</button><button class="btn btn-x btn-s btn-w mt-8" onclick="if(confirm(\'¿Eliminar PIN? La app quedará sin protección.\'))savePin(\'\')">Quitar PIN</button>';}else{return '<div class="txxs mb-10 tc3">Sin PIN configurado — cualquiera con el link puede acceder.</div><div class="flex gap-6"><input class="fi" id="cfg_pin_new" type="password" name="new-pin" autocomplete="new-password" inputmode="numeric" maxlength="8" placeholder="Nuevo PIN (mín. 4 dígitos)" style="flex:1;margin:0"><button class="btn btn-s" style="background:#6366f1;color:#fff;white-space:nowrap" onclick="var v=$(\'cfg_pin_new\').value.trim();if(v.length>=4)savePin(v);else toast(\'Mínimo 4 dígitos\',\'var(--red)\')">Activar PIN</button></div>';}})()}</div><div class="card mb-12" style="background:var(--red-bg);border:1px solid var(--red-mid)"><div class="ts fw7 mb-8" style="color:var(--red)">Zona peligrosa</div><button class="btn btn-x btn-s btn-w" onclick="deleteProj()">Eliminar obra</button></div><div class="card mb-12" style="border-left:4px solid #8b5cf6;padding:12px"><div class="ts fw7 mb-6" style="color:#8b5cf6">&#x1F4F8; Estado de las fotos</div><div class="txxs tc3 mb-8">Verificá que todas tus fotos estén visibles y respaldadas en Drive.</div><button class="btn btn-sec btn-s btn-w" onclick="diagnosticoFotos()">Ver estado de las fotos</button></div><div class="card mb-12" style="border-left:4px solid var(--orange);padding:12px"><div class="ts fw7 mb-6" style="color:var(--orange)">&#x1F5D1; Papelera de Drive</div><div class="txxs tc3 mb-8">Todo lo que se elimina va a la papelera de Drive y se puede restaurar. Nada se borra de forma definitiva.</div><button class="btn btn-sec btn-s btn-w" onclick="verPapeleraDrive()">Ver y restaurar (${(D.papeleraDrive||[]).length})</button></div><div class="card mb-12" style="border-left:4px solid var(--cyan);padding:12px"><div class="ts fw7 mb-6">&#x1F4BE; Almacenamiento local</div><div style="background:var(--gray-ll);border-radius:6px;height:8px;margin-bottom:6px"><div style="background:${_lsColor};border-radius:6px;height:8px;width:${_lsPct}%"></div></div><div class="txxs tc3">${_lsUsed} KB usados de ~5120 KB disponibles</div>${_lsPct>80?'<div class="txxs mt-4" style="color:var(--orange)">&#x26A0; Almacenamiento casi lleno. Conectá Drive para liberar espacio.</div>':''}</div><div class="tac mt-20 txxs tc3"><div class="fw7">ObraControl Pro v9.0</div><div class="mt-4">Visita-centric | PDF | Materiales+Ingresos | Comentarios vinculados</div></div><div class="mo" id="editProjM"><div class="mo-c"><div class="mo-h"><h3>Editar Obra</h3><button class="tbtn" onclick="closeM('editProjM')">${I.x}</button></div><div class="fg"><label class="fl">Nombre *</label><input class="fi" id="ep_n" value="${p.name||''}"></div><div class="fg"><label class="fl">Cliente</label><input class="fi" id="ep_cl" value="${p.client||''}"></div><div class="fg"><label class="fl">Ubicacion</label><input class="fi" id="ep_loc" value="${p.location||''}"></div><div class="fr"><div class="fg"><label class="fl">Director</label><input class="fi" id="ep_dir" value="${p.director||''}"></div><div class="fg"><label class="fl">Capataz</label><input class="fi" id="ep_cap" value="${p.capataz||''}"></div></div><div class="fr"><div class="fg"><label class="fl">Inicio</label><input class="fi" id="ep_st" type="date" value="${p.startDate||''}"></div><div class="fg"><label class="fl">Fin</label><input class="fi" id="ep_en" type="date" value="${p.endDate||''}"></div></div><div class="fg"><label class="fl">Estado</label><select class="fs" id="ep_sta">${['En curso','Pausada','Finalizada','Por iniciar'].map(s=>`<option${s===p.status?' selected':''}>${s}</option>`).join('')}</select></div><button class="btn btn-p btn-w mt-8" onclick="saveEP()">Guardar</button></div></div>`;
+mc.innerHTML=`${modHeader('config','Configuracion')}<div class="card mb-12"><div class="flex justify-between items-center mb-8"><div class="ts fw7">Datos de la obra</div><button class="btn btn-sec btn-s" onclick="openM('editProjM')">${I.edit} Editar</button></div><div class="ts tc3 lh18"><strong>Nombre:</strong> ${p.name}<br><strong>Cliente:</strong> ${p.client||'-'}<br><strong>Ubicacion:</strong> ${p.location||'-'}<br><strong>Director:</strong> ${p.director||'-'}<br><strong>Capataz:</strong> ${p.capataz||'-'}<br><strong>Inicio:</strong> ${fmts(p.startDate)||'-'}<br><strong>Fin:</strong> ${fmts(p.endDate)||'-'}<br><strong>Estado:</strong> ${p.status}</div></div><div class="card mb-12"><div class="ts fw7 mb-8">Estadisticas</div><div class="ts tc3 lh18">Visitas: ${pf('visitas').length} | Tareas: ${pf('tareas').length} | Materiales: ${pf('materiales').length} | Ingresos: ${pf('matIngresos').length} | Alertas: ${pf('alertas').length} | Comentarios: ${pf('comentarios').length} | Docs: ${pf('documentos').length} | Enlaces: ${pf('enlaces').length}</div></div><div class="card mb-12" style="border-left:4px solid #0d9488"><div class="ts fw7 mb-8" style="color:#0d9488">&#x1F4F1; Informes de campo</div><div class="txxs tc3 mb-12">Cuando compartís el link con un colaborador, los informes te llegan por los canales que tengas activos.</div><div class="flex items-center gap-8 mb-10"><div class="flex-1"><label class="fl">Tu WhatsApp</label><input class="fi" id="cfg_arch_tel" type="tel" value="${SYNC.archTel||''}" placeholder="+549..." onblur="saveArchContact('tel',this.value)"></div><button class="btn btn-s" style="margin-top:18px;min-width:80px;font-size:11px;background:${SYNC.sendWA?'var(--green)':'var(--gray-ll)'};color:${SYNC.sendWA?'#fff':'var(--text2)'}" onclick="toggleSendChannel('wa')">${SYNC.sendWA?'&#x2713; Activo':'Inactivo'}</button></div><div class="flex items-center gap-8 mb-12"><div class="flex-1"><label class="fl">Tu email</label><input class="fi" id="cfg_arch_mail" type="email" value="${SYNC.archEmail||''}" placeholder="tu@email.com" onblur="saveArchContact('mail',this.value)"></div><button class="btn btn-s" style="margin-top:18px;min-width:80px;font-size:11px;background:${SYNC.sendEmail?'var(--green)':'var(--gray-ll)'};color:${SYNC.sendEmail?'#fff':'var(--text2)'}" onclick="toggleSendChannel('email')">${SYNC.sendEmail?'&#x2713; Activo':'Inactivo'}</button></div><div class="txxs tc3">Los envíos llegan como un link. Al tocarlo la app muestra los datos en la Bandeja de entrada.</div></div><div class="card mb-12" style="border-left:4px solid var(--green)"><div class="ts fw7 mb-8" style="color:var(--green)">&#x1F680; Servidor propio (recomendado)</div><div class="txxs tc3 mb-12">Con esto los informes y las fotos te llegan solos, sin depender de WhatsApp. Se guardan en tu Google Drive. Instrucciones en el archivo INSTALAR_BACKEND.md.</div><div class="fg"><label class="fl">URL del Apps Script (termina en /exec)</label><input class="fi" id="cfg_api_url" value="${SYNC.apiUrl||''}" placeholder="https://script.google.com/macros/s/..../exec" onblur="saveApiCfg('url',this.value)"></div><div class="fg"><label class="fl">Clave secreta (la misma del script)</label><input class="fi" id="cfg_api_sec" value="${SYNC.apiSecret||''}" placeholder="tu clave" onblur="saveApiCfg('sec',this.value)"></div><div class="flex gap-6"><button class="btn btn-sec btn-s" style="flex:1" onclick="probarServidor()">&#x1F50C; Probar conexión</button><button class="btn btn-s" style="flex:1;background:var(--green);color:#fff" onclick="revisarServidor(true)">&#x1F4E5; Buscar informes</button></div>${SYNC.apiUrl&&SYNC.apiSecret?'<div class="txxs mt-8" style="color:var(--green);font-weight:700">&#x2713; Activo — se revisa solo al abrir la app</div>':'<div class="txxs mt-8 tc3">Sin configurar: los informes siguen dependiendo de WhatsApp.</div>'}</div>v><div class="card mb-12" style="border-left:4px solid #6366f1"><div class="ts fw7 mb-8" style="color:#6366f1">🔒 Protección con PIN</div><div class="txxs tc3 mb-12">Solo vos podés acceder a la app. Al abrir desde cualquier dispositivo se pedirá el PIN.</div>${(function(){var _p=localStorage.getItem('oc_pin');if(_p){return '<div class="txxs mb-10" style="color:var(--green);font-weight:700">✓ PIN activo ('+_p.length+' dígitos)</div><div class="flex gap-6"><input class="fi" id="cfg_pin_new" type="password" name="new-pin" autocomplete="new-password" inputmode="numeric" maxlength="8" placeholder="Nuevo PIN" style="flex:1;margin:0"><button class="btn btn-s" style="background:#6366f1;color:#fff;white-space:nowrap" onclick="var v=$(\'cfg_pin_new\').value.trim();if(v.length>=4)savePin(v);else toast(\'Mínimo 4 dígitos\',\'var(--red)\')">Cambiar</button></div><div class="txxs tc3 mt-8">'+(_pinDevOk()?'Este dispositivo está recordado: no se pide el PIN al abrir.':'Este dispositivo no está recordado: se pide el PIN en cada apertura.')+'</div><button class="btn btn-sec btn-s btn-w mt-4" onclick="olvidarDispositivo()">Olvidar este dispositivo</button><button class="btn btn-x btn-s btn-w mt-8" onclick="if(confirm(\'¿Eliminar PIN? La app quedará sin protección.\'))savePin(\'\')">Quitar PIN</button>';}else{return '<div class="txxs mb-10 tc3">Sin PIN configurado — cualquiera con el link puede acceder.</div><div class="flex gap-6"><input class="fi" id="cfg_pin_new" type="password" name="new-pin" autocomplete="new-password" inputmode="numeric" maxlength="8" placeholder="Nuevo PIN (mín. 4 dígitos)" style="flex:1;margin:0"><button class="btn btn-s" style="background:#6366f1;color:#fff;white-space:nowrap" onclick="var v=$(\'cfg_pin_new\').value.trim();if(v.length>=4)savePin(v);else toast(\'Mínimo 4 dígitos\',\'var(--red)\')">Activar PIN</button></div>';}})()}</div>${_cardCierreConfig(p)}<div class="card mb-12" style="background:var(--red-bg);border:1px solid var(--red-mid)"><div class="ts fw7 mb-8" style="color:var(--red)">Zona peligrosa</div><button class="btn btn-x btn-s btn-w" onclick="deleteProj()">Eliminar obra</button></div><div class="card mb-12" style="border-left:4px solid #8b5cf6;padding:12px"><div class="ts fw7 mb-6" style="color:#8b5cf6">&#x1F4F8; Estado de las fotos</div><div class="txxs tc3 mb-8">Verificá que todas tus fotos estén visibles y respaldadas en Drive.</div><button class="btn btn-sec btn-s btn-w" onclick="diagnosticoFotos()">Ver estado de las fotos</button></div><div class="card mb-12" style="border-left:4px solid var(--orange);padding:12px"><div class="ts fw7 mb-6" style="color:var(--orange)">&#x1F5D1; Papelera de Drive</div><div class="txxs tc3 mb-8">Todo lo que se elimina va a la papelera de Drive y se puede restaurar. Nada se borra de forma definitiva.</div><button class="btn btn-sec btn-s btn-w" onclick="verPapeleraDrive()">Ver y restaurar (${(D.papeleraDrive||[]).length})</button></div><div class="card mb-12" style="border-left:4px solid var(--cyan);padding:12px"><div class="ts fw7 mb-6">&#x1F4BE; Almacenamiento local</div><div style="background:var(--gray-ll);border-radius:6px;height:8px;margin-bottom:6px"><div style="background:${_lsColor};border-radius:6px;height:8px;width:${_lsPct}%"></div></div><div class="txxs tc3">${_lsUsed} KB usados de ~5120 KB disponibles</div>${_lsPct>80?'<div class="txxs mt-4" style="color:var(--orange)">&#x26A0; Almacenamiento casi lleno. Conectá Drive para liberar espacio.</div>':''}</div><div class="tac mt-20 txxs tc3"><div class="fw7">ObraControl Pro v9.0</div><div class="mt-4">Visita-centric | PDF | Materiales+Ingresos | Comentarios vinculados</div></div><div class="mo" id="editProjM"><div class="mo-c"><div class="mo-h"><h3>Editar Obra</h3><button class="tbtn" onclick="closeM('editProjM')">${I.x}</button></div><div class="fg"><label class="fl">Nombre *</label><input class="fi" id="ep_n" value="${p.name||''}"></div><div class="fg"><label class="fl">Cliente</label><input class="fi" id="ep_cl" value="${p.client||''}"></div><div class="fg"><label class="fl">Ubicacion</label><input class="fi" id="ep_loc" value="${p.location||''}"></div><div class="fr"><div class="fg"><label class="fl">Director</label><input class="fi" id="ep_dir" value="${p.director||''}"></div><div class="fg"><label class="fl">Capataz</label><input class="fi" id="ep_cap" value="${p.capataz||''}"></div></div><div class="fr"><div class="fg"><label class="fl">Inicio</label><input class="fi" id="ep_st" type="date" value="${p.startDate||''}"></div><div class="fg"><label class="fl">Fin</label><input class="fi" id="ep_en" type="date" value="${p.endDate||''}"></div></div><div class="fg"><label class="fl">Estado</label><select class="fs" id="ep_sta">${['En curso','Pausada','Finalizada','Por iniciar'].map(s=>`<option${s===p.status?' selected':''}>${s}</option>`).join('')}</select></div><button class="btn btn-p btn-w mt-8" onclick="saveEP()">Guardar</button></div></div>`;
 }
 
 function renderConfigSize(){
@@ -8153,6 +8153,695 @@ function deleteProj(){
   cloudSave(); // immediate — don't let the 2-second debounce race with Drive merge
   render();
   toast('Obra eliminada');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MÓDULO: CIERRE DE OBRA
+// Cerrar en 3 pasos (revisar → generar respaldo e informes → cerrar), reabrir,
+// y abrir una obra desde su archivo .obracontrol.
+// El .obracontrol es un ZIP con obra.json + fotos/ + archivos/: se reabre desde
+// la app, y si se le cambia la extensión a .zip se puede mirar por dentro.
+// ═══════════════════════════════════════════════════════════════
+
+// ── ZIP propio (sin librerías externas: funciona aunque no cargue un CDN) ──
+var _CRC_T=null;
+function _crc32(u8){
+  if(!_CRC_T){_CRC_T=new Uint32Array(256);for(var n=0;n<256;n++){var c=n;for(var k=0;k<8;k++)c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1);_CRC_T[n]=c>>>0;}}
+  var crc=0xFFFFFFFF;for(var i=0;i<u8.length;i++)crc=_CRC_T[(crc^u8[i])&0xFF]^(crc>>>8);
+  return (crc^0xFFFFFFFF)>>>0;
+}
+function _u8Texto(s){return new TextEncoder().encode(String(s));}
+function _u8DataUrl(du){
+  var i=String(du).indexOf(',');var b=atob(String(du).slice(i+1));
+  var u=new Uint8Array(b.length);for(var k=0;k<b.length;k++)u[k]=b.charCodeAt(k);return u;
+}
+function _dataUrlDeU8(u8,mime){
+  var s='';var CH=0x8000;for(var i=0;i<u8.length;i+=CH)s+=String.fromCharCode.apply(null,u8.subarray(i,i+CH));
+  return 'data:'+(mime||'application/octet-stream')+';base64,'+btoa(s);
+}
+// Sin compresión (STORE): las fotos ya vienen comprimidas en JPEG.
+function _zipCrear(entradas){
+  var partes=[],central=[],off=0;
+  var d=new Date();
+  var hora=((d.getHours()<<11)|(d.getMinutes()<<5)|(d.getSeconds()>>1))&0xFFFF;
+  var fecha=(((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate())&0xFFFF;
+  entradas.forEach(function(e){
+    var nom=_u8Texto(e.nombre),dat=e.datos,crc=_crc32(dat);
+    var h=new DataView(new ArrayBuffer(30));
+    h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint16(6,0x0800,true);h.setUint16(8,0,true);
+    h.setUint16(10,hora,true);h.setUint16(12,fecha,true);h.setUint32(14,crc,true);
+    h.setUint32(18,dat.length,true);h.setUint32(22,dat.length,true);h.setUint16(26,nom.length,true);h.setUint16(28,0,true);
+    partes.push(new Uint8Array(h.buffer),nom,dat);
+    var c=new DataView(new ArrayBuffer(46));
+    c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);c.setUint16(8,0x0800,true);c.setUint16(10,0,true);
+    c.setUint16(12,hora,true);c.setUint16(14,fecha,true);c.setUint32(16,crc,true);
+    c.setUint32(20,dat.length,true);c.setUint32(24,dat.length,true);c.setUint16(28,nom.length,true);
+    c.setUint16(30,0,true);c.setUint16(32,0,true);c.setUint16(34,0,true);c.setUint16(36,0,true);c.setUint32(38,0,true);c.setUint32(42,off,true);
+    central.push(new Uint8Array(c.buffer),nom);
+    off+=30+nom.length+dat.length;
+  });
+  var tamCentral=central.reduce(function(s,x){return s+x.length;},0);
+  var f=new DataView(new ArrayBuffer(22));
+  f.setUint32(0,0x06054b50,true);f.setUint16(4,0,true);f.setUint16(6,0,true);
+  f.setUint16(8,entradas.length,true);f.setUint16(10,entradas.length,true);
+  f.setUint32(12,tamCentral,true);f.setUint32(16,off,true);f.setUint16(20,0,true);
+  return new Blob(partes.concat(central,[new Uint8Array(f.buffer)]),{type:'application/zip'});
+}
+// Lee STORE y DEFLATE (por si alguien lo descomprimió y lo volvió a comprimir).
+async function _zipLeer(buf){
+  var u8=new Uint8Array(buf),dv=new DataView(buf),fin=-1;
+  for(var i=u8.length-22;i>=Math.max(0,u8.length-66000);i--){if(dv.getUint32(i,true)===0x06054b50){fin=i;break;}}
+  if(fin<0)throw new Error('El archivo no es un paquete válido');
+  var n=dv.getUint16(fin+10,true),p=dv.getUint32(fin+16,true),out={};
+  for(var k=0;k<n;k++){
+    if(dv.getUint32(p,true)!==0x02014b50)throw new Error('Paquete dañado');
+    var met=dv.getUint16(p+10,true),csz=dv.getUint32(p+20,true);
+    var nl=dv.getUint16(p+28,true),xl=dv.getUint16(p+30,true),cl=dv.getUint16(p+32,true),lo=dv.getUint32(p+42,true);
+    var nombre=new TextDecoder().decode(u8.subarray(p+46,p+46+nl));
+    var ini=lo+30+dv.getUint16(lo+26,true)+dv.getUint16(lo+28,true);
+    var raw=u8.slice(ini,ini+csz);
+    if(met===8){raw=new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());}
+    else if(met!==0)throw new Error('Compresión no soportada en '+nombre);
+    out[nombre]=raw;
+    p+=46+nl+xl+cl;
+  }
+  return out;
+}
+
+// ── Datos de una obra ──
+var _CIERRE_TABLAS=['visitas','tareas','materiales','matIngresos','alertas','checklists','documentos','enlaces','comentarios','colaboradores','economia','chkHistorial','carpetas','formulariosPendientes','auditLog'];
+function _cTbl(tbl,pid){return (D[tbl]||[]).filter(function(x){return x&&x.projectId===pid;});}
+function _cUrlFoto(ph){return typeof ph==='string'?ph:((ph&&ph.url)||'');}
+function _cDriveId(u){return (u&&u.indexOf('drive.google.com')>=0)?((u.match(/[?&]id=([^&]+)/)||u.match(/\/d\/([^/?]+)/)||[])[1]||null):null;}
+// Cada foto y archivo de la obra, con dónde está referenciado.
+function _cierreReferencias(pid){
+  var fotos=[],archivos=[];
+  ['visitas','tareas','materiales','matIngresos','alertas','comentarios','checklists'].forEach(function(tbl){
+    _cTbl(tbl,pid).forEach(function(it){
+      (it.photos||[]).forEach(function(ph){var u=_cUrlFoto(ph);if(u)fotos.push({ref:u,local:(ph&&ph.localUrl)||'',tbl:tbl});});
+      (it.archivos||[]).forEach(function(a){if(a)archivos.push({a:a,tbl:tbl});});
+    });
+  });
+  _cTbl('economia',pid).forEach(function(e){if(e.imagen)fotos.push({ref:e.imagen,local:'',tbl:'economia'});});
+  _cTbl('documentos',pid).forEach(function(d){archivos.push({a:d,tbl:'documentos'});});
+  var vistos={};
+  fotos=fotos.filter(function(f){if(vistos[f.ref])return false;vistos[f.ref]=1;return true;});
+  return {fotos:fotos,archivos:archivos};
+}
+function _cExt(du){
+  var m=String(du).match(/^data:([^;,]+)/);var t=m?m[1]:'';
+  return ({'image/jpeg':'jpg','image/jpg':'jpg','image/png':'png','image/webp':'webp','image/gif':'gif','application/pdf':'pdf'})[t]||(t.split('/')[1]||'bin');
+}
+// Junta los bytes de cada foto: primero del dispositivo, después de Drive.
+async function _cierreJuntarBytes(pid,progreso){
+  var refs=_cierreReferencias(pid),mapa={},faltan=[];
+  var enDisp={},porDrive={};
+  try{if(GD.idbReady){(await idbGetAll('images')||[]).forEach(function(im){
+    if(!im||typeof im.data!=='string'||!im.data.startsWith('data:'))return;
+    if(im.id)enDisp[im.id]=im.data;if(im.driveId)porDrive[im.driveId]=im.data;});}}catch(_){}
+  var conDrive=_cTokenVigente();
+  var total=refs.fotos.length+refs.archivos.length,hechas=0;
+  for(var i=0;i<refs.fotos.length;i++){
+    var f=refs.fotos[i],u=f.ref,du=null;
+    if(u.startsWith('data:'))du=u;
+    else if((f.local||'').startsWith('data:'))du=f.local;
+    else if(u.indexOf('[foto:')===0){var rid=u.slice(6,-1);du=(typeof IMG_CACHE!=='undefined'&&IMG_CACHE[rid])||enDisp[rid]||null;}
+    else{var did=_cDriveId(u);if(did){du=porDrive[did]||null;if(!du&&conDrive){du=await _descargarBytesDrive(did);}}}
+    if(du)mapa[u]=du;else faltan.push(f);
+    hechas++;if(progreso)progreso(hechas,total,'fotos');
+  }
+  var arch={};
+  for(var j=0;j<refs.archivos.length;j++){
+    var a=refs.archivos[j].a,k=a.id||a.driveId||a.name,dd=null;
+    var cand=[a.fileData,a.data].filter(function(x){return typeof x==='string'&&x.startsWith('data:');})[0];
+    if(cand)dd=cand;else if(a.driveId&&conDrive)dd=await _descargarBytesDrive(a.driveId);
+    if(dd&&k)arch[k]={datos:dd,nombre:a.fileName||a.name||('archivo_'+k)};
+    hechas++;if(progreso)progreso(hechas,total,'archivos');
+  }
+  return {fotos:mapa,archivos:arch,faltan:faltan,totalFotos:refs.fotos.length,totalArchivos:refs.archivos.length,conDrive:conDrive};
+}
+function _cNombreArchivo(s){return String(s||'obra').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,60)||'obra';}
+
+// ── Informe de cierre ──
+function _cPesos(n){return '$'+(Math.round((parseFloat(n)||0)*100)/100).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function _cOrdenFecha(a,b){return String(a.fecha||a.date||'').localeCompare(String(b.fecha||b.date||''))||String(a.date||'').localeCompare(String(b.date||''));}
+function _cEconomia(pid,conPrivados){
+  var todos=_cTbl('economia',pid);
+  var items=(conPrivados?todos:todos.filter(function(e){return !e.interno;})).slice().sort(_cOrdenFecha);
+  var ing=0,egr=0,rub={};
+  items.forEach(function(e){
+    var m=parseFloat(e.monto)||0;
+    if(e.tipo==='ingreso')ing+=m;
+    else{
+      egr+=m;
+      var rk=(e.rubro||'').trim()||'Sin rubro';
+      if(!rub[rk])rub[rk]={monto:0,items:{}};
+      rub[rk].monto+=m;
+      _ecoPartesItem(e).forEach(function(p){rub[rk].items[p.item]=(rub[rk].items[p.item]||0)+p.monto;});
+    }
+  });
+  return {items:items,ing:ing,egr:egr,saldo:ing-egr,rubros:rub,privados:todos.filter(function(e){return e.interno;}).length};
+}
+function _cMateriales(pid){
+  var mats=_cTbl('materiales',pid),ings=_cTbl('matIngresos',pid);
+  var esIng=function(i){return i.estado==='ingresado'||!i.estado;};
+  var filas=mats.map(function(m){
+    var tot=ings.filter(function(i){return i.materialId===m.id&&esIng(i);}).reduce(function(s,i){return s+_qtyEq(m,i);},0);
+    var comp=parseFloat(m.computado)||0;
+    return {m:m,comp:comp,ing:Math.round(tot*100)/100,falta:Math.max(Math.round((comp-tot)*100)/100,0),pct:comp>0?Math.round(tot/comp*100):null};
+  });
+  var sinComp={};
+  ings.filter(function(i){return !i.materialId&&esIng(i);}).forEach(function(i){
+    var k=(i.matNombre||'Sin nombre').trim()+'|'+(i.unit||'u');
+    if(!sinComp[k])sinComp[k]={nombre:(i.matNombre||'Sin nombre').trim(),unit:i.unit||'u',qty:0,provs:{}};
+    sinComp[k].qty+=parseFloat(i.qty)||0;if(i.proveedor)sinComp[k].provs[i.proveedor]=1;
+  });
+  return {filas:filas,sinComp:Object.values(sinComp),
+    pedidos:ings.filter(function(i){return i.estado==='pedido';}),
+    aPedir:ings.filter(function(i){return i.estado==='a_pedir';}),
+    existentes:ings.filter(function(i){return i.estado==='existente';}),
+    historial:ings.filter(esIng).slice().sort(_cOrdenFecha)};
+}
+function _cNomMat(i){var m=i.materialId?(D.materiales||[]).find(function(x){return x.id===i.materialId;}):null;return i.matNombre||(m&&m.name)||'-';}
+function _cierreInformeHtml(pid,opt,fotos){
+  opt=opt||{};fotos=fotos||{};
+  var p=(D.projects||[]).find(function(x){return x.id===pid;})||{};
+  var S_=opt.secciones||{portada:1,ecoCliente:1,ecoInterno:opt.privados,materiales:1,visitas:1,tareas:1,checklists:1,comentarios:1,alertas:1,docs:1};
+  var src=function(ph){var u=_cUrlFoto(ph);return fotos[u]||(u&&/^https?:/.test(u)?u:'');};
+  var galeria=function(arr){
+    var v=(arr||[]).filter(function(ph){return src(ph);});
+    if(!v.length)return '';
+    return '<div class="gal">'+v.map(function(ph){
+      var cap=(ph&&typeof ph==='object'&&ph.caption)||'';
+      var cm=(ph&&typeof ph==='object'&&ph.comments)||[];
+      return '<figure><img src="'+src(ph)+'">'+(cap?'<figcaption>'+esc(cap)+'</figcaption>':'')
+        +cm.map(function(c){return '<figcaption>💬 '+esc(c.text||'')+(c.author?' — '+esc(c.author):'')+'</figcaption>';}).join('')+'</figure>';
+    }).join('')+'</div>';
+  };
+  var txt=function(s){return s?'<div class="tx">'+esc(s)+'</div>':'';};
+  var h='';
+  var V=_cTbl('visitas',pid).slice().sort(_cOrdenFecha),T=_cTbl('tareas',pid),C=_cTbl('comentarios',pid).slice().sort(_cOrdenFecha);
+  var K=_cTbl('checklists',pid),A=_cTbl('alertas',pid),Dc=_cTbl('documentos',pid),En=_cTbl('enlaces',pid),Co=_cTbl('colaboradores',pid);
+  var mat=_cMateriales(pid),ecC=_cEconomia(pid,false),ecI=_cEconomia(pid,true);
+  var tDone=T.filter(function(t){return t.status==='completada';}).length;
+  var nFotos=Object.keys(fotos).length;
+  if(S_.portada){
+    h+='<section class="port"><div class="kick">'+esc(opt.kicker||'Informe de cierre de obra')+'</div><h1>'+esc(p.name||'')+'</h1>'
+      +'<table class="ficha">'
+      +[['Cliente',p.client],['Ubicación',p.location],['Director',p.director],['Capataz',p.capataz],['Inicio',p.startDate?fmt(p.startDate):''],['Fin previsto',p.endDate?fmt(p.endDate):''],['Fecha de cierre',fmt(td())],['Estado','Finalizada']]
+        .filter(function(r){return r[1];}).map(function(r){return '<tr><th>'+r[0]+'</th><td>'+esc(r[1])+'</td></tr>';}).join('')
+      +'</table><div class="kpis">'
+      +[['Visitas',V.length],['Tareas',tDone+' / '+T.length+' completadas'],['Comentarios',C.length],['Materiales',mat.filas.length],['Movimientos',ecC.items.length],['Fotos',nFotos]]
+        .map(function(k){return '<div><b>'+k[1]+'</b><span>'+k[0]+'</span></div>';}).join('')
+      +'</div>'
+      +(opt.privados?'<div class="interno">⚠ USO INTERNO — incluye '+ecI.privados+' movimiento(s) privado(s). No entregar al cliente.</div>':'')
+      +'</section>';
+  }
+  var ecoHtml=function(ec,titulo,marcaPriv){
+    var r='<section><h2>'+titulo+'</h2><div class="tri"><div class="ok"><span>Ingresos</span><b>'+_cPesos(ec.ing)+'</b></div><div class="no"><span>Egresos</span><b>'+_cPesos(ec.egr)+'</b></div><div><span>Saldo</span><b style="color:'+(ec.saldo>=0?'#16a34a':'#dc2626')+'">'+_cPesos(ec.saldo)+'</b></div></div>';
+    var rs=Object.entries(ec.rubros).sort(function(a,b){return b[1].monto-a[1].monto;});
+    if(rs.length){
+      r+='<h3>Distribución de egresos por rubro e ítem</h3><table><tr><th>Rubro / ítem</th><th class="n">Monto</th><th class="n">% egresos</th></tr>';
+      rs.forEach(function(x){
+        r+='<tr class="rb"><td>'+esc(x[0])+'</td><td class="n">'+_cPesos(x[1].monto)+'</td><td class="n">'+(ec.egr?(x[1].monto/ec.egr*100).toFixed(1):'0')+'%</td></tr>';
+        Object.entries(x[1].items).sort(function(a,b){return b[1]-a[1];}).forEach(function(it){
+          r+='<tr><td class="sub">'+esc(it[0])+'</td><td class="n">'+_cPesos(it[1])+'</td><td class="n">'+(ec.egr?(it[1]/ec.egr*100).toFixed(1):'0')+'%</td></tr>';
+        });
+      });
+      r+='</table>';
+    }
+    r+='<h3>Movimientos ('+ec.items.length+')</h3><table><tr><th>Fecha</th><th>Concepto</th><th>Proveedor</th><th>Rubro / ítem</th><th class="n">Monto</th></tr>';
+    ec.items.forEach(function(e){
+      var ing=e.tipo==='ingreso';
+      r+='<tr><td>'+fmt(e.fecha||e.date)+'</td><td>'+(marcaPriv&&e.interno?'🔒 ':'')+esc(e.concepto||'')+(e.detalle?'<div class="mut">'+esc(e.detalle)+'</div>':'')+'</td><td>'+esc(e.proveedor||'')+'</td><td>'+esc(e.rubro||'')+(_ecoItemTexto(e)?'<div class="mut">'+esc(_ecoItemTexto(e))+'</div>':'')+'</td><td class="n" style="color:'+(ing?'#16a34a':'#dc2626')+'">'+(ing?'+':'-')+_cPesos(e.monto)+'</td></tr>';
+    });
+    r+='</table>';
+    var fac=ec.items.filter(function(e){return e.imagen&&src(e.imagen)&&/^data:image/.test(src(e.imagen));});
+    if(opt.facturas&&fac.length&&(marcaPriv||!S_.ecoInterno))r+='<h3>Comprobantes</h3>'+'<div class="gal">'+fac.map(function(e){return '<figure><img src="'+src(e.imagen)+'"><figcaption>'+fmt(e.fecha||e.date)+' · '+esc(e.concepto||'')+'</figcaption></figure>';}).join('')+'</div>';
+    return r+'</section>';
+  };
+  if(S_.ecoCliente)h+=ecoHtml(ecC,'Balance económico del cliente',false);
+  if(S_.ecoInterno)h+=ecoHtml(ecI,'Balance económico interno (con privados)',true);
+  if(S_.materiales){
+    h+='<section><h2>Balance de materiales</h2>';
+    if(mat.filas.length){
+      h+='<table><tr><th>Material</th><th class="n">Computado</th><th class="n">Ingresado</th><th class="n">Falta</th><th class="n">Avance</th></tr>';
+      mat.filas.forEach(function(f){h+='<tr><td>'+esc(f.m.name||'')+'</td><td class="n">'+(f.comp||'-')+' '+esc(f.m.unit||'')+'</td><td class="n">'+f.ing+'</td><td class="n">'+(f.comp?f.falta:'-')+'</td><td class="n">'+(f.pct!==null?f.pct+'%':'-')+'</td></tr>';});
+      h+='</table>';
+    }
+    if(mat.sinComp.length){
+      h+='<h3>Ingresados sin cómputo</h3><table><tr><th>Material</th><th class="n">Cantidad</th><th>Proveedores</th></tr>';
+      mat.sinComp.forEach(function(s){h+='<tr><td>'+esc(s.nombre)+'</td><td class="n">'+(Math.round(s.qty*100)/100)+' '+esc(s.unit)+'</td><td>'+esc(Object.keys(s.provs).join(', '))+'</td></tr>';});
+      h+='</table>';
+    }
+    [['Pedidos sin ingresar',mat.pedidos],['A pedir (no se pidieron)',mat.aPedir],['Existentes en obra',mat.existentes]].forEach(function(g){
+      if(!g[1].length)return;
+      h+='<h3>'+g[0]+' ('+g[1].length+')</h3><table><tr><th>Material</th><th class="n">Cantidad</th><th>Proveedor</th><th>Fecha</th></tr>';
+      g[1].forEach(function(i){h+='<tr><td>'+esc(_cNomMat(i))+'</td><td class="n">'+(i.qty||'-')+' '+esc(i.unit||'')+'</td><td>'+esc(i.proveedor||'')+'</td><td>'+fmt(i.fecha||i.date)+'</td></tr>';});
+      h+='</table>';
+    });
+    if(mat.historial.length){
+      h+='<h3>Historial de ingresos ('+mat.historial.length+')</h3>';
+      mat.historial.forEach(function(i){
+        h+='<div class="it"><div class="ith"><b>'+esc(_cNomMat(i))+'</b> · '+(i.qty||0)+' '+esc(i.unit||'')+'<span class="fe">'+fmt(i.fecha||i.date)+'</span></div>'
+          +'<div class="mut">'+[i.proveedor?'Proveedor: '+esc(i.proveedor):'',i.remito?'Remito: '+esc(i.remito):''].filter(Boolean).join(' · ')+'</div>'
+          +txt(i.observations)+galeria(i.photos)+'</div>';
+      });
+    }
+    h+='</section>';
+  }
+  if(S_.visitas&&V.length){
+    h+='<section><h2>Visitas ('+V.length+')</h2>';
+    V.forEach(function(v){
+      var vt=T.filter(function(t){return t.visitaId===v.id;}),vk=K.filter(function(k){return k.visitaId===v.id;});
+      h+='<div class="it"><div class="ith"><b>'+esc(v.title||'Visita')+'</b><span class="fe">'+fmt(v.date)+'</span></div>'
+        +(v.description?'<div class="lb">Descripción</div>'+txt(v.description):'')
+        +(v.observations?'<div class="lb">Observaciones</div>'+txt(v.observations):'')
+        +(vt.length?'<div class="mut">Tareas: '+vt.map(function(t){return esc(t.title||'');}).join(' · ')+'</div>':'')
+        +(vk.length?'<div class="mut">Checklists: '+vk.map(function(k){return esc(k.title||'');}).join(' · ')+'</div>':'')
+        +galeria(v.photos)+'</div>';
+    });
+    h+='</section>';
+  }
+  if(S_.tareas&&T.length){
+    h+='<section><h2>Tareas ('+tDone+' de '+T.length+' completadas)</h2>';
+    ['pendiente','en curso','completada','cancelada'].forEach(function(st){
+      var g=T.filter(function(t){return (t.status||'pendiente')===st;}).slice().sort(_cOrdenFecha);
+      if(!g.length)return;
+      h+='<h3>'+st.charAt(0).toUpperCase()+st.slice(1)+' ('+g.length+')</h3>';
+      g.forEach(function(t){
+        h+='<div class="it"><div class="ith"><b>'+esc(t.title||'')+'</b><span class="fe">'+(t.dueDate?'Vence '+fmt(t.dueDate):fmt(t.date))+'</span></div>'
+          +'<div class="mut">'+[t.priority?'Prioridad: '+esc(t.priority):'',t.encargado?'Encargado: '+esc(t.encargado):''].filter(Boolean).join(' · ')+'</div>'
+          +txt(t.description)+(t.comment?'<div class="mut">📝 '+esc(t.comment)+'</div>':'')+galeria(t.photos)+'</div>';
+      });
+    });
+    h+='</section>';
+  }
+  if(S_.checklists&&K.length){
+    h+='<section><h2>Checklists ('+K.length+')</h2>';
+    K.forEach(function(k){
+      var it=k.items||[],dn=it.filter(function(x){return x.done;}).length;
+      h+='<div class="it"><div class="ith"><b>'+esc(k.title||'')+'</b><span class="fe">'+dn+'/'+it.length+'</span></div>'+txt(k.note)
+        +it.map(function(x){return '<div class="ck">'+(x.done?'☑':'☐')+' '+esc(x.text||'')+'</div>';}).join('')+galeria(k.photos)+'</div>';
+    });
+    h+='</section>';
+  }
+  if(S_.comentarios&&C.length){
+    h+='<section><h2>Comentarios ('+C.length+')</h2>';
+    C.forEach(function(c){
+      h+='<div class="it"><div class="ith"><b>'+esc([c.tipo==='propietario'?'Propietario':'General',c.rubro,c.etapa].filter(Boolean).join(' · '))+'</b>'+(c.cumplido?' ✓ Realizado':'')+'<span class="fe">'+fmt(c.date)+'</span></div>'
+        +txt(c.text)+galeria(c.photos)+'</div>';
+    });
+    h+='</section>';
+  }
+  if(S_.alertas&&A.length){
+    h+='<section><h2>Alertas ('+A.filter(function(a){return !a.resolved;}).length+' activas de '+A.length+')</h2>';
+    A.slice().sort(_cOrdenFecha).forEach(function(a){
+      h+='<div class="it"><div class="ith"><b>'+(a.resolved?'✓ ':'⚠ ')+esc(a.message||'')+'</b><span class="fe">'+fmt(a.date)+'</span></div>'
+        +'<div class="mut">'+[a.priority?'Prioridad: '+esc(a.priority):'',a.dueDate?'Vence: '+fmt(a.dueDate):'',a.resolved?'Resuelta':'Activa'].filter(Boolean).join(' · ')+'</div>'+galeria(a.photos)+'</div>';
+    });
+    h+='</section>';
+  }
+  if(S_.docs&&(Dc.length||En.length||Co.length)){
+    h+='<section><h2>Documentos, enlaces y colaboradores</h2>';
+    if(Dc.length)h+='<h3>Documentos ('+Dc.length+')</h3><table><tr><th>Nombre</th><th>Categoría</th><th>Fecha</th></tr>'+Dc.map(function(d){return '<tr><td>'+esc(d.name||d.fileName||'')+'</td><td>'+esc(d.category||'')+'</td><td>'+fmt(d.date)+'</td></tr>';}).join('')+'</table>';
+    if(En.length)h+='<h3>Enlaces ('+En.length+')</h3><table><tr><th>Nombre</th><th>Dirección</th></tr>'+En.map(function(e){return '<tr><td>'+esc(e.name||e.title||'')+'</td><td class="mut">'+esc(e.url||'')+'</td></tr>';}).join('')+'</table>';
+    if(Co.length)h+='<h3>Colaboradores ('+Co.length+')</h3><table><tr><th>Nombre</th><th>Rol</th></tr>'+Co.map(function(c){return '<tr><td>'+esc(c.name||c.nombre||'')+'</td><td>'+esc(c.role||c.rol||'')+'</td></tr>';}).join('')+'</table>';
+    h+='</section>';
+  }
+  var css='@page{size:A4;margin:15mm}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+    +'body{font-family:Arial,Helvetica,sans-serif;color:#1a1a1a;max-width:210mm;margin:0 auto;padding:12px;font-size:10pt;line-height:1.45}'
+    +'h1{font-size:22pt;margin:4px 0 14px}h2{font-size:13pt;color:#D97706;border-bottom:2px solid #D97706;padding-bottom:4px;margin:26px 0 10px;page-break-after:avoid}'
+    +'h3{font-size:10.5pt;color:#475569;margin:16px 0 6px;page-break-after:avoid}section{margin-bottom:10px}'
+    +'.port{page-break-after:always}.kick{color:#D97706;font-weight:700;text-transform:uppercase;letter-spacing:1px;font-size:9pt;margin-top:30px}'
+    +'.ficha th{text-align:left;color:#64748b;font-weight:600;width:130px;background:none;padding:4px 0}.ficha td{padding:4px 0;border:none}'
+    +'.kpis{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}.kpis div{flex:1 1 30%;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px}.kpis b{display:block;font-size:14pt}.kpis span{font-size:8.5pt;color:#64748b}'
+    +'.interno{margin-top:16px;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;border-radius:6px;padding:8px 12px;font-weight:700}'
+    +'.tri{display:flex;gap:8px;margin-bottom:8px}.tri div{flex:1;border-radius:6px;padding:8px;background:#f8fafc;text-align:center}.tri .ok{background:#f0fdf4}.tri .no{background:#fef2f2}.tri span{display:block;font-size:8pt;color:#64748b;font-weight:700;text-transform:uppercase}.tri b{font-size:12pt}'
+    +'table{width:100%;border-collapse:collapse;font-size:8.5pt;margin-bottom:8px}th{background:#f1f5f9;text-align:left;padding:4px 5px}td{padding:4px 5px;border-bottom:1px solid #eee;vertical-align:top}'
+    +'.n{text-align:right;white-space:nowrap}.rb td{font-weight:700;background:#fffbeb}.sub{padding-left:16px}.mut{color:#64748b;font-size:8.5pt}'
+    +'.it{border-left:3px solid #D97706;background:#fafafa;border-radius:4px;padding:8px 10px;margin-bottom:8px;page-break-inside:avoid}'
+    +'.ith{display:flex;gap:8px;align-items:baseline}.ith b{flex:1}.fe{color:#64748b;font-size:8.5pt;white-space:nowrap}.lb{font-size:8pt;color:#94a3b8;text-transform:uppercase;margin-top:4px}'
+    +'.tx{white-space:pre-wrap;margin:3px 0}.ck{font-size:9pt;padding:1px 0}'
+    +'.gal{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.gal figure{margin:0;width:150px;page-break-inside:avoid}.gal img{width:150px;height:auto;max-height:200px;object-fit:cover;border-radius:4px;border:1px solid #ddd;display:block}.gal figcaption{font-size:7.5pt;color:#475569;margin-top:2px}'
+    +'.firma{margin-top:30px;border-top:2px solid #D97706;padding-top:10px;display:flex;justify-content:space-between;font-size:9pt;color:#666}.firma b{color:#D97706;font-size:13pt}'
+    +'.no-print{position:fixed;top:10px;right:10px}@media print{.no-print{display:none}}';
+  return '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+esc((opt.titulo||'Cierre')+' — '+(p.name||''))+'</title><style>'+css+'</style></head><body>'
+    +(opt.titulo&&!S_.portada?'<h1>'+esc(opt.titulo)+'</h1><div class="mut">'+esc(p.name||'')+(p.client?' · '+esc(p.client):'')+' · '+fmt(td())+'</div>'+(opt.privados?'<div class="interno">⚠ USO INTERNO — incluye movimientos privados.</div>':''):'')
+    +h
+    +'<div class="firma"><div><b>FEDERICO PICKELNY</b><br>ARQUITECTO · MP 2304</div><div style="text-align:right">&#9742; 264 4397772<br>&#9993; federicopickelny@gmail.com<br>B. Rivadavia Oeste 114</div></div>'
+    +'<button class="no-print" onclick="window.print()" style="background:#D97706;color:#fff;border:none;padding:10px 16px;border-radius:8px;font-weight:700;font-size:13px">Imprimir / Guardar PDF</button>'
+    +'</body></html>';
+}
+function _cCsv(filas){return '﻿'+filas.map(function(r){return r.map(function(c){return '"'+String(c==null?'':c).replace(/"/g,'""')+'"';}).join(';');}).join('\r\n');}
+function _cierreCsvs(pid){
+  var eco=function(conPriv){
+    var ec=_cEconomia(pid,conPriv);
+    return _cCsv([['Fecha','Tipo','Concepto','Detalle','Medio de pago','Proveedor','Rubro','Ítem','Monto','Privado']].concat(ec.items.map(function(e){
+      return [e.fecha||String(e.date||'').slice(0,10),e.tipo,e.concepto||'',e.detalle||'',e.medioPago||'',e.proveedor||'',e.rubro||'',_ecoItemTexto(e),String(parseFloat(e.monto)||0).replace('.',','),e.interno?'Sí':''];})));
+  };
+  var mt=_cMateriales(pid);
+  return {
+    'planillas/economia_cliente.csv':eco(false),
+    'planillas/economia_interna.csv':eco(true),
+    'planillas/materiales.csv':_cCsv([['Material','Unidad','Computado','Ingresado','Falta','Avance %']].concat(mt.filas.map(function(f){return [f.m.name||'',f.m.unit||'',f.comp,f.ing,f.comp?f.falta:'',f.pct!==null?f.pct:''];}))),
+    'planillas/ingresos_de_materiales.csv':_cCsv([['Fecha','Material','Cantidad','Unidad','Proveedor','Remito','Estado','Observaciones']].concat(_cTbl('matIngresos',pid).slice().sort(_cOrdenFecha).map(function(i){return [i.fecha||String(i.date||'').slice(0,10),_cNomMat(i),i.qty||'',i.unit||'',i.proveedor||'',i.remito||'',i.estado||'ingresado',i.observations||''];})))
+  };
+}
+
+// ── Los dos paquetes ──
+function _cierreArmarRespaldo(pid,bytes){
+  var p=(D.projects||[]).find(function(x){return x.id===pid;});
+  var tablas={};_CIERRE_TABLAS.forEach(function(t){tablas[t]=JSON.parse(JSON.stringify(_cTbl(t,pid)));});
+  var proj=JSON.parse(JSON.stringify(p));
+  proj.cerrada=true;proj.status='Finalizada';
+  proj.cierre=Object.assign({},proj.cierre||{},{fecha:nw(),por:(D.user&&D.user.name)||'',estadoAnterior:p.cerrada?((p.cierre&&p.cierre.estadoAnterior)||''):(p.status||'')});
+  var entradas=[],fotoIdx={},archIdx={},n=0;
+  Object.keys(bytes.fotos).forEach(function(ref){
+    n++;var ruta='fotos/'+String(n).padStart(4,'0')+'.'+_cExt(bytes.fotos[ref]);
+    fotoIdx[ref]=ruta;entradas.push({nombre:ruta,datos:_u8DataUrl(bytes.fotos[ref])});
+  });
+  Object.keys(bytes.archivos).forEach(function(k,i){
+    var a=bytes.archivos[k];var ruta='archivos/'+String(i+1).padStart(3,'0')+'_'+_cNombreArchivo(a.nombre)+'.'+_cExt(a.datos);
+    archIdx[k]=ruta;entradas.push({nombre:ruta,datos:_u8DataUrl(a.datos)});
+  });
+  var obra={formato:'obracontrol',version:1,generado:nw(),app:'ObraControl Pro',
+    project:proj,tablas:tablas,fotos:fotoIdx,archivos:archIdx,
+    resumen:{fotos:Object.keys(fotoIdx).length,fotosSinBytes:bytes.faltan.length,archivos:Object.keys(archIdx).length}};
+  entradas.unshift({nombre:'obra.json',datos:_u8Texto(JSON.stringify(obra))});
+  entradas.push({nombre:'LEEME.txt',datos:_u8Texto(
+    'RESPALDO DE CIERRE — '+(p.name||'')+'\r\nGenerado: '+new Date().toLocaleString('es-AR')+'\r\n\r\n'
+    +'Para volver a abrir la obra: ObraControl → pantalla de inicio → "Abrir archivo de obra" → elegir este archivo.\r\n'
+    +'La obra vuelve con todos sus datos, fotos y archivos.\r\n\r\n'
+    +'Este archivo es un ZIP: si le cambiás la extensión .obracontrol por .zip podés ver las fotos (carpeta fotos) y los archivos adjuntos (carpeta archivos).\r\n'
+    +(bytes.faltan.length?'\r\nAviso: '+bytes.faltan.length+' foto(s) no se pudieron copiar dentro del archivo (no estaban en el dispositivo ni se pudieron bajar de Drive). Quedan referenciadas a su ubicación en Drive.\r\n':''))});
+  return {blob:_zipCrear(entradas),nombre:'Obra_'+_cNombreArchivo(p.name)+'_cierre_'+td()+'.obracontrol',fotos:Object.keys(fotoIdx).length};
+}
+function _cierreArmarInformes(pid,bytes){
+  var p=(D.projects||[]).find(function(x){return x.id===pid;});
+  var f=bytes.fotos,e=[];
+  var add=function(nombre,html){e.push({nombre:nombre,datos:_u8Texto(html)});};
+  add('1_Informe_de_cierre_COMPLETO_uso_interno.html',_cierreInformeHtml(pid,{titulo:'Informe de cierre — uso interno',kicker:'Informe de cierre de obra · USO INTERNO',privados:true,facturas:true},f));
+  add('2_Informe_de_cierre_para_el_cliente.html',_cierreInformeHtml(pid,{titulo:'Informe de cierre',privados:false},f));
+  add('3_Balance_economico_cliente.html',_cierreInformeHtml(pid,{titulo:'Balance económico del cliente',secciones:{ecoCliente:1}},f));
+  add('4_Balance_economico_interno.html',_cierreInformeHtml(pid,{titulo:'Balance económico interno',privados:true,facturas:true,secciones:{ecoInterno:1}},f));
+  add('5_Balance_de_materiales.html',_cierreInformeHtml(pid,{titulo:'Balance de materiales',secciones:{materiales:1}},f));
+  var cs=_cierreCsvs(pid);Object.keys(cs).forEach(function(k){e.push({nombre:k,datos:_u8Texto(cs[k])});});
+  add('LEEME.txt','INFORMES DE CIERRE — '+(p.name||'')+'\r\nGenerado: '+new Date().toLocaleString('es-AR')+'\r\n\r\n'
+    +'Los informes .html se abren con cualquier navegador (Chrome, Edge, Safari) y traen las fotos adentro.\r\n'
+    +'Para pasarlos a PDF: abrirlos y usar Imprimir → Guardar como PDF.\r\n\r\n'
+    +'1 — Informe completo (incluye movimientos privados: NO entregar al cliente)\r\n'
+    +'2 — Informe para el cliente (sin privados)\r\n3 — Balance económico del cliente\r\n4 — Balance económico interno\r\n5 — Balance de materiales\r\n'
+    +'planillas — lo mismo en CSV para abrir con Excel\r\n\r\n'
+    +'Para volver a abrir la obra en la app se usa el otro archivo: el .obracontrol.\r\n');
+  return {blob:_zipCrear(e),nombre:'Obra_'+_cNombreArchivo(p.name)+'_informes_de_cierre_'+td()+'.zip'};
+}
+function _cTam(b){return b<1048576?Math.max(1,Math.round(b/1024))+' KB':(Math.round(b/1048576*10)/10).toString().replace('.',',')+' MB';}
+function _cDescargar(blob,nombre){
+  var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.download=nombre;
+  document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url);},60000);
+}
+// Subida reanudable: sirve para archivos grandes (la multipart común se corta).
+async function _cSubirDrive(blob,nombre,carpeta,mime){
+  var ini=await fetchWithTimeout('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id',{method:'POST',
+    headers:{'Authorization':'Bearer '+GD.accessToken,'Content-Type':'application/json; charset=UTF-8','X-Upload-Content-Type':mime,'X-Upload-Content-Length':String(blob.size)},
+    body:JSON.stringify({name:nombre,parents:[carpeta],mimeType:mime})},30000);
+  if(!ini.ok)throw new Error('Drive '+ini.status);
+  var dest=ini.headers.get('Location');if(!dest)throw new Error('Drive no devolvió dirección de subida');
+  var r=await fetchWithTimeout(dest,{method:'PUT',headers:{'Content-Type':mime},body:blob},15*60000);
+  if(!r.ok)throw new Error('Drive '+r.status);
+  return (await r.json()).id;
+}
+function _cTokenVigente(){return !!(GD.accessToken&&GD.tokenExpiry&&(GD.tokenExpiry-Date.now())>60000);}
+// El inicio de sesión de Google abre una ventana: tiene que salir del toque del
+// usuario (si no, el navegador la bloquea) y no puede quedar esperando para siempre.
+function _cAuthConTope(ms){
+  return Promise.race([ensureAuth().catch(function(){return false;}),new Promise(function(r){setTimeout(function(){r(false);},ms||90000);})]);
+}
+async function _cierreSubirDrive(pid,resp,inf){
+  if(!_cTokenVigente())return {ok:false,motivo:'Drive no está conectado en este momento',reintentable:true};
+  await ensureFolders(pid);
+  var carpeta=await findOrCreateFolder('CIERRE_DE_OBRA',GD.obraFolders[pid]||GD.rootId);
+  var idR=await _cSubirDrive(resp.blob,resp.nombre,carpeta,'application/octet-stream');
+  var idI=inf?await _cSubirDrive(inf.blob,inf.nombre,carpeta,'application/zip'):null;
+  return {ok:true,respaldoId:idR,informesId:idI,carpeta:carpeta};
+}
+
+// ── Asistente de cierre (3 pasos) ──
+var _CIE=null;
+function abrirCierreObra(){
+  var pid=S.proj;var p=(D.projects||[]).find(function(x){return x.id===pid;});if(!p)return;
+  _CIE={pid:pid,paso:1,bytes:null,resp:null,inf:null,bajado:false,drive:null};
+  var m=document.getElementById('cierreM');if(m)m.remove();
+  m=document.createElement('div');m.className='mo open';m.id='cierreM';
+  m.innerHTML='<div class="mo-c" style="max-width:520px"><div class="mo-h"><h3 style="color:#D97706">🏁 Cerrar obra</h3><button class="tbtn" onclick="cerrarAsistenteCierre()">'+I.x+'</button></div><div id="cie_pasos"></div><div id="cie_cuerpo"></div></div>';
+  document.body.appendChild(m);
+  _cierrePintar();
+}
+function cerrarAsistenteCierre(){var m=document.getElementById('cierreM');if(m)m.remove();_CIE=null;}
+function _cierrePintar(){
+  if(!_CIE)return;
+  var pasos=['Revisar','Respaldo e informes','Cerrar'];
+  var ps=document.getElementById('cie_pasos');
+  if(ps)ps.innerHTML='<div style="display:flex;gap:6px;margin-bottom:14px">'+pasos.map(function(t,i){
+    var n=i+1,act=n===_CIE.paso,hecho=n<_CIE.paso;
+    return '<div style="flex:1;text-align:center;padding:6px 4px;border-radius:8px;font-size:11px;font-weight:700;'+(act?'background:#D97706;color:#fff':hecho?'background:#dcfce7;color:#16a34a':'background:var(--gray-ll);color:var(--text3)')+'">'+(hecho?'✓ ':n+'. ')+t+'</div>';
+  }).join('')+'</div>';
+  var c=document.getElementById('cie_cuerpo');if(!c)return;
+  var pid=_CIE.pid,p=(D.projects||[]).find(function(x){return x.id===pid;})||{};
+  if(_CIE.paso===1){
+    var T=_cTbl('tareas',pid),pend=T.filter(function(t){return t.status!=='completada'&&t.status!=='cancelada';}).length;
+    var al=_cTbl('alertas',pid).filter(function(a){return !a.resolved;}).length;
+    var mi=_cTbl('matIngresos',pid),ped=mi.filter(function(i){return i.estado==='pedido';}).length,ap=mi.filter(function(i){return i.estado==='a_pedir';}).length;
+    var ck=_cTbl('checklists',pid).filter(function(k){var it=k.items||[];return it.length&&it.some(function(x){return !x.done;});}).length;
+    var refs=_cierreReferencias(pid),sinSubir=refs.fotos.filter(function(f){return f.ref.indexOf('[foto:')===0;}).length;
+    var ecC=_cEconomia(pid,false),ecI=_cEconomia(pid,true);
+    var fila=function(ok,txt){return '<div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--gray-ll);font-size:13px"><span>'+(ok?'✅':'⚠️')+'</span><span style="flex:1">'+txt+'</span></div>';};
+    c.innerHTML='<div class="txxs tc3 mb-8">Revisá cómo queda la obra antes de cerrarla. Lo pendiente no impide el cierre: queda registrado en el informe tal como está.</div>'
+      +fila(!pend,pend?pend+' tarea(s) sin completar':'Todas las tareas completadas')
+      +fila(!al,al?al+' alerta(s) activa(s)':'Sin alertas activas')
+      +fila(!ped&&!ap,(ped||ap)?(ped?ped+' pedido(s) sin ingresar':'')+(ped&&ap?' · ':'')+(ap?ap+' material(es) a pedir':''):'Sin pedidos pendientes')
+      +fila(!ck,ck?ck+' checklist(s) incompleta(s)':'Checklists completas')
+      +fila(!sinSubir,sinSubir?sinSubir+' foto(s) todavía sin subir a Drive (se incluyen si están en este dispositivo)':'Fotos respaldadas en Drive')
+      +'<div style="display:flex;gap:8px;margin:12px 0"><div style="flex:1;background:#f0f9ff;border-radius:8px;padding:8px"><div class="txxs tc3">Saldo cliente</div><div class="fw8" style="color:'+(ecC.saldo>=0?'var(--green)':'var(--red)')+'">'+_cPesos(ecC.saldo)+'</div></div>'
+      +'<div style="flex:1;background:#f8fafc;border-radius:8px;padding:8px"><div class="txxs tc3">Saldo interno</div><div class="fw8" style="color:'+(ecI.saldo>=0?'var(--green)':'var(--red)')+'">'+_cPesos(ecI.saldo)+'</div></div>'
+      +'<div style="flex:1;background:#fffbeb;border-radius:8px;padding:8px"><div class="txxs tc3">Fotos</div><div class="fw8">'+refs.fotos.length+'</div></div></div>'
+      +'<button class="btn btn-w" style="background:#D97706;color:#fff" onclick="_CIE.paso=2;_cierrePintar()">Siguiente →</button>';
+  } else if(_CIE.paso===2){
+    if(!_CIE.resp){
+      c.innerHTML='<div class="txxs tc3 mb-10">Se generan dos archivos:<br><b>📦 Respaldo (.obracontrol)</b> — para volver a abrir la obra en la app con todo: datos, fotos y archivos.<br><b>📑 Informes (.zip)</b> — informe completo, informe para el cliente, balances y planillas, con las fotos.</div>'
+        +'<div id="cie_prog" class="ts mb-10" style="display:none;background:var(--gray-ll);border-radius:8px;padding:10px"></div>'
+        +'<button class="btn btn-w" id="cie_gen" style="background:#D97706;color:#fff" onclick="cierreGenerar()">Generar respaldo e informes</button>'
+        +'<button class="btn btn-sec btn-w mt-8" onclick="_CIE.paso=1;_cierrePintar()">← Volver</button>';
+    } else {
+      var d=_CIE.drive;
+      c.innerHTML='<div class="ts mb-8" style="color:var(--green);font-weight:700">✓ Listo: '+_CIE.resp.fotos+' foto(s) incluidas'+(_CIE.bytes.faltan.length?' · <span style="color:var(--orange)">'+_CIE.bytes.faltan.length+' no se pudieron copiar</span>':'')+'</div>'
+        +'<button class="btn btn-w mb-8" style="background:#7c3aed;color:#fff" onclick="cierreBajar(\'resp\')">⬇ Descargar respaldo (.obracontrol) — '+_cTam(_CIE.resp.blob.size)+'</button>'
+        +'<button class="btn btn-w mb-8" style="background:#0891b2;color:#fff" onclick="cierreBajar(\'inf\')">⬇ Descargar informes (.zip) — '+_cTam(_CIE.inf.blob.size)+'</button>'
+        +'<div style="display:flex;gap:6px" class="mb-8"><button class="btn btn-sec btn-s" style="flex:1" onclick="cierreImprimir(true)">🖨 PDF completo</button><button class="btn btn-sec btn-s" style="flex:1" onclick="cierreImprimir(false)">🖨 PDF para el cliente</button></div>'
+        +'<div class="txxs mb-10" style="padding:8px;border-radius:8px;background:'+(d&&d.ok?'#f0fdf4;color:#16a34a':'#fff7ed;color:#c2410c')+'">'+(!d||d.subiendo?'☁ Subiendo copia a Drive…':d.ok?'☁ Copia guardada en Drive, carpeta CIERRE_DE_OBRA de la obra':'☁ No se pudo subir a Drive ('+esc(d.motivo||'')+'). Guardá el respaldo en el teléfono o en la compu.'
+          +'<button class="btn btn-sec btn-s btn-w mt-6" onclick="cierreSubirDriveManual()">☁ Subir copia a Drive</button>')+'</div>'
+        +'<button class="btn btn-w" style="background:#D97706;color:#fff'+((_CIE.bajado||(d&&d.ok))?'':';opacity:.4;cursor:not-allowed')+'" onclick="_CIE.paso=3;_cierrePintar()"'+((_CIE.bajado||(d&&d.ok))?'':' disabled')+'>Siguiente →</button>'
+        +((_CIE.bajado||(d&&d.ok))?'':'<div class="txxs tc3 mt-4 tac">Para seguir, descargá el respaldo o esperá la copia en Drive.</div>');
+    }
+  } else {
+    c.innerHTML='<div class="ts mb-10">La obra <b>'+esc(p.name||'')+'</b> pasa a <b>Obras cerradas</b>: deja de aparecer entre las activas, pero no se borra nada. Podés entrar a consultarla o reabrirla cuando haga falta (ampliación, intervención, etc.).</div>'
+      +'<div class="txxs tc3 mb-10">Si algún día no está en la app, se vuelve a abrir con el archivo de respaldo: inicio → "Abrir archivo de obra".</div>'
+      +'<button class="btn btn-w" style="background:#16a34a;color:#fff" onclick="cierreConfirmar()">🏁 Cerrar la obra</button>'
+      +'<button class="btn btn-sec btn-w mt-8" onclick="_CIE.paso=2;_cierrePintar()">← Volver</button>';
+  }
+}
+async function cierreGenerar(){
+  if(!_CIE)return;
+  var btn=document.getElementById('cie_gen'),pr=document.getElementById('cie_prog');
+  if(btn){btn.disabled=true;btn.textContent='Generando…';}
+  if(pr){pr.style.display='block';pr.textContent='Juntando fotos y archivos…';}
+  try{
+    var pid=_CIE.pid;
+    var refs=_cierreReferencias(pid);
+    var usaDrive=refs.fotos.some(function(f){return _cDriveId(f.ref);})||refs.archivos.some(function(a){return a.a&&a.a.driveId;});
+    if((usaDrive||GD.rootId)&&!_cTokenVigente()){
+      if(pr)pr.textContent='Conectando con Google Drive…';
+      await _cAuthConTope(90000);
+    }
+    _CIE.bytes=await _cierreJuntarBytes(pid,function(n,t,que){if(pr)pr.textContent='Juntando '+que+'… '+n+' de '+t;});
+    if(pr)pr.textContent='Armando los archivos…';
+    await new Promise(function(r){setTimeout(r,30);});
+    _CIE.resp=_cierreArmarRespaldo(pid,_CIE.bytes);
+    _CIE.inf=_cierreArmarInformes(pid,_CIE.bytes);
+    _cierrePintar();
+    _cierreSubirDrive(pid,_CIE.resp,_CIE.inf).then(function(d){if(_CIE){_CIE.drive=d;_cierrePintar();}})
+      .catch(function(e){if(_CIE){_CIE.drive={ok:false,motivo:String(e&&e.message||e)};_cierrePintar();}});
+  }catch(e){
+    console.error('cierre',e);
+    if(pr)pr.textContent='No se pudo generar: '+(e&&e.message||e);
+    if(btn){btn.disabled=false;btn.textContent='Reintentar';}
+  }
+}
+async function cierreSubirDriveManual(){
+  if(!_CIE||!_CIE.resp)return;
+  var yaHay=_cTokenVigente();
+  _CIE.drive={subiendo:true};_cierrePintar();
+  if(!yaHay&&!(await _cAuthConTope(90000))){_CIE.drive={ok:false,motivo:'no se pudo conectar con Google'};_cierrePintar();return;}
+  try{_CIE.drive=await _cierreSubirDrive(_CIE.pid,_CIE.resp,_CIE.inf);}
+  catch(e){_CIE.drive={ok:false,motivo:String(e&&e.message||e)};}
+  if(_CIE)_cierrePintar();
+}
+function cierreBajar(cual){
+  if(!_CIE)return;var x=cual==='resp'?_CIE.resp:_CIE.inf;if(!x)return;
+  _cDescargar(x.blob,x.nombre);
+  if(cual==='resp'){_CIE.bajado=true;_cierrePintar();}
+}
+function cierreImprimir(completo){
+  if(!_CIE||!_CIE.bytes)return;
+  var html=_cierreInformeHtml(_CIE.pid,completo?{titulo:'Informe de cierre — uso interno',kicker:'Informe de cierre de obra · USO INTERNO',privados:true,facturas:true}:{titulo:'Informe de cierre',privados:false},_CIE.bytes.fotos);
+  var w=window.open('','_blank');
+  if(!w){toast('Activá las ventanas emergentes para ver el PDF','var(--orange)',4000);return;}
+  w.document.write(html);w.document.close();
+  setTimeout(function(){try{w.print();}catch(_){}},900);
+}
+function cierreConfirmar(){
+  if(!_CIE)return;
+  var p=(D.projects||[]).find(function(x){return x.id===_CIE.pid;});if(!p)return;
+  var reg={fecha:nw(),por:(D.user&&D.user.name)||'',archivo:_CIE.resp&&_CIE.resp.nombre,
+    driveRespaldoId:_CIE.drive&&_CIE.drive.ok?_CIE.drive.respaldoId:null,driveInformesId:_CIE.drive&&_CIE.drive.ok?_CIE.drive.informesId:null,
+    estadoAnterior:p.status||''};
+  p.cerrada=true;p.status='Finalizada';p.cierre=reg;
+  p.historialCierres=(p.historialCierres||[]).concat([{tipo:'cierre',fecha:reg.fecha,por:reg.por,archivo:reg.archivo}]);
+  p.updatedAt=nw();
+  audit('projects','cierre',p.name);
+  cerrarAsistenteCierre();
+  S.proj=null;S.mod='dashboard';S.visitaDetail=null;S.matDetail=null;
+  sv();try{cloudSave();}catch(_){}
+  render();
+  toast('Obra cerrada ✓ — queda en "Obras cerradas"','var(--green)',4500);
+}
+function reabrirObra(pid){
+  var p=(D.projects||[]).find(function(x){return x.id===pid;});if(!p)return;
+  if(!confirm('¿Reabrir "'+p.name+'"?\n\nVuelve a Obras activas con todos sus datos.'))return;
+  p.cerrada=false;
+  p.status=(p.cierre&&p.cierre.estadoAnterior&&p.cierre.estadoAnterior!=='Finalizada')?p.cierre.estadoAnterior:'En curso';
+  p.historialCierres=(p.historialCierres||[]).concat([{tipo:'reapertura',fecha:nw(),por:(D.user&&D.user.name)||''}]);
+  p.updatedAt=nw();
+  audit('projects','reapertura',p.name);
+  sv();try{cloudSave();}catch(_){}
+  render();
+  toast('Obra reabierta ✓','var(--green)');
+}
+function _cardCierreConfig(p){
+  if(!p)return '';
+  var hist=(p.historialCierres||[]).slice(-4).reverse();
+  return '<div class="card mb-12" style="border-left:4px solid #D97706">'
+    +'<div class="ts fw7 mb-6" style="color:#D97706">🏁 Cierre de obra</div>'
+    +(p.cerrada
+      ?'<div class="txxs tc3 mb-8">Obra cerrada'+(p.cierre&&p.cierre.fecha?' el '+fmt(p.cierre.fecha):'')+(p.cierre&&p.cierre.archivo?' · respaldo: '+esc(p.cierre.archivo):'')+'.</div>'
+        +'<div class="flex gap-6"><button class="btn btn-s" style="flex:1;background:#16a34a;color:#fff" onclick="reabrirObra(\''+p.id+'\')">🔓 Reabrir obra</button><button class="btn btn-sec btn-s" style="flex:1" onclick="abrirCierreObra()">📦 Nuevo respaldo</button></div>'
+      :'<div class="txxs tc3 mb-8">Genera el respaldo para reabrirla (.obracontrol) y los informes de cierre con fotos y balances, y la pasa a Obras cerradas. No se borra nada y se puede reabrir.</div>'
+        +'<button class="btn btn-s btn-w" style="background:#D97706;color:#fff" onclick="abrirCierreObra()">🏁 Cerrar obra</button>')
+    +'<button class="btn btn-sec btn-s btn-w mt-8" onclick="document.getElementById(\'abrirObraCfgF\').click()">📂 Abrir obra desde archivo</button><input type="file" id="abrirObraCfgF" style="display:none" onchange="abrirArchivoObra(this)">'
+    +(hist.length?'<div class="txxs tc3 mt-8">'+hist.map(function(x){return '• '+fmt(x.fecha)+' — '+esc(x.tipo)+(x.por?' ('+esc(x.por)+')':'');}).join('<br>')+'</div>':'')
+    +'</div>';
+}
+function _seccionObrasCerradas(lista){
+  if(!lista||!lista.length)return '';
+  var abierta=!!S.verCerradas;
+  var orden=lista.slice().sort(function(a,b){return String((b.cierre&&b.cierre.fecha)||'').localeCompare(String((a.cierre&&a.cierre.fecha)||''));});
+  var h='<div style="margin-top:18px"><button onclick="S.verCerradas=!S.verCerradas;render()" style="width:100%;display:flex;align-items:center;gap:8px;background:var(--gray-ll);border:1px solid var(--brd);border-radius:10px;padding:10px 12px;cursor:pointer;font-family:inherit">'
+    +'<span style="font-size:16px">📦</span><span class="ts fw7" style="flex:1;text-align:left;color:var(--text2)">Obras cerradas ('+lista.length+')</span><span class="tc3">'+(abierta?'▲':'▼')+'</span></button>';
+  if(abierta){
+    h+='<div style="margin-top:8px">'+orden.map(function(p){
+      return '<div class="card card-click" style="padding:10px 12px;opacity:.9" onclick="S.proj=\''+p.id+'\';S.mod=\'dashboard\';S.visitaDetail=null;S.matDetail=null;render();">'
+        +'<div class="flex justify-between items-center"><div style="min-width:0"><div class="fw7 trun" style="font-size:14px">'+esc(p.name||'')+'</div>'
+        +'<div class="txxs tc3">'+(p.client?esc(p.client)+' · ':'')+(p.cierre&&p.cierre.fecha?'Cerrada el '+fmt(p.cierre.fecha):'Cerrada')+'</div></div>'
+        +'<button class="btn btn-sec btn-s" style="flex-shrink:0" onclick="event.stopPropagation();reabrirObra(\''+p.id+'\')">🔓 Reabrir</button></div></div>';
+    }).join('')+'</div>';
+  }
+  return h+'</div>';
+}
+function _bannerObraCerrada(p){
+  if(!p||!p.cerrada)return '';
+  return '<div class="card mb-12" style="background:#f0fdf4;border:1px solid #bbf7d0;padding:10px 12px;display:flex;align-items:center;gap:10px">'
+    +'<span style="font-size:20px">📦</span><div style="flex:1"><div class="ts fw7" style="color:#16a34a">Obra cerrada</div><div class="txxs tc3">'+(p.cierre&&p.cierre.fecha?'Cerrada el '+fmt(p.cierre.fecha)+'. ':'')+'Podés consultarla o reabrirla.</div></div>'
+    +'<button class="btn btn-s" style="background:#16a34a;color:#fff;white-space:nowrap" onclick="reabrirObra(\''+p.id+'\')">🔓 Reabrir</button></div>';
+}
+
+// ── Abrir una obra desde su archivo ──
+async function abrirArchivoObra(input){
+  var f=input&&input.files&&input.files[0];if(input)input.value='';
+  if(!f)return;
+  try{
+    toast('Leyendo el archivo…','var(--blue)',2500);
+    var buf=await f.arrayBuffer(),u8=new Uint8Array(buf),obra=null,zip=null;
+    if(u8[0]===0x50&&u8[1]===0x4B){
+      zip=await _zipLeer(buf);
+      if(!zip['obra.json']){
+        toast(Object.keys(zip).some(function(k){return /Informe_de_cierre/.test(k);})?'Ese es el zip de informes. Para reabrir la obra elegí el archivo .obracontrol':'El archivo no tiene una obra adentro','var(--red)',6000);
+        return;
+      }
+      obra=JSON.parse(new TextDecoder().decode(zip['obra.json']));
+    } else {
+      var j=null;try{j=JSON.parse(new TextDecoder().decode(u8));}catch(_){}
+      if(j&&j.formato==='obracontrol')obra=j;
+      else if(j&&j.project){var t={};_CIERRE_TABLAS.forEach(function(k){if(Array.isArray(j[k]))t[k]=j[k];});obra={formato:'obracontrol',version:0,project:j.project,tablas:t,fotos:{},archivos:{}};}
+    }
+    if(!obra||!obra.project||!obra.project.id){toast('El archivo no es un respaldo de ObraControl','var(--red)',5000);return;}
+    _cierrePreguntarApertura(obra,zip);
+  }catch(e){console.error('abrir obra',e);toast('No se pudo leer el archivo: '+(e&&e.message||e),'var(--red)',6000);}
+}
+function _cierrePreguntarApertura(obra,zip){
+  var p=obra.project,existe=(D.projects||[]).find(function(x){return x.id===p.id;});
+  var n=function(t){return ((obra.tablas||{})[t]||[]).length;};
+  var m=document.getElementById('abrirObraM');if(m)m.remove();
+  m=document.createElement('div');m.className='mo open';m.id='abrirObraM';
+  m.innerHTML='<div class="mo-c" style="max-width:460px"><div class="mo-h"><h3>📂 '+esc(p.name||'Obra')+'</h3><button class="tbtn" onclick="document.getElementById(\'abrirObraM\').remove()">'+I.x+'</button></div>'
+    +'<div class="txxs tc3 mb-10">'+(obra.generado?'Respaldo del '+fmt(obra.generado)+' · ':'')+n('visitas')+' visitas · '+n('tareas')+' tareas · '+n('economia')+' movimientos · '+Object.keys(obra.fotos||{}).length+' fotos</div>'
+    +(existe?'<div class="txxs mb-10" style="background:#fff7ed;border-radius:8px;padding:8px;color:#c2410c">Esta obra ya está en la app. Se completa con lo del archivo: de cada registro queda la versión más nueva y no se borra nada.</div>':'')
+    +'<button class="btn btn-w mb-8" style="background:#16a34a;color:#fff" id="ao_reabrir">🔓 Reabrirla (vuelve a Obras activas)</button>'
+    +'<button class="btn btn-sec btn-w" id="ao_consultar">📦 Solo consultarla (queda en Obras cerradas)</button></div>';
+  document.body.appendChild(m);
+  document.getElementById('ao_reabrir').onclick=function(){m.remove();_cierreRestaurar(obra,zip,true);};
+  document.getElementById('ao_consultar').onclick=function(){m.remove();_cierreRestaurar(obra,zip,false);};
+}
+async function _cierreRestaurar(obra,zip,reabrir){
+  try{
+    var p=JSON.parse(JSON.stringify(obra.project)),pid=p.id,tablas=obra.tablas||{};
+    var ids={};ids[pid]=1;
+    Object.keys(tablas).forEach(function(t){(tablas[t]||[]).forEach(function(r){if(r&&r.id)ids[r.id]=1;});});
+    // Si la obra se había eliminado, sus lápidas harían que Drive la vuelva a borrar.
+    if(D.tombstones)D.tombstones=D.tombstones.filter(function(t){return !ids[t.id];});
+    var nuevo=function(a,b){return String(a.updatedAt||a.date||'')>=String(b.updatedAt||b.date||'');};
+    var ex=(D.projects||[]).find(function(x){return x.id===pid;});
+    if(reabrir){p.cerrada=false;if(p.status==='Finalizada')p.status=(p.cierre&&p.cierre.estadoAnterior&&p.cierre.estadoAnterior!=='Finalizada')?p.cierre.estadoAnterior:'En curso';}
+    else p.cerrada=true;
+    p.historialCierres=(p.historialCierres||[]).concat([{tipo:reabrir?'reapertura desde archivo':'consulta desde archivo',fecha:nw(),por:(D.user&&D.user.name)||''}]);
+    p.updatedAt=nw();
+    if(ex)Object.assign(ex,p);else D.projects.push(p);
+    var cuenta=0;
+    Object.keys(tablas).forEach(function(t){
+      if(!Array.isArray(D[t]))D[t]=[];
+      (tablas[t]||[]).forEach(function(r){
+        if(!r||!r.id)return;r.projectId=pid;
+        var i=D[t].findIndex(function(x){return x.id===r.id;});
+        if(i<0){D[t].push(r);cuenta++;}
+        else if(nuevo(r,D[t][i])){D[t][i]=r;cuenta++;}
+      });
+    });
+    var fotosOk=0;
+    if(zip&&obra.fotos){
+      for(var ref in obra.fotos){
+        var bin=zip[obra.fotos[ref]];if(!bin)continue;
+        var ext=obra.fotos[ref].split('.').pop();
+        var du=_dataUrlDeU8(bin,({jpg:'image/jpeg',png:'image/png',webp:'image/webp',gif:'image/gif',pdf:'application/pdf'})[ext]||'image/jpeg');
+        var did=_cDriveId(ref);
+        if(did){if(await _guardarBytesLocales(did,du))fotosOk++;}
+        else if(ref.indexOf('[foto:')===0){await queueImageUpload(ref.slice(6,-1),du,'foto_'+ref.slice(6,-1)+'.'+ext,pid,null);fotosOk++;}
+      }
+    }
+    sv();try{cloudSave();}catch(_){}
+    S.proj=pid;S.mod='dashboard';S.visitaDetail=null;S.matDetail=null;
+    render();
+    toast('"'+(p.name||'Obra')+'" '+(reabrir?'reabierta':'abierta para consulta')+' ✓ · '+cuenta+' registros'+(fotosOk?' · '+fotosOk+' fotos':''),'var(--green)',6000);
+  }catch(e){console.error('restaurar',e);toast('No se pudo abrir la obra: '+(e&&e.message||e),'var(--red)',6000);}
 }
 
 // ═══════ ECONOMIA ═══════
