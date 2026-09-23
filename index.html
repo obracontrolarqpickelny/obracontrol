@@ -1123,7 +1123,7 @@ function buildLogContent(){
   c+='Egresos: $'+tEgr.toLocaleString('es-AR')+NL;
   c+='SALDO: $'+(tIng-tEgr).toLocaleString('es-AR')+NL+NL;
   eco.sort(function(a,b){return (b.fecha||'').localeCompare(a.fecha||'');}).forEach(function(e){
-    c+=(e.tipo==='ingreso'?'+':'-')+'$'+(parseFloat(e.monto)||0).toLocaleString('es-AR')+' | '+fmt(e.fecha||e.date)+' | '+(e.medioPago||'')+' | '+e.concepto+(e.proveedor?' | '+e.proveedor:'')+(e.rubro?' | ['+e.rubro+(e.item?' / '+e.item:'')+']':'')+(e.detalle?' — '+e.detalle:'')+NL;
+    c+=(e.tipo==='ingreso'?'+':'-')+'$'+(parseFloat(e.monto)||0).toLocaleString('es-AR')+' | '+fmt(e.fecha||e.date)+' | '+(e.medioPago||'')+' | '+e.concepto+(e.proveedor?' | '+e.proveedor:'')+((e.rubro||_ecoItemTexto(e))?' | ['+(e.rubro||'Sin rubro')+(_ecoItemTexto(e)?' / '+_ecoItemTexto(e):'')+']':'')+(e.detalle?' — '+e.detalle:'')+NL;
   });
   // Distribución de egresos por rubro
   var _txtEgrs=eco.filter(function(e){return e.tipo==='egreso';});
@@ -1135,8 +1135,7 @@ function buildLogContent(){
       var rk=(e.rubro||'').trim()||'Sin rubro';
       if(!_txtRubros[rk])_txtRubros[rk]={monto:0,items:{}};
       _txtRubros[rk].monto+=parseFloat(e.monto)||0;
-      var ik=(e.item||'').trim();
-      if(ik){if(!_txtRubros[rk].items[ik])_txtRubros[rk].items[ik]=0;_txtRubros[rk].items[ik]+=parseFloat(e.monto)||0;}
+      _ecoPartesItem(e).forEach(function(p){if(!_txtRubros[rk].items[p.item])_txtRubros[rk].items[p.item]=0;_txtRubros[rk].items[p.item]+=p.monto;});
     });
     Object.entries(_txtRubros).sort(function(a,b){return b[1].monto-a[1].monto;}).forEach(function(r){
       var pct=(_txtTotEgr>0?r[1].monto/_txtTotEgr*100:0).toFixed(1);
@@ -6786,7 +6785,7 @@ function editIng(ingId, mid){
     <button class="tbtn" onclick="document.getElementById('editIngM').remove()">${I.x}</button></div>
     <div class="fr">
       <div class="fg"><label class="fl">Cantidad *</label><input class="fi" id="ei_qty" type="number" min="0" value="${ing.qty||0}"></div>
-      <div class="fg"><label class="fl">Fecha</label><input class="fi" id="ei_date" type="date" value="${ing.date||td()}"></div>
+      <div class="fg"><label class="fl">Fecha de ingreso</label><input class="fi" id="ei_date" type="date" value="${String(ing.fecha||ing.date||td()).slice(0,10)}"></div>
     </div>
     <div class="fg"><label class="fl">Proveedor</label><input class="fi" id="ei_prov" value="${ing.proveedor||''}"></div>
     <div class="fg"><label class="fl">Remito / N\u00ba</label><input class="fi" id="ei_rem" value="${ing.remito||''}"></div>
@@ -6805,7 +6804,13 @@ async function saveEditIng(ingId, mid){
   const nuevasFotos=await readPhotos('ei_ph','materiales');
   const ing=D.matIngresos?.find(x=>x.id===ingId);if(!ing)return;
   ing.qty=qty;
-  ing.date=document.getElementById('ei_date')?.value||td();
+  // La fecha se guardaba solo en "date", pero el historial muestra y ordena por
+  // "fecha" (y los ingresos que vienen de Economía la traen cargada): el cambio no
+  // se veía nunca. Se escriben los tres campos de fecha del ingreso juntos.
+  // La fecha del pago en Economía no se toca: pueden ser distintas.
+  const _fNueva=document.getElementById('ei_date')?.value||ing.fecha||ing.date||td();
+  ing.date=_fNueva;ing.fecha=_fNueva;
+  if(ing.fechaIngreso||ing.estado==='ingresado')ing.fechaIngreso=_fNueva;
   ing.proveedor=document.getElementById('ei_prov')?.value||'';
   ing.remito=document.getElementById('ei_rem')?.value||'';
   ing.observations=document.getElementById('ei_obs')?.value||'';
@@ -8182,7 +8187,7 @@ function rEconomia(mc,p){
       items=items.filter(function(e){
         var _r=(e.rubro||'').trim()||'Sin rubro';
         if(_r!==S.ecoRubroFilter)return false;
-        if(S.ecoItemFilter){var _it2=(e.item||'').trim();if(_it2!==S.ecoItemFilter)return false;}
+        if(S.ecoItemFilter){if(!_ecoPartesItem(e).some(function(p){return p.item===S.ecoItemFilter;}))return false;}
         return true;
       });
     }
@@ -8274,7 +8279,7 @@ function rEconomia(mc,p){
       <div class="flex justify-between items-start mb-4">
         <div class="flex-1">
           <div class="ts fw6">${item.concepto||'Sin concepto'}${_notaBadge('economia',item.id,'detalle')}${item.interno?' <span style="font-size:9px;background:#f1f5f9;border-radius:3px;padding:1px 4px;color:#64748b">&#x1F512; Priv.</span>':''}${item.sourceType==='formulario'?' <span style="font-size:9px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:1px 6px;color:#16a34a">&#x1F464; '+(item.cargadoPor||item.sourceName||'')+'</span>':''}</div>
-          <div class="txxs tc3 mt-2">${fmts(item.fecha||item.date)} | ${item.medioPago||''} ${item.proveedor?`| <strong>${item.proveedor}</strong>`:''} ${item.rubro?`<span style="background:#f1f5f9;border-radius:3px;padding:1px 5px;margin-left:2px;color:#475569">${item.rubro}${item.item?' / '+item.item:''}</span>`:''}</div>
+          <div class="txxs tc3 mt-2">${fmts(item.fecha||item.date)} | ${item.medioPago||''} ${item.proveedor?`| <strong>${item.proveedor}</strong>`:''} ${(item.rubro||_ecoItemTexto(item))?`<span style="background:#f1f5f9;border-radius:3px;padding:1px 5px;margin-left:2px;color:#475569">${item.rubro||'Sin rubro'}${_ecoItemTexto(item)?' / '+_ecoItemTexto(item):''}</span>`:''}</div>
         </div>
         <div class="fw8" style="color:${col};font-size:15px;flex-shrink:0;margin-left:8px">${sign}$${(parseFloat(item.monto)||0).toLocaleString('es-AR')}</div>
       </div>
@@ -8291,9 +8296,10 @@ function rEconomia(mc,p){
   <div class="fg"><label class="fl">Fecha *</label><input class="fi" id="eco_fecha" type="date" value="${td()}"></div>
   <div class="fg"><label class="fl">Concepto *</label><div class="ac-wrap"><input class="fi" id="eco_concepto" placeholder="Pago albañilería, compra cemento..." autocomplete="off"></div></div>
   <div class="fg"><label class="fl">Detalle (opcional)</label><textarea class="ft" id="eco_detalle" rows="3" placeholder="Ej: 12 perfiles, 6 planchuelas, 8 latas de pintura, 5 pinceles..."></textarea><div class="txxs tc3 mt-2">Se ve como un ícono de nota junto al concepto — mantiene el listado corto y el detalle a mano.</div></div>
-  <div class="fr"><div class="fg"><label class="fl">Monto *</label><input class="fi" id="eco_monto" type="number" min="0" step="0.01" placeholder="0.00"></div><div class="fg"><label class="fl">Medio de pago</label><select class="fs" id="eco_medio">${MEDIOS.map(m=>`<option>${m}</option>`).join('')}</select></div></div>
+  <div class="fr"><div class="fg"><label class="fl">Monto *</label><input class="fi" id="eco_monto" type="number" min="0" step="0.01" placeholder="0.00" oninput="_repLeer('eco')"></div><div class="fg"><label class="fl">Medio de pago</label><select class="fs" id="eco_medio">${MEDIOS.map(m=>`<option>${m}</option>`).join('')}</select></div></div>
   <div class="fg"><label class="fl">Proveedor / Pagador</label><div class="ac-wrap"><input class="fi" id="eco_prov" placeholder="Nombre..." autocomplete="off"></div></div>
   <div class="fr"><div class="fg"><label class="fl">Rubro</label><div class="ac-wrap"><input class="fi" id="eco_rubro" placeholder="Ej: Materiales, Mano de obra..." autocomplete="off" oninput="setTimeout(function(){setupAC('eco_item',_acItems($('eco_rubro')?.value));},100)"></div></div><div class="fg"><label class="fl">Ítem</label><div class="ac-wrap"><input class="fi" id="eco_item" placeholder="Ej: Cemento, Pintura..." autocomplete="off"></div></div></div>
+  ${_repHtml('eco',null)}
   <div class="fg"><label class="fl">Imagen (factura / remito)</label><input type="file" accept="image/*,application/pdf" id="eco_img" class="fi" style="padding:6px"></div>
   <div class="fg"><label class="fl" style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="eco_interno" style="width:16px;height:16px"> <span>&#x1F512; Privado (no aparece en PDF para cliente)</span></label></div>
   <div class="fg"><label class="fl" style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="eco_doble" style="width:16px;height:16px" onchange="toggleEcoDoble()"><span>&#x1F500; Doble registro (ingreso+egreso, saldo neutro)</span></label><div id="eco_doble_info" style="display:none;font-size:11px;color:#16a34a;padding:4px 8px;margin-top:4px">Se crean 2 movimientos con mismo monto. Saldo final = 0.</div></div>
@@ -8312,15 +8318,129 @@ function rEconomia(mc,p){
   renderEcoMetros();
 }
 
+// "fecha" es solo el día del movimiento; "date" guarda el instante exacto en que se
+// asentó (con hora) y no cambia al editar. Dentro del mismo día se desempata por
+// ese instante: lo cargado a la tarde va antes que lo de la mañana en "Más
+// reciente", y al revés en "Más antiguo".
+// ═══════ REPARTO DE UN MOVIMIENTO ENTRE ÍTEMS ═══════
+// e.reparto=[{item,pct}] (suma 100). Mismo rubro, distintos ítems: una sola compra
+// que corresponde 30% a revoques, 40% a estructura y 30% a sanitaria.
+// Todo lo que suma por ítem pasa por _ecoPartesItem.
+function _ecoPartesItem(e){
+  var m=parseFloat(e&&e.monto)||0;
+  if(e&&Array.isArray(e.reparto)&&e.reparto.length){
+    return e.reparto.filter(function(r){return (r.item||'').trim();})
+      .map(function(r){var p=parseFloat(r.pct)||0;return {item:r.item.trim(),pct:p,monto:m*p/100};});
+  }
+  var it=((e&&e.item)||'').trim();
+  return it?[{item:it,pct:100,monto:m}]:[];
+}
+function _ecoItemTexto(e){
+  var p=_ecoPartesItem(e);
+  if(!(e&&Array.isArray(e.reparto)&&e.reparto.length))return p.length?p[0].item:'';
+  return p.map(function(x){return x.item+' '+_fmtPct(x.pct);}).join(' · ');
+}
+// Con un ítem filtrado, de un movimiento repartido cuenta solo la parte de ese ítem.
+function _ecoMontoVisible(e){
+  var m=parseFloat(e.monto)||0;
+  if(!S.ecoItemFilter||!(Array.isArray(e.reparto)&&e.reparto.length))return m;
+  return _ecoPartesItem(e).filter(function(p){return p.item===S.ecoItemFilter;}).reduce(function(s,p){return s+p.monto;},0);
+}
+function _fmtPct(p){return (Math.round(p*100)/100).toString().replace('.',',')+'%';}
+var _REP={};
+function _repHtml(pfx,rep){
+  _REP[pfx]=(rep&&rep.length)?rep.map(function(r){return {item:r.item||'',pct:r.pct};}):[];
+  var on=_REP[pfx].length>0;
+  return '<div class="fg"><label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">'
+    +'<input type="checkbox" id="'+pfx+'_rep_on"'+(on?' checked':'')+' onchange="_repToggle(\''+pfx+'\')"> ➗ Repartir el monto entre varios ítems (%)</label>'
+    +'<div id="'+pfx+'_rep_panel" style="display:'+(on?'block':'none')+';margin-top:8px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:10px">'
+    +'<div class="txxs tc3 mb-6">Mismo rubro, distintos ítems. Los porcentajes tienen que sumar 100%.</div>'
+    +'<div id="'+pfx+'_rep_filas">'+_repFilasHtml(pfx)+'</div>'
+    +'<button type="button" class="btn btn-sec btn-s btn-w mt-4" onclick="_repAgregar(\''+pfx+'\')">+ Agregar ítem</button>'
+    +'<div id="'+pfx+'_rep_total" class="txxs fw7 mt-6">'+_repTotalHtml(pfx)+'</div>'
+    +'</div></div>';
+}
+function _repFilasHtml(pfx){
+  var m=parseFloat(($(pfx+'_monto')||{}).value)||0;
+  return (_REP[pfx]||[]).map(function(r,i){
+    var p=parseFloat(r.pct);
+    return '<div class="flex gap-6 items-center mb-6">'
+      +'<div class="ac-wrap" style="flex:1;min-width:0"><input class="fi" id="'+pfx+'_rep_i'+i+'" value="'+esc(r.item||'')+'" placeholder="Ítem" autocomplete="off" style="margin:0" onfocus="_repAC(\''+pfx+'\','+i+')" oninput="_repLeer(\''+pfx+'\')"></div>'
+      +'<input class="fi" id="'+pfx+'_rep_p'+i+'" type="number" inputmode="decimal" min="0" max="100" step="0.01" value="'+(isNaN(p)?'':p)+'" placeholder="%" style="margin:0;width:58px;flex-shrink:0" oninput="_repLeer(\''+pfx+'\')">'
+      +'<span class="txxs tc3" id="'+pfx+'_rep_m'+i+'" style="width:68px;text-align:right;flex-shrink:0;font-size:10px">'+(isNaN(p)||!m?'':'$'+_fmt2(m*p/100))+'</span>'
+      +'<button type="button" class="btn btn-g btn-s" style="color:var(--red);flex-shrink:0" onclick="_repQuitar(\''+pfx+'\','+i+')">✕</button>'
+      +'</div>';
+  }).join('');
+}
+function _repSuma(pfx){return (_REP[pfx]||[]).reduce(function(s,r){return s+(parseFloat(r.pct)||0);},0);}
+function _repTotalHtml(pfx){
+  var s=Math.round(_repSuma(pfx)*100)/100;
+  if(Math.abs(s-100)<0.01)return '<span style="color:var(--green)">Total 100% ✓</span>';
+  return '<span style="color:var(--red)">Total '+_fmtPct(s)+' — '+(s<100?'faltan '+_fmtPct(100-s):'sobran '+_fmtPct(s-100))+'</span>';
+}
+function _repPintar(pfx){
+  var f=$(pfx+'_rep_filas');if(f)f.innerHTML=_repFilasHtml(pfx);
+  var t=$(pfx+'_rep_total');if(t)t.innerHTML=_repTotalHtml(pfx);
+}
+function _repToggle(pfx){
+  var on=!!($(pfx+'_rep_on')||{}).checked;
+  var p=$(pfx+'_rep_panel');if(p)p.style.display=on?'block':'none';
+  var ci=$(pfx+'_item');if(ci){ci.disabled=on;ci.placeholder=on?'Repartido abajo':'Ej: Cemento, Pintura...';}
+  if(on&&!(_REP[pfx]||[]).length){
+    var it=(($(pfx+'_item')||{}).value||'').trim();
+    _REP[pfx]=[{item:it,pct:''},{item:'',pct:''}];
+    _repPintar(pfx);
+  }
+}
+function _repAgregar(pfx){
+  _repLeer(pfx);
+  var falta=Math.round((100-_repSuma(pfx))*100)/100;
+  (_REP[pfx]=_REP[pfx]||[]).push({item:'',pct:falta>0?falta:''});
+  _repPintar(pfx);
+}
+function _repQuitar(pfx,i){_repLeer(pfx);(_REP[pfx]||[]).splice(i,1);_repPintar(pfx);}
+function _repAC(pfx,i){
+  var inp=$(pfx+'_rep_i'+i);if(!inp||inp._acOff)return;
+  setupAC(pfx+'_rep_i'+i,_acItems((($(pfx+'_rubro')||{}).value||'').trim()));
+  inp.dispatchEvent(new Event('focus'));
+}
+// Solo actualiza montos y total: no redibuja los campos (así no se baja el teclado).
+function _repLeer(pfx){
+  var m=parseFloat(($(pfx+'_monto')||{}).value)||0;
+  (_REP[pfx]||[]).forEach(function(r,i){
+    var ii=$(pfx+'_rep_i'+i),pp=$(pfx+'_rep_p'+i),mm=$(pfx+'_rep_m'+i);
+    if(ii)r.item=ii.value;
+    if(pp)r.pct=pp.value;
+    var p=parseFloat(r.pct);
+    if(mm)mm.textContent=(isNaN(p)||!m)?'':'$'+_fmt2(m*p/100);
+  });
+  var t=$(pfx+'_rep_total');if(t)t.innerHTML=_repTotalHtml(pfx);
+}
+// null = sin reparto. Si está activo y no cierra, devuelve {error}.
+function _repValor(pfx){
+  if(!($(pfx+'_rep_on')||{}).checked)return null;
+  _repLeer(pfx);
+  var filas=(_REP[pfx]||[]).map(function(r){return {item:(r.item||'').trim(),pct:parseFloat(r.pct)||0};})
+    .filter(function(r){return r.item||r.pct;});
+  if(filas.length<2)return {error:'Para repartir hacen falta al menos 2 ítems'};
+  if(filas.some(function(r){return !r.item;}))return {error:'Falta el nombre del ítem en algún renglón'};
+  if(filas.some(function(r){return r.pct<=0;}))return {error:'Falta el porcentaje en algún renglón'};
+  var s=filas.reduce(function(a,r){return a+r.pct;},0);
+  if(Math.abs(s-100)>=0.01)return {error:'Los porcentajes suman '+_fmtPct(s)+': tienen que sumar 100%'};
+  return filas;
+}
+function _ecoDia(e){return String(e.fecha||e.date||'').slice(0,10);}
+function _ecoMomento(e){return String(e.date||e.updatedAt||'');}
 function _ecoSortItems(arr){
   const _s=S.ecoSort||'';
   return [...arr].sort(function(a,b){
-    if(_s==='fecha_asc') return (a.fecha||a.date||'').localeCompare(b.fecha||b.date||'');
+    if(_s==='fecha_asc') return _ecoDia(a).localeCompare(_ecoDia(b))||_ecoMomento(a).localeCompare(_ecoMomento(b));
     if(_s==='monto_asc') return (parseFloat(a.monto)||0)-(parseFloat(b.monto)||0);
     if(_s==='monto_desc') return (parseFloat(b.monto)||0)-(parseFloat(a.monto)||0);
-    if(_s==='modif') return (b.date||b.fecha||'').localeCompare(a.date||a.fecha||'');
-    // Default: más reciente primero (por fecha)
-    return (b.fecha||b.date||'').localeCompare(a.fecha||a.date||'');
+    // Última modificación: updatedAt sí cambia al editar ("date" es la creación).
+    if(_s==='modif') return String(b.updatedAt||b.date||'').localeCompare(String(a.updatedAt||a.date||''));
+    // Default: más reciente primero
+    return _ecoDia(b).localeCompare(_ecoDia(a))||_ecoMomento(b).localeCompare(_ecoMomento(a));
   });
 }
 function renderEcoItems(){
@@ -8347,15 +8467,15 @@ function renderEcoItems(){
       items=items.filter(function(e){
         var r=(e.rubro||'').trim()||'Sin rubro';
         if(r!==S.ecoRubroFilter)return false;
-        if(S.ecoItemFilter){var it=(e.item||'').trim();if(it!==S.ecoItemFilter)return false;}
+        if(S.ecoItemFilter){if(!_ecoPartesItem(e).some(function(p){return p.item===S.ecoItemFilter;}))return false;}
         return true;
       });
     }
   }
   // Ordenamiento dinámico según S.ecoSort
   items=_ecoSortItems(items);
-  const tIng=items.filter(i=>i.tipo==='ingreso').reduce((s,i)=>s+(parseFloat(i.monto)||0),0);
-  const tEgr=items.filter(i=>i.tipo==='egreso').reduce((s,i)=>s+(parseFloat(i.monto)||0),0);
+  const tIng=items.filter(i=>i.tipo==='ingreso').reduce((s,i)=>s+_ecoMontoVisible(i),0);
+  const tEgr=items.filter(i=>i.tipo==='egreso').reduce((s,i)=>s+_ecoMontoVisible(i),0);
   const saldo=tIng-tEgr;
   const allIng=all.filter(i=>i.tipo==='ingreso').reduce((s,i)=>s+(parseFloat(i.monto)||0),0);
   const allEgr=all.filter(i=>i.tipo==='egreso').reduce((s,i)=>s+(parseFloat(i.monto)||0),0);
@@ -8410,7 +8530,7 @@ function renderEcoItems(){
       <div class="flex justify-between items-start mb-4">
         <div class="flex-1">
           <div class="ts fw6">${item.concepto||'Sin concepto'}${_notaBadge('economia',item.id,'detalle')}${item.interno?' <span style="font-size:9px;background:#f1f5f9;border-radius:3px;padding:1px 4px;color:#64748b">&#x1F512; Priv.</span>':''}${item.sourceType==='formulario'?' <span style="font-size:9px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:1px 6px;color:#16a34a">&#x1F464; '+(item.cargadoPor||item.sourceName||'')+'</span>':''}</div>
-          <div class="txxs tc3 mt-2">${fmts(item.fecha||item.date)} | ${item.medioPago||''} ${item.proveedor?`| <strong>${item.proveedor}</strong>`:''} ${item.rubro?`<span style="background:#f1f5f9;border-radius:3px;padding:1px 5px;margin-left:2px;color:#475569">${item.rubro}${item.item?' / '+item.item:''}</span>`:''}</div>
+          <div class="txxs tc3 mt-2">${fmts(item.fecha||item.date)} | ${item.medioPago||''} ${item.proveedor?`| <strong>${item.proveedor}</strong>`:''} ${(item.rubro||_ecoItemTexto(item))?`<span style="background:#f1f5f9;border-radius:3px;padding:1px 5px;margin-left:2px;color:#475569">${item.rubro||'Sin rubro'}${_ecoItemTexto(item)?' / '+_ecoItemTexto(item):''}</span>`:''}</div>
         </div>
         <div class="fw8" style="color:${col};font-size:15px;flex-shrink:0;margin-left:8px">${sign}$${(parseFloat(item.monto)||0).toLocaleString('es-AR')}</div>
       </div>
@@ -8474,11 +8594,10 @@ function renderEcoDistrib(){
     var rKey=(e.rubro||'').trim()||'Sin rubro';
     if(!rubros[rKey])rubros[rKey]={monto:0,items:{}};
     rubros[rKey].monto+=parseFloat(e.monto)||0;
-    var iKey=(e.item||'').trim();
-    if(iKey){
-      if(!rubros[rKey].items[iKey])rubros[rKey].items[iKey]=0;
-      rubros[rKey].items[iKey]+=parseFloat(e.monto)||0;
-    }
+    _ecoPartesItem(e).forEach(function(p){
+      if(!rubros[rKey].items[p.item])rubros[rKey].items[p.item]=0;
+      rubros[rKey].items[p.item]+=p.monto;
+    });
   });
   var sorted=Object.entries(rubros).sort(function(a,b){return b[1].monto-a[1].monto;});
   var palette=['#0891b2','#7c3aed','#ea580c','#16a34a','#D97706','#db2777','#3b82f6','#dc2626','#475569','#059669'];
@@ -8564,11 +8683,11 @@ function renameEcoItem(rubEnc,itemEnc){
   // Update all economia records in this project with matching rubro+item
   var count=0;
   (pf('economia')||[]).forEach(function(e){
-    if((e.rubro||'')===(rub==='Sin rubro'?'':rub)&&(e.item||'')===(oldItem)){
-      e.item=nuevo;
-      e.updatedAt=nw();
-      count++;
-    }
+    if((e.rubro||'')!==(rub==='Sin rubro'?'':rub))return;
+    var toco=false;
+    if((e.item||'')===oldItem){e.item=nuevo;toco=true;}
+    if(Array.isArray(e.reparto))e.reparto.forEach(function(r){if((r.item||'').trim()===oldItem){r.item=nuevo;toco=true;}});
+    if(toco){e.updatedAt=nw();count++;}
   });
   if(!count){toast('No se encontraron movimientos para renombrar','var(--orange)');return;}
   sv();
@@ -8769,8 +8888,9 @@ function _acItems(rubro){
   var eco=pf('economia');
   var r=(rubro||'').trim();
   // Items ya usados en Economia bajo ese rubro (o todos si no se eligio rubro).
-  var propios=(r?eco.filter(function(e){return (e.rubro||'').trim().toLowerCase()===r.toLowerCase();}):eco)
-    .map(function(e){return (e.item||'').trim();}).filter(Boolean);
+  var propios=[];
+  (r?eco.filter(function(e){return (e.rubro||'').trim().toLowerCase()===r.toLowerCase();}):eco)
+    .forEach(function(e){_ecoPartesItem(e).forEach(function(p){propios.push(p.item);});});
   var extra=[];
   // Si el rubro es de materiales, el Item tiene que ofrecer TODOS los materiales
   // de la obra (computados, pedidos e ingresados), no solo los que ya se usaron
@@ -8804,6 +8924,7 @@ function openNEM(){
     setupAC('eco_prov',_acProveedores());
     setupAC('eco_rubro',_acRubros());
     setupAC('eco_item',_acItems());
+    var _ro=$('eco_rep_on');if(_ro)_ro.checked=false;_REP.eco=[];_repToggle('eco');_repPintar('eco');
   },80);
 }
 
@@ -8823,6 +8944,8 @@ async function saveEco(){
   const monto=$('eco_monto')?.value;
   if(!concepto){toast('Concepto obligatorio','var(--red)');return;}
   if(!monto||parseFloat(monto)<=0){toast('Monto inválido','var(--red)');return;}
+  const _erep=_repValor('eco');
+  if(_erep&&_erep.error){toast(_erep.error,'var(--red)',4500);return;}
   if(!D.economia)D.economia=[];
   let img='';
   const imgFile=$('eco_img');
@@ -8857,10 +8980,10 @@ async function saveEco(){
   }
   const _eid=uid(),_etipo=$('eco_tipo')?.value||'egreso',_efecha=$('eco_fecha')?.value||td(),_eprov=$('eco_prov')?.value||'';
   const _erubro=($('eco_rubro')?.value||'').trim();
-  const _eitem=($('eco_item')?.value||'').trim();
+  const _eitem=_erep?'':($('eco_item')?.value||'').trim();
   D.economia.push({id:_eid,projectId:S.proj,tipo:_etipo,fecha:_efecha,concepto,
     monto:parseFloat(monto),medioPago:$('eco_medio')?.value||'',proveedor:_eprov,
-    rubro:_erubro,item:_eitem,detalle:($('eco_detalle')?.value||'').trim()||null,
+    rubro:_erubro,item:_eitem,reparto:_erep||null,detalle:($('eco_detalle')?.value||'').trim()||null,
     imagen:img,interno:!!($('eco_interno')?.checked),date:nw(),updatedAt:nw()});
   if($('eco_es_mat')?.checked && _etipo==='egreso'){
     if(!D.matIngresos)D.matIngresos=[];
@@ -9044,9 +9167,10 @@ function editEco(id){
   <div class="fg"><label class="fl">Fecha</label><input class="fi" id="eeq_fecha" type="date" value="${item.fecha||item.date||''}"></div>
   <div class="fg"><label class="fl">Concepto *</label><div class="ac-wrap"><input class="fi" id="eeq_concepto" value="${item.concepto||''}" autocomplete="off"></div></div>
   <div class="fg"><label class="fl">Detalle (opcional)</label><textarea class="ft" id="eeq_detalle" rows="3" placeholder="Ej: 12 perfiles, 6 planchuelas...">${esc(item.detalle||'')}</textarea></div>
-  <div class="fr"><div class="fg"><label class="fl">Monto *</label><input class="fi" id="eeq_monto" type="number" value="${item.monto||0}"></div><div class="fg"><label class="fl">Medio</label><select class="fs" id="eeq_medio">${MEDIOS.map(m=>`<option${m===item.medioPago?' selected':''}>${m}</option>`).join('')}</select></div></div>
+  <div class="fr"><div class="fg"><label class="fl">Monto *</label><input class="fi" id="eeq_monto" type="number" value="${item.monto||0}" oninput="_repLeer('eeq')"></div><div class="fg"><label class="fl">Medio</label><select class="fs" id="eeq_medio">${MEDIOS.map(m=>`<option${m===item.medioPago?' selected':''}>${m}</option>`).join('')}</select></div></div>
   <div class="fg"><label class="fl">Proveedor</label><div class="ac-wrap"><input class="fi" id="eeq_prov" value="${item.proveedor||''}" autocomplete="off"></div></div>
   <div class="fr"><div class="fg"><label class="fl">Rubro</label><div class="ac-wrap"><input class="fi" id="eeq_rubro" value="${item.rubro||''}" placeholder="Ej: Materiales, Mano de obra..." autocomplete="off" oninput="setTimeout(function(){setupAC('eeq_item',_acItems($('eeq_rubro')?.value));},100)"></div></div><div class="fg"><label class="fl">Ítem</label><div class="ac-wrap"><input class="fi" id="eeq_item" value="${item.item||''}" placeholder="Ej: Cemento, Pintura..." autocomplete="off"></div></div></div>
+  ${_repHtml('eeq',item.reparto)}
   ${item.imagen?`<div class="fg"><label class="fl">Imagen actual</label><div class="flex gap-6"><button class="btn btn-sec btn-s" onclick="verEco('${id}')">Ver imagen adjunta</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="delEcoImagen('${id}');this.closest('.mo').remove()" title="Eliminar imagen">✕ Eliminar</button></div></div>`:''}
   <div class="fg"><label class="fl">Nueva imagen</label><input type="file" accept="image/*,application/pdf" id="eeq_img" class="fi" style="padding:6px"></div>
   <div class="fg"><label class="fl" style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="eeq_interno" style="width:16px;height:16px"${item.interno?' checked':''}> <span>&#x1F512; Privado (no aparece en PDF para cliente)</span></label></div>
@@ -9080,6 +9204,7 @@ function editEco(id){
     setupAC('eeq_prov',_acProveedores());
     setupAC('eeq_rubro',_acRubros());
     setupAC('eeq_item',_acItems($('eeq_rubro')?.value));
+    _repLeer('eeq');_repToggle('eeq');
   },80);
 }
 function toggleEEcoMatPanel(){
@@ -9120,6 +9245,8 @@ async function saveEEco(id){
   const concepto=$('eeq_concepto')?.value.trim();
   const monto=$('eeq_monto')?.value;
   if(!concepto){toast('Concepto obligatorio','var(--red)');return;}
+  const _eerep=_repValor('eeq');
+  if(_eerep&&_eerep.error){toast(_eerep.error,'var(--red)',4500);return;}
   // Collect all form values before any await to avoid stale-ref if _silentMerge fires
   var _eeVals={concepto,monto:parseFloat(monto)||0,tipo:$('eeq_tipo')?.value||'egreso',
     fecha:$('eeq_fecha')?.value||td(),interno:!!($('eeq_interno')?.checked),
@@ -9164,7 +9291,8 @@ async function saveEEco(id){
   item.concepto=_eeVals.concepto;item.monto=_eeVals.monto;
   item.tipo=_eeVals.tipo;item.fecha=_eeVals.fecha;item.interno=_eeVals.interno;
   item.medioPago=_eeVals.medioPago;item.proveedor=_eeVals.proveedor;
-  item.rubro=_eeVals.rubro;item.item=_eeVals.item;item.detalle=_eeVals.detalle;
+  item.rubro=_eeVals.rubro;item.detalle=_eeVals.detalle;
+  item.reparto=_eerep||null;item.item=_eerep?'':_eeVals.item;
   if(_eeImagen){item.imagen=_eeImagen.url;item.imagenDeletedAt=_eeImagen.deletedAt;}
   item.updatedAt=nw();
   // Doble registro: crearlo si se tildó, o mantener la contrapartida al día
@@ -10148,7 +10276,7 @@ function exportEcoPDF(includeDistrib,includeRubroCol,includeMetros,privados){
     _runBal+=esI?_m:-_m;
     const _bc=_runBal>=0?'#16a34a':'#dc2626';
     const _bs=(_runBal>=0?'+':'-')+'$'+_f2(Math.abs(_runBal));
-    var rubroTd=includeRubroCol?'<td style="padding:3px 4px;border-bottom:1px solid #eee;font-size:7pt;color:#475569">'+(e.rubro||'')+(e.item?'<br><span style="color:#94a3b8">'+e.item+'</span>':'')+'</td>':'';
+    var rubroTd=includeRubroCol?'<td style="padding:3px 4px;border-bottom:1px solid #eee;font-size:7pt;color:#475569">'+(e.rubro||'')+(_ecoItemTexto(e)?'<br><span style="color:#94a3b8">'+esc(_ecoItemTexto(e))+'</span>':'')+'</td>':'';
     return '<tr>'
       +'<td style="padding:3px 4px;border-bottom:1px solid #eee;font-size:7.5pt">'+fmt(e.fecha||e.date)+'</td>'
       +'<td style="padding:3px 4px;border-bottom:1px solid #eee;font-size:7.5pt">'+(e.concepto||'')+(e.detalle?'<br><span style="color:#94a3b8;font-size:6.5pt">'+e.detalle+'</span>':'')+'</td>'
@@ -10171,8 +10299,7 @@ function exportEcoPDF(includeDistrib,includeRubroCol,includeMetros,privados){
         var rk=(e.rubro||'').trim()||'Sin rubro';
         if(!rubD[rk])rubD[rk]={monto:0,items:{}};
         rubD[rk].monto+=parseFloat(e.monto)||0;
-        var ik=(e.item||'').trim();
-        if(ik){if(!rubD[rk].items[ik])rubD[rk].items[ik]=0;rubD[rk].items[ik]+=parseFloat(e.monto)||0;}
+        _ecoPartesItem(e).forEach(function(p){if(!rubD[rk].items[p.item])rubD[rk].items[p.item]=0;rubD[rk].items[p.item]+=p.monto;});
       });
       var sortedD=Object.entries(rubD).sort(function(a,b){return b[1].monto-a[1].monto;});
       var palD=['#0891b2','#7c3aed','#ea580c','#16a34a','#D97706','#db2777','#3b82f6','#dc2626','#475569','#059669'];
@@ -10300,7 +10427,7 @@ function exportEcoCSV(){
   let csv=bom+'Fecha,Tipo,Concepto,Detalle,Medio de pago,Proveedor,Rubro,\u00CDtem,Monto\n';
   items.forEach(e=>{
     const monto=(e.tipo==='egreso'?-1:1)*(parseFloat(e.monto)||0);
-    csv+='"'+fmt(e.fecha||e.date)+'","'+e.tipo+'","'+(e.concepto||'').replace(/"/g,"''")+'","'+(e.detalle||'').replace(/"/g,"''")+'","'+(e.medioPago||'')+'","'+(e.proveedor||'').replace(/"/g,"''")+'","'+(e.rubro||'').replace(/"/g,"''")+'","'+(e.item||'').replace(/"/g,"''")+'","'+monto+'"\n';
+    csv+='"'+fmt(e.fecha||e.date)+'","'+e.tipo+'","'+(e.concepto||'').replace(/"/g,"''")+'","'+(e.detalle||'').replace(/"/g,"''")+'","'+(e.medioPago||'')+'","'+(e.proveedor||'').replace(/"/g,"''")+'","'+(e.rubro||'').replace(/"/g,"''")+'","'+_ecoItemTexto(e).replace(/"/g,"''")+'","'+monto+'"\n';
   });
   const tIng=items.filter(i=>i.tipo==='ingreso').reduce((s,i)=>s+(parseFloat(i.monto)||0),0);
   const tEgr=items.filter(i=>i.tipo==='egreso').reduce((s,i)=>s+(parseFloat(i.monto)||0),0);
