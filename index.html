@@ -1762,8 +1762,11 @@ const _UI_KEYS=[
   'cmtFilter','cmtSearch','cmtTipoFilter','cmtSort','cmtState',
   // Economía
   'ecoFilter','ecoTipoFilter','ecoSort','ecoMetrosOpen',
+  'ecoVerPrivados','ecoDistribOpen','ecoFiltrosOpen','ecoRubroFilter','ecoItemFilter','ecoFechaDesde','ecoFechaHasta',
+  // Grupos de materiales plegados, alertas resueltas, obras cerradas del inicio
+  'matGrupoCollapsed','alertResOpen','verCerradas',
   // Bandeja y carpeta de colaboradores
-  'bandejaTab','carpetaSort','carpetaFilter'
+  'bandejaTab','bandejaSearch','carpetaSort','carpetaFilter'
 ];
 try{
   var _sui=localStorage.getItem(_SK_UI);
@@ -1776,6 +1779,13 @@ function saveUIState(){
     localStorage.setItem(_SK_UI,JSON.stringify(_u));
   }catch(e){}
 }
+// La pantalla queda como la dejaste: se guarda después de cada toque (varios
+// desplegables se redibujan solos, sin pasar por render) y al cerrar o salir de
+// la app, que en el celular puede pasar sin ningún toque previo.
+document.addEventListener('click',function(){setTimeout(saveUIState,0);},true);
+document.addEventListener('change',function(){setTimeout(saveUIState,0);},true);
+document.addEventListener('visibilitychange',function(){if(document.visibilityState==='hidden')saveUIState();});
+window.addEventListener('pagehide',saveUIState);
 
 async function loadAll(){
   // Step 1: Initialize IndexedDB
@@ -6841,7 +6851,7 @@ function rAlertas(mc){
   ${auto.length?`<div class="mb-12"><div class="txs fw6 tc3 mb-8">Automaticas</div>${auto.map(a=>`<div class="alrt ${a.cls}">${I.warn}<div class="flex-1"><div class="ts fw6">${a.type}</div><div class="txxs">${a.msg}</div></div></div>`).join('')}</div>`:''}
   ${act.map(a=>{const vN=a.visitaId?D.visitas.find(v=>v.id===a.visitaId)?.title:null;return `<div class="card" style="padding:12px">${priBadge(a.priority||'media',true)}<div class="ts mt-4">${a.message}</div>${a.dueDate?`<div class="txxs tc3 mt-4">${I.cal} Vence: ${fmts(a.dueDate)}</div>`:''} ${a.photos&&a.photos.length?photoGrid(a.photos,'alertas',a.id):''} ${a.archivos&&a.archivos.length?`<div class="mt-4">${a.archivos.map(f=>`<div class="flex items-center gap-6 txxs tc3"><span>${I.file}</span><span style="color:var(--slate);flex:1">${f.name}</span><button class="btn btn-sec btn-s" onclick="event.stopPropagation();viewArchivo('alertas','${a.id}','${f.id||f.name||''}')">👁</button><button class="btn btn-sec btn-s" onclick="event.stopPropagation();delArchivo('alertas','${a.id}','${f.id||f.name||''}')" style="color:var(--red)">${I.trash}</button></div>`).join('')}</div>`:''}<div class="flex gap-4 mt-6 items-center wrap"><span class="txxs tc3">${fmts(a.date)}</span>${vN?`<span class="link-tag" onclick="_escudoToque();S.visitaDetail='${a.visitaId}';S.mod='visitas';render();">${I.link} ${vN}</span>`:''}<button class="btn btn-ok btn-s" style="margin-left:auto" onclick="resA('${a.id}')">Resolver</button><button class="btn btn-sec btn-s" onclick="editAlerta('${a.id}')">${I.edit}</button><button class="btn btn-sec btn-s" onclick="exportAlertaGCal('${a.id}')" title="Google Calendar">&#128197;</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delI('alertas','${a.id}')">${I.trash}</button></div></div>`;}).join('')}
   ${!auto.length&&!act.length?`<div class="empty"><span style="color:${c}">${I.bell}</span><div class="ts mt-8">Sin alertas</div></div>`:''}
-  ${res.length?`<div class="mt-12"><button class="btn btn-g btn-s btn-w" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">Resueltas (${res.length})</button><div style="display:none">${res.map(a=>`<div class="card mt-6" style="padding:10px;opacity:.5"><div class="ts" style="text-decoration:line-through">${a.message}</div><div class="flex gap-4 mt-4"><button class="btn btn-g btn-s" onclick="resA2('${a.id}')">Reabrir</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delI('alertas','${a.id}')">${I.trash}</button></div></div>`).join('')}</div></div>`:''}
+  ${res.length?`<div class="mt-12"><button class="btn btn-g btn-s btn-w" onclick="S.alertResOpen=!S.alertResOpen;this.nextElementSibling.style.display=S.alertResOpen?'block':'none'">Resueltas (${res.length}) ${S.alertResOpen?'▲':'▼'}</button><div style="display:${S.alertResOpen?'block':'none'}">${res.map(a=>`<div class="card mt-6" style="padding:10px;opacity:.5"><div class="ts" style="text-decoration:line-through">${a.message}</div><div class="flex gap-4 mt-4"><button class="btn btn-g btn-s" onclick="resA2('${a.id}')">Reabrir</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delI('alertas','${a.id}')">${I.trash}</button></div></div>`).join('')}</div></div>`:''}
   <div class="mo" id="newAlertM"><div class="mo-c"><div class="mo-h"><h3 style="color:${c}">Nueva Alerta</h3><button class="tbtn" onclick="closeM('newAlertM')">${I.x}</button></div><div class="fg"><label class="fl">Mensaje *</label><textarea class="ft" id="na_m"></textarea></div>${priSelector('na_p','media')}<div class="fg"><label class="fl">Fecha vencimiento</label><input class="fi" id="na_due" type="date"></div><div class="fg"><label class="fl">Fotos</label><input type="file" accept="image/*" multiple id="na_ph" class="fi" style="padding:6px"></div><div class="fg"><label class="fl">Archivos adjuntos</label><input type="file" multiple id="na_af" class="fi" style="padding:6px"></div><button class="btn btn-w mt-8" style="background:${c};color:#fff" onclick="saveAlert()">Crear</button></div></div>`;
 }
 async function saveAlert(){const m=$('na_m').value.trim();if(!m){toast('Mensaje obligatorio','var(--red)');return;}const photos=await readPhotos('na_ph','alertas');const afFiles=[];const afInput=$('na_af');if(afInput&&afInput.files&&afInput.files.length){const files=Array.from(afInput.files);await Promise.all(files.map(f=>new Promise(res=>{const r=new FileReader();r.onload=e=>{afFiles.push({id:uid(),name:f.name,type:f.type,data:e.target.result,date:td()});res();};r.readAsDataURL(f);})));}D.alertas.push({id:uid(),projectId:S.proj,message:m,priority:$('na_p').value||'media',resolved:false,dueDate:$('na_due')?.value||'',photos:photos.map(u=>mkPhoto(u,'')),archivos:afFiles,date:td()});audit('alertas','create',m.slice(0,30));sv();closeM('newAlertM');render();toast('Alerta creada');}
@@ -8925,7 +8935,7 @@ function rEconomia(mc,p){
     <div class="flex gap-6 items-center mb-8">
       <input class="fi" id="eco_search" placeholder="🔍 Buscar en todo: concepto, notas, proveedor..." value="${S.ecoFilter||''}" oninput="S.ecoFilter=this.value;renderEcoItems()" style="flex:1;margin:0">
       ${S.ecoFilter?`<button class="btn btn-sec btn-s" onclick="S.ecoFilter='';if($('eco_search'))$('eco_search').value='';renderEcoItems()">✕</button>`:''}
-      <button class="btn btn-sec btn-s" onclick="var p=$('eco_filtros_extra');if(p)p.style.display=p.style.display==='none'?'flex':'none'" style="white-space:nowrap">⚙ Filtros${(S.ecoTipoFilter||S.ecoSort)?'<span style="background:var(--cyan);color:#fff;border-radius:8px;padding:0 5px;font-size:10px;margin-left:4px">!</span>':''}</button>
+      <button class="btn btn-sec btn-s" onclick="var p=$('eco_filtros_extra');S.ecoFiltrosOpen=!(p&&p.style.display!=='none');if(p)p.style.display=S.ecoFiltrosOpen?'flex':'none'" style="white-space:nowrap">⚙ Filtros${(S.ecoTipoFilter||S.ecoSort)?'<span style="background:var(--cyan);color:#fff;border-radius:8px;padding:0 5px;font-size:10px;margin-left:4px">!</span>':''}</button>
     </div>
     <!-- PERÍODO -->
     <div class="flex gap-6 items-center flex-wrap" style="border-top:1px solid var(--gray-ll);padding-top:8px;margin-bottom:${(S.ecoTipoFilter||S.ecoSort)?'8px':'0'}">
@@ -8935,7 +8945,7 @@ function rEconomia(mc,p){
       <input class="fi" id="eco_fecha_hasta" type="date" value="${S.ecoFechaHasta||''}" onchange="S.ecoFechaHasta=this.value;renderEcoItems()" style="max-width:148px;margin:0;font-size:12px;padding:5px 8px">
       <button class="btn btn-sec btn-s" style="color:${(S.ecoFechaDesde||S.ecoFechaHasta)?'var(--red)':'var(--gray-l)'}" onclick="S.ecoFechaDesde='';S.ecoFechaHasta='';var d=$('eco_fecha_desde');if(d)d.value='';var h=$('eco_fecha_hasta');if(h)h.value='';renderEcoItems()">✕ Período</button>
     </div>
-    <div id="eco_filtros_extra" class="flex gap-6 wrap" style="display:${(S.ecoTipoFilter||S.ecoSort)?'flex':'none'};border-top:1px solid var(--gray-ll);padding-top:8px;margin-top:8px">
+    <div id="eco_filtros_extra" class="flex gap-6 wrap" style="display:${(S.ecoFiltrosOpen!==undefined?S.ecoFiltrosOpen:(S.ecoTipoFilter||S.ecoSort))?'flex':'none'};border-top:1px solid var(--gray-ll);padding-top:8px;margin-top:8px">
       <button id="eco_btn_all" class="btn btn-s ${!S.ecoTipoFilter?'btn-p':'btn-sec'}" onclick="S.ecoTipoFilter='';renderEcoItems()">Todos</button>
       <button id="eco_btn_ing" class="btn btn-s ${S.ecoTipoFilter==='ingreso'?'btn-ok':'btn-sec'}" onclick="S.ecoTipoFilter=S.ecoTipoFilter==='ingreso'?'':'ingreso';renderEcoItems()">↑ Ingresos</button>
       <button id="eco_btn_egr" class="btn btn-s ${S.ecoTipoFilter==='egreso'?'btn-x':'btn-sec'}" onclick="S.ecoTipoFilter=S.ecoTipoFilter==='egreso'?'':'egreso';renderEcoItems()">↓ Egresos</button>
