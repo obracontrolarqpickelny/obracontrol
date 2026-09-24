@@ -1766,18 +1766,58 @@ const _UI_KEYS=[
   // Grupos de materiales plegados, alertas resueltas, obras cerradas del inicio
   'matGrupoCollapsed','alertResOpen','verCerradas',
   // Bandeja y carpeta de colaboradores
-  'bandejaTab','bandejaSearch','carpetaSort','carpetaFilter'
+  'bandejaTab','bandejaSearch','carpetaSort','carpetaFilter',
+  // Obra y pestaña en las que quedó la app
+  'proj','mod'
 ];
+// Si la obra guardada ya no existe (se eliminó o se abrió en otro dispositivo),
+// se vuelve al inicio en lugar de mostrar una obra vacía.
+function _validarObraRestaurada(){
+  if(S.proj&&!(D.projects||[]).some(function(p){return p.id===S.proj;})){S.proj=null;S.mod='dashboard';}
+  if(!S.mod)S.mod='dashboard';
+}
 try{
   var _sui=localStorage.getItem(_SK_UI);
   if(_sui){var _sp=JSON.parse(_sui);_UI_KEYS.forEach(function(k){if(_sp[k]!==undefined)S[k]=_sp[k];});}
 }catch(e){}
+// Se guarda en los dos lugares. localStorage solo no alcanza: los datos de las
+// obras lo llenan casi hasta el tope (~5 MB) y ahí este guardado fallaba en
+// silencio, así que al reabrir la app volvía todo como estaba por defecto.
+// IndexedDB tiene lugar de sobra. Al abrir se usa la copia más reciente (_t).
+var _uiUltimo='';
+// Hasta leer la copia de IndexedDB no se guarda nada: la app dibuja la pantalla
+// antes de abrirla, y guardar ahí pisaría el estado bueno con el de fábrica.
+var _uiListo=false;
+setTimeout(function(){_uiListo=true;},6000);
 function saveUIState(){
+  if(!_uiListo)return;
+  var _u={};
+  try{_UI_KEYS.forEach(function(k){if(S[k]!==undefined)_u[k]=S[k];});}catch(e){return;}
+  var firma;try{firma=JSON.stringify(_u);}catch(e){return;}
+  if(firma===_uiUltimo)return;
+  _uiUltimo=firma;
+  _u._t=Date.now();
+  try{localStorage.setItem(_SK_UI,JSON.stringify(_u));}catch(e){}
+  try{if(GD.idbReady)idbPut('data',{key:'uiState',s:_u}).catch(function(){});}catch(e){}
+}
+// Devuelve true si cambió algo (hay que redibujar).
+async function _restaurarUIStateIDB(){
+  var cambio=false;
   try{
-    var _u={};
-    _UI_KEYS.forEach(function(k){if(S[k]!==undefined)_u[k]=S[k];});
-    localStorage.setItem(_SK_UI,JSON.stringify(_u));
+    if(GD.idbReady){
+      var r=await idbGet('data','uiState');
+      if(r&&r.s){
+        var local=null;try{local=JSON.parse(localStorage.getItem(_SK_UI)||'null');}catch(e){}
+        if(!(local&&(local._t||0)>=(r.s._t||0))){
+          _UI_KEYS.forEach(function(k){if(r.s[k]!==undefined)S[k]=r.s[k];});
+          _validarObraRestaurada();
+          cambio=true;
+        }
+      }
+    }
   }catch(e){}
+  _uiListo=true;
+  return cambio;
 }
 // La pantalla queda como la dejaste: se guarda después de cada toque (varios
 // desplegables se redibujan solos, sin pasar por render) y al cerrar o salir de
@@ -11357,6 +11397,7 @@ function _unidadInfo(sfx){
 // ═══════ INIT ═══════
 // 1. Sync bootstrap from localStorage (immediate render)
 load();
+_validarObraRestaurada();
 _adoptServerCfg();
 _pinCheck();
 if(!_isPinLocked())render();
@@ -11442,6 +11483,7 @@ if(!_isPinLocked())render();
 // 2. Async: init IDB + attempt Drive load in background
 (async()=>{
   await initIDB();
+  if(await _restaurarUIStateIDB()&&!_isPinLocked())render();
   // Caché de imágenes locales: sin esto, cualquier foto encolada para Drive se
   // ve como ícono de nube aunque esté guardada en el dispositivo.
   var _nImgs=await _cargarCacheImagenes();
