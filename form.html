@@ -137,7 +137,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
   <!-- Tabs -->
   <div class="tabs-wrap">
-    <button class="tab active" id="tab-msg" onclick="showTab('msg')">💬 Comentarios<span class="tab-count" id="count-cmt" style="display:none"></span></button>
+    <button class="tab active" id="tab-msg" onclick="showTab('msg')">💬 Comentarios<span class="tab-badge" id="badge-cmt" style="display:none">✓</span><span class="tab-count" id="count-cmt" style="display:none"></span></button>
     <button class="tab" id="tab-mov" onclick="showTab('mov')">💰 Movimientos<span class="tab-badge" id="badge-mov" style="display:none">✓</span><span class="tab-count" id="count-mov" style="display:none"></span></button>
     <button class="tab" id="tab-tar" onclick="showTab('tar')">📋 Tareas<span class="tab-badge" id="badge-tar" style="display:none">✓</span><span class="tab-count" id="count-tar" style="display:none"></span></button>
     <button class="tab" id="tab-mex" onclick="showTab('mex')">📦 Existentes<span class="tab-badge" id="badge-mex" style="display:none">✓</span><span class="tab-count" id="count-mex" style="display:none"></span></button>
@@ -158,6 +158,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <!-- Tab: Comentarios — misma forma que "Nuevo comentario" de la app, para
          que al aceptarlos entren tal cual a la pestaña Comentarios de la obra. -->
     <div class="tab-pane active" id="pane-msg">
+      <div class="tab-done-bar">
+        <button class="done-toggle" id="done-cmt" onclick="toggleDone('cmt')">✓ Marcar pestaña lista</button>
+      </div>
       <div id="list-cmt"></div>
       <button class="btn-add" onclick="addItem('cmt')">+ Agregar comentario</button>
     </div>
@@ -412,7 +415,7 @@ var unitOpts=UNITS.map(function(u){return '<option value="'+u+'">'+u+'</option>'
 var colabName='';
 var sessionId=_uid();
 var sendCount=0;
-var doneTabMap={mov:false,tar:false,mex:false,mpe:false,chk:false,mrec:false};
+var doneTabMap={cmt:false,mov:false,tar:false,mex:false,mpe:false,chk:false,mrec:false};
 // Mismas listas que el formulario de Comentarios de la app principal.
 var RUB_F=['Estructura','Mamposteria','Inst. Sanitaria','Inst. Electrica','Inst. Gas','Revoques','Pisos','Pintura','Carpinteria','Cubierta','Otro'];
 var ETAPAS_F=['Excavacion','Fundaciones','Estructura','Mamposteria','Instalaciones','Revoques','Contrapisos','Pisos','Revestimientos','Pintura','Carpinteria','Cubierta','Terminaciones','Otro'];
@@ -730,13 +733,26 @@ function _reenviarHistorial(idx){
 function toggleDone(t){
   doneTabMap[t]=!doneTabMap[t];
   var btn=$('done-'+t);
-  var badge=$('badge-'+t);
   if(doneTabMap[t]){
     btn.classList.add('on');btn.textContent='✓ Pestaña lista';
-    if(badge) badge.style.display='inline-flex';
   } else {
     btn.classList.remove('on');btn.textContent='✓ Marcar pestaña lista';
-    if(badge) badge.style.display='none';
+  }
+  _marcaPestana(t);
+}
+// Tilde de "pestaña lista" y cantidad en la misma burbuja ("✓2"): en el celular
+// las pestañas van de a tres por fila y con dos burbujas no entraba el nombre.
+function _marcaPestana(t){
+  var b=$('badge-'+t),c=$('count-'+t),l=$('list-'+t);
+  var n=l?l.querySelectorAll('.item-card').length:0,listo=!!doneTabMap[t];
+  if(c&&n>0){
+    c.textContent=(listo?'✓':'')+n;
+    c.style.background=listo?'var(--green)':'';
+    c.style.display='inline-flex';
+    if(b)b.style.display='none';
+  } else {
+    if(c){c.style.display='none';c.style.background='';}
+    if(b)b.style.display=listo?'inline-flex':'none';
   }
 }
 
@@ -896,6 +912,7 @@ function updateCount(type){
   var n=list?list.querySelectorAll('.item-card').length:0;
   var c=$('count-'+type);
   if(c){c.textContent=n;c.style.display=n>0?'inline-flex':'none';}
+  _marcaPestana(type);
   _renumerar(type);
 }
 // El número es la posición en la lista, no un contador que solo sube: si se cierra
@@ -1382,7 +1399,7 @@ function editarYReenviar(){
 function nuevoFormulario(){
   sessionId=_uid();
   sendCount=0;
-  doneTabMap={mov:false,tar:false,mex:false,mpe:false,mrec:false,chk:false};
+  doneTabMap={cmt:false,mov:false,tar:false,mex:false,mpe:false,mrec:false,chk:false};
   counters={cmt:0,mov:0,tar:0,mex:0,mpe:0,mrec:0};
   photoMap={};allPhotos=[];
 
