@@ -137,7 +137,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
   <!-- Tabs -->
   <div class="tabs-wrap">
-    <button class="tab active" id="tab-msg" onclick="showTab('msg')">💬 Comentarios</button>
+    <button class="tab active" id="tab-msg" onclick="showTab('msg')">💬 Comentarios<span class="tab-count" id="count-cmt" style="display:none"></span></button>
     <button class="tab" id="tab-mov" onclick="showTab('mov')">💰 Movimientos<span class="tab-badge" id="badge-mov" style="display:none">✓</span><span class="tab-count" id="count-mov" style="display:none"></span></button>
     <button class="tab" id="tab-tar" onclick="showTab('tar')">📋 Tareas<span class="tab-badge" id="badge-tar" style="display:none">✓</span><span class="tab-count" id="count-tar" style="display:none"></span></button>
     <button class="tab" id="tab-mex" onclick="showTab('mex')">📦 Existentes<span class="tab-badge" id="badge-mex" style="display:none">✓</span><span class="tab-count" id="count-mex" style="display:none"></span></button>
@@ -896,6 +896,14 @@ function updateCount(type){
   var n=list?list.querySelectorAll('.item-card').length:0;
   var c=$('count-'+type);
   if(c){c.textContent=n;c.style.display=n>0?'inline-flex':'none';}
+  _renumerar(type);
+}
+// El número es la posición en la lista, no un contador que solo sube: si se cierra
+// una tarjeta, las que quedan se renumeran y la próxima vuelve a tomar el número libre.
+function _renumerar(type){
+  var list=$('list-'+type);if(!list)return;
+  var label={cmt:'Comentario',mov:'Movimiento',tar:'Tarea',mex:'Material existente',mpe:'Material pedido',mrec:'Material recibido'}[type]||'Ítem';
+  list.querySelectorAll('.item-card').forEach(function(card,i){var l=card.querySelector('.item-label');if(l)l.textContent=label+' '+(i+1);});
 }
 
 function buildItemHTML(type,idx){
