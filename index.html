@@ -4874,7 +4874,7 @@ function exportVisitaPDF(vid){
       +(v.observations?'<h2>Observaciones</h2><div class="sec" style="border-left-color:#ea580c">'+v.observations+'</div>':'')
       +(ph?'<h2>Fotos</h2><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:8px 0 20px">'+ph+'</div>':'')
       +_tHtml+_matHtml+_aHtml+_dHtml+_chkHtml
-      +'<div style="margin-top:32px;border-top:2px solid #eee;padding-top:16px;font-size:11px;color:#999;text-align:center">ObraControl Pro v9.0 &mdash; '+new Date().toLocaleString('es-AR')+'</div>'
+      +'<div style="margin-top:32px;border-top:2px solid #eee;padding-top:16px;font-size:11px;color:#999;text-align:center">ObraControl Pro v9.0</div>'
       +'<div class="page-footer" style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:24px;border-top:2px solid #D97706;padding-top:12px">'
       +'<div><div style="font-size:15px;font-weight:800;color:#D97706">FEDERICO PICKELNY</div><div style="font-size:10pt;font-weight:700;color:#555;margin-top:1px">ARQUITECTO</div><div style="font-size:9pt;color:#666;margin-top:1px">MP 2304</div></div>'
       +'<div style="text-align:right"><div style="font-size:9pt;color:#666">&#9742; 264 4397772</div><div style="font-size:9pt;color:#666">&#9993; federicopickelny@gmail.com</div><div style="font-size:9pt;color:#666">&#127968; B. Rivadavia Oeste 114</div></div></div>'
@@ -4882,7 +4882,7 @@ function exportVisitaPDF(vid){
 
     const w=window.open('','_blank');
     if(!w){toast('Activá ventanas emergentes en el navegador para ver el PDF','var(--orange)',4000);return;}
-    w.document.write(h);w.document.close();
+    w.document.write(_pdfSinEncabezado(h));w.document.close();
     setTimeout(function(){
       const btn=w.document.createElement('button');
       btn.textContent='Imprimir / Guardar PDF (A4)';
@@ -4912,10 +4912,10 @@ function exportMatPDF(){
     const col=m.computado&&m.pct>=100?'#16a34a':m.pct>=80?'#ea580c':'#3b82f6';
     return `<tr><td style="padding:3px 4px;border-bottom:1px solid #eee;font-size:7.5pt">${m.name}</td><td style="padding:3px 4px;border-bottom:1px solid #eee;text-align:center;font-size:7.5pt">${m.computado||0} ${m.unit||''}</td><td style="padding:3px 4px;border-bottom:1px solid #eee;text-align:center;color:#3b82f6;font-size:7.5pt">${m.totalIng}</td><td style="padding:3px 4px;border-bottom:1px solid #eee;text-align:center;color:#ea580c;font-size:7.5pt">${Math.max((m.computado||0)-m.totalIng,0)}</td><td style="padding:3px 4px;border-bottom:1px solid #eee;text-align:center;font-weight:700;color:${col};font-size:7.5pt">${m.computado?m.pct+'%':'-'}</td></tr>`;
   }).join('')).join('');
-  const h=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Materiales - ${p?.name||''}</title><style>@page{size:A4;margin:20mm}@media print{.no-print{display:none}}body{font-family:Arial,sans-serif;max-width:210mm;margin:0 auto;padding:20px;color:#333}h1{font-size:12pt;border-bottom:3px solid #D97706;padding-bottom:5px;margin-bottom:3px}h2{font-size:8pt;color:#666;font-weight:normal;margin:3px 0 12px}table{width:100%;border-collapse:collapse;font-size:7.5pt}th{background:#7c3aed;color:#fff;padding:5px 4px;text-align:left;font-size:7.5pt}th:not(:first-child){text-align:center}.footer{margin-top:16px;border-top:1px solid #eee;padding-top:8px;font-size:7pt;color:#999;text-align:center}@media print{body{padding:10px}}</style></head><body><h1>Resumen de Materiales</h1><h2>Obra: ${p?.name||''} | Fecha: ${new Date().toLocaleDateString('es-AR')}</h2><table><tr><th>Material</th><th>Computado</th><th>Ingresado</th><th>Falta</th><th>Avance</th></tr>${rows}</table><div class="footer">ObraControl Pro v9.0 — ${new Date().toLocaleString('es-AR')}</div><div class="page-footer" style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:24px;border-top:2px solid #D97706;padding-top:12px"><div><div style="font-size:15px;font-weight:800;color:#D97706">FEDERICO PICKELNY</div><div style="font-size:10pt;font-weight:700;color:#555;margin-top:1px">ARQUITECTO</div><div style="font-size:9pt;color:#666;margin-top:1px">MP 2304</div></div><div style="text-align:right"><div style="font-size:9pt;color:#666">&#9742; 264 4397772</div><div style="font-size:9pt;color:#666">&#9993; federicopickelny@gmail.com</div><div style="font-size:9pt;color:#666">&#127968; B. Rivadavia Oeste 114</div></div></div></body></html>`;
+  const h=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Materiales - ${p?.name||''}</title><style>@page{size:A4;margin:20mm}@media print{.no-print{display:none}}body{font-family:Arial,sans-serif;max-width:210mm;margin:0 auto;padding:20px;color:#333}h1{font-size:12pt;border-bottom:3px solid #D97706;padding-bottom:5px;margin-bottom:3px}h2{font-size:8pt;color:#666;font-weight:normal;margin:3px 0 12px}table{width:100%;border-collapse:collapse;font-size:7.5pt}th{background:#7c3aed;color:#fff;padding:5px 4px;text-align:left;font-size:7.5pt}th:not(:first-child){text-align:center}.footer{margin-top:16px;border-top:1px solid #eee;padding-top:8px;font-size:7pt;color:#999;text-align:center}@media print{body{padding:10px}}</style></head><body><h1>Resumen de Materiales</h1><h2>Obra: ${p?.name||''}</h2><table><tr><th>Material</th><th>Computado</th><th>Ingresado</th><th>Falta</th><th>Avance</th></tr>${rows}</table><div class="footer">ObraControl Pro v9.0</div><div class="page-footer" style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:24px;border-top:2px solid #D97706;padding-top:12px"><div><div style="font-size:15px;font-weight:800;color:#D97706">FEDERICO PICKELNY</div><div style="font-size:10pt;font-weight:700;color:#555;margin-top:1px">ARQUITECTO</div><div style="font-size:9pt;color:#666;margin-top:1px">MP 2304</div></div><div style="text-align:right"><div style="font-size:9pt;color:#666">&#9742; 264 4397772</div><div style="font-size:9pt;color:#666">&#9993; federicopickelny@gmail.com</div><div style="font-size:9pt;color:#666">&#127968; B. Rivadavia Oeste 114</div></div></div></body></html>`;
   const w=window.open('','_blank');
   if(!w){toast('Activá ventanas emergentes para ver el PDF','var(--orange)',4000);return;}
-  w.document.write(h);w.document.close();
+  w.document.write(_pdfSinEncabezado(h));w.document.close();
   setTimeout(()=>{
     const btn=w.document.createElement('button');
     btn.textContent='Imprimir / Guardar PDF (A4)';
@@ -5086,7 +5086,7 @@ function exportTareasPDF(){
     +'@media print{.no-print{display:none!important}}</style></head>'
     +'<body>'
     +'<h1>Tareas &mdash; '+(p?p.name:'')+(_filtroTxt?'<span style="font-size:10px;font-weight:400;color:#666">'+_filtroTxt+'</span>':'')+'</h1>'
-    +'<div class="meta">'+new Date().toLocaleDateString('es-AR')+' &mdash; '+all.length+' tarea'+(all.length!==1?'s':'')+(_filtros.length?' (filtradas)':'')+' de '+_allT.length+' totales</div>'
+    +'<div class="meta">'+all.length+' tarea'+(all.length!==1?'s':'')+(_filtros.length?' (filtradas)':'')+' de '+_allT.length+' totales</div>'
     +'<div class="r">'
     +'<div class="rc" style="background:#fef3c7"><div class="n" style="color:#D97706">'+pend+'</div><div class="l">En curso / Pendientes</div></div>'
     +'<div class="rc" style="background:#f0fdf4"><div class="n" style="color:#16a34a">'+comp+'</div><div class="l">Completadas</div></div>'
@@ -5094,14 +5094,14 @@ function exportTareasPDF(){
     +'</div>'
     +'<h2>Tareas ('+sorted.length+')</h2>'
     +_tHtml
-    +'<div style="margin-top:32px;border-top:2px solid #eee;padding-top:16px;font-size:11px;color:#999;text-align:center">ObraControl Pro v9.0 &mdash; '+new Date().toLocaleString('es-AR')+'</div>'
+    +'<div style="margin-top:32px;border-top:2px solid #eee;padding-top:16px;font-size:11px;color:#999;text-align:center">ObraControl Pro v9.0</div>'
     +'<div class="page-footer" style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:24px;border-top:2px solid #D97706;padding-top:12px">'
     +'<div><div style="font-size:15px;font-weight:800;color:#D97706">FEDERICO PICKELNY</div><div style="font-size:10pt;font-weight:700;color:#555;margin-top:1px">ARQUITECTO</div><div style="font-size:9pt;color:#666;margin-top:1px">MP 2304</div></div>'
     +'<div style="text-align:right"><div style="font-size:9pt;color:#666">&#9742; 264 4397772</div><div style="font-size:9pt;color:#666">&#9993; federicopickelny@gmail.com</div><div style="font-size:9pt;color:#666">&#127968; B. Rivadavia Oeste 114</div></div></div>'
     +'</body></html>';
   const w=window.open('','_blank');
   if(!w){toast('Activá ventanas emergentes','var(--orange)');return;}
-  w.document.write(h);w.document.close();
+  w.document.write(_pdfSinEncabezado(h));w.document.close();
   setTimeout(function(){
     const btn=w.document.createElement('button');
     btn.textContent='Imprimir / Guardar PDF (A4)';
@@ -6570,7 +6570,7 @@ function exportMatDetailPDF(mid){
       +'</body></html>';
     var w=window.open('','_blank');
     if(!w){toast('Activá ventanas emergentes','var(--orange)',4000);return;}
-    w.document.write(h);w.document.close();
+    w.document.write(_pdfSinEncabezado(h));w.document.close();
     setTimeout(function(){
       var btn=w.document.createElement('button');
       btn.textContent='Imprimir / Guardar PDF';
@@ -7389,20 +7389,20 @@ function exportComentariosPDF(){
     +'.rc .n{font-size:13px;font-weight:800}.rc .l{font-size:7.5pt;color:#666;margin-top:1px}'
     +'@media print{button{display:none!important}}</style></head><body>'
     +'<h1>Comentarios — '+(p?p.name:'')+filtroTxt+'</h1>'
-    +'<div class="meta">'+new Date().toLocaleDateString('es-AR')+' — '+filtered.length+' comentario'+(filtered.length!==1?'s':'')+' de '+pf('comentarios').length+' totales'+(filtros.length?' (filtrados)':'')+'</div>'
+    +'<div class="meta">'+filtered.length+' comentario'+(filtered.length!==1?'s':'')+' de '+pf('comentarios').length+' totales'+(filtros.length?' (filtrados)':'')+'</div>'
     +'<div class="r">'
     +'<div class="rc" style="background:#fff7ed"><div class="n" style="color:#ea580c">'+propCount+'</div><div class="l">Propietario</div></div>'
     +'<div class="rc" style="background:#f8fafc"><div class="n" style="color:#64748b">'+genCount+'</div><div class="l">General</div></div>'
     +'<div class="rc" style="background:#f0fdf4"><div class="n" style="color:#16a34a">'+filtered.filter(x=>x.cumplido).length+'</div><div class="l">Realizados</div></div>'
     +'</div>'
     +html
-    +'<div style="margin-top:32px;border-top:2px solid #eee;padding-top:12px;font-size:9px;color:#999;text-align:center">ObraControl Pro v9.0 — '+new Date().toLocaleString('es-AR')+'</div>'
+    +'<div style="margin-top:32px;border-top:2px solid #eee;padding-top:12px;font-size:9px;color:#999;text-align:center">ObraControl Pro v9.0</div>'
     +'<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:20px;border-top:2px solid #ea580c;padding-top:10px">'
     +'<div><div style="font-size:15px;font-weight:800;color:#ea580c">FEDERICO PICKELNY</div><div style="font-size:10pt;font-weight:700;color:#555;margin-top:1px">ARQUITECTO</div><div style="font-size:9pt;color:#666;margin-top:1px">MP 2304</div></div>'
     +'<div style="text-align:right"><div style="font-size:9pt;color:#666">&#9742; 264 4397772</div><div style="font-size:9pt;color:#666">&#9993; federicopickelny@gmail.com</div><div style="font-size:9pt;color:#666">&#127968; B. Rivadavia Oeste 114</div></div></div>'
     +'</body></html>';
   const w=window.open('','_blank');if(!w){toast('Habilitá las ventanas emergentes','var(--orange)');return;}
-  w.document.write(doc);w.document.close();setTimeout(function(){w.print();},400);
+  w.document.write(_pdfSinEncabezado(doc));w.document.close();setTimeout(function(){w.print();},400);
   }catch(e){toast('Error al generar PDF','var(--red)');console.error(e);}
 }
 function toggleCmtSel(id){
@@ -7448,20 +7448,20 @@ function exportSeleccionadosPDF(){
     +'.rc .n{font-size:13px;font-weight:800}.rc .l{font-size:7.5pt;color:#666;margin-top:1px}'
     +'@media print{button{display:none!important}}</style></head><body>'
     +'<h1>Comentarios seleccionados — '+(p?p.name:'')+'</h1>'
-    +'<div class="meta">'+new Date().toLocaleDateString('es-AR')+' — '+filtered.length+' comentario'+(filtered.length!==1?'s':'')+' seleccionado'+(filtered.length!==1?'s':'')+' manualmente</div>'
+    +'<div class="meta">'+filtered.length+' comentario'+(filtered.length!==1?'s':'')+' seleccionado'+(filtered.length!==1?'s':'')+' manualmente</div>'
     +'<div class="r">'
     +'<div class="rc" style="background:#fff7ed"><div class="n" style="color:#ea580c">'+propCount+'</div><div class="l">Propietario</div></div>'
     +'<div class="rc" style="background:#f8fafc"><div class="n" style="color:#64748b">'+genCount+'</div><div class="l">General</div></div>'
     +'<div class="rc" style="background:#f0fdf4"><div class="n" style="color:#16a34a">'+filtered.filter(function(x){return x.cumplido;}).length+'</div><div class="l">Realizados</div></div>'
     +'</div>'
     +html
-    +'<div style="margin-top:32px;border-top:2px solid #eee;padding-top:12px;font-size:9px;color:#999;text-align:center">ObraControl Pro v9.0 — '+new Date().toLocaleString('es-AR')+'</div>'
+    +'<div style="margin-top:32px;border-top:2px solid #eee;padding-top:12px;font-size:9px;color:#999;text-align:center">ObraControl Pro v9.0</div>'
     +'<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:20px;border-top:2px solid #0d9488;padding-top:10px">'
     +'<div><div style="font-size:15px;font-weight:800;color:#0d9488">FEDERICO PICKELNY</div><div style="font-size:10pt;font-weight:700;color:#555;margin-top:1px">ARQUITECTO</div><div style="font-size:9pt;color:#666;margin-top:1px">MP 2304</div></div>'
     +'<div style="text-align:right"><div style="font-size:9pt;color:#666">&#9742; 264 4397772</div><div style="font-size:9pt;color:#666">&#9993; federicopickelny@gmail.com</div><div style="font-size:9pt;color:#666">&#127968; B. Rivadavia Oeste 114</div></div></div>'
     +'</body></html>';
   const w=window.open('','_blank');if(!w){toast('Habilitá las ventanas emergentes','var(--orange)');return;}
-  w.document.write(doc);w.document.close();setTimeout(function(){w.print();},400);
+  w.document.write(_pdfSinEncabezado(doc));w.document.close();setTimeout(function(){w.print();},400);
   }catch(e){toast('Error al generar PDF','var(--red)');console.error(e);}
 }
 // ─── ARCHIVOS CON LÍMITE ─────────────────────────────────────────
@@ -7809,7 +7809,7 @@ function generarInformeMixto(){
       +'table th{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}'
       +'@media print{body{padding:0}}</style></head><body>'
       +'<h1>'+esc(titulo)+'</h1>'
-      +'<div class="meta"><strong>Obra:</strong> '+esc(p.name)+(p.client?' | <strong>Cliente:</strong> '+esc(p.client):'')+' | <strong>Fecha:</strong> '+new Date().toLocaleDateString('es-AR')+'</div>'
+      +'<div class="meta"><strong>Obra:</strong> '+esc(p.name)+(p.client?' | <strong>Cliente:</strong> '+esc(p.client):'')+'</div>'
       +body
       +'<div style="margin-top:32px;border-top:2px solid #D97706;padding-top:12px;display:flex;justify-content:space-between;align-items:flex-end">'
       +'<div><div style="font-size:15px;font-weight:800;color:#D97706">FEDERICO PICKELNY</div><div style="font-size:10pt;font-weight:700;color:#555;margin-top:1px">ARQUITECTO</div><div style="font-size:9pt;color:#666;margin-top:1px">MP 2304</div></div>'
@@ -7818,7 +7818,7 @@ function generarInformeMixto(){
     var _old=document.getElementById('informeMixtoM');if(_old)_old.remove();
     var w=window.open('','_blank');
     if(!w){toast('Activá ventanas emergentes para ver el PDF','var(--orange)',4000);return;}
-    w.document.write(html);w.document.close();
+    w.document.write(_pdfSinEncabezado(html));w.document.close();
     setTimeout(function(){
       var btn=w.document.createElement('button');
       btn.textContent='Imprimir / Guardar PDF (A4)';
@@ -8163,6 +8163,32 @@ function deleteProj(){
 // la app, y si se le cambia la extensión a .zip se puede mirar por dentro.
 // ═══════════════════════════════════════════════════════════════
 
+// ── PDF sin el encabezado del navegador ──
+// Chrome imprime arriba fecha, hora y título, y abajo la dirección, en el margen
+// de la hoja. Declarar contenido propio en el margen no lo quita: la única forma
+// confiable es dejar la hoja sin margen, así no queda lugar para ese texto. El
+// margen se arma adentro: una tabla cuyo thead/tfoot vacíos el navegador repite
+// arriba y abajo de CADA hoja, y un relleno lateral.
+// Los PDF de uso interno no pasan por acá: ahí sí se quiere ver fecha, hora y título.
+function _pdfSinEncabezado(html){
+  html=String(html||'');
+  var css='<style id="pdf-sin-encabezado">'
+    +'table.pdf-hoja{width:100%;border-collapse:collapse;border:0;margin:0;font-size:inherit;background:none}'
+    +'table.pdf-hoja>thead>tr>td,table.pdf-hoja>tfoot>tr>td{height:0;padding:0;border:0;background:none}'
+    +'table.pdf-hoja>tbody>tr>td{padding:0;border:0;background:none;vertical-align:top}'
+    +'@page{margin:0}'
+    +'@media print{html,body{margin:0!important}'
+    +'body{padding:0 14mm!important;max-width:none!important;width:auto!important;box-sizing:border-box!important}'
+    +'table.pdf-hoja>thead>tr>td,table.pdf-hoja>tfoot>tr>td{height:14mm}}'
+    +'</style>';
+  html=/<\/head>/i.test(html)?html.replace(/<\/head>/i,css+'</head>'):css+html;
+  var abre='<table class="pdf-hoja"><thead><tr><td></td></tr></thead><tfoot><tr><td></td></tr></tfoot><tbody><tr><td>';
+  var cierra='</td></tr></tbody></table>';
+  if(/<body[^>]*>/i.test(html))html=html.replace(/<body[^>]*>/i,function(m){return m+abre;});else html=abre+html;
+  if(/<\/body>/i.test(html))html=html.replace(/<\/body>/i,cierra+'</body>');else html+=cierra;
+  return html;
+}
+
 // ── ZIP propio (sin librerías externas: funciona aunque no cargue un CDN) ──
 var _CRC_T=null;
 function _crc32(u8){
@@ -8486,12 +8512,13 @@ function _cierreInformeHtml(pid,opt,fotos){
     +'.gal{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.gal figure{margin:0;width:150px;page-break-inside:avoid}.gal img{width:150px;height:auto;max-height:200px;object-fit:cover;border-radius:4px;border:1px solid #ddd;display:block}.gal figcaption{font-size:7.5pt;color:#475569;margin-top:2px}'
     +'.firma{margin-top:30px;border-top:2px solid #D97706;padding-top:10px;display:flex;justify-content:space-between;font-size:9pt;color:#666}.firma b{color:#D97706;font-size:13pt}'
     +'.no-print{position:fixed;top:10px;right:10px}@media print{.no-print{display:none}}';
-  return '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+esc((opt.titulo||'Cierre')+' — '+(p.name||''))+'</title><style>'+css+'</style></head><body>'
-    +(opt.titulo&&!S_.portada?'<h1>'+esc(opt.titulo)+'</h1><div class="mut">'+esc(p.name||'')+(p.client?' · '+esc(p.client):'')+' · '+fmt(td())+'</div>'+(opt.privados?'<div class="interno">⚠ USO INTERNO — incluye movimientos privados.</div>':''):'')
+  var out='<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+esc((opt.titulo||'Cierre')+' — '+(p.name||''))+'</title><style>'+css+'</style></head><body>'
+    +(opt.titulo&&!S_.portada?'<h1>'+esc(opt.titulo)+'</h1><div class="mut">'+esc(p.name||'')+(p.client?' · '+esc(p.client):'')+(opt.privados?' · '+fmt(td()):'')+'</div>'+(opt.privados?'<div class="interno">⚠ USO INTERNO — incluye movimientos privados.</div>':''):'')
     +h
     +'<div class="firma"><div><b>FEDERICO PICKELNY</b><br>ARQUITECTO · MP 2304</div><div style="text-align:right">&#9742; 264 4397772<br>&#9993; federicopickelny@gmail.com<br>B. Rivadavia Oeste 114</div></div>'
     +'<button class="no-print" onclick="window.print()" style="background:#D97706;color:#fff;border:none;padding:10px 16px;border-radius:8px;font-weight:700;font-size:13px">Imprimir / Guardar PDF</button>'
     +'</body></html>';
+  return opt.privados?out:_pdfSinEncabezado(out);
 }
 function _cCsv(filas){return '﻿'+filas.map(function(r){return r.map(function(c){return '"'+String(c==null?'':c).replace(/"/g,'""')+'"';}).join(';');}).join('\r\n');}
 function _cierreCsvs(pid){
@@ -11074,7 +11101,7 @@ function exportEcoPDF(includeDistrib,includeRubroCol,includeMetros,privados){
     +'.footer{margin-top:14px;border-top:1px solid #eee;padding-top:6px;font-size:7pt;color:#999;text-align:center}'
     +'</style></head><body>'
     +'<h2 style="font-size:11pt;border-bottom:3px solid #D97706;padding-bottom:5px;margin-bottom:4px">Resumen Económico'+filterNote+'</h2>'
-    +'<p style="font-size:7.5pt;color:#666;margin:3px 0 10px">Obra: '+(p?p.name:'')+' | '+new Date().toLocaleDateString('es-AR')+' | '+items.length+' movimientos</p>'
+    +'<p style="font-size:7.5pt;color:#666;margin:3px 0 10px">Obra: '+(p?p.name:'')+(privados!=='sin'?' | '+new Date().toLocaleDateString('es-AR'):'')+' | '+items.length+' movimientos</p>'
     +'<div class="resumen">'
     +'<div class="res-card" style="background:#f0fdf4"><div class="lbl">Ingresos</div><div class="val" style="color:#16a34a">$'+_f2(tIng)+'</div></div>'
     +'<div class="res-card" style="background:#fef2f2"><div class="lbl">Egresos</div><div class="val" style="color:#dc2626">$'+_f2(tEgr)+'</div></div>'
@@ -11083,13 +11110,13 @@ function exportEcoPDF(includeDistrib,includeRubroCol,includeMetros,privados){
     +'<table><tr><th>Fecha</th><th>Concepto</th><th>Medio</th><th>Proveedor</th>'+rubroTh+'<th style="text-align:right">Monto</th><th class="th-bal" style="text-align:right">Saldo acum.</th></tr>'+rows+'</table>'
     +distribHtml
     +metrosHtml
-    +'<div class="footer">ObraControl Pro v9.0 — '+new Date().toLocaleString('es-AR')+'</div>'
+    +'<div class="footer">ObraControl Pro v9.0'+(privados!=='sin'?' — '+new Date().toLocaleString('es-AR'):'')+'</div>'
     +'<div class="page-footer" style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:24px;border-top:2px solid #D97706;padding-top:12px">'
     +'<div><div style="font-size:15px;font-weight:800;color:#D97706">FEDERICO PICKELNY</div><div style="font-size:10pt;font-weight:700;color:#555;margin-top:1px">ARQUITECTO</div><div style="font-size:9pt;color:#666;margin-top:1px">MP 2304</div></div>'
     +'<div style="text-align:right"><div style="font-size:9pt;color:#666">&#9742; 264 4397772</div><div style="font-size:9pt;color:#666">&#9993; federicopickelny@gmail.com</div><div style="font-size:9pt;color:#666">&#127968; B. Rivadavia Oeste 114</div></div></div>'
     +'</body></html>';
   const w=window.open('','_blank');if(!w){toast('Activá ventanas emergentes','var(--orange)');return;}
-  w.document.write(h);w.document.close();
+  w.document.write(privados==='sin'?_pdfSinEncabezado(h):h);w.document.close();
   setTimeout(function(){
     const btn=w.document.createElement('button');
     btn.textContent='Imprimir / Guardar PDF (A4)';
