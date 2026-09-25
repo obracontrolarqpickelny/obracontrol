@@ -11882,7 +11882,7 @@ function incorporarFormularioModal(id){
       h+=_iBtn(key,done);
       h+='<div class="flex-1 min-w-0"><div class="txxs fw7" style="color:var(--text3)">'+(c.tipo==='propietario'?'👤 Propietario':'💬 General')+' · '+esc(c.rubro||'')+(c.etapa?' · '+esc(c.etapa):'')+(c.fecha?' · '+esc(fmts(c.fecha)||c.fecha):'')+'</div>'
         +'<div class="ts" style="white-space:pre-wrap;line-height:1.45">'+esc(c.texto||'')+'</div>'
-        +((c.foto&&String(c.foto).indexOf('[')!==0)?'<img src="'+c.foto+'" style="width:64px;height:64px;object-fit:cover;border-radius:6px;margin-top:4px">':'')
+        +_miniFotosForm(c)
         +(done?'<div class="txxs mt-4" style="color:var(--green)">✓ En Comentarios de la obra</div>':'')+'</div>';
       h+='</div>';
     });
@@ -11897,7 +11897,7 @@ function incorporarFormularioModal(id){
       h+='<div class="flex items-center gap-8" style="padding:5px 0;border-bottom:1px solid var(--gray-ll);opacity:'+(done?'0.5':'1')+'">';
       h+=_iBtn(key,done);
       h+='<div class="flex-1 min-w-0"><div class="txxs fw7">'+(m.tipo==='ingreso'?'💵 Ingreso':'💸 Egreso')+'</div><div class="ts">$'+(m.monto||0)+(m.concepto?' — '+esc(m.concepto):'')+'</div></div>';
-      if(m.foto)h+='<img src="'+m.foto+'" style="width:44px;height:44px;object-fit:cover;border-radius:6px;flex-shrink:0" onerror="this.style.display=\'none\'">';
+      h+=_miniFotosForm(m,true);
       h+='</div>';
     });
     h+='</div>';
@@ -11913,7 +11913,7 @@ function incorporarFormularioModal(id){
       h+='<div class="flex-1 min-w-0"><div class="ts fw6">'+esc(t.titulo||'Sin título')+'</div>';
       if(t.descripcion)h+='<div class="txxs tc3 mt-1">'+esc(t.descripcion)+'</div>';
       h+='<div class="txxs tc3 mt-1">'+({alta:'🔴',media:'🟡',baja:'🟢'}[t.prioridad||'media']||'🟡')+' '+(t.prioridad||'media')+'</div></div>';
-      if(t.foto)h+='<img src="'+t.foto+'" style="width:44px;height:44px;object-fit:cover;border-radius:6px;flex-shrink:0" onerror="this.style.display=\'none\'">';
+      h+=_miniFotosForm(t,true);
       h+='</div>';
     });
     h+='</div>';
@@ -11927,6 +11927,7 @@ function incorporarFormularioModal(id){
       h+='<div class="flex items-center gap-8" style="padding:5px 0;border-bottom:1px solid var(--gray-ll);opacity:'+(done?'0.5':'1')+'">';
       h+=_iBtn(key,done);
       h+='<div class="flex-1 min-w-0"><div class="ts fw6">'+esc(m.nombre||'')+'</div><div class="txxs tc3 mt-1">'+(m.cantidad||0)+' '+(m.unidad||'u')+(m.notas?' · '+esc(m.notas):'')+'</div></div>';
+      h+=_miniFotosForm(m,true);
       h+='</div>';
     });
     h+='</div>';
@@ -11953,7 +11954,7 @@ function incorporarFormularioModal(id){
       h+='<div class="flex items-center gap-8" style="padding:5px 0;border-bottom:1px solid var(--gray-ll);opacity:'+(done?'0.5':'1')+'">';
       h+=_iBtn(key,done);
       h+='<div class="flex-1 min-w-0"><div class="ts fw6">'+esc(mr.nombre||'Sin nombre')+'</div><div class="txxs tc3 mt-1">'+(mr.cantidad||0)+' '+(mr.unidad||'u')+(mr.proveedor?' · '+esc(mr.proveedor):'')+'</div></div>';
-      if(mr.foto)h+='<img src="'+mr.foto+'" style="width:44px;height:44px;object-fit:cover;border-radius:6px;flex-shrink:0" onerror="this.style.display=\'none\'">';
+      h+=_miniFotosForm(mr,true);
       h+='</div>';
     });
     h+='</div>';
@@ -11965,7 +11966,7 @@ function incorporarFormularioModal(id){
     h+='<div class="flex items-center gap-8" style="opacity:'+(chkDone?'0.5':'1')+'">'+_iBtn('chk_0',chkDone);
     h+='<div class="flex-1 min-w-0"><div class="ts fw6">'+esc(sub.checklist.titulo)+'</div>';
     if(sub.checklist.items){var cl=(sub.checklist.items||'').split('\n').filter(function(l){return l.trim();}).slice(0,5);h+='<div class="txxs tc3 mt-1">'+cl.map(function(l){return '☐ '+esc(l.trim());}).join(' · ')+'</div>';}
-    h+='</div></div></div>';
+    h+='</div>'+_miniFotosForm(sub.checklist,true)+'</div></div>';
   }
   if(sub.tareas===undefined&&sub.categoria){
     var catL={movimiento:'💰 Movimiento',tarea:'📋 Tarea',checklist:'✅ Checklist',material_existente:'📦 Material existente',material_pedido:'🔔 Material pedido'};
@@ -12013,6 +12014,30 @@ function _getAllFormKeys(sub){
   } else if(sub.categoria){keys.push('legacy_0');}
   return keys;
 }
+// Fotos de un ítem del formulario del colaborador. Formato nuevo: fotos:[{src,nota}]
+// (varias por ítem). Formato viejo: foto/fotoNota (una sola), que sigue llegando
+// en informes enviados antes de actualizar el formulario.
+function _fotosFormItem(x){
+  var out=[];if(!x)return out;
+  var ok=function(u){return u&&String(u).indexOf('[')!==0;};
+  if(Array.isArray(x.fotos)&&x.fotos.length){
+    x.fotos.forEach(function(f){var u=f&&(f.src||f.url);if(ok(u))out.push({url:u,caption:(f.nota||f.caption||'')});});
+  } else if(ok(x.foto))out.push({url:x.foto,caption:x.fotoNota||''});
+  return out;
+}
+function _miniFotosForm(x,alCostado){
+  var fs=_fotosFormItem(x);if(!fs.length)return '';
+  return '<div style="display:flex;flex-wrap:wrap;gap:4px;'+(alCostado?'max-width:96px;justify-content:flex-end;flex-shrink:0':'margin-top:4px')+'">'
+    +fs.map(function(f){return '<img src="'+f.url+'" title="'+esc(f.caption||'')+'" style="width:44px;height:44px;object-fit:cover;border-radius:6px" onerror="this.style.display=\'none\'">';}).join('')+'</div>';
+}
+// Copia una foto a la carpeta del colaborador en la obra (así queda también ahí).
+function _fotoACarpetaColab(pid,token,src,nombre,desc){
+  if(!src||String(src).indexOf('data:')!==0)return;
+  if(!D.carpetas)D.carpetas=[];
+  var cp=D.carpetas.find(function(c){return c.colabId===token&&c.projectId===pid;});
+  if(!cp){cp={id:Date.now().toString(36)+Math.random().toString(36).slice(2,5),projectId:pid,colabId:token,archivos:[]};D.carpetas.push(cp);}
+  cp.archivos.push({id:uid(),nombre:nombre,tipo:'image/jpeg',data:src,descripcion:desc||'',fecha:new Date().toISOString(),subidoPor:'col',visto:false});
+}
 function _doIncItem(sub,key){
   var parts=key.split('_');var type=parts[0];var idx=parseInt(parts[1])||0;
   var pid=sub.obraId||sub.projectId||S.proj;
@@ -12037,7 +12062,7 @@ function _doIncItem(sub,key){
     D.comentarios.push({id:_cmId,projectId:pid,text:cm.texto,
       tipo:cm.tipo==='propietario'?'propietario':'general',
       rubro:cm.rubro||'Otro',etapa:cm.etapa||'',tareaId:'',
-      photos:cm.foto?[{url:cm.foto,caption:cm.fotoNota||''}]:[],archivos:[],
+      photos:_fotosFormItem(cm),archivos:[],
       cargadoPor:by,sourceType:'formulario',sourceName:by,sourceId:sub.id,colabId:sub.token||'',
       date:cm.fecha||String(sub.fecha||nw()).slice(0,10),updatedAt:nw()});
     audit('comentarios','create','form: '+String(cm.texto).slice(0,30));
@@ -12049,11 +12074,17 @@ function _doIncItem(sub,key){
   } else if(type==='mov'){
     var m=(sub.movimientos||[])[idx];if(!m)return;
     D.economia=D.economia||[];
+    // Un movimiento lleva un solo comprobante (imagen): va la primera foto. Las
+    // demás no se pierden: quedan en la carpeta del colaborador.
+    var _fm=_fotosFormItem(m);
     D.economia.push({id:uid(),projectId:pid,tipo:m.tipo==='ingreso'?'ingreso':'egreso',
       fecha:(sub.fecha||nw()).slice(0,10),concepto:m.concepto||'Sin concepto',
       monto:parseFloat(m.monto)||0,proveedor:m.proveedor||'',medioPago:'',
+      imagen:_fm.length?_fm[0].url:'',
+      detalle:_fm.length&&_fm[0].caption?_fm[0].caption:null,
       cargadoPor:by,sourceType:'formulario',sourceName:by,sourceId:sub.id,
       date:nw(),updatedAt:nw()});
+    _fm.slice(1).forEach(function(f,k){_fotoACarpetaColab(pid,sub.token,f.url,'movimiento_'+(m.concepto||'foto').slice(0,15).replace(/[^a-zA-Z0-9áéíóúñ]/g,'_')+'_'+(k+2)+'.jpg','💰 '+(m.concepto||'Movimiento')+(f.caption?' — '+f.caption:''));});
     audit('economia','create','form: '+(m.concepto||''));
   } else if(type==='tar'){
     var t=(sub.tareas||[])[idx];if(!t)return;
@@ -12062,15 +12093,12 @@ function _doIncItem(sub,key){
       description:(t.descripcion||'')+' [Reportado por '+by+']',
       priority:t.prioridad||'media',status:'pendiente',
       cargadoPor:by,encargado:by,
-      photos:t.foto?[{url:t.foto,caption:t.fotoNota||''}]:[],
+      photos:_fotosFormItem(t),
       sourceType:'formulario',sourceName:by,sourceId:sub.id,
       date:nw(),updatedAt:nw()});
-    if(t.foto&&t.foto.startsWith('data:')){
-      if(!D.carpetas)D.carpetas=[];
-      var _cpT=D.carpetas.find(function(c){return c.colabId===sub.token&&c.projectId===pid;});
-      if(!_cpT){_cpT={id:Date.now().toString(36)+Math.random().toString(36).slice(2,5),projectId:pid,colabId:sub.token,archivos:[]};D.carpetas.push(_cpT);}
-      _cpT.archivos.push({id:uid(),nombre:'tarea_'+(t.titulo||'foto').slice(0,15).replace(/[^a-zA-Z0-9áéíóúñ]/g,'_')+'.jpg',tipo:'image/jpeg',data:t.foto,descripcion:'📋 '+(t.titulo||'Tarea'),fecha:new Date().toISOString(),subidoPor:'col',visto:false});
-    }
+    _fotosFormItem(t).forEach(function(f,k){
+      _fotoACarpetaColab(pid,sub.token,f.url,'tarea_'+(t.titulo||'foto').slice(0,15).replace(/[^a-zA-Z0-9áéíóúñ]/g,'_')+(k?'_'+(k+1):'')+'.jpg','📋 '+(t.titulo||'Tarea')+(f.caption?' — '+f.caption:''));
+    });
     audit('tareas','create','form: '+(t.titulo||''));
   } else if(type==='mex'){
     var me=(sub.materialesExistentes||[])[idx];if(!me)return;
@@ -12078,6 +12106,7 @@ function _doIncItem(sub,key){
     D.materiales.push({id:uid(),projectId:pid,name:me.nombre||'Sin nombre',
       qty:parseFloat(me.cantidad)||0,unit:me.unidad||'u',
       notes:(me.notas||'')+' ['+by+']',category:'General',computado:0,
+      photos:_fotosFormItem(me),
       cargadoPor:by,sourceType:'formulario',sourceName:by,
       date:td(),updatedAt:nw()});
     audit('materiales','create','form: '+(me.nombre||''));
@@ -12098,6 +12127,7 @@ function _doIncItem(sub,key){
       qty:parseFloat(mr.cantidad)||0,unit:mr.unidad||'u',
       estado:'recibido',proveedor:mr.proveedor||'',
       observations:(mr.notas||'')+' ['+by+']',
+      photos:_fotosFormItem(mr),
       cargadoPor:by,sourceType:'formulario',sourceName:by,sourceId:sub.id,
       date:nw(),updatedAt:nw()});
     audit('materiales','create','form recibido: '+(mr.nombre||''));
@@ -12109,6 +12139,7 @@ function _doIncItem(sub,key){
       title:sub.checklist.titulo+' ('+by+')',
       priority:'media',date:td(),updatedAt:nw(),
       cargadoPor:by,sourceType:'formulario',sourceName:by,sourceId:sub.id,
+      photos:_fotosFormItem(sub.checklist),
       items:its.map(function(l){return {id:uid(),text:l.trim(),done:false};})});
     audit('checklists','create','form: '+sub.checklist.titulo);
   } else if(type==='legacy'){

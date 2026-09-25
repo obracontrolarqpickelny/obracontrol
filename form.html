@@ -59,6 +59,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .fr{display:flex;gap:8px}
 .fr>.fg{flex:1;min-width:0}
 .photo-prev{width:100%;border-radius:8px;max-height:160px;object-fit:cover;margin-top:8px;display:none}
+.fotos-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;margin-bottom:8px}
+.fotos-grid:empty{display:none}
+.foto-it{position:relative;background:var(--gray-ll);border:1px solid var(--brd);border-radius:8px;padding:4px}
+.foto-it img{width:100%;height:84px;object-fit:cover;border-radius:6px;display:block}
+.foto-it .foto-doc{width:100%;height:84px;border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:10px;color:var(--text3);text-align:center;padding:4px;background:#fff;word-break:break-all}
+.foto-it .foto-del{position:absolute;top:-7px;right:-7px;width:24px;height:24px;border-radius:50%;border:none;background:var(--red);color:#fff;font-size:13px;font-weight:800;cursor:pointer;line-height:24px;padding:0;box-shadow:0 1px 4px #0003}
+.foto-it input{width:100%;margin-top:4px;border:1px solid var(--brd);border-radius:5px;padding:4px 6px;font-size:11px;font-family:inherit;background:#fff}
+.btn-fotos{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:9px;border:1.5px dashed var(--brd);border-radius:8px;background:none;color:var(--teal);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
 
 /* buttons */
 .btn{display:block;width:100%;padding:12px;border-radius:10px;font-size:15px;font-weight:700;font-family:inherit;border:none;cursor:pointer;text-align:center;transition:opacity .15s}
@@ -218,9 +226,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div class="card">
         <div class="fg"><label class="fl">Título del checklist</label><input class="fi" id="chk_titulo" placeholder="Ej: Inspección de armadura, Control de losa..."></div>
         <div class="fg"><label class="fl">Ítems (uno por línea)</label><textarea class="ft" id="chk_items" rows="7" placeholder="Verificar estribos&#10;Revisar recubrimiento&#10;Controlar separación entre barras&#10;Limpiar fondos&#10;Verificar pasatubos"></textarea></div>
-        <div class="fg"><label class="fl">Foto general (opcional)</label>
-          <input type="file" accept="image/*" id="chk_foto" onchange="prevFoto('chk_foto','chk_prev')" style="font-size:13px;width:100%">
-          <img id="chk_prev" class="photo-prev">
+        <div class="fg"><label class="fl">Fotos (opcional)</label>
+          <div class="fotos-grid" id="chk_fotos"></div>
+          <label class="btn-fotos">📷 Agregar fotos<input type="file" accept="image/*" multiple style="display:none" onchange="agregarFotos('chk',this)"></label>
         </div>
       </div>
     </div>
@@ -321,11 +329,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       </label>
       <div id="carpetaPreview" style="display:none;margin-bottom:12px">
         <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:8px" id="carpetaCount"></div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center" id="carpetaThumb"></div>
+        <div class="fotos-grid" id="carpetaThumb" style="text-align:left"></div>
       </div>
       <div class="fg">
-        <label class="fl">Descripción (opcional)</label>
-        <input class="fi" id="carpetaDesc" placeholder="Ej: fotos de la losa del segundo piso">
+        <label class="fl">Descripción general (opcional)</label>
+        <input class="fi" id="carpetaDesc" placeholder="Para los que no tengan comentario propio">
       </div>
       <button class="btn btn-pri" id="carpetaSendBtn" onclick="sendCarpeta()" style="margin-top:4px;background:var(--green)">📤 Enviar al arquitecto</button>
       <div id="carpetaErr" style="color:var(--red);font-size:12px;margin-top:8px;display:none"></div>
@@ -483,25 +491,40 @@ function init(){
 }
 
 // ── Carpeta mode ─────────────────────────
+// Cada elegido se SUMA a la lista (antes una segunda selección reemplazaba la
+// primera). Cada archivo tiene su ✕ para quitarlo y su propio comentario.
 var _carpetaFiles=[];
 function previewCarpetaFiles(input){
-  _carpetaFiles=Array.from(input.files||[]);
-  if(!_carpetaFiles.length){$('carpetaPreview').style.display='none';return;}
-  $('carpetaCount').textContent=_carpetaFiles.length+' archivo'+(_carpetaFiles.length>1?'s':'')+' seleccionado'+(_carpetaFiles.length>1?'s':'');
-  var thumb=$('carpetaThumb');thumb.innerHTML='';
-  _carpetaFiles.forEach(function(f){
+  var nuevos=Array.from((input&&input.files)||[]);
+  if(input)input.value='';
+  nuevos.forEach(function(f){
+    var it={id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),file:f,nota:'',thumb:''};
+    _carpetaFiles.push(it);
     if(f.type.startsWith('image/')){
-      var img=document.createElement('img');
-      img.style.cssText='width:72px;height:72px;object-fit:cover;border-radius:8px;border:2px solid var(--brd)';
-      var r=new FileReader();r.onload=function(){img.src=r.result;};r.readAsDataURL(f);
-      thumb.appendChild(img);
-    } else {
-      var div=document.createElement('div');
-      div.style.cssText='width:72px;height:72px;border-radius:8px;border:2px solid var(--brd);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:11px;color:var(--text3);padding:4px;text-align:center;background:var(--gray-ll)';
-      div.innerHTML='📄<br>'+f.name.slice(0,10)+(f.name.length>10?'…':'');
-      thumb.appendChild(div);
+      var r=new FileReader();r.onload=function(){it.thumb=r.result;_pintarCarpeta();};r.readAsDataURL(f);
     }
   });
+  _pintarCarpeta();
+}
+function quitarArchivoCarpeta(id){
+  _carpetaFiles=_carpetaFiles.filter(function(x){return x.id!==id;});
+  _pintarCarpeta();
+}
+function notaArchivoCarpeta(id,valor){
+  var it=_carpetaFiles.find(function(x){return x.id===id;});if(it)it.nota=valor;
+}
+function _pintarCarpeta(){
+  var n=_carpetaFiles.length;
+  if(!n){$('carpetaPreview').style.display='none';$('carpetaThumb').innerHTML='';return;}
+  $('carpetaCount').textContent=n+' archivo'+(n>1?'s':'')+' seleccionado'+(n>1?'s':'')+' · tocá ✕ para quitar';
+  var esc_=function(s){return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');};
+  $('carpetaThumb').innerHTML=_carpetaFiles.map(function(it){
+    var f=it.file,vista=f.type.startsWith('image/')
+      ?(it.thumb?'<img src="'+it.thumb+'">':'<div class="foto-doc">…</div>')
+      :'<div class="foto-doc">📄<br>'+esc_(f.name.slice(0,18))+(f.name.length>18?'…':'')+'</div>';
+    return '<div class="foto-it">'+vista+'<button type="button" class="foto-del" title="Quitar" onclick="quitarArchivoCarpeta(\''+it.id+'\')">✕</button>'
+      +'<input placeholder="Comentario" value="'+esc_(it.nota)+'" oninput="notaArchivoCarpeta(\''+it.id+'\',this.value)"></div>';
+  }).join('');
   $('carpetaPreview').style.display='block';
 }
 async function compressImg(dataUrl, maxPx, q){
@@ -526,7 +549,7 @@ async function sendCarpeta(){
   var myName=COLAB_NAME_PARAM||(TOKEN?localStorage.getItem('oc_n_'+TOKEN):'')||'Colaborador';
   var archivos=[];
   for(var i=0;i<_carpetaFiles.length;i++){
-    var f=_carpetaFiles[i];
+    var f=_carpetaFiles[i].file,_notaF=_carpetaFiles[i].nota;
     if(f.size>15*1024*1024){continue;}
     try{
       var data=await new Promise(function(res,rej){var r=new FileReader();r.onload=function(){res(r.result);};r.onerror=rej;r.readAsDataURL(f);});
@@ -536,7 +559,7 @@ async function sendCarpeta(){
         if(data.length>80000) data=await compressImg(data,480,0.5);
         if(data.length>50000) data=await compressImg(data,360,0.45);
       }
-      archivos.push({nombre:f.name,tipo:f.type||'application/octet-stream',data:data,descripcion:($('carpetaDesc')||{}).value||''});
+      archivos.push({nombre:f.name,tipo:f.type||'application/octet-stream',data:data,descripcion:(_notaF||'').trim()||($('carpetaDesc')||{}).value||''});
     }catch(e){console.warn('file error',e);}
   }
   if(!archivos.length){btn.disabled=false;btn.textContent='📤 Enviar al arquitecto';err.textContent='Error procesando los archivos.';err.style.display='block';return;}
@@ -904,6 +927,7 @@ function removeItem(type,idx){
   var el=$('item-'+type+'-'+idx);
   if(el) el.remove();
   delete photoMap[type+'_'+idx+'_foto'];
+  delete fotosItem[type+'_'+idx];
   updateCount(type);
 }
 
@@ -933,26 +957,24 @@ function buildItemHTML(type,idx){
     '<div class="fr"><div class="fg"><label class="fl">Rubro</label><select class="fs" id="cmt_'+idx+'_rubro">'+RUB_F.map(function(r){return '<option>'+r+'</option>';}).join('')+'</select></div>'+
     '<div class="fg"><label class="fl">Etapa</label><select class="fs" id="cmt_'+idx+'_etapa"><option value="">-</option>'+ETAPAS_F.map(function(e){return '<option>'+e+'</option>';}).join('')+'</select></div></div>'+
     '<div class="fg"><label class="fl">📅 Fecha del comentario</label><input class="fi" id="cmt_'+idx+'_fecha" type="date" value="'+_hoyLocal()+'"></div>'+
-    '<div class="fg"><label class="fl">Foto (opcional)</label><input type="file" accept="image/*" id="cmt_'+idx+'_foto" onchange="prevFoto(\'cmt_'+idx+'_foto\',\'cmt_'+idx+'_prev\');" style="font-size:13px;width:100%"><img id="cmt_'+idx+'_prev" class="photo-prev"></div>'+
-    '<div class="fg" id="cmt_'+idx+'_captionWrap" style="display:none"><label class="fl">Comentario de la foto</label><input class="fi" id="cmt_'+idx+'_caption" placeholder="¿Qué muestra esta foto?"></div>';
+    _fotosHtml('cmt_'+idx);
   if(type==='mov') return hdr+
     '<div class="fg"><label class="fl">Tipo</label><select class="fs" id="mov_'+idx+'_tipo"><option value="ingreso">💵 Ingreso</option><option value="egreso">💸 Egreso</option></select></div>'+
     '<div class="fg"><label class="fl">Monto *</label><input class="fi" id="mov_'+idx+'_monto" type="number" step="0.01" min="0" placeholder="0.00" inputmode="decimal"></div>'+
     '<div class="fg"><label class="fl">Concepto *</label><input class="fi" id="mov_'+idx+'_concepto" placeholder="Ej: Compra de cemento, Pago mano de obra..."></div>'+
     '<div class="fg"><label class="fl">Proveedor / Comercio (opcional)</label><input class="fi" id="mov_'+idx+'_proveedor" placeholder="Ej: Corralón El Constructor, Ferretería Sur..."></div>'+
-    '<div class="fg"><label class="fl">Foto (opcional)</label><input type="file" accept="image/*" id="mov_'+idx+'_foto" onchange="prevFoto(\'mov_'+idx+'_foto\',\'mov_'+idx+'_prev\');" style="font-size:13px;width:100%"><img id="mov_'+idx+'_prev" class="photo-prev"></div>';
+    _fotosHtml('mov_'+idx);
   if(type==='tar') return hdr+
     '<div class="fg"><label class="fl">Título *</label><input class="fi" id="tar_'+idx+'_titulo" placeholder="¿Qué tarea?"></div>'+
     '<div class="fg"><label class="fl">Descripción / detalle</label><textarea class="ft" id="tar_'+idx+'_desc" placeholder="Describí el avance, qué hay que hacer..."></textarea></div>'+
     '<div class="fg"><label class="fl">Prioridad</label><select class="fs" id="tar_'+idx+'_pri"><option value="alta">🔴 Alta</option><option value="media" selected>🟡 Media</option><option value="baja">🟢 Baja</option></select></div>'+
-    '<div class="fg"><label class="fl">Foto (opcional)</label><input type="file" accept="image/*" id="tar_'+idx+'_foto" onchange="prevFoto(\'tar_'+idx+'_foto\',\'tar_'+idx+'_prev\');" style="font-size:13px;width:100%"><img id="tar_'+idx+'_prev" class="photo-prev"></div>'+
-    '<div class="fg" id="tar_'+idx+'_captionWrap" style="display:none"><label class="fl">Comentario de la foto</label><input class="fi" id="tar_'+idx+'_caption" placeholder="¿Qué muestra esta foto?"></div>';
+    _fotosHtml('tar_'+idx);
   if(type==='mex') return hdr+
     '<div class="fg"><label class="fl">Material *</label><input class="fi" id="mex_'+idx+'_nombre" placeholder="Ej: Cemento Portland, Hierro 10mm..."></div>'+
     '<div class="fr"><div class="fg"><label class="fl">Cantidad *</label><input class="fi" id="mex_'+idx+'_qty" type="number" step="0.01" min="0" placeholder="0" inputmode="decimal"></div>'+
     '<div class="fg"><label class="fl">Unidad</label><select class="fs" id="mex_'+idx+'_uni">'+unitOpts+'</select></div></div>'+
     '<div class="fg"><label class="fl">Ubicación / estado</label><textarea class="ft" id="mex_'+idx+'_nota" style="min-height:52px" placeholder="Ej: Apilado en depósito, en buen estado..."></textarea></div>'+
-    '<div class="fg"><label class="fl">Foto (opcional)</label><input type="file" accept="image/*" id="mex_'+idx+'_foto" onchange="prevFoto(\'mex_'+idx+'_foto\',\'mex_'+idx+'_prev\');" style="font-size:13px;width:100%"><img id="mex_'+idx+'_prev" class="photo-prev"></div>';
+    _fotosHtml('mex_'+idx);
   if(type==='mpe') return hdr+
     '<div class="fg"><label class="fl">Material *</label><input class="fi" id="mpe_'+idx+'_nombre" placeholder="Ej: Arena gruesa, Hierro 8mm..."></div>'+
     '<div class="fr"><div class="fg"><label class="fl">Cantidad *</label><input class="fi" id="mpe_'+idx+'_qty" type="number" step="0.01" min="0" placeholder="0" inputmode="decimal"></div>'+
@@ -965,8 +987,54 @@ function buildItemHTML(type,idx){
     '<div class="fg"><label class="fl">Unidad</label><select class="fs" id="mrec_'+idx+'_uni">'+unitOpts+'</select></div></div>'+
     '<div class="fg"><label class="fl">Proveedor / Remito</label><input class="fi" id="mrec_'+idx+'_prov" placeholder="Ej: Corralón ABC, Remito 001234..."></div>'+
     '<div class="fg"><label class="fl">Notas</label><textarea class="ft" id="mrec_'+idx+'_nota" style="min-height:48px" placeholder="Observaciones sobre la entrega..."></textarea></div>'+
-    '<div class="fg"><label class="fl">Foto del remito (opcional)</label><input type="file" accept="image/*" id="mrec_'+idx+'_foto" onchange="prevFoto(\'mrec_'+idx+'_foto\',\'mrec_'+idx+'_prev\');" style="font-size:13px;width:100%"><img id="mrec_'+idx+'_prev" class="photo-prev"></div>';
+    _fotosHtml('mrec_'+idx,'Fotos del remito (opcional)');
   return hdr;
+}
+
+// ── Varias fotos por tarjeta ─────────────
+// Cada tarjeta guarda su lista en fotosItem[clave] (clave: 'cmt_3', 'mov_0',
+// 'chk'...). Cada foto se puede quitar con su ✕ y llevar su propio comentario.
+// Al enviar viaja como fotos:[{src,nota}] y, para compatibilidad con la app y el
+// servidor que ya están instalados, foto/fotoNota siguen siendo la primera.
+var fotosItem={};
+function _fotosHtml(clave,titulo){
+  return '<div class="fg"><label class="fl">'+(titulo||'Fotos (opcional)')+'</label>'
+    +'<div class="fotos-grid" id="'+clave+'_fotos"></div>'
+    +'<label class="btn-fotos">📷 Agregar fotos<input type="file" accept="image/*" multiple style="display:none" onchange="agregarFotos(\''+clave+'\',this)"></label></div>';
+}
+function agregarFotos(clave,input){
+  var files=Array.from((input&&input.files)||[]);
+  if(input)input.value='';
+  if(!files.length)return;
+  if(!fotosItem[clave])fotosItem[clave]=[];
+  Promise.all(files.map(function(f){return compressImage(f,300,0.55);})).then(function(lista){
+    lista.forEach(function(d){if(d)fotosItem[clave].push({id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),src:d,nota:''});});
+    _pintarFotos(clave);
+  });
+}
+function quitarFoto(clave,id){
+  fotosItem[clave]=(fotosItem[clave]||[]).filter(function(f){return f.id!==id;});
+  _pintarFotos(clave);
+}
+function notaFoto(clave,id,valor){
+  var f=(fotosItem[clave]||[]).find(function(x){return x.id===id;});
+  if(f)f.nota=valor;
+}
+function _pintarFotos(clave){
+  var g=$(clave+'_fotos');if(!g)return;
+  g.innerHTML=(fotosItem[clave]||[]).map(function(f){
+    return '<div class="foto-it"><img src="'+f.src+'"><button type="button" class="foto-del" title="Quitar foto" onclick="quitarFoto(\''+clave+'\',\''+f.id+'\')">✕</button>'
+      +'<input placeholder="Comentario de la foto" value="'+String(f.nota||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')+'" oninput="notaFoto(\''+clave+'\',\''+f.id+'\',this.value)"></div>';
+  }).join('');
+}
+function _fotosDe(clave){
+  return (fotosItem[clave]||[]).map(function(f){return {src:f.src,nota:f.nota||''};});
+}
+function _conFotos(obj,clave){
+  var fs=_fotosDe(clave);
+  obj.fotos=fs;obj.foto=fs.length?fs[0].src:null;obj.fotoNota=fs.length?fs[0].nota:'';
+  fs.forEach(function(f){allPhotos.push(f.src);});
+  return obj;
 }
 
 // ── Photo preview ────────────────────────
@@ -1039,9 +1107,7 @@ function collectData(){
     var idx=parseInt(el.id.split('-').pop());
     var texto=v('cmt_'+idx+'_texto');
     if(texto){
-      var foto=photoMap['cmt_'+idx+'_foto']||null;
-      if(foto) allPhotos.push(foto);
-      data.comentarios.push({tipo:v('cmt_'+idx+'_tipo')||'general',texto:texto,rubro:v('cmt_'+idx+'_rubro')||'Otro',etapa:v('cmt_'+idx+'_etapa')||'',fecha:v('cmt_'+idx+'_fecha')||_hoyLocal(),foto:foto,fotoNota:v('cmt_'+idx+'_caption')});
+      data.comentarios.push(_conFotos({tipo:v('cmt_'+idx+'_tipo')||'general',texto:texto,rubro:v('cmt_'+idx+'_rubro')||'Otro',etapa:v('cmt_'+idx+'_etapa')||'',fecha:v('cmt_'+idx+'_fecha')||_hoyLocal()},'cmt_'+idx));
     }
   });
 
@@ -1052,9 +1118,7 @@ function collectData(){
     var monto=parseFloat(v('mov_'+idx+'_monto'))||0;
     var concepto=v('mov_'+idx+'_concepto');
     if(monto||concepto){
-      var foto=photoMap['mov_'+idx+'_foto']||null;
-      if(foto) allPhotos.push(foto);
-      data.movimientos.push({tipo:v('mov_'+idx+'_tipo')||'egreso',monto:monto,concepto:concepto,proveedor:v('mov_'+idx+'_proveedor')||'',foto:foto});
+      data.movimientos.push(_conFotos({tipo:v('mov_'+idx+'_tipo')||'egreso',monto:monto,concepto:concepto,proveedor:v('mov_'+idx+'_proveedor')||''},'mov_'+idx));
     }
   });
 
@@ -1064,10 +1128,7 @@ function collectData(){
     var idx=parseInt(el.id.split('-').pop());
     var titulo=v('tar_'+idx+'_titulo');
     if(titulo){
-      var foto=photoMap['tar_'+idx+'_foto']||null;
-      var caption=v('tar_'+idx+'_caption');
-      if(foto) allPhotos.push(foto);
-      data.tareas.push({titulo:titulo,descripcion:v('tar_'+idx+'_desc'),prioridad:v('tar_'+idx+'_pri')||'media',foto:foto,fotoNota:caption});
+      data.tareas.push(_conFotos({titulo:titulo,descripcion:v('tar_'+idx+'_desc'),prioridad:v('tar_'+idx+'_pri')||'media'},'tar_'+idx));
     }
   });
 
@@ -1077,9 +1138,7 @@ function collectData(){
     var idx=parseInt(el.id.split('-').pop());
     var nombre=v('mex_'+idx+'_nombre');
     if(nombre){
-      var foto=photoMap['mex_'+idx+'_foto']||null;
-      if(foto) allPhotos.push(foto);
-      data.materialesExistentes.push({nombre:nombre,cantidad:parseFloat(v('mex_'+idx+'_qty'))||0,unidad:v('mex_'+idx+'_uni')||'u',notas:v('mex_'+idx+'_nota'),foto:foto});
+      data.materialesExistentes.push(_conFotos({nombre:nombre,cantidad:parseFloat(v('mex_'+idx+'_qty'))||0,unidad:v('mex_'+idx+'_uni')||'u',notas:v('mex_'+idx+'_nota')},'mex_'+idx));
     }
   });
 
@@ -1099,18 +1158,14 @@ function collectData(){
     var idx=parseInt(el.id.split('-').pop());
     var nombre=v('mrec_'+idx+'_nombre');
     if(nombre){
-      var foto=photoMap['mrec_'+idx+'_foto']||null;
-      if(foto) allPhotos.push(foto);
-      data.materialesIngresados.push({nombre:nombre,cantidad:parseFloat(v('mrec_'+idx+'_qty'))||0,unidad:v('mrec_'+idx+'_uni')||'u',proveedor:v('mrec_'+idx+'_prov'),notas:v('mrec_'+idx+'_nota'),foto:foto});
+      data.materialesIngresados.push(_conFotos({nombre:nombre,cantidad:parseFloat(v('mrec_'+idx+'_qty'))||0,unidad:v('mrec_'+idx+'_uni')||'u',proveedor:v('mrec_'+idx+'_prov'),notas:v('mrec_'+idx+'_nota')},'mrec_'+idx));
     }
   });
 
   // checklist
   var chkTit=v('chk_titulo');
   if(chkTit){
-    var foto=photoMap['chk_foto']||null;
-    if(foto) allPhotos.push(foto);
-    data.checklist={titulo:chkTit,items:($('chk_items')?.value||'').trim(),foto:foto};
+    data.checklist=_conFotos({titulo:chkTit,items:($('chk_items')?.value||'').trim()},'chk');
   }
 
   return data;
@@ -1143,10 +1198,10 @@ function _postServidor(payload){
 function encodeSubmission(data){
   // clone without photos to check size, then add if feasible
   var noPhoto=JSON.parse(JSON.stringify(data));
-  noPhoto.movimientos.forEach(function(m){m.foto=null;});
-  noPhoto.tareas.forEach(function(t){t.foto=null;});
-  noPhoto.materialesExistentes.forEach(function(m){m.foto=null;});
-  if(noPhoto.checklist) noPhoto.checklist.foto=null;
+  ['comentarios','movimientos','tareas','materialesExistentes','materialesIngresados'].forEach(function(k){
+    (noPhoto[k]||[]).forEach(function(x){x.foto=null;x.fotos=[];});
+  });
+  if(noPhoto.checklist){noPhoto.checklist.foto=null;noPhoto.checklist.fotos=[];}
 
   // Encoding compacto: btoa(unescape(encodeURIComponent(json))) — mucho más corto que btoa(encodeURIComponent(json))
   function _enc(obj){return btoa(unescape(encodeURIComponent(JSON.stringify(obj))));}
@@ -1401,7 +1456,7 @@ function nuevoFormulario(){
   sendCount=0;
   doneTabMap={cmt:false,mov:false,tar:false,mex:false,mpe:false,mrec:false,chk:false};
   counters={cmt:0,mov:0,tar:0,mex:0,mpe:0,mrec:0};
-  photoMap={};allPhotos=[];
+  photoMap={};allPhotos=[];fotosItem={};
 
   ['cmt','mov','tar','mex','mpe','mrec'].forEach(function(t){
     var _l=$('list-'+t);if(_l)_l.innerHTML='';
@@ -1413,8 +1468,7 @@ function nuevoFormulario(){
   $('done-chk').classList.remove('on');
   $('done-chk').textContent='✓ Marcar pestaña lista';
   $('chk_titulo').value='';$('chk_items').value='';
-  $('chk_prev').style.display='none';
-  if($('chk_foto'))$('chk_foto').value='';
+  if($('chk_fotos'))$('chk_fotos').innerHTML='';
   if($('msg_general'))$('msg_general').value='';
   if($('photosSection'))$('photosSection').style.display='none';
 
