@@ -4933,7 +4933,7 @@ function exportVisitaPDF(vid){
     const w=window.open('','_blank');
     if(!w){toast('Activá ventanas emergentes en el navegador para ver el PDF','var(--orange)',4000);return;}
     w.document.write(_pdfSinEncabezado(h));w.document.close();
-    setTimeout(function(){
+    _imprimirConFotos(w).then(function(){
       const btn=w.document.createElement('button');
       btn.textContent='Imprimir / Guardar PDF (A4)';
       btn.style.cssText='position:fixed;top:10px;right:10px;background:#D97706;color:#fff;border:none;padding:10px 18px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,.2)';
@@ -4941,7 +4941,7 @@ function exportVisitaPDF(vid){
       btn.onclick=function(){w.print();};
       w.document.body.appendChild(btn);
       w.print();
-    },600);
+    });
   }catch(e){
     console.error('PDF error:',e);
     toast('Error al generar PDF: '+e.message,'var(--red)',5000);
@@ -4966,7 +4966,7 @@ function exportMatPDF(){
   const w=window.open('','_blank');
   if(!w){toast('Activá ventanas emergentes para ver el PDF','var(--orange)',4000);return;}
   w.document.write(_pdfSinEncabezado(h));w.document.close();
-  setTimeout(()=>{
+  _imprimirConFotos(w).then(function(){
     const btn=w.document.createElement('button');
     btn.textContent='Imprimir / Guardar PDF (A4)';
     btn.style.cssText='position:fixed;top:10px;right:10px;background:#D97706;color:#fff;border:none;padding:10px 18px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,.2)';
@@ -4974,7 +4974,7 @@ function exportMatPDF(){
     btn.onclick=()=>w.print();
     w.document.body.appendChild(btn);
     w.print();
-  },600);
+  });
 
   }catch(e){
     console.error('PDF error:',e);
@@ -5152,13 +5152,13 @@ function exportTareasPDF(){
   const w=window.open('','_blank');
   if(!w){toast('Activá ventanas emergentes','var(--orange)');return;}
   w.document.write(_pdfSinEncabezado(h));w.document.close();
-  setTimeout(function(){
+  _imprimirConFotos(w).then(function(){
     const btn=w.document.createElement('button');
     btn.textContent='Imprimir / Guardar PDF (A4)';
     btn.style.cssText='position:fixed;top:10px;right:10px;background:#D97706;color:#fff;border:none;padding:10px 18px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,.2)';
     btn.className='no-print';btn.onclick=function(){w.print();};
     w.document.body.appendChild(btn);w.print();
-  },600);
+  });
   all.forEach(function(t){t.pdfGenerado=true;});
   sv();render();
   toast('PDF generado');
@@ -6621,14 +6621,14 @@ function exportMatDetailPDF(mid){
     var w=window.open('','_blank');
     if(!w){toast('Activá ventanas emergentes','var(--orange)',4000);return;}
     w.document.write(_pdfSinEncabezado(h));w.document.close();
-    setTimeout(function(){
+    _imprimirConFotos(w).then(function(){
       var btn=w.document.createElement('button');
       btn.textContent='Imprimir / Guardar PDF';
       btn.style.cssText='position:fixed;top:10px;right:10px;background:#D97706;color:#fff;border:none;padding:10px 18px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;z-index:9999';
       btn.onclick=function(){w.print();};
       w.document.body.appendChild(btn);
       w.print();
-    },600);
+    });
   }catch(e){console.error('PDF material error:',e);toast('Error PDF: '+e.message,'var(--red)',5000);}
 }
 
@@ -7452,7 +7452,7 @@ function exportComentariosPDF(){
     +'<div style="text-align:right"><div style="font-size:9pt;color:#666">&#9742; 264 4397772</div><div style="font-size:9pt;color:#666">&#9993; federicopickelny@gmail.com</div><div style="font-size:9pt;color:#666">&#127968; B. Rivadavia Oeste 114</div></div></div>'
     +'</body></html>';
   const w=window.open('','_blank');if(!w){toast('Habilitá las ventanas emergentes','var(--orange)');return;}
-  w.document.write(_pdfSinEncabezado(doc));w.document.close();setTimeout(function(){w.print();},400);
+  w.document.write(_pdfSinEncabezado(doc));w.document.close();_imprimirConFotos(w).then(function(){w.print();});
   }catch(e){toast('Error al generar PDF','var(--red)');console.error(e);}
 }
 function toggleCmtSel(id){
@@ -7511,7 +7511,7 @@ function exportSeleccionadosPDF(){
     +'<div style="text-align:right"><div style="font-size:9pt;color:#666">&#9742; 264 4397772</div><div style="font-size:9pt;color:#666">&#9993; federicopickelny@gmail.com</div><div style="font-size:9pt;color:#666">&#127968; B. Rivadavia Oeste 114</div></div></div>'
     +'</body></html>';
   const w=window.open('','_blank');if(!w){toast('Habilitá las ventanas emergentes','var(--orange)');return;}
-  w.document.write(_pdfSinEncabezado(doc));w.document.close();setTimeout(function(){w.print();},400);
+  w.document.write(_pdfSinEncabezado(doc));w.document.close();_imprimirConFotos(w).then(function(){w.print();});
   }catch(e){toast('Error al generar PDF','var(--red)');console.error(e);}
 }
 // ─── ARCHIVOS CON LÍMITE ─────────────────────────────────────────
@@ -7869,7 +7869,7 @@ function generarInformeMixto(){
     var w=window.open('','_blank');
     if(!w){toast('Activá ventanas emergentes para ver el PDF','var(--orange)',4000);return;}
     w.document.write(_pdfSinEncabezado(html));w.document.close();
-    setTimeout(function(){
+    _imprimirConFotos(w).then(function(){
       var btn=w.document.createElement('button');
       btn.textContent='Imprimir / Guardar PDF (A4)';
       btn.style.cssText='position:fixed;top:10px;right:10px;background:#D97706;color:#fff;border:none;padding:10px 18px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,.2)';
@@ -7877,7 +7877,7 @@ function generarInformeMixto(){
       btn.onclick=function(){w.print();};
       w.document.body.appendChild(btn);
       w.print();
-    },600);
+    });
   }catch(e){
     console.error('Informe mixto error:',e);
     toast('Error al generar informe: '+e.message,'var(--red)',5000);
@@ -8237,6 +8237,47 @@ function _pdfSinEncabezado(html){
   if(/<body[^>]*>/i.test(html))html=html.replace(/<body[^>]*>/i,function(m){return m+abre;});else html=abre+html;
   if(/<\/body>/i.test(html))html=html.replace(/<\/body>/i,cierra+'</body>');else html+=cierra;
   return html;
+}
+
+// ── Imprimir recién cuando cargaron las fotos ──
+// Los PDF mandaban a imprimir a los ~0,6 s: las fotos de Drive todavía estaban
+// bajando y el teléfono congelaba la hoja con los recuadros grises. Además, una
+// foto pendiente de subir ('[foto:ID]') no la puede mostrar la ventana nueva.
+// Acá: 1) se reemplaza cada foto por su copia en el dispositivo si la hay
+// (instantánea, sin internet); 2) a Drive se le pide un tamaño acorde al PDF;
+// 3) se espera a que carguen todas (con tope) mostrando el avance.
+async function _imprimirConFotos(w,topeMs){
+  if(!w||!w.document)return;
+  var doc=w.document,imgs=Array.prototype.slice.call(doc.images||[]);
+  if(!imgs.length)return;
+  var aviso=doc.createElement('div');
+  aviso.className='no-print';
+  aviso.style.cssText='position:fixed;left:50%;top:12px;transform:translateX(-50%);background:#0f172a;color:#fff;padding:8px 14px;border-radius:20px;font:600 13px Arial,sans-serif;z-index:99999;box-shadow:0 4px 12px rgba(0,0,0,.25)';
+  try{doc.body.appendChild(aviso);}catch(_){}
+  var porDrive={},porId={};
+  try{if(GD.idbReady)(await idbGetAll('images')||[]).forEach(function(im){
+    if(!im||typeof im.data!=='string'||!im.data.startsWith('data:'))return;
+    if(im.driveId)porDrive[im.driveId]=im.data;if(im.id)porId[im.id]=im.data;});}catch(_){}
+  imgs.forEach(function(im){
+    var s=im.getAttribute('src')||'';
+    var m=s.match(/^\[foto:(.+)\]$/);
+    if(m){var d=(typeof IMG_CACHE!=='undefined'&&IMG_CACHE[m[1]])||porId[m[1]];if(d)im.src=d;return;}
+    var did=(s.indexOf('drive.google.com')>=0)?((s.match(/[?&]id=([^&]+)/)||s.match(/\/d\/([^/?]+)/)||[])[1]):null;
+    if(did){
+      if(porDrive[did])im.src=porDrive[did];
+      else im.src='https://drive.google.com/thumbnail?id='+did+'&sz=w700';
+    }
+  });
+  var listo=function(im){return im.complete&&im.naturalWidth>0;};
+  var fallo=function(im){return im.complete&&im.naturalWidth===0;};
+  var fin=Date.now()+(topeMs||25000);
+  while(Date.now()<fin){
+    var ok=imgs.filter(listo).length,mal=imgs.filter(fallo).length;
+    aviso.textContent='Cargando fotos '+ok+' de '+imgs.length+'…';
+    if(ok+mal>=imgs.length)break;
+    await new Promise(function(r){setTimeout(r,250);});
+  }
+  try{aviso.remove();}catch(_){}
 }
 
 // ── ZIP propio (sin librerías externas: funciona aunque no cargue un CDN) ──
@@ -8775,7 +8816,7 @@ function cierreImprimir(completo){
   var w=window.open('','_blank');
   if(!w){toast('Activá las ventanas emergentes para ver el PDF','var(--orange)',4000);return;}
   w.document.write(html);w.document.close();
-  setTimeout(function(){try{w.print();}catch(_){}},900);
+  _imprimirConFotos(w).then(function(){try{w.print();}catch(_){}});
 }
 function cierreConfirmar(){
   if(!_CIE)return;
@@ -9678,6 +9719,13 @@ function _acItems(rubro){
 function openNEM(){
   openM('newEcoM');
   setTimeout(function(){
+    // Un movimiento nuevo arranca siempre en blanco: no arrastra lo que quedó
+    // escrito en el anterior (ni si se cerró sin guardar).
+    ['eco_concepto','eco_detalle','eco_monto','eco_prov','eco_rubro','eco_item','eco_img'].forEach(function(id){var el=$(id);if(el)el.value='';});
+    var _f=$('eco_fecha');if(_f)_f.value=td();
+    ['eco_medio','eco_mat_estado','eco_mat_unit'].forEach(function(id){var el=$(id);if(el&&el.options&&el.options.length)el.selectedIndex=0;});
+    ['eco_interno','eco_doble'].forEach(function(id){var el=$(id);if(el)el.checked=false;});
+    toggleEcoDoble();
     selEcoTipo('egreso'); // default egreso para compras
     var cb=$('eco_es_mat');if(cb)cb.checked=false;
     var panel=$('eco_mat_panel');if(panel)panel.style.display='none';
@@ -11167,13 +11215,13 @@ function exportEcoPDF(includeDistrib,includeRubroCol,includeMetros,privados){
     +'</body></html>';
   const w=window.open('','_blank');if(!w){toast('Activá ventanas emergentes','var(--orange)');return;}
   w.document.write(privados==='sin'?_pdfSinEncabezado(h):h);w.document.close();
-  setTimeout(function(){
+  _imprimirConFotos(w).then(function(){
     const btn=w.document.createElement('button');
     btn.textContent='Imprimir / Guardar PDF (A4)';
     btn.style.cssText='position:fixed;top:10px;right:10px;background:#D97706;color:#fff;border:none;padding:10px 18px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,.2)';
     btn.className='no-print';btn.onclick=function(){w.print();};
     w.document.body.appendChild(btn);w.print();
-  },600);
+  });
   }catch(e){
     console.error('PDF error:',e);
     toast('Error al generar PDF: '+e.message,'var(--red)',5000);
