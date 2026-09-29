@@ -5109,6 +5109,26 @@ function App(){
   const _guardarFn=useRef(null);
   const _driveTimer=useRef(null);
   const [driveStatus,setDriveStatus]=useState('idle'); // idle | loading | pending | saving | saved | error
+  const _ultimoData=useRef(null);   // lo último que se armó para guardar, para poder mandarlo al salir
+  const [saliendo,setSaliendo]=useState(false);
+
+  /* Volver al panel de obras desde el logo. El guardado a Drive espera 15s, así
+     que si quedó algo pendiente se manda ahora: si no, salir de la obra se
+     comía el último cambio. */
+  const irAlInicio=async()=>{
+    if(saliendo)return;
+    const pendiente=DRIVE_URL&&proyecto&&(driveStatus==='pending'||driveStatus==='saving');
+    if(pendiente&&_ultimoData.current){
+      setSaliendo(true);
+      if(_driveTimer.current)clearTimeout(_driveTimer.current);
+      setDriveStatus('saving');
+      const ok=await _driveSave(_obraArchivo||proyecto,_ultimoData.current);
+      if(!ok&&!window.confirm('No pude guardar en Drive el último cambio. En este dispositivo queda guardado igual.\n\n¿Salir igual al listado de obras?')){
+        setSaliendo(false);setDriveStatus('error');return;
+      }
+    }
+    window.location.href=window.location.pathname;   // sin ?obra= → panel de obras
+  };
 
   /* ── Botón del asistente: arrastrable ──────────────────────────────
      Queda fijo sobre el contenido, así que tiene que poder correrse cuando tapa
@@ -5181,6 +5201,7 @@ function App(){
   useEffect(()=>{
     const data={tareas,rec,grupos,rubros,cfg,proyecto,cuadGrupos,cuadRubros,moItems,matIncr,prof,imprevistos,notaPDF,
       aiChat:(aiChat||[]).slice(-40)};   // últimos 40 mensajes del Asistente: contexto suficiente sin inflar el JSON
+    _ultimoData.current=data;
     guardarStorage(data);
     setLastSaved(new Date());
     if(DRIVE_URL&&_initDone.current&&proyecto){
@@ -5421,7 +5442,11 @@ function App(){
       {/* HEADER */}
       <div className="hdr-wrap" style={{background:C.surface,borderBottom:`1px solid ${C.border}`,position:"sticky",top:0,zIndex:100,boxShadow:"0 2px 8px rgba(0,0,0,.07)"}}>
         <div className="hdr" style={{display:"flex",alignItems:"center"}}>
-          <div className="hdr-brand" style={{display:"flex",alignItems:"center",gap:"8px",padding:"9px 14px",borderRight:`1px solid ${C.border}`,minWidth:"155px",flexShrink:0}}>
+          {/* El logo vuelve al listado de obras (salvo en un HTML guardado, que no tiene listado) */}
+          <div className="hdr-brand" onClick={__SNAP__?undefined:irAlInicio}
+            title={__SNAP__?undefined:"Volver al listado de obras"}
+            style={{display:"flex",alignItems:"center",gap:"8px",padding:"9px 14px",borderRight:`1px solid ${C.border}`,minWidth:"155px",flexShrink:0,
+              cursor:__SNAP__?"default":"pointer",userSelect:"none",opacity:saliendo?.6:1}}>
             <div style={{background:C.accent,width:"28px",height:"28px",borderRadius:"7px",display:"flex",alignItems:"center",justifyContent:"center",color:"white",flexShrink:0}}>
               <svg viewBox="0 0 22 18" width="15" height="12" fill="none">
                 <rect x="2" y="1.5" width="12" height="4" rx="2" fill="white"/>
@@ -5431,7 +5456,9 @@ function App(){
             </div>
             <div>
               <div style={{fontWeight:800,fontSize:"14px",letterSpacing:"-.3px",color:C.t1}}>ObraGestión</div>
-              <div style={{fontSize:"8px",color:C.t3,letterSpacing:".2px"}}>v4 · gestión de obra</div>
+              <div style={{fontSize:"8px",color:C.t3,letterSpacing:".2px"}}>
+                {__SNAP__?'v4 · gestión de obra':saliendo?'guardando…':'← Mis obras'}
+              </div>
             </div>
           </div>
           <div className="hdr-tabs" style={{display:"flex",overflowX:"auto",flex:1}}>
