@@ -2873,8 +2873,36 @@ function _resetMatModal(prefix){
 // Abrir y cerrar un cartel cambia lo que queda debajo del dedo, y el celular
 // volvía a entregar ese mismo toque sobre lo nuevo: al tocar "Crear Visita" se
 // abría OTRA visita, la que quedaba bajo el botón. El escudo descarta ese toque.
+// Todas las ventanas de "nuevo" (new*, y lk* que crean algo desde una visita)
+// abren en blanco: cada campo vuelve al valor con que nace en la plantilla. El
+// morphing conserva lo escrito entre renders, y sin esto la tarea, el comentario,
+// la alerta, etc. nuevos arrancaban con los datos del anterior. Quien necesita
+// precargar algo lo hace después de openM (en un setTimeout), así que no se pisa.
+function _limpiarModalNuevo(id){
+  var m=$(id);if(!m)return;
+  m.querySelectorAll('input,textarea,select').forEach(function(el){
+    var t=(el.type||'').toLowerCase();
+    if(t==='file'){el.value='';return;}
+    if(t==='checkbox'||t==='radio'){el.checked=el.defaultChecked;return;}
+    if(el.tagName==='SELECT'){
+      var i=-1;for(var k=0;k<el.options.length;k++){if(el.options[k].defaultSelected){i=k;break;}}
+      el.selectedIndex=i>=0?i:0;return;
+    }
+    if(t==='date'&&el.defaultValue){el.value=td();return;}
+    el.value=el.defaultValue;
+  });
+  // Selector de prioridad: resaltar el botón que corresponde al valor limpio.
+  m.querySelectorAll('button[onclick^="selPri("]').forEach(function(b){
+    var mm=(b.getAttribute('onclick')||'').match(/selPri\('([^']+)','([^']+)'/);
+    if(!mm)return;var h=$(mm[1]);
+    b.classList.toggle('btn-act',!!h&&h.value===mm[2]);
+  });
+  m.querySelectorAll('.photo-prev').forEach(function(im){im.removeAttribute('src');im.style.display='none';});
+  m.querySelectorAll('.mcs-drop,.ac-list').forEach(function(d){d.style.display='none';});
+}
 function openM(id){
   _escudoToque();
+  if(/^(new|lk)/.test(id))_limpiarModalNuevo(id);
   var pfx=_MATM_PREFIX[id];
   if(pfx)_resetMatModal(pfx);
   $(id)?.classList.add('open');
@@ -5440,7 +5468,7 @@ function rMat(mc){
   <div id="mat_items_list"><div class="txxs tc3 tac" style="padding:16px">Cargando...</div></div>
   
   <div class="mo" id="newMatM"><div class="mo-c"><div class="mo-h"><h3 style="color:${c}">Nuevo Material</h3><button class="tbtn" onclick="closeM('newMatM')">${I.x}</button></div><div class="fg"><label class="fl">Material *</label><input class="fi" id="nm_n"></div><div class="fr"><div class="fg"><label class="fl">Computado</label><input class="fi" id="nm_comp" type="number" min="0" placeholder="Cantidad prevista"></div><div class="fg"><label class="fl">Unidad</label><select class="fs" id="nm_u">${UNI.map(u=>`<option>${u}</option>`).join('')}</select></div></div><div class="fg"><label class="fl">Categoría</label><select class="fs" id="nm_c">${MATCAT.map(c=>`<option>${c}</option>`).join('')}</select></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="nm_no"></textarea></div><div class="fg"><label class="fl">Fotos</label><input type="file" accept="image/*" multiple id="nm_ph" class="fi" style="padding:6px"></div><button class="btn btn-w mt-8" style="background:${c};color:#fff" onclick="saveMat()">Guardar</button></div></div>
-  <div class="mo" id="newIngM"><div class="mo-c"><div class="mo-h"><h3 style="color:${c}">Ingreso de Material</h3><button class="tbtn" onclick="closeM('newIngM')">${I.x}</button></div><button class="btn btn-sec btn-s btn-w mb-10" style="color:#7c3aed" onclick="closeM('newIngM');abrirIngresoMultiple()">&#x1F4E6; ¿Llegaron varios? Cargar el remito entero</button>${allItems.length?`<div class="fg"><label class="fl">Material *</label>${_mcsHtml('ni_mat',allItems,'Buscar material...',null)}<div id="ni_uinfo" style="display:none"></div></div>`:'<div class="ts tc3 mb-12">Primero carga materiales en el cómputo</div>'}<div class="fr"><div class="fg"><label class="fl">Cantidad *</label><input class="fi" id="ni_q" type="number" min="0" oninput="_unidadInfo('ni')"></div><div class="fg"><label class="fl">Fecha</label><input class="fi" id="ni_d" type="date" value="${td()}" onchange="_unidadInfo('ni')"></div></div><div class="fg"><label class="fl">Proveedor</label>${_pcHtml('ni_prov',_provList,'Buscar o escribir proveedor...')}</div><div class="fg"><label class="fl">Remito</label><input class="fi" id="ni_rem"></div><div class="fg"><label class="fl">Observaciones</label><textarea class="ft" id="ni_obs"></textarea></div><div class="fg"><label class="fl">Fotos del ingreso</label><input type="file" accept="image/*" multiple id="ni_ph" class="fi" style="padding:6px"></div><button class="btn btn-w mt-8" style="background:${c};color:#fff" onclick="saveIng()">Registrar</button>
+  <div class="mo" id="newIngM"><div class="mo-c"><div class="mo-h"><h3 style="color:${c}">Ingreso de Material</h3><button class="tbtn" onclick="closeM('newIngM')">${I.x}</button></div><button class="btn btn-sec btn-s btn-w mb-10" style="color:#7c3aed" onclick="closeM('newIngM');abrirIngresoMultiple()">&#x1F4E6; ¿Llegaron varios? Cargar el remito entero</button>${allItems.length?`<div class="fg"><label class="fl">Material del cómputo</label>${_mcsHtml('ni_mat',allItems,'Buscar material...','— Ninguno (uso nombre libre) —')}<div id="ni_uinfo" style="display:none"></div></div>`:''}<div class="fg"><label class="fl">${allItems.length?'…o nombre libre (sin cómputo)':'Material (sin cómputo)'}</label><div style="display:flex;gap:8px"><div style="flex:2;min-width:0">${_pcHtml('ni_nombre',_sinCompNombres().map(x=>x.nombre),'Escribí o elegí uno ya ingresado','','onchange="_niUnidadSinComp()"')}</div><select class="fs" id="ni_u" style="flex:1;min-width:0">${UNI.map(u=>`<option>${u}</option>`).join('')}</select></div><div class="txxs tc3 mt-2">Al escribir aparecen los ya ingresados sin cómputo: elegí uno para sumarle a ese y no cargarlo dos veces.</div></div><div class="fr"><div class="fg"><label class="fl">Cantidad *</label><input class="fi" id="ni_q" type="number" min="0" oninput="_unidadInfo('ni')"></div><div class="fg"><label class="fl">Fecha</label><input class="fi" id="ni_d" type="date" value="${td()}" onchange="_unidadInfo('ni')"></div></div><div class="fg"><label class="fl">Proveedor</label>${_pcHtml('ni_prov',_provList,'Buscar o escribir proveedor...')}</div><div class="fg"><label class="fl">Remito</label><input class="fi" id="ni_rem"></div><div class="fg"><label class="fl">Observaciones</label><textarea class="ft" id="ni_obs"></textarea></div><div class="fg"><label class="fl">Fotos del ingreso</label><input type="file" accept="image/*" multiple id="ni_ph" class="fi" style="padding:6px"></div><button class="btn btn-w mt-8" style="background:${c};color:#fff" onclick="saveIng()">Registrar</button>
 </div></div>
   <div class="mo" id="newPedidoM"><div class="mo-c"><div class="mo-h"><h3 style="color:var(--orange)">&#x1F4CB; Nuevo Pedido</h3><button class="tbtn" onclick="closeM('newPedidoM')">${I.x}</button></div><button class="btn btn-sec btn-s btn-w mb-10" style="color:var(--orange)" onclick="closeM('newPedidoM');abrirIngresoMultiple('pedido')">&#x1F4DD; ¿Son varios? Cargar por lista</button><div style="background:#fff7ed;border-left:3px solid var(--orange);border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px">Los pedidos <strong>no computan</strong> como ingresados. Se convierten en ingreso con un clic cuando lleguen.</div><div class="fg"><label class="fl">Material del c&oacute;mputo (opcional)</label>${_mcsHtml('np_mat',allItems,'Buscar o dejar vacío...','— Ninguno —')}<div id="np_uinfo" style="display:none"></div></div><div class="fg"><label class="fl">Nombre libre</label><input class="fi" id="np_nombre" placeholder="Si no est&aacute; en el c&oacute;mputo..."></div><div class="fr"><div class="fg"><label class="fl">Cantidad *</label><input class="fi" id="np_q" type="number" min="0" step="0.01" oninput="_unidadInfo('np')"></div><div class="fg"><label class="fl">Unidad</label><select class="fs" id="np_u">${UNI.map(u=>`<option>${u}</option>`).join('')}</select></div></div><div class="fg"><label class="fl">Proveedor</label>${_pcHtml('np_prov',_provList,'Buscar o escribir proveedor...')}</div><div class="fg"><label class="fl">Fecha pedido</label><input class="fi" id="np_fecha" type="date" value="${td()}" onchange="_unidadInfo('np')"></div><div class="fg"><label class="fl">Grupo (opcional)</label>${_pcHtml('np_grupo',_grupoNames,'Buscar o crear un grupo...')}<div class="txxs tc3 mt-2">Agrupá varios materiales bajo el mismo nombre para no ver un listado tan largo.</div></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="np_obs"></textarea></div><button class="btn btn-w mt-8" style="background:var(--orange);color:#fff" onclick="savePedido()">Registrar Pedido</button></div></div>
   <div class="mo" id="newAPedirM"><div class="mo-c"><div class="mo-h"><h3 style="color:#8b5cf6">&#x1F4DD; A pedir</h3><button class="tbtn" onclick="closeM('newAPedirM')">${I.x}</button></div><button class="btn btn-sec btn-s btn-w mb-10" style="color:#8b5cf6" onclick="closeM('newAPedirM');abrirIngresoMultiple('a_pedir')">&#x1F4DD; ¿Son varios? Cargar por lista</button><div style="background:#f5f3ff;border-left:3px solid #8b5cf6;border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px">Material pendiente de pedido. Pas&aacute;lo a Pedido cuando se solicite.</div><div class="fg"><label class="fl">Material del c&oacute;mputo (opcional)</label>${_mcsHtml('nap_mat',allItems,'Buscar o dejar vacío...','— Ninguno —')}<div id="nap_uinfo" style="display:none"></div></div><div class="fg"><label class="fl">Nombre</label><input class="fi" id="nap_nombre" placeholder="Nombre del material"></div><div class="fr"><div class="fg"><label class="fl">Cantidad</label><input class="fi" id="nap_q" type="number" min="0" step="0.01" oninput="_unidadInfo('nap')"></div><div class="fg"><label class="fl">Unidad</label><select class="fs" id="nap_u">${UNI.map(u=>`<option>${u}</option>`).join('')}</select></div></div><div class="fg"><label class="fl">Proveedor sugerido</label>${_pcHtml('nap_prov',_provList,'Buscar o escribir proveedor...')}</div><div class="fg"><label class="fl">Fecha estimada</label><input class="fi" id="nap_fecha" type="date" value="${td()}" onchange="_unidadInfo('nap')"></div><div class="fg"><label class="fl">Grupo (opcional)</label>${_pcHtml('nap_grupo',_grupoNames,'Buscar o crear un grupo...')}<div class="txxs tc3 mt-2">Agrupá varios materiales bajo el mismo nombre para no ver un listado tan largo.</div></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="nap_obs"></textarea></div><button class="btn btn-w mt-8" style="background:#8b5cf6;color:#fff" onclick="saveAPedir()">Registrar A pedir</button></div></div>
@@ -6330,7 +6358,25 @@ function ejecutarConfirmarPedido(pedidoId){
 
 async function saveMat(){
   if(!requireWrite())return;const n=$('nm_n').value.trim();if(!n){toast('Nombre obligatorio','var(--red)');return;}const pu=await readPhotos('nm_ph','materiales');D.materiales.push({id:uid(),projectId:S.proj,name:n,computado:parseFloat($('nm_comp').value)||0,qty:0,unit:$('nm_u').value,category:$('nm_c').value||'General',notes:$('nm_no').value,photos:pu.map(u=>mkPhoto(u,'')),date:td(),updatedAt:nw()});audit('materiales','create',n);sv();closeM('newMatM');render();toast('Material registrado');}
-async function saveIng(){const mid=$('ni_mat')?.value;const q=parseFloat($('ni_q').value);if(!mid){toast('Selecciona material','var(--red)');return;}if(!q||q<=0){toast('Cantidad invalida','var(--red)');return;}if(!D.matIngresos)D.matIngresos=[];const pu=await readPhotos('ni_ph','materiales');const _ingMat=(D.materiales||[]).find(function(m){return m.id===mid;});D.matIngresos.push({id:uid(),projectId:S.proj,materialId:mid,matNombre:_ingMat?_ingMat.name:'',qty:q,date:$('ni_d').value||td(),proveedor:$('ni_prov').value,remito:$('ni_rem').value,observations:$('ni_obs').value,photos:pu.map(u=>mkPhoto(u,'')),unitEsNueva:_matUnitAt(_ingMat,$('ni_d').value||td()).nueva,unit:_matUnitAt(_ingMat,$('ni_d').value||td()).unit,updatedAt:nw()});audit('matIngresos','create','+'+q);sv();closeM('newIngM');render();toast('Ingreso registrado');}
+async function saveIng(){let mid=$('ni_mat')?.value;const q=parseFloat($('ni_q').value);
+  // Nombre libre: material que no está en el cómputo. Si coincide exacto con uno
+  // computado se usa ese; si coincide con uno ya ingresado sin cómputo se toma su
+  // nombre tal cual, así queda en el mismo grupo y no se duplica.
+  const _nl=(($('ni_nombre')||{}).value||'').trim();
+  if(!mid&&_nl){const _mc=pf('materiales').find(function(m){return !m.visitaId&&_normTxt(m.name)===_normTxt(_nl);});if(_mc)mid=_mc.id;}
+  if(!mid&&!_nl){toast('Elegí un material del cómputo o escribí el nombre','var(--red)');return;}
+  if(!q||q<=0){toast('Cantidad invalida','var(--red)');return;}
+  if(!mid){
+    if(!D.matIngresos)D.matIngresos=[];
+    const _prev=_sinCompNombres().find(function(x){return _normTxt(x.nombre)===_normTxt(_nl);});
+    const _f=$('ni_d').value||td();
+    const _pu=await readPhotos('ni_ph','materiales');
+    D.matIngresos.push({id:uid(),projectId:S.proj,materialId:'',matNombre:_prev?_prev.nombre:_nl,qty:q,unit:($('ni_u')||{}).value||(_prev&&_prev.unit)||'u',
+      estado:'ingresado',date:_f,fecha:_f,fechaIngreso:_f,proveedor:$('ni_prov').value,remito:$('ni_rem').value,observations:$('ni_obs').value,
+      photos:_pu.map(u=>mkPhoto(u,'')),updatedAt:nw()});
+    audit('matIngresos','create','+'+q+' '+(_prev?_prev.nombre:_nl)+' (sin cómputo)');sv();closeM('newIngM');render();
+    toast(_prev?'Sumado a "'+_prev.nombre+'" (sin cómputo)':'Ingreso registrado sin cómputo');return;
+  }if(!D.matIngresos)D.matIngresos=[];const pu=await readPhotos('ni_ph','materiales');const _ingMat=(D.materiales||[]).find(function(m){return m.id===mid;});D.matIngresos.push({id:uid(),projectId:S.proj,materialId:mid,matNombre:_ingMat?_ingMat.name:'',qty:q,date:$('ni_d').value||td(),proveedor:$('ni_prov').value,remito:$('ni_rem').value,observations:$('ni_obs').value,photos:pu.map(u=>mkPhoto(u,'')),unitEsNueva:_matUnitAt(_ingMat,$('ni_d').value||td()).nueva,unit:_matUnitAt(_ingMat,$('ni_d').value||td()).unit,updatedAt:nw()});audit('matIngresos','create','+'+q);sv();closeM('newIngM');render();toast('Ingreso registrado');}
 // ─── INGRESO MÚLTIPLE (UN REMITO, VARIOS MATERIALES) ──────────────
 // Un remito trae 8 o 10 materiales, pero comparten proveedor, fecha y número de
 // remito. Cargarlos de a uno obligaba a repetir esos tres datos otras tantas
@@ -11329,10 +11375,10 @@ function olvidarDispositivo(){
 
 // ═══════ PROVEEDOR COMBO ═══════
 var _pcOpts={};
-function _pcHtml(selId,items,placeholder,value){
+function _pcHtml(selId,items,placeholder,value,extra){
   _pcOpts[selId]=items;
   return '<div class="mcs" id="'+selId+'_w">'
-    +'<input class="fi" id="'+selId+'" type="text" placeholder="'+placeholder+'" autocomplete="off" style="margin:0;width:100%" value="'+esc(value||'')+'" '
+    +'<input class="fi" id="'+selId+'" type="text" placeholder="'+placeholder+'" autocomplete="off" style="margin:0;width:100%" value="'+esc(value||'')+'" '+(extra||'')+' '
     +'oninput="_pcF(\''+selId+'\')" onfocus="_pcF(\''+selId+'\')" onblur="setTimeout(function(){_pcCl(\''+selId+'\')},220)">'
     +'<div class="mcs-drop" id="'+selId+'_d"></div>'
     +'</div>';
@@ -11358,8 +11404,23 @@ function _pcF(selId){
 function _pcCl(selId){var d=$(selId+'_d');if(d)d.style.display='none';}
 function _pcP(selId,val){
   var inp=$(selId),drop=$(selId+'_d');
-  if(inp)inp.value=val;
+  if(inp){inp.value=val;inp.dispatchEvent(new Event('change'));}
   if(drop)drop.style.display='none';
+}
+// Materiales ingresados sin cómputo de la obra: nombre (el primero con que se
+// cargó) y su unidad. Sirve para elegir uno ya existente y no duplicarlo.
+function _sinCompNombres(){
+  var vistos={},out=[];
+  _sinCompItems().filter(function(i){return (i.matNombre||'').trim();})
+    .slice().sort(function(a,b){return String(a.date||'').localeCompare(String(b.date||''));})
+    .forEach(function(i){var k=_normTxt(i.matNombre);if(!vistos[k]){vistos[k]={nombre:i.matNombre.trim(),unit:i.unit||'u'};out.push(vistos[k]);}});
+  return out.sort(function(a,b){return a.nombre.localeCompare(b.nombre,'es',{sensitivity:'base'});});
+}
+function _niUnidadSinComp(){
+  var n=_normTxt(($('ni_nombre')||{}).value);if(!n)return;
+  var hit=_sinCompNombres().find(function(x){return _normTxt(x.nombre)===n;});
+  var u=$('ni_u');
+  if(hit&&u){var ok=[].some.call(u.options,function(o){return o.value===hit.unit;});if(!ok){var o=document.createElement('option');o.textContent=hit.unit;u.appendChild(o);}u.value=hit.unit;}
 }
 
 // ═══════ MATERIAL COMBO SEARCH ═══════
