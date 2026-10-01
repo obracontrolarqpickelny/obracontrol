@@ -1762,9 +1762,9 @@ const _UI_KEYS=[
   'cmtFilter','cmtSearch','cmtTipoFilter','cmtSort','cmtState',
   // Economía
   'ecoFilter','ecoTipoFilter','ecoSort','ecoMetrosOpen',
-  'ecoVerPrivados','ecoDistribOpen','ecoFiltrosOpen','ecoRubroFilter','ecoItemFilter','ecoFechaDesde','ecoFechaHasta',
+  'ecoVerPrivados','ecoDistribOpen','ecoMesesOpen','ecoFiltrosOpen','ecoRubroFilter','ecoItemFilter','ecoFechaDesde','ecoFechaHasta',
   // Grupos de materiales plegados, alertas resueltas, obras cerradas del inicio
-  'matGrupoCollapsed','alertResOpen','verCerradas',
+  'matGrupoCollapsed','alertResOpen','verCerradas','matPdfSinComp',
   // Bandeja y carpeta de colaboradores
   'bandejaTab','bandejaSearch','carpetaSort','carpetaFilter',
   // Obra y pestaña en las que quedó la app
@@ -4975,7 +4975,21 @@ function exportVisitaPDF(vid){
     toast('Error al generar PDF: '+e.message,'var(--red)',5000);
   }
 }
-function exportMatPDF(){
+// Antes de generar, si hay ingresados sin cómputo se pregunta si incluirlos (la
+// elección se recuerda). Sin ninguno, sale directo como siempre.
+function abrirPdfMateriales(){
+  var sc=_cMateriales(S.proj).sinComp;
+  if(!sc.length){exportMatPDF(false);return;}
+  var incl=S.matPdfSinComp!==false;
+  var old=document.getElementById('pdfMatM');if(old)old.remove();
+  var d=document.createElement('div');d.className='mo open';d.id='pdfMatM';
+  d.innerHTML='<div class="mo-c" style="max-width:400px"><div class="mo-h"><h3 style="color:var(--purple)">📄 PDF de materiales</h3><button class="tbtn" onclick="document.getElementById(\'pdfMatM\').remove()">'+I.x+'</button></div>'
+    +'<label class="fl" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:6px"><input type="checkbox" id="pdfMat_sc" style="width:16px;height:16px"'+(incl?' checked':'')+'> Incluir materiales ingresados sin cómputo ('+sc.length+')</label>'
+    +'<div class="txxs tc3 mb-12">Van en una tabla aparte, debajo de los computados.</div>'
+    +'<button class="btn btn-w" style="background:var(--purple);color:#fff" onclick="var c=document.getElementById(\'pdfMat_sc\').checked;S.matPdfSinComp=c;saveUIState();document.getElementById(\'pdfMatM\').remove();exportMatPDF(c)">Generar PDF</button></div>';
+  document.body.appendChild(d);
+}
+function exportMatPDF(incluirSinComp){
   try{
 
   const p=D.projects.find(x=>x.id===S.proj);
@@ -4990,7 +5004,17 @@ function exportMatPDF(){
     const col=m.computado&&m.pct>=100?'#16a34a':m.pct>=80?'#ea580c':'#3b82f6';
     return `<tr><td style="padding:3px 4px;border-bottom:1px solid #eee;font-size:7.5pt">${m.name}</td><td style="padding:3px 4px;border-bottom:1px solid #eee;text-align:center;font-size:7.5pt">${m.computado||0} ${m.unit||''}</td><td style="padding:3px 4px;border-bottom:1px solid #eee;text-align:center;color:#3b82f6;font-size:7.5pt">${m.totalIng}</td><td style="padding:3px 4px;border-bottom:1px solid #eee;text-align:center;color:#ea580c;font-size:7.5pt">${Math.max((m.computado||0)-m.totalIng,0)}</td><td style="padding:3px 4px;border-bottom:1px solid #eee;text-align:center;font-weight:700;color:${col};font-size:7.5pt">${m.computado?m.pct+'%':'-'}</td></tr>`;
   }).join('')).join('');
-  const h=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Materiales - ${p?.name||''}</title><style>@page{size:A4;margin:20mm}@media print{.no-print{display:none}}body{font-family:Arial,sans-serif;max-width:210mm;margin:0 auto;padding:20px;color:#333}h1{font-size:12pt;border-bottom:3px solid #D97706;padding-bottom:5px;margin-bottom:3px}h2{font-size:8pt;color:#666;font-weight:normal;margin:3px 0 12px}table{width:100%;border-collapse:collapse;font-size:7.5pt}th{background:#7c3aed;color:#fff;padding:5px 4px;text-align:left;font-size:7.5pt}th:not(:first-child){text-align:center}.footer{margin-top:16px;border-top:1px solid #eee;padding-top:8px;font-size:7pt;color:#999;text-align:center}@media print{body{padding:10px}}</style></head><body><h1>Resumen de Materiales</h1><h2>Obra: ${p?.name||''}</h2><table><tr><th>Material</th><th>Computado</th><th>Ingresado</th><th>Falta</th><th>Avance</th></tr>${rows}</table><div class="footer">ObraControl Pro v9.0</div><div class="page-footer" style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:24px;border-top:2px solid #D97706;padding-top:12px"><div><div style="font-size:15px;font-weight:800;color:#D97706">FEDERICO PICKELNY</div><div style="font-size:10pt;font-weight:700;color:#555;margin-top:1px">ARQUITECTO</div><div style="font-size:9pt;color:#666;margin-top:1px">MP 2304</div></div><div style="text-align:right"><div style="font-size:9pt;color:#666">&#9742; 264 4397772</div><div style="font-size:9pt;color:#666">&#9993; federicopickelny@gmail.com</div><div style="font-size:9pt;color:#666">&#127968; B. Rivadavia Oeste 114</div></div></div></body></html>`;
+  let _scHtml='';
+  if(incluirSinComp){
+    const _sc=_cMateriales(S.proj).sinComp.slice().sort(function(a,b){return a.nombre.localeCompare(b.nombre,'es',{sensitivity:'base'});});
+    if(_sc.length){
+      _scHtml='<h1 style="margin-top:18px;font-size:10pt">Ingresados sin cómputo ('+_sc.length+')</h1>'
+        +'<table><tr><th>Material</th><th>Ingresado</th><th style="text-align:left">Proveedores</th></tr>'
+        +_sc.map(function(x){return '<tr><td style="padding:3px 4px;border-bottom:1px solid #eee;font-size:7.5pt">'+esc(x.nombre)+'</td><td style="padding:3px 4px;border-bottom:1px solid #eee;text-align:center;color:#3b82f6;font-size:7.5pt">'+(Math.round(x.qty*100)/100)+' '+esc(x.unit)+'</td><td style="padding:3px 4px;border-bottom:1px solid #eee;font-size:7.5pt">'+esc(Object.keys(x.provs).join(', '))+'</td></tr>';}).join('')
+        +'</table>';
+    }
+  }
+  const h=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Materiales - ${p?.name||''}</title><style>@page{size:A4;margin:20mm}@media print{.no-print{display:none}}body{font-family:Arial,sans-serif;max-width:210mm;margin:0 auto;padding:20px;color:#333}h1{font-size:12pt;border-bottom:3px solid #D97706;padding-bottom:5px;margin-bottom:3px}h2{font-size:8pt;color:#666;font-weight:normal;margin:3px 0 12px}table{width:100%;border-collapse:collapse;font-size:7.5pt}th{background:#7c3aed;color:#fff;padding:5px 4px;text-align:left;font-size:7.5pt}th:not(:first-child){text-align:center}.footer{margin-top:16px;border-top:1px solid #eee;padding-top:8px;font-size:7pt;color:#999;text-align:center}@media print{body{padding:10px}}</style></head><body><h1>Resumen de Materiales</h1><h2>Obra: ${p?.name||''}</h2><table><tr><th>Material</th><th>Computado</th><th>Ingresado</th><th>Falta</th><th>Avance</th></tr>${rows}</table>${_scHtml}<div class="footer">ObraControl Pro v9.0</div><div class="page-footer" style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:24px;border-top:2px solid #D97706;padding-top:12px"><div><div style="font-size:15px;font-weight:800;color:#D97706">FEDERICO PICKELNY</div><div style="font-size:10pt;font-weight:700;color:#555;margin-top:1px">ARQUITECTO</div><div style="font-size:9pt;color:#666;margin-top:1px">MP 2304</div></div><div style="text-align:right"><div style="font-size:9pt;color:#666">&#9742; 264 4397772</div><div style="font-size:9pt;color:#666">&#9993; federicopickelny@gmail.com</div><div style="font-size:9pt;color:#666">&#127968; B. Rivadavia Oeste 114</div></div></div></body></html>`;
   const w=window.open('','_blank');
   if(!w){toast('Activá ventanas emergentes para ver el PDF','var(--orange)',4000);return;}
   w.document.write(_pdfSinEncabezado(h));w.document.close();
@@ -5451,7 +5475,7 @@ function rMat(mc){
     const status=comp===0?'':pct>=100?'ok':pct>=80?'limit':'under';
     cats[cat].push({...m,totalIng,pct,status});
   });
-  mc.innerHTML=`${modHeader('materiales','Materiales',`<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><button class="btn btn-s" style="background:#8b5cf6;color:#fff;white-space:nowrap" onclick="openM('newAPedirM')">&#x1F4DD; A pedir</button><button class="btn btn-s" style="background:var(--orange);color:#fff;white-space:nowrap" onclick="openM('newPedidoM')">&#x1F4CB; Pedido</button><button class="btn btn-s" style="background:${c};color:#fff;white-space:nowrap" onclick="openM('newIngM')">${I.truck} Ingreso</button><button class="btn btn-s" style="background:#7c3aed;color:#fff;white-space:nowrap" onclick="abrirIngresoMultiple()">&#x1F4E6; Remito</button><button class="btn btn-s" style="background:var(--green);color:#fff;white-space:nowrap" onclick="openM('newExistenteM')">&#x2713; Existente</button><button class="btn btn-sec btn-s" style="white-space:nowrap" onclick="openM('newMatM')">${I.plus} Material</button><button class="btn btn-sec btn-s" style="white-space:nowrap" onclick="exportMatPDF()">${I.pdf} PDF</button><button class="btn btn-sec btn-s" style="white-space:nowrap" id="mat_mic_btn" onclick="startMatVoice()">🎤 Voz</button><button class="btn btn-sec btn-s" style="white-space:nowrap" onclick="abrirFusionMat()">&#x1F501; Fusionar</button></div>`)}
+  mc.innerHTML=`${modHeader('materiales','Materiales',`<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><button class="btn btn-s" style="background:#8b5cf6;color:#fff;white-space:nowrap" onclick="openM('newAPedirM')">&#x1F4DD; A pedir</button><button class="btn btn-s" style="background:var(--orange);color:#fff;white-space:nowrap" onclick="openM('newPedidoM')">&#x1F4CB; Pedido</button><button class="btn btn-s" style="background:${c};color:#fff;white-space:nowrap" onclick="openM('newIngM')">${I.truck} Ingreso</button><button class="btn btn-s" style="background:#7c3aed;color:#fff;white-space:nowrap" onclick="abrirIngresoMultiple()">&#x1F4E6; Remito</button><button class="btn btn-s" style="background:var(--green);color:#fff;white-space:nowrap" onclick="openM('newExistenteM')">&#x2713; Existente</button><button class="btn btn-sec btn-s" style="white-space:nowrap" onclick="openM('newMatM')">${I.plus} Material</button><button class="btn btn-sec btn-s" style="white-space:nowrap" onclick="abrirPdfMateriales()">${I.pdf} PDF</button><button class="btn btn-sec btn-s" style="white-space:nowrap" id="mat_mic_btn" onclick="startMatVoice()">🎤 Voz</button><button class="btn btn-sec btn-s" style="white-space:nowrap" onclick="abrirFusionMat()">&#x1F501; Fusionar</button></div>`)}
   <!-- FILTROS MATERIALES -->
   <div class="card mb-12" style="padding:12px">
     <div class="flex gap-6 mb-8 items-center">
@@ -9116,6 +9140,14 @@ function rEconomia(mc,p){
     </div>
     <div id="eco_distrib_body" style="${S.ecoDistribOpen?'margin-top:12px':'display:none'}"></div>
   </div>
+  <!-- EGRESOS POR MES -->
+  <div class="card mb-12" id="eco_meses_card">
+    <div class="flex justify-between items-center" onclick="S.ecoMesesOpen=!S.ecoMesesOpen;renderEcoMeses();" style="cursor:pointer;user-select:none">
+      <span class="ts fw7" style="color:var(--red)">&#x1F4C5; Egresos por mes</span>
+      <span class="txxs tc3" id="eco_meses_toggle">${S.ecoMesesOpen?'▲':'▼'}</span>
+    </div>
+    <div id="eco_meses_body" style="${S.ecoMesesOpen?'margin-top:12px':'display:none'}"></div>
+  </div>
   <!-- MÉTRICAS POR M² -->
   <div class="card mb-12" id="eco_metros_card">
     <div class="flex justify-between items-center" onclick="S.ecoMetrosOpen=!S.ecoMetrosOpen;renderEcoMetros();" style="cursor:pointer;user-select:none">
@@ -9424,7 +9456,70 @@ function _pct2(num,den){
   return (num/den*100).toFixed(2).replace('.',',')+'%';
 }
 
+// ── EGRESOS POR MES ──
+// Una barra por mes (horizontal: en el celular entran todos los meses y el monto
+// se lee al lado). Un solo color: el rojo de egresos de la app. Respeta "ocultar
+// privados" igual que el saldo. Tocar un mes filtra los movimientos de ese mes
+// (usa el filtro de período); tocarlo de nuevo lo saca.
+var _MESES_N=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+function _ecoUltimoDia(ym){var p=ym.split('-');return ym+'-'+String(new Date(+p[0],+p[1],0).getDate()).padStart(2,'0');}
+function renderEcoMeses(){
+  var tog=$('eco_meses_toggle'),body=$('eco_meses_body');
+  if(!body)return;
+  if(tog)tog.textContent=S.ecoMesesOpen?'▲':'▼';
+  if(!S.ecoMesesOpen){body.style.display='none';return;}
+  body.style.display='block';body.style.marginTop='12px';
+  var verPriv=S.ecoVerPrivados!==false;
+  var meses={};
+  pf('economia').forEach(function(e){
+    if(e.tipo!=='egreso')return;
+    if(!verPriv&&e.interno)return;
+    var ym=String(e.fecha||e.date||'').slice(0,7);
+    if(!/^\d{4}-\d{2}$/.test(ym))return;
+    if(!meses[ym])meses[ym]={monto:0,n:0};
+    meses[ym].monto+=parseFloat(e.monto)||0;meses[ym].n++;
+  });
+  var claves=Object.keys(meses).sort();
+  if(!claves.length){body.innerHTML='<div class="txxs tc3">Sin egresos cargados</div>';return;}
+  // Se completan los meses sin egresos entre el primero y el último: un hueco
+  // también es dato (un mes en cero no debe desaparecer de la serie).
+  var todos=[],y=+claves[0].slice(0,4),m=+claves[0].slice(5,7),fin=claves[claves.length-1];
+  while(true){var k=y+'-'+String(m).padStart(2,'0');todos.push(k);if(k===fin||todos.length>240)break;m++;if(m>12){m=1;y++;}}
+  var max=Math.max.apply(null,todos.map(function(k){return meses[k]?meses[k].monto:0;}))||1;
+  var total=todos.reduce(function(s,k){return s+(meses[k]?meses[k].monto:0);},0);
+  var prom=total/todos.length;
+  var activo=(S.ecoFechaDesde&&S.ecoFechaHasta&&S.ecoFechaDesde.slice(8)==='01'&&S.ecoFechaDesde.slice(0,7)===S.ecoFechaHasta.slice(0,7)&&_ecoUltimoDia(S.ecoFechaDesde.slice(0,7))===S.ecoFechaHasta)?S.ecoFechaDesde.slice(0,7):'';
+  var h='<div style="display:flex;gap:8px;margin-bottom:10px">'
+    +'<div style="flex:1;background:var(--red-bg);border-radius:8px;padding:8px 10px"><div class="txxs tc3">Total egresos</div><div class="ts fw8">$'+_fmt2(total)+'</div></div>'
+    +'<div style="flex:1;background:var(--gray-ll);border-radius:8px;padding:8px 10px"><div class="txxs tc3">Promedio por mes</div><div class="ts fw8">$'+_fmt2(prom)+'</div></div></div>'
+    +(verPriv?'':'<div class="txxs tc3 mb-6">🔒 Sin movimientos privados</div>')
+    +'<div class="txxs tc3 mb-6">Tocá un mes para ver sus movimientos.</div>';
+  // Más reciente arriba.
+  todos.slice().reverse().forEach(function(k,i,arr){
+    var d=meses[k]||{monto:0,n:0},pct=d.monto/max*100,sel=activo===k;
+    var prev=arr[i+1]?(meses[arr[i+1]]||{monto:0}).monto:null;
+    var vari='';
+    if(prev!==null&&prev>0&&d.monto>0){var v=Math.round((d.monto-prev)/prev*100);vari='<span style="color:var(--text3)">'+(v>0?'▲ +':v<0?'▼ ':'= ')+v+'% vs mes anterior</span>';}
+    h+='<div onclick="setEcoMes(\''+k+'\')" title="'+(sel?'Quitar filtro':'Ver los movimientos de este mes')+'" style="cursor:pointer;padding:6px 8px;margin:0 -8px 2px;border-radius:8px;'+(sel?'background:var(--red-bg);outline:2px solid var(--red);':'')+'">'
+      +'<div class="flex justify-between items-center" style="gap:8px;margin-bottom:4px">'
+      +'<span class="txxs fw7" style="color:var(--text2)">'+(sel?'✓ ':'')+_MESES_N[+k.slice(5,7)-1].replace(/^./,function(c){return c.toUpperCase();})+' '+k.slice(0,4)+'</span>'
+      +'<span class="txxs fw7" style="color:var(--text1)">$'+_fmt2(d.monto)+'</span></div>'
+      +'<div style="background:var(--gray-ll);border-radius:4px;height:12px;overflow:hidden"><div style="width:'+(d.monto?Math.max(pct,1.5):0).toFixed(2)+'%;height:100%;background:var(--red);border-radius:0 4px 4px 0"></div></div>'
+      +'<div class="flex justify-between" style="margin-top:2px;gap:8px"><span class="txxs tc3">'+(d.n?d.n+' movimiento'+(d.n!==1?'s':''):'sin egresos')+'</span><span class="txxs">'+vari+'</span></div>'
+      +'</div>';
+  });
+  body.innerHTML=h;
+}
+function setEcoMes(ym){
+  var desde=ym+'-01',hasta=_ecoUltimoDia(ym);
+  if(S.ecoFechaDesde===desde&&S.ecoFechaHasta===hasta){S.ecoFechaDesde='';S.ecoFechaHasta='';}
+  else{S.ecoFechaDesde=desde;S.ecoFechaHasta=hasta;}
+  var fd=$('eco_fecha_desde');if(fd)fd.value=S.ecoFechaDesde;
+  var fh=$('eco_fecha_hasta');if(fh)fh.value=S.ecoFechaHasta;
+  renderEcoItems();renderEcoMeses();
+}
 function renderEcoDistrib(){
+  renderEcoMeses();
   var tog=$('eco_distrib_toggle');
   var body=$('eco_distrib_body');
   if(!body)return;
