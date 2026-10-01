@@ -60,6 +60,8 @@ a{color:var(--blue);text-decoration:none}
 .btn-x{background:var(--red-bg);color:var(--red)}
 .btn-act{outline:2px solid var(--pri);outline-offset:1px}
 .card{background:var(--white);border-radius:var(--r);padding:16px;border:1px solid var(--brd);box-shadow:0 1px 2px #00000008;margin-bottom:10px}
+/* Pestañas plegables de Economía: más bajas y más juntas (mismo tamaño de letra) */
+.card.eco-plegable{padding:11px 16px!important;margin-bottom:8px!important}
 .card-click{cursor:pointer}.card-click:active{box-shadow:none}
 .stat{display:flex;align-items:center;gap:12px;padding:14px}
 .stico{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
@@ -9133,7 +9135,7 @@ function rEconomia(mc,p){
     </div>
   </div>
   <!-- DISTRIBUCIÓN DE EGRESOS POR RUBRO -->
-  <div class="card mb-12" id="eco_distrib_card">
+  <div class="card eco-plegable" id="eco_distrib_card">
     <div class="flex justify-between items-center" onclick="S.ecoDistribOpen=!S.ecoDistribOpen;renderEcoDistrib();" style="cursor:pointer;user-select:none">
       <span class="ts fw7" style="color:var(--red)">&#x1F4CA; Distribución de egresos por rubro</span>
       <span class="txxs tc3" id="eco_distrib_toggle">${S.ecoDistribOpen?'▲':'▼'}</span>
@@ -9141,7 +9143,7 @@ function rEconomia(mc,p){
     <div id="eco_distrib_body" style="${S.ecoDistribOpen?'margin-top:12px':'display:none'}"></div>
   </div>
   <!-- EGRESOS POR MES -->
-  <div class="card mb-12" id="eco_meses_card">
+  <div class="card eco-plegable" id="eco_meses_card">
     <div class="flex justify-between items-center" onclick="S.ecoMesesOpen=!S.ecoMesesOpen;renderEcoMeses();" style="cursor:pointer;user-select:none">
       <span class="ts fw7" style="color:var(--red)">&#x1F4C5; Egresos por mes</span>
       <span class="txxs tc3" id="eco_meses_toggle">${S.ecoMesesOpen?'▲':'▼'}</span>
@@ -9149,7 +9151,7 @@ function rEconomia(mc,p){
     <div id="eco_meses_body" style="${S.ecoMesesOpen?'margin-top:12px':'display:none'}"></div>
   </div>
   <!-- MÉTRICAS POR M² -->
-  <div class="card mb-12" id="eco_metros_card">
+  <div class="card eco-plegable" id="eco_metros_card">
     <div class="flex justify-between items-center" onclick="S.ecoMetrosOpen=!S.ecoMetrosOpen;renderEcoMetros();" style="cursor:pointer;user-select:none">
       <span class="ts fw7" style="color:var(--cyan)">&#x1F4D0; M&#xE9;tricas por m&#xB2;</span>
       <span class="txxs tc3" id="eco_metros_toggle">${S.ecoMetrosOpen?'▲':'▼'}</span>
@@ -9463,6 +9465,67 @@ function _pct2(num,den){
 // (usa el filtro de período); tocarlo de nuevo lo saca.
 var _MESES_N=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 function _ecoUltimoDia(ym){var p=ym.split('-');return ym+'-'+String(new Date(+p[0],+p[1],0).getDate()).padStart(2,'0');}
+// Datos de egresos por mes, compartidos por la pestaña y el PDF. Solo los meses
+// con gastos llevan renglón; los meses vacíos seguidos se juntan en un único
+// renglón de corte ("sin egresos: julio – agosto 2026"), así se ve el lapso sin
+// gastos sin listar cada mes en cero. La variación se compara con el último mes
+// con gastos, que se nombra, porque contra un mes vacío no significa nada.
+function _ecoMesNombre(ym,conAnio){var n=_MESES_N[+ym.slice(5,7)-1];return conAnio===false?n:n+' '+ym.slice(0,4);}
+function _ecoMesesFilas(egresos){
+  var meses={};
+  (egresos||[]).forEach(function(e){
+    var ym=String(e.fecha||e.date||'').slice(0,7);
+    if(!/^\d{4}-\d{2}$/.test(ym))return;
+    if(!meses[ym])meses[ym]={monto:0,n:0};
+    meses[ym].monto+=parseFloat(e.monto)||0;meses[ym].n++;
+  });
+  var claves=Object.keys(meses).sort();
+  var idx=function(ym){return (+ym.slice(0,4))*12+(+ym.slice(5,7))-1;};
+  var deIdx=function(i){return Math.floor(i/12)+'-'+String(i%12+1).padStart(2,'0');};
+  var filas=[];
+  for(var i=claves.length-1;i>=0;i--){
+    var k=claves[i],prev=i>0?claves[i-1]:null,vari=null;
+    if(prev&&meses[prev].monto>0)vari={pct:Math.round((meses[k].monto-meses[prev].monto)/meses[prev].monto*100),contra:prev};
+    filas.push({tipo:'mes',ym:k,monto:meses[k].monto,n:meses[k].n,vari:vari});
+    if(prev){
+      var hueco=idx(k)-idx(prev)-1;
+      if(hueco>0)filas.push({tipo:'hueco',desde:deIdx(idx(prev)+1),hasta:deIdx(idx(k)-1),meses:hueco});
+    }
+  }
+  var total=claves.reduce(function(s,k){return s+meses[k].monto;},0);
+  var max=Math.max.apply(null,claves.map(function(k){return meses[k].monto;}).concat([1]));
+  return {filas:filas,total:total,prom:claves.length?total/claves.length:0,activos:claves.length,max:max};
+}
+function _ecoHuecoTexto(f){
+  if(f.meses===1)return 'Sin egresos en '+_ecoMesNombre(f.desde);
+  var mismoAnio=f.desde.slice(0,4)===f.hasta.slice(0,4);
+  return 'Sin egresos: '+_ecoMesNombre(f.desde,!mismoAnio)+' – '+_ecoMesNombre(f.hasta)+' ('+f.meses+' meses)';
+}
+// Sección "Egresos por mes" del PDF de Economía: mismos datos y mismo criterio que
+// la pestaña, sobre los movimientos que entran en ese PDF.
+function _ecoMesesPdfHtml(incluir,items){
+  if(!incluir)return '';
+  var dat=_ecoMesesFilas((items||[]).filter(function(e){return e.tipo==='egreso';}));
+  if(!dat.activos)return '';
+  var cap=function(t){return t.replace(/^./,function(c){return c.toUpperCase();});};
+  var td_='padding:4px 5px;border-bottom:1px solid #eee;font-size:7.5pt;vertical-align:middle';
+  var h='<div style="margin-top:16px;page-break-inside:avoid">'
+    +'<h2 style="font-size:9pt;color:#D97706;border-bottom:1px solid #e5e7eb;padding-bottom:3px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">Egresos por mes</h2>'
+    +'<p style="font-size:7.5pt;color:#666;margin-bottom:8px">Total: $'+_fmt2(dat.total)+' · Promedio por mes con gastos: $'+_fmt2(dat.prom)+'</p>'
+    +'<table style="width:100%;border-collapse:collapse">';
+  dat.filas.forEach(function(f){
+    if(f.tipo==='hueco'){
+      h+='<tr><td colspan="4" style="padding:5px;font-size:7.5pt;color:#94a3b8;font-style:italic;text-align:center;border-top:1px dashed #cbd5e1;border-bottom:1px dashed #cbd5e1">⋯ '+_ecoHuecoTexto(f)+'</td></tr>';
+      return;
+    }
+    var pct=Math.max(f.monto/dat.max*100,1.5).toFixed(2);
+    var vari=f.vari?(f.vari.pct>0?'▲ +':f.vari.pct<0?'▼ ':'= ')+f.vari.pct+'% vs '+_ecoMesNombre(f.vari.contra,f.vari.contra.slice(0,4)!==f.ym.slice(0,4)):'';
+    h+='<tr><td style="'+td_+';width:22%;font-weight:700">'+cap(_ecoMesNombre(f.ym))+'<div style="font-weight:400;color:#94a3b8;font-size:6.5pt">'+f.n+' mov.'+(vari?' · '+vari:'')+'</div></td>'
+      +'<td style="'+td_+';width:50%"><div style="background:#f1f5f9;border-radius:3px;height:9px;overflow:hidden"><div style="width:'+pct+'%;height:100%;background:#dc2626;border-radius:0 3px 3px 0;-webkit-print-color-adjust:exact;print-color-adjust:exact"></div></div></td>'
+      +'<td style="'+td_+';text-align:right;font-weight:700;white-space:nowrap" colspan="2">$'+_fmt2(f.monto)+'</td></tr>';
+  });
+  return h+'</table></div>';
+}
 function renderEcoMeses(){
   var tog=$('eco_meses_toggle'),body=$('eco_meses_body');
   if(!body)return;
@@ -9470,42 +9533,31 @@ function renderEcoMeses(){
   if(!S.ecoMesesOpen){body.style.display='none';return;}
   body.style.display='block';body.style.marginTop='12px';
   var verPriv=S.ecoVerPrivados!==false;
-  var meses={};
-  pf('economia').forEach(function(e){
-    if(e.tipo!=='egreso')return;
-    if(!verPriv&&e.interno)return;
-    var ym=String(e.fecha||e.date||'').slice(0,7);
-    if(!/^\d{4}-\d{2}$/.test(ym))return;
-    if(!meses[ym])meses[ym]={monto:0,n:0};
-    meses[ym].monto+=parseFloat(e.monto)||0;meses[ym].n++;
-  });
-  var claves=Object.keys(meses).sort();
-  if(!claves.length){body.innerHTML='<div class="txxs tc3">Sin egresos cargados</div>';return;}
-  // Se completan los meses sin egresos entre el primero y el último: un hueco
-  // también es dato (un mes en cero no debe desaparecer de la serie).
-  var todos=[],y=+claves[0].slice(0,4),m=+claves[0].slice(5,7),fin=claves[claves.length-1];
-  while(true){var k=y+'-'+String(m).padStart(2,'0');todos.push(k);if(k===fin||todos.length>240)break;m++;if(m>12){m=1;y++;}}
-  var max=Math.max.apply(null,todos.map(function(k){return meses[k]?meses[k].monto:0;}))||1;
-  var total=todos.reduce(function(s,k){return s+(meses[k]?meses[k].monto:0);},0);
-  var prom=total/todos.length;
+  var dat=_ecoMesesFilas(pf('economia').filter(function(e){return e.tipo==='egreso'&&(verPriv||!e.interno);}));
+  if(!dat.activos){body.innerHTML='<div class="txxs tc3">Sin egresos cargados</div>';return;}
   var activo=(S.ecoFechaDesde&&S.ecoFechaHasta&&S.ecoFechaDesde.slice(8)==='01'&&S.ecoFechaDesde.slice(0,7)===S.ecoFechaHasta.slice(0,7)&&_ecoUltimoDia(S.ecoFechaDesde.slice(0,7))===S.ecoFechaHasta)?S.ecoFechaDesde.slice(0,7):'';
+  var cap=function(t){return t.replace(/^./,function(c){return c.toUpperCase();});};
   var h='<div style="display:flex;gap:8px;margin-bottom:10px">'
-    +'<div style="flex:1;background:var(--red-bg);border-radius:8px;padding:8px 10px"><div class="txxs tc3">Total egresos</div><div class="ts fw8">$'+_fmt2(total)+'</div></div>'
-    +'<div style="flex:1;background:var(--gray-ll);border-radius:8px;padding:8px 10px"><div class="txxs tc3">Promedio por mes</div><div class="ts fw8">$'+_fmt2(prom)+'</div></div></div>'
+    +'<div style="flex:1;background:var(--red-bg);border-radius:8px;padding:8px 10px"><div class="txxs tc3">Total egresos</div><div class="ts fw8">$'+_fmt2(dat.total)+'</div></div>'
+    +'<div style="flex:1;background:var(--gray-ll);border-radius:8px;padding:8px 10px"><div class="txxs tc3">Promedio por mes con gastos</div><div class="ts fw8">$'+_fmt2(dat.prom)+'</div></div></div>'
     +(verPriv?'':'<div class="txxs tc3 mb-6">🔒 Sin movimientos privados</div>')
     +'<div class="txxs tc3 mb-6">Tocá un mes para ver sus movimientos.</div>';
-  // Más reciente arriba.
-  todos.slice().reverse().forEach(function(k,i,arr){
-    var d=meses[k]||{monto:0,n:0},pct=d.monto/max*100,sel=activo===k;
-    var prev=arr[i+1]?(meses[arr[i+1]]||{monto:0}).monto:null;
-    var vari='';
-    if(prev!==null&&prev>0&&d.monto>0){var v=Math.round((d.monto-prev)/prev*100);vari='<span style="color:var(--text3)">'+(v>0?'▲ +':v<0?'▼ ':'= ')+v+'% vs mes anterior</span>';}
+  dat.filas.forEach(function(f){
+    if(f.tipo==='hueco'){
+      h+='<div style="display:flex;align-items:center;gap:8px;margin:4px 0 6px;color:var(--text3)">'
+        +'<div style="flex:1;border-top:2px dashed var(--brd)"></div>'
+        +'<span class="txxs" style="font-style:italic;white-space:nowrap">⋯ '+_ecoHuecoTexto(f)+'</span>'
+        +'<div style="flex:1;border-top:2px dashed var(--brd)"></div></div>';
+      return;
+    }
+    var k=f.ym,sel=activo===k,pct=f.monto/dat.max*100;
+    var vari=f.vari?'<span style="color:var(--text3)">'+(f.vari.pct>0?'▲ +':f.vari.pct<0?'▼ ':'= ')+f.vari.pct+'% vs '+_ecoMesNombre(f.vari.contra,f.vari.contra.slice(0,4)!==k.slice(0,4))+'</span>':'';
     h+='<div onclick="setEcoMes(\''+k+'\')" title="'+(sel?'Quitar filtro':'Ver los movimientos de este mes')+'" style="cursor:pointer;padding:6px 8px;margin:0 -8px 2px;border-radius:8px;'+(sel?'background:var(--red-bg);outline:2px solid var(--red);':'')+'">'
       +'<div class="flex justify-between items-center" style="gap:8px;margin-bottom:4px">'
-      +'<span class="txxs fw7" style="color:var(--text2)">'+(sel?'✓ ':'')+_MESES_N[+k.slice(5,7)-1].replace(/^./,function(c){return c.toUpperCase();})+' '+k.slice(0,4)+'</span>'
-      +'<span class="txxs fw7" style="color:var(--text1)">$'+_fmt2(d.monto)+'</span></div>'
-      +'<div style="background:var(--gray-ll);border-radius:4px;height:12px;overflow:hidden"><div style="width:'+(d.monto?Math.max(pct,1.5):0).toFixed(2)+'%;height:100%;background:var(--red);border-radius:0 4px 4px 0"></div></div>'
-      +'<div class="flex justify-between" style="margin-top:2px;gap:8px"><span class="txxs tc3">'+(d.n?d.n+' movimiento'+(d.n!==1?'s':''):'sin egresos')+'</span><span class="txxs">'+vari+'</span></div>'
+      +'<span class="txxs fw7" style="color:var(--text2)">'+(sel?'✓ ':'')+cap(_ecoMesNombre(k))+'</span>'
+      +'<span class="txxs fw7" style="color:var(--text1)">$'+_fmt2(f.monto)+'</span></div>'
+      +'<div style="background:var(--gray-ll);border-radius:4px;height:12px;overflow:hidden"><div style="width:'+Math.max(pct,1.5).toFixed(2)+'%;height:100%;background:var(--red);border-radius:0 4px 4px 0"></div></div>'
+      +'<div class="flex justify-between" style="margin-top:2px;gap:8px"><span class="txxs tc3">'+f.n+' movimiento'+(f.n!==1?'s':'')+'</span><span class="txxs">'+vari+'</span></div>'
       +'</div>';
   });
   body.innerHTML=h;
@@ -11185,17 +11237,18 @@ function openEcoPDFDialog(){
   ${resumenHtml}
   <div class="fg"><label class="fl" style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="pdf_incl_distrib" style="width:16px;height:16px" checked> <span>&#x1F4CA; Incluir distribución de egresos por rubro</span></label></div>
   <div class="fg"><label class="fl" style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="pdf_incl_rubro_col" style="width:16px;height:16px" checked> <span>Incluir columnas Rubro / Ítem en la tabla</span></label></div>
+  <div class="fg"><label class="fl" style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="pdf_incl_meses" style="width:16px;height:16px" checked> <span>&#x1F4C5; Incluir egresos por mes</span></label></div>
   <div class="fg"><label class="fl" style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="pdf_incl_metros" style="width:16px;height:16px" checked> <span>&#x1F4D0; Incluir m&#xE9;tricas por m&#xB2;</span></label></div>
   <div class="fg"><label class="fl">&#x1F512; Movimientos privados</label><select class="fs" id="pdf_priv">
     <option value="sin">No incluirlos — PDF para el cliente</option>
     <option value="con">Incluirlos — uso interno</option>
     <option value="solo">S&#xF3;lo los privados</option>
   </select><div class="txxs tc3 mt-2">Si los incluye, el PDF sale marcado como uso interno.</div></div>
-  <button class="btn btn-w mt-8" style="background:var(--cyan);color:#fff" onclick="exportEcoPDF($('pdf_incl_distrib')?.checked,$('pdf_incl_rubro_col')?.checked,$('pdf_incl_metros')?.checked,$('pdf_priv')?.value);this.closest('.mo').remove()">Generar PDF</button></div>`;
+  <button class="btn btn-w mt-8" style="background:var(--cyan);color:#fff" onclick="exportEcoPDF($('pdf_incl_distrib')?.checked,$('pdf_incl_rubro_col')?.checked,$('pdf_incl_metros')?.checked,$('pdf_priv')?.value,$('pdf_incl_meses')?.checked);this.closest('.mo').remove()">Generar PDF</button></div>`;
   document.body.appendChild(d);
 }
 
-function exportEcoPDF(includeDistrib,includeRubroCol,includeMetros,privados){
+function exportEcoPDF(includeDistrib,includeRubroCol,includeMetros,privados,includeMeses){
   if(includeDistrib===undefined)includeDistrib=true;
   if(includeRubroCol===undefined)includeRubroCol=true;
   if(includeMetros===undefined)includeMetros=true;
@@ -11348,6 +11401,7 @@ function exportEcoPDF(includeDistrib,includeRubroCol,includeMetros,privados){
     +'</div>'
     +'<table><tr><th>Fecha</th><th>Concepto</th><th>Medio</th><th>Proveedor</th>'+rubroTh+'<th style="text-align:right">Monto</th><th class="th-bal" style="text-align:right">Saldo acum.</th></tr>'+rows+'</table>'
     +distribHtml
+    +_ecoMesesPdfHtml(includeMeses,items)
     +metrosHtml
     +'<div class="footer">ObraControl Pro v9.0'+(privados!=='sin'?' — '+new Date().toLocaleString('es-AR'):'')+'</div>'
     +'<div class="page-footer" style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:24px;border-top:2px solid #D97706;padding-top:12px">'
