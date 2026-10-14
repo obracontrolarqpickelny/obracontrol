@@ -3669,6 +3669,7 @@ function _keepScroll(fn){
   });
 }
 function render(){
+  if(!_accesoAutorizado()){_pantallaAcceso();return;}
   if(!D.user){renderAuth();return;}
   if(!S.proj){renderProjects();return;}
   saveUIState();
@@ -11458,6 +11459,73 @@ function exportEcoCSV(){
   document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
   toast('CSV descargado — abre con Excel');
 }
+// ═══════ ACCESO: SOLO EL TITULAR ═══════
+// El PIN vive en cada dispositivo: un teléfono nuevo no tenía PIN y la app abría
+// directo (así entró un cliente). Ahora, antes que nada, el dispositivo tiene que
+// estar autorizado, y eso solo se logra ingresando con la cuenta de Google del
+// titular (Google confirma qué cuenta es; la app no guarda contraseñas). El resto
+// ve "acceso restringido". Los colaboradores no pasan por acá: usan form.html.
+var TITULARES=['federicopickelny@gmail.com'];
+var _ACC_KEY='oc_acceso';
+function _accesoAutorizado(){
+  try{var a=JSON.parse(localStorage.getItem(_ACC_KEY)||'null');
+    return !!(a&&a.email&&TITULARES.indexOf(String(a.email).toLowerCase())>=0);}catch(e){return false;}
+}
+// Pregunta a Google con qué cuenta es el token (sirve el permiso de Drive que ya usa la app).
+async function _verificarCuentaTitular(){
+  if(!GD.accessToken)return {ok:false,motivo:'sin sesión de Google'};
+  try{
+    var r=await fetchWithTimeout('https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)',{headers:{'Authorization':'Bearer '+GD.accessToken}},15000);
+    if(!r.ok)return {ok:false,motivo:'Google respondió '+r.status};
+    var em=String(((await r.json()).user||{}).emailAddress||'').toLowerCase();
+    if(TITULARES.indexOf(em)<0)return {ok:false,email:em,motivo:'cuenta no autorizada'};
+    localStorage.setItem(_ACC_KEY,JSON.stringify({email:em,fecha:nw()}));
+    return {ok:true,email:em};
+  }catch(e){return {ok:false,motivo:'sin conexión'};}
+}
+// Una cuenta ajena no queda conectada en ese dispositivo.
+function _descartarSesionGoogle(){
+  try{if(GD.accessToken&&window.google&&google.accounts&&google.accounts.oauth2)google.accounts.oauth2.revoke(GD.accessToken,function(){});}catch(_){}
+  GD.accessToken=null;GD.tokenExpiry=0;
+  try{localStorage.removeItem(GD_TOKEN_KEY);localStorage.removeItem('obracontrol-gaccount');}catch(_){}
+}
+function _pantallaAcceso(msg,ocupado){
+  app.innerHTML='<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:var(--bg)">'
+    +'<div style="width:100%;max-width:380px;background:var(--white);border:1px solid var(--brd);border-radius:16px;padding:28px 22px;text-align:center;box-shadow:0 8px 24px #0000000f">'
+    +'<div style="font-size:44px;margin-bottom:6px">🔒</div>'
+    +'<div style="font-size:20px;font-weight:800;margin-bottom:8px">Acceso restringido</div>'
+    +'<div class="ts tc3" style="line-height:1.55;margin-bottom:16px">ObraControl es de uso privado del <b>Arq. Federico Pickelny</b>. Este dispositivo no está autorizado.<br>Si necesitás acceso, comunicate con él.</div>'
+    +'<div class="ts" style="background:var(--gray-ll);border-radius:10px;padding:10px;margin-bottom:18px;line-height:1.7">&#9742; 264 4397772<br>&#9993; federicopickelny@gmail.com</div>'
+    +(msg?'<div class="txxs" style="color:var(--red);font-weight:700;margin-bottom:12px">'+esc(msg)+'</div>':'')
+    +'<button class="btn btn-sec btn-s" style="width:100%" '+(ocupado?'disabled':'onclick="ingresarTitular()"')+'>'+(ocupado?'Verificando…':'Soy el titular — ingresar con Google')+'</button>'
+    +'</div></div>';
+}
+function _continuarArranqueAutorizado(){
+  _pinCheck();
+  if(!_isPinLocked()){
+    render();
+    if(window._driveDiferido){window._driveDiferido=false;if(typeof window._arranqueDrive==='function')setTimeout(window._arranqueDrive,150);}
+  }
+}
+async function ingresarTitular(){
+  // El inicio de sesión de Google abre una ventana: tiene que salir de este toque.
+  var p=ensureAuth(true);
+  _pantallaAcceso('',true);
+  var ok=false;try{ok=await p;}catch(_){ok=false;}
+  if(!ok){_pantallaAcceso('No se pudo iniciar sesión con Google.');return;}
+  var r=await _verificarCuentaTitular();
+  if(r.ok){toast('Dispositivo autorizado ✓','var(--green)');_continuarArranqueAutorizado();return;}
+  if(r.email)_descartarSesionGoogle();
+  _pantallaAcceso(r.email?'La cuenta '+r.email+' no tiene acceso.':'No se pudo verificar la cuenta ('+r.motivo+').');
+}
+// Dispositivos del titular que ya tienen la sesión de Drive vigente se autorizan
+// solos, sin tocar nada.
+async function _autoAutorizarSilencioso(){
+  try{if(!loadGToken())return;}catch(_){return;}
+  var r=await _verificarCuentaTitular();
+  if(r.ok)_continuarArranqueAutorizado();
+}
+
 // ═══════ PIN PROTECTION ═══════
 var _PIN_KEY='oc_pin';
 var _PIN_DEV='oc_pin_dev';
@@ -11667,8 +11735,8 @@ function _unidadInfo(sfx){
 load();
 _validarObraRestaurada();
 _adoptServerCfg();
-_pinCheck();
-if(!_isPinLocked())render();
+if(_accesoAutorizado()){_pinCheck();if(!_isPinLocked())render();}
+else{_pantallaAcceso();setTimeout(_autoAutorizarSilencioso,300);}
 // 2b. Deep-link incoming report (#r=BASE64)
 (function(){
   function _processCarpeta(sub){
@@ -11843,7 +11911,7 @@ if(!_isPinLocked())render();
   window._drivePost=_drivePost;
   // Con el PIN puesto no se toca Drive: se espera a que entre, así no hay
   // movimiento de ningún tipo detrás de la pantalla del PIN.
-  if(_isPinLocked()) window._driveDiferido=true;
+  if(_isPinLocked()||!_accesoAutorizado()) window._driveDiferido=true;
   else window._arranqueDrive();
 
   // Process any pending image uploads
