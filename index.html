@@ -11288,11 +11288,17 @@ function exportEcoPDF(includeDistrib,includeRubroCol,includeMetros,privados,incl
   if(S.ecoFilter)filterParts.push('"'+S.ecoFilter+'"');
   const filterNote=filterParts.length?' — '+filterParts.join(' | '):'';
   const _f2=function(n){return n.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});};
-  let _runBal=0;
+  // El saldo acumulado se calcula en orden cronológico (fecha y, dentro del día,
+  // momento en que se asentó), no en el orden de la tabla: si la tabla va del más
+  // reciente al más viejo, sumar de arriba hacia abajo daba saldos al revés y el
+  // renglón más reciente no coincidía con el saldo total.
+  const _saldoA={};
+  (function(){var b=0;items.slice().sort(function(a,c){return _ecoDia(a).localeCompare(_ecoDia(c))||_ecoMomento(a).localeCompare(_ecoMomento(c));})
+    .forEach(function(e){var m=parseFloat(e.monto)||0;b+=e.tipo==='ingreso'?m:-m;_saldoA[e.id]=b;});})();
   const rows=items.map(function(e){
     const esI=e.tipo==='ingreso';
     const _m=parseFloat(e.monto)||0;
-    _runBal+=esI?_m:-_m;
+    const _runBal=_saldoA[e.id]||0;
     const _bc=_runBal>=0?'#16a34a':'#dc2626';
     const _bs=(_runBal>=0?'+':'-')+'$'+_f2(Math.abs(_runBal));
     var rubroTd=includeRubroCol?'<td style="padding:3px 4px;border-bottom:1px solid #eee;font-size:7pt;color:#475569">'+(e.rubro||'')+(_ecoItemTexto(e)?'<br><span style="color:#94a3b8">'+esc(_ecoItemTexto(e))+'</span>':'')+'</td>':'';
@@ -11408,7 +11414,7 @@ function exportEcoPDF(includeDistrib,includeRubroCol,includeMetros,privados,incl
     +'<div class="resumen">'
     +'<div class="res-card" style="background:#f0fdf4"><div class="lbl">Ingresos</div><div class="val" style="color:#16a34a">$'+_f2(tIng)+'</div></div>'
     +'<div class="res-card" style="background:#fef2f2"><div class="lbl">Egresos</div><div class="val" style="color:#dc2626">$'+_f2(tEgr)+'</div></div>'
-    +'<div class="res-card" style="background:'+(saldo>=0?'#f0fdf4':'#fef2f2')+'"><div class="lbl">Saldo</div><div class="val" style="color:'+(saldo>=0?'#16a34a':'#dc2626')+';font-size:12pt">$'+_f2(Math.abs(saldo))+'</div></div>'
+    +'<div class="res-card" style="background:'+(saldo>=0?'#f0fdf4':'#fef2f2')+'"><div class="lbl">Saldo</div><div class="val" style="color:'+(saldo>=0?'#16a34a':'#dc2626')+';font-size:12pt">'+(saldo<0?'-':'')+'$'+_f2(Math.abs(saldo))+'</div></div>'
     +'</div>'
     +'<table><tr><th>Fecha</th><th>Concepto</th><th>Medio</th><th>Proveedor</th>'+rubroTh+'<th style="text-align:right">Monto</th><th class="th-bal" style="text-align:right">Saldo acum.</th></tr>'+rows+'</table>'
     +distribHtml
