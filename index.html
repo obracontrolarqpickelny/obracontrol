@@ -11736,6 +11736,47 @@ function _unidadInfo(sfx){
   info.innerHTML=h;info.style.display='block';
 }
 
+// ═══════ VERSIÓN NUEVA DE LA APP ═══════
+// Al publicar un cambio, el navegador seguía usando su copia guardada (GitHub le
+// permite reusarla 10 min) o la pestaña que ya estaba abierta: el arreglo "no
+// llegaba". Acá se le pregunta a GitHub la fecha de la versión publicada
+// (Last-Modified) y se la compara con la de la página que está corriendo
+// (document.lastModified, que viene de ese mismo encabezado). Si hay una más
+// nueva: recién abierta y sin nada a medio cargar, se recarga sola por una
+// dirección nueva (así no se usa la copia guardada); si no, aparece un aviso.
+var _cargaTs=Date.now();
+async function _chequearVersionNueva(){
+  try{
+    if(!/^https?:$/.test(location.protocol))return;
+    var r=await fetch(location.pathname+'?chk='+Date.now(),{cache:'no-store'});
+    var lm=r.headers.get('Last-Modified');if(!r.ok||!lm)return;
+    var remoto=new Date(lm).getTime(),local=new Date(document.lastModified).getTime();
+    if(!remoto||!local||remoto<=local+1000)return;
+    var ae=document.activeElement;
+    var ocupado=document.querySelector('.mo.open')||(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName));
+    var yaIntentado=false;try{yaIntentado=sessionStorage.getItem('oc_v_intento')===String(remoto);}catch(_){}
+    if(Date.now()-_cargaTs<20000&&!ocupado&&!yaIntentado){_irAVersionNueva(remoto);return;}
+    _avisoVersionNueva(remoto);
+  }catch(_){}
+}
+function _irAVersionNueva(ts){
+  try{sessionStorage.setItem('oc_v_intento',String(ts));}catch(_){}
+  try{saveUIState();}catch(_){}
+  var q=new URLSearchParams(location.search);q.set('v',String(ts));q.delete('chk');
+  location.replace(location.pathname+'?'+q.toString()+location.hash);
+}
+function _avisoVersionNueva(ts){
+  if(document.getElementById('avisoVersion'))return;
+  var d=document.createElement('div');d.id='avisoVersion';
+  d.style.cssText='position:fixed;left:50%;bottom:76px;transform:translateX(-50%);z-index:99998;background:#0f172a;color:#fff;border-radius:12px;padding:10px 12px 10px 14px;display:flex;align-items:center;gap:10px;box-shadow:0 6px 20px rgba(0,0,0,.3);font-size:13px;max-width:92vw';
+  d.innerHTML='<span>🔄 Hay una versión nueva de la app</span><button style="background:#D97706;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-weight:700;font-family:inherit;cursor:pointer">Actualizar</button>';
+  d.querySelector('button').onclick=function(){_irAVersionNueva(ts);};
+  document.body.appendChild(d);
+}
+setTimeout(_chequearVersionNueva,2500);
+document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')_chequearVersionNueva();});
+setInterval(_chequearVersionNueva,20*60*1000);
+
 // ═══════ INIT ═══════
 // 1. Sync bootstrap from localStorage (immediate render)
 load();
