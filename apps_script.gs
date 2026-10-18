@@ -214,11 +214,23 @@ function _archivarAdjuntos(payload, obraName, colabName, fecha, id) {
     if (f && f.data) guardar(f.data, f.nombre || 'archivo');
   });
 
-  // Fotos embebidas en cada sección del informe
-  (payload.tareas || []).forEach(function (t, i) { guardar(t.foto, 'tarea_' + (t.titulo || i)); });
-  (payload.movimientos || []).forEach(function (m, i) { guardar(m.foto, 'movim_' + (m.concepto || i)); });
-  (payload.materialesExistentes || []).forEach(function (m, i) { guardar(m.foto, 'material_' + (m.nombre || i)); });
-  if (payload.checklist) guardar(payload.checklist.foto, 'checklist_' + (payload.checklist.titulo || ''));
+  // Fotos embebidas en cada sección del informe. Antes se guardaba sólo la
+  // primera de tareas, movimientos y materiales; ahora todas, de todas las
+  // secciones, y con el comentario de cada foto en el nombre del archivo.
+  function fotosDe(x, etiqueta) {
+    if (!x) return;
+    var lista = (x.fotos && x.fotos.length) ? x.fotos : (x.foto ? [{ src: x.foto, nota: x.fotoNota || '' }] : []);
+    lista.forEach(function (f, k) {
+      if (!f) return;
+      guardar(f.src || f.url, etiqueta + (lista.length > 1 ? '_' + (k + 1) : '') + (f.nota ? ' - ' + f.nota : ''));
+    });
+  }
+  (payload.comentarios || []).forEach(function (c, i) { fotosDe(c, 'comentario_' + String(c.texto || i).slice(0, 20)); });
+  (payload.tareas || []).forEach(function (t, i) { fotosDe(t, 'tarea_' + (t.titulo || i)); });
+  (payload.movimientos || []).forEach(function (m, i) { fotosDe(m, 'movim_' + (m.concepto || i)); });
+  (payload.materialesExistentes || []).forEach(function (m, i) { fotosDe(m, 'material_' + (m.nombre || i)); });
+  (payload.materialesIngresados || []).forEach(function (m, i) { fotosDe(m, 'recibido_' + (m.nombre || i)); });
+  if (payload.checklist) fotosDe(payload.checklist, 'checklist_' + (payload.checklist.titulo || ''));
 
   // Copia del informe en texto, para tener el respaldo legible junto a las fotos
   try {
@@ -242,7 +254,7 @@ function doGet(e) {
       if (String(p.secreto || '') !== SECRETO) {
         return _json({ ok: false, error: 'Clave incorrecta.' });
       }
-      return _json({ ok: true, mensaje: 'Conectado', version: 1 });
+      return _json({ ok: true, mensaje: 'Conectado', version: 2 });
     }
 
     if (String(p.secreto || '') !== SECRETO) {
@@ -289,6 +301,25 @@ function doGet(e) {
         return _json({ ok: false, error: 'Informe demasiado grande.', grande: true });
       }
       return _json({ ok: true, payload: JSON.parse(texto) });
+    }
+
+    // Recuperar un informe ya incorporado, con sus fotos: se usa cuando en la app
+    // las fotos quedaron como "no sincronizadas". Busca la copia que se guardó al
+    // recibirlo (ObraControl_Datos/<obra>/<colaborador>/..._informe_<id>.json) y,
+    // si no está, el original que quedó en la papelera de la bandeja.
+    if (accion === 'recuperar') {
+      var idR = String(p.id || '').replace(/["'\\]/g, '');
+      if (!idR) return _json({ ok: false, error: 'Falta el id.' });
+      var cand = DriveApp.searchFiles('title contains "_informe_' + idR + '.json" and trashed = false');
+      var fR = cand.hasNext() ? cand.next() : null;
+      if (!fR) {
+        var cand2 = DriveApp.searchFiles('title = "' + idR + '.data.json"');
+        fR = cand2.hasNext() ? cand2.next() : null;
+      }
+      if (!fR) return _json({ ok: false, error: 'No encontré la copia de ese informe.' });
+      var txtR = fR.getBlob().getDataAsString();
+      if (txtR.length > TOPE_RESPUESTA) return _json({ ok: false, error: 'Informe demasiado grande.', grande: true });
+      return _json({ ok: true, payload: JSON.parse(txtR) });
     }
 
     // Marcar como incorporado: sale de la bandeja (la copia navegable queda).
