@@ -33,8 +33,11 @@ function _carpeta(padre, nombre) {
 
 /** Carpeta raíz del sistema, en la raíz de tu Drive. */
 function _raiz() {
-  var it = DriveApp.getFoldersByName(CARPETA_RAIZ);
-  return it.hasNext() ? it.next() : DriveApp.createFolder(CARPETA_RAIZ);
+  // Si al pegar el script se borró la línea de CARPETA_RAIZ, se usa la de siempre
+  // en vez de fallar ("CARPETA_RAIZ is not defined" rompía todos los envíos).
+  var nombre = (typeof CARPETA_RAIZ !== 'undefined' && CARPETA_RAIZ) ? CARPETA_RAIZ : 'ObraControl_Datos';
+  var it = DriveApp.getFoldersByName(nombre);
+  return it.hasNext() ? it.next() : DriveApp.createFolder(nombre);
 }
 
 /** Bandeja: acá viven los informes que la app todavía no incorporó. */

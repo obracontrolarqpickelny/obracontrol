@@ -33,6 +33,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .tab{min-width:0;padding:7px 4px;border:1px solid var(--brd);background:var(--gray-ll);border-radius:8px;font-size:11.5px;font-weight:600;color:var(--text2);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:background .15s,color .15s}
 .tab.active{color:#fff;background:var(--teal);border-color:var(--teal)}
 .tab-badge{display:inline-flex;align-items:center;justify-content:center;background:var(--green);color:#fff;border-radius:10px;font-size:9px;font-weight:800;min-width:16px;height:16px;padding:0 4px}
+.tab.tab-novedad{background:#16a34a!important;border-color:#16a34a!important;color:#fff!important;box-shadow:0 0 0 2px #bbf7d0}
+.tab.tab-novedad .tab-count{box-shadow:0 0 0 1.5px #fff}
 .tab-count{display:inline-flex;align-items:center;justify-content:center;background:var(--teal);color:#fff;border-radius:10px;font-size:9px;font-weight:800;min-width:16px;height:16px;padding:0 4px}
 
 /* scroll body */
@@ -405,6 +407,8 @@ function _actualizarBadgeBandeja(){
     cnt.style.background=pend?'var(--red)':'var(--teal)'; // en rojo mientras haya pendientes
   }
   if(bdg)bdg.style.display='none'; // el número en rojo ya avisa
+  // Mientras haya algo compartido sin ver, toda la pestaña se pone verde.
+  var tb=$('tab-bdj');if(tb)tb.classList.toggle('tab-novedad',pend>0);
 }
 function _traerBandejaServidor(){
   if(!API_URL||!TOKEN)return;

@@ -1766,7 +1766,7 @@ const _UI_KEYS=[
   'ecoFilter','ecoTipoFilter','ecoSort','ecoMetrosOpen',
   'ecoVerPrivados','ecoDistribOpen','ecoMesesOpen','ecoFiltrosOpen','ecoRubroFilter','ecoItemFilter','ecoFechaDesde','ecoFechaHasta',
   // Grupos de materiales plegados, alertas resueltas, obras cerradas del inicio
-  'matGrupoCollapsed','alertResOpen','verCerradas','matPdfSinComp',
+  'matGrupoCollapsed','alertResOpen','verCerradas','matPdfSinComp','matPdfHist',
   // Bandeja y carpeta de colaboradores
   'bandejaTab','bandejaSearch','carpetaSort','carpetaFilter',
   // Obra y pestaña en las que quedó la app
@@ -4991,18 +4991,25 @@ function exportVisitaPDF(vid){
 // Antes de generar, si hay ingresados sin cómputo se pregunta si incluirlos (la
 // elección se recuerda). Sin ninguno, sale directo como siempre.
 function abrirPdfMateriales(){
-  var sc=_cMateriales(S.proj).sinComp;
-  if(!sc.length){exportMatPDF(false);return;}
-  var incl=S.matPdfSinComp!==false;
+  var nSc=_cMateriales(S.proj).sinComp.length;
+  var nHi=pf('matIngresos').filter(function(i){return i.estado==='ingresado'||!i.estado;}).length;
   var old=document.getElementById('pdfMatM');if(old)old.remove();
   var d=document.createElement('div');d.className='mo open';d.id='pdfMatM';
+  var chk=function(id,on,txt){return '<label class="fl" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px"><input type="checkbox" id="'+id+'" style="width:16px;height:16px"'+(on?' checked':'')+'> '+txt+'</label>';};
   d.innerHTML='<div class="mo-c" style="max-width:400px"><div class="mo-h"><h3 style="color:var(--purple)">📄 PDF de materiales</h3><button class="tbtn" onclick="document.getElementById(\'pdfMatM\').remove()">'+I.x+'</button></div>'
-    +'<label class="fl" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:6px"><input type="checkbox" id="pdfMat_sc" style="width:16px;height:16px"'+(incl?' checked':'')+'> Incluir materiales ingresados sin cómputo ('+sc.length+')</label>'
-    +'<div class="txxs tc3 mb-12">Van en una tabla aparte, debajo de los computados.</div>'
-    +'<button class="btn btn-w" style="background:var(--purple);color:#fff" onclick="var c=document.getElementById(\'pdfMat_sc\').checked;S.matPdfSinComp=c;saveUIState();document.getElementById(\'pdfMatM\').remove();exportMatPDF(c)">Generar PDF</button></div>';
+    +(nSc?chk('pdfMat_sc',S.matPdfSinComp!==false,'Incluir materiales ingresados sin cómputo ('+nSc+'), con fecha de ingreso'):'')
+    +(nHi?chk('pdfMat_hi',!!S.matPdfHist,'Incluir historial de ingresos ('+nHi+'): fechas, proveedor, remito y notas'):'')
+    +'<div class="txxs tc3 mb-12">Van en tablas aparte, debajo de los computados.</div>'
+    +'<button class="btn btn-w" style="background:var(--purple);color:#fff" onclick="_generarPdfMateriales()">Generar PDF</button></div>';
   document.body.appendChild(d);
 }
-function exportMatPDF(incluirSinComp){
+function _generarPdfMateriales(){
+  var sc=document.getElementById('pdfMat_sc'),hi=document.getElementById('pdfMat_hi');
+  if(sc)S.matPdfSinComp=sc.checked;if(hi)S.matPdfHist=hi.checked;saveUIState();
+  var m=document.getElementById('pdfMatM');if(m)m.remove();
+  exportMatPDF(!!(sc&&sc.checked),!!(hi&&hi.checked));
+}
+function exportMatPDF(incluirSinComp,incluirHist){
   try{
 
   const p=D.projects.find(x=>x.id===S.proj);
@@ -5018,16 +5025,45 @@ function exportMatPDF(incluirSinComp){
     return `<tr><td style="padding:3px 4px;border-bottom:1px solid #eee;font-size:7.5pt">${m.name}</td><td style="padding:3px 4px;border-bottom:1px solid #eee;text-align:center;font-size:7.5pt">${m.computado||0} ${m.unit||''}</td><td style="padding:3px 4px;border-bottom:1px solid #eee;text-align:center;color:#3b82f6;font-size:7.5pt">${m.totalIng}</td><td style="padding:3px 4px;border-bottom:1px solid #eee;text-align:center;color:#ea580c;font-size:7.5pt">${Math.max((m.computado||0)-m.totalIng,0)}</td><td style="padding:3px 4px;border-bottom:1px solid #eee;text-align:center;font-weight:700;color:${col};font-size:7.5pt">${m.computado?m.pct+'%':'-'}</td></tr>`;
   }).join('')).join('');
   let _scHtml='';
+  const _fF=function(f){return f?fmt(String(f).slice(0,10)):'';};
   if(incluirSinComp){
-    const _sc=_cMateriales(S.proj).sinComp.slice().sort(function(a,b){return a.nombre.localeCompare(b.nombre,'es',{sensitivity:'base'});});
+    // Agrupado igual que la sección de la app (nombre + unidad), con las fechas de ingreso.
+    const _g={};
+    _sinCompItems().forEach(function(i){
+      const nom=(i.matNombre||'Sin nombre').trim(),k=_normTxt(nom)+'|'+(i.unit||'u');
+      if(!_g[k])_g[k]={nombre:nom,unit:i.unit||'u',qty:0,provs:{},fechas:[]};
+      _g[k].qty+=parseFloat(i.qty)||0;if(i.proveedor)_g[k].provs[i.proveedor]=1;
+      const f=String(i.fechaIngreso||i.fecha||i.date||'').slice(0,10);if(f)_g[k].fechas.push(f);
+    });
+    const _sc=Object.values(_g).sort(function(a,b){return a.nombre.localeCompare(b.nombre,'es',{sensitivity:'base'});});
     if(_sc.length){
       _scHtml='<h1 style="margin-top:18px;font-size:10pt">Ingresados sin cómputo ('+_sc.length+')</h1>'
-        +'<table><tr><th>Material</th><th>Ingresado</th><th style="text-align:left">Proveedores</th></tr>'
-        +_sc.map(function(x){return '<tr><td style="padding:3px 4px;border-bottom:1px solid #eee;font-size:7.5pt">'+esc(x.nombre)+'</td><td style="padding:3px 4px;border-bottom:1px solid #eee;text-align:center;color:#3b82f6;font-size:7.5pt">'+(Math.round(x.qty*100)/100)+' '+esc(x.unit)+'</td><td style="padding:3px 4px;border-bottom:1px solid #eee;font-size:7.5pt">'+esc(Object.keys(x.provs).join(', '))+'</td></tr>';}).join('')
+        +'<table><tr><th>Material</th><th>Ingresado</th><th>Fecha de ingreso</th><th style="text-align:left">Proveedores</th></tr>'
+        +_sc.map(function(x){
+          const fs_=x.fechas.slice().sort();
+          const fTxt=!fs_.length?'-':(fs_.length===1||fs_[0]===fs_[fs_.length-1])?_fF(fs_[0])+(fs_.length>1?' ('+fs_.length+' ingresos)':''):_fF(fs_[0])+' → '+_fF(fs_[fs_.length-1])+' ('+fs_.length+' ingresos)';
+          return '<tr><td style="">'+esc(x.nombre)+'</td><td style=";text-align:center;color:#3b82f6">'+(Math.round(x.qty*100)/100)+' '+esc(x.unit)+'</td><td style=";text-align:center;white-space:nowrap">'+fTxt+'</td><td style="">'+esc(Object.keys(x.provs).join(', '))+'</td></tr>';
+        }).join('')
         +'</table>';
     }
   }
-  const h=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Materiales - ${p?.name||''}</title><style>@page{size:A4;margin:20mm}@media print{.no-print{display:none}}body{font-family:Arial,sans-serif;max-width:210mm;margin:0 auto;padding:20px;color:#333}h1{font-size:12pt;border-bottom:3px solid #D97706;padding-bottom:5px;margin-bottom:3px}h2{font-size:8pt;color:#666;font-weight:normal;margin:3px 0 12px}table{width:100%;border-collapse:collapse;font-size:7.5pt}th{background:#7c3aed;color:#fff;padding:5px 4px;text-align:left;font-size:7.5pt}th:not(:first-child){text-align:center}.footer{margin-top:16px;border-top:1px solid #eee;padding-top:8px;font-size:7pt;color:#999;text-align:center}@media print{body{padding:10px}}</style></head><body><h1>Resumen de Materiales</h1><h2>Obra: ${p?.name||''}</h2><table><tr><th>Material</th><th>Computado</th><th>Ingresado</th><th>Falta</th><th>Avance</th></tr>${rows}</table>${_scHtml}<div class="footer">ObraControl Pro v9.0</div><div class="page-footer" style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:24px;border-top:2px solid #D97706;padding-top:12px"><div><div style="font-size:15px;font-weight:800;color:#D97706">FEDERICO PICKELNY</div><div style="font-size:10pt;font-weight:700;color:#555;margin-top:1px">ARQUITECTO</div><div style="font-size:9pt;color:#666;margin-top:1px">MP 2304</div></div><div style="text-align:right"><div style="font-size:9pt;color:#666">&#9742; 264 4397772</div><div style="font-size:9pt;color:#666">&#9993; federicopickelny@gmail.com</div><div style="font-size:9pt;color:#666">&#127968; B. Rivadavia Oeste 114</div></div></div></body></html>`;
+  // Historial de ingresos de todos los materiales (computados y sin cómputo), en orden de fecha.
+  let _histHtml='';
+  if(incluirHist){
+    const _hi=ings.filter(function(i){return i.estado==='ingresado'||!i.estado;}).slice()
+      .sort(function(a,b){return String(a.fechaIngreso||a.fecha||a.date||'').localeCompare(String(b.fechaIngreso||b.fecha||b.date||''));});
+    if(_hi.length){
+      _histHtml='<h1 style="margin-top:18px;font-size:10pt">Historial de ingresos ('+_hi.length+')</h1>'
+        +'<table><tr><th>Fecha</th><th style="text-align:left">Material</th><th>Cantidad</th><th style="text-align:left">Proveedor / Remito</th><th style="text-align:left">Notas</th></tr>'
+        +_hi.map(function(i){
+          const m=i.materialId?(D.materiales||[]).find(function(x){return x.id===i.materialId;}):null;
+          const nom=(m&&m.name)||i.matNombre||'-',u=i.unit||(m&&m.unit)||'';
+          return '<tr><td style=";white-space:nowrap">'+_fF(i.fechaIngreso||i.fecha||i.date)+'</td><td style="">'+esc(nom)+(m?'':' <span style="color:#94a3b8">(sin cómputo)</span>')+'</td><td style=";text-align:center;white-space:nowrap">'+(i.qty||0)+' '+esc(u)+'</td><td style="">'+esc(i.proveedor||'')+(i.remito?'<br><span style="color:#94a3b8">Remito '+esc(i.remito)+'</span>':'')+'</td><td style=";white-space:pre-wrap">'+esc(i.observations||'')+'</td></tr>';
+        }).join('')
+        +'</table>';
+    }
+  }
+  const h=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Materiales - ${p?.name||''}</title><style>@page{size:A4;margin:20mm}@media print{.no-print{display:none}}body{font-family:Arial,sans-serif;max-width:210mm;margin:0 auto;padding:20px;color:#333}h1{font-size:12pt;border-bottom:3px solid #D97706;padding-bottom:5px;margin-bottom:3px}h2{font-size:8pt;color:#666;font-weight:normal;margin:3px 0 12px}table{width:100%;border-collapse:collapse;font-size:7.5pt}th{background:#7c3aed;color:#fff;padding:5px 4px;text-align:left;font-size:7.5pt}th:not(:first-child){text-align:center}.footer{margin-top:16px;border-top:1px solid #eee;padding-top:8px;font-size:7pt;color:#999;text-align:center}@media print{body{padding:10px}}</style></head><body><h1>Resumen de Materiales</h1><h2>Obra: ${p?.name||''}</h2><table><tr><th>Material</th><th>Computado</th><th>Ingresado</th><th>Falta</th><th>Avance</th></tr>${rows}</table>${_scHtml}${_histHtml}<div class="footer">ObraControl Pro v9.0</div><div class="page-footer" style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:24px;border-top:2px solid #D97706;padding-top:12px"><div><div style="font-size:15px;font-weight:800;color:#D97706">FEDERICO PICKELNY</div><div style="font-size:10pt;font-weight:700;color:#555;margin-top:1px">ARQUITECTO</div><div style="font-size:9pt;color:#666;margin-top:1px">MP 2304</div></div><div style="text-align:right"><div style="font-size:9pt;color:#666">&#9742; 264 4397772</div><div style="font-size:9pt;color:#666">&#9993; federicopickelny@gmail.com</div><div style="font-size:9pt;color:#666">&#127968; B. Rivadavia Oeste 114</div></div></div></body></html>`;
   const w=window.open('','_blank');
   if(!w){toast('Activá ventanas emergentes para ver el PDF','var(--orange)',4000);return;}
   w.document.write(_pdfSinEncabezado(h));w.document.close();
