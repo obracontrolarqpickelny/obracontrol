@@ -111,7 +111,8 @@ a{color:var(--blue);text-decoration:none}
    entren las cuatro de un vistazo. El nowrap evita que un título largo salte
    de renglón y deje esa fila más alta que las otras tres. */
 .matsec{padding:8px 10px!important;margin-bottom:8px!important}
-.matsec-h{display:flex;justify-content:space-between;align-items:center;gap:8px;min-height:32px}
+.matsec-h{display:flex;justify-content:space-between;align-items:center;gap:8px;min-height:32px;flex-wrap:wrap;row-gap:6px}
+.matsec-h>.link-tag{flex-shrink:0;white-space:nowrap}
 .matsec-h>.link-tag{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .matsec-h .btn{flex-shrink:0}
 /* Filas compactas de materiales computados: mismo dato, bastante menos alto */
@@ -3749,6 +3750,15 @@ function _renderAlertasBandeja(){
 // Vista previa de lo que el colaborador propone cambiar en un checklist.
 // Sin esto el arquitecto tendría que aprobar a ciegas.
 function _previewCambiosChecklist(m){
+  if(m.tipo==='materiales'&&(m.materiales||[]).length){
+    var stM=m.itemStates||{},nM=0;
+    var hm='<div style="background:var(--gray-ll);border-radius:8px;padding:8px 10px;margin-bottom:8px"><div class="txxs fw7 tc3 mb-4">Lo que marcó el colaborador:</div>';
+    m.materiales.forEach(function(it,i){
+      var ok=!!stM[i];if(ok)nM++;
+      hm+='<div style="display:flex;gap:6px;padding:2px 0;font-size:12px"><span style="color:'+(ok?'var(--green)':'var(--gray-l)')+'">'+(ok?'☑':'☐')+'</span><span style="flex:1">'+esc(it.nombre)+' · '+_fmtNum(it.qty)+' '+esc(it.unit||'')+'</span></div>';
+    });
+    return hm+'<div class="txxs mt-4 fw7" style="color:var(--text2)">'+nM+' de '+m.materiales.length+' marcados</div></div>';
+  }
   if(m.tipo!=='checklist'||!m.entidadId)return '';
   var chk=(D.checklists||[]).find(function(c){return c.id===m.entidadId;});
   if(!chk||!(chk.items||[]).length)return '';
@@ -5944,7 +5954,7 @@ function renderMatItems(){
     _apedirH='<div class="card matsec" style="border-left:3px solid #8b5cf6">';
     _apedirH+='<div class="matsec-h">';
     _apedirH+='<button class="link-tag fw7" style="color:#8b5cf6;font-size:13px" onclick="S.matAPedirMin=!S.matAPedirMin;renderMatItems()">&#x1F4DD; A pedir ('+_apedir.length+')'+(S.matAPedirMin?' &#x25B6;':' &#x25BC;')+'</button>';
-    _apedirH+='<div class="flex gap-4"><button class="btn btn-s btn-sec" title="Agregar al calendario" onclick="exportMatItemsGCal(\'a_pedir\')">&#x1F4C5;</button><button class="btn btn-s btn-sec" title="Cargar varios de una vez" onclick="abrirIngresoMultiple(\'a_pedir\')">📝 Lista</button><button class="btn btn-s btn-sec" onclick="openM(\'newAPedirM\')">'+ I.plus +' Nuevo</button></div></div>';
+    _apedirH+='<div class="flex gap-4"><button class="btn btn-s btn-sec" title="Compartir con un colaborador" onclick="compartirMatColab(\'a_pedir\')">&#x1F4E4;</button><button class="btn btn-s btn-sec" title="Agregar al calendario" onclick="exportMatItemsGCal(\'a_pedir\')">&#x1F4C5;</button><button class="btn btn-s btn-sec" title="Cargar varios de una vez" onclick="abrirIngresoMultiple(\'a_pedir\')">📝 Lista</button><button class="btn btn-s btn-sec" onclick="openM(\'newAPedirM\')">'+ I.plus +' Nuevo</button></div></div>';
     if(!S.matAPedirMin){
       var _apGrp=_buildMatGroups(_apedir);
       var _apIni=_apedirH.length;
@@ -5980,7 +5990,7 @@ function renderMatItems(){
     _pedH='<div class="card matsec" style="border-left:3px solid var(--orange)">';
     _pedH+='<div class="matsec-h">';
     _pedH+='<button class="link-tag fw7" style="color:var(--orange);font-size:13px" onclick="S.matPedMin=!S.matPedMin;renderMatItems()">&#x1F4CB; Pedidos ('+_peds.length+')'+(S.matPedMin?' &#x25B6;':' &#x25BC;')+'</button>';
-    _pedH+='<div class="flex gap-4"><button class="btn btn-s btn-sec" title="Agregar al calendario" onclick="exportMatItemsGCal(\'pedido\')">&#x1F4C5;</button><button class="btn btn-s btn-sec" title="Cargar varios de una vez" onclick="abrirIngresoMultiple(\'pedido\')">📝 Lista</button><button class="btn btn-s btn-sec" onclick="openM(\'newPedidoM\')">' +I.plus+' Nuevo</button></div></div>';
+    _pedH+='<div class="flex gap-4"><button class="btn btn-s btn-sec" title="Compartir con un colaborador" onclick="compartirMatColab(\'pedido\')">&#x1F4E4;</button><button class="btn btn-s btn-sec" title="Agregar al calendario" onclick="exportMatItemsGCal(\'pedido\')">&#x1F4C5;</button><button class="btn btn-s btn-sec" title="Cargar varios de una vez" onclick="abrirIngresoMultiple(\'pedido\')">📝 Lista</button><button class="btn btn-s btn-sec" onclick="openM(\'newPedidoM\')">' +I.plus+' Nuevo</button></div></div>';
     if(!S.matPedMin){
       var _pedGrp=_buildMatGroups(_peds);
       var _pedIni=_pedH.length;
@@ -7017,6 +7027,52 @@ function _matCalElegidos(tipo){
   if(!chks.length)return items;
   var sel={};document.querySelectorAll('.matcal_chk:checked').forEach(function(c){sel[c.value]=1;});
   return items.filter(function(i){return sel[i.id];});
+}
+// ── Compartir materiales con un colaborador ──
+// Se eligen todos o algunos (por grupo o de a uno) y le llegan a su bandeja como
+// una lista para tildar; al responder, se ve qué marcó.
+function compartirMatColab(tipo){
+  var items=(D.matIngresos||[]).filter(function(i){return i.projectId===S.proj&&i.estado===tipo;});
+  if(!items.length){toast('No hay materiales en esta sección','var(--orange)');return;}
+  var cols=pf('colaboradores').filter(function(c){return c.estado!=='revocado';});
+  if(!cols.length){toast('Esta obra no tiene colaboradores. Agregalos en Colaboradores.','var(--orange)',4500);return;}
+  var label=tipo==='a_pedir'?'A pedir':'Pedidos';
+  document.getElementById('matCalM')?.remove();
+  var d=document.createElement('div');d.className='mo open';d.id='matCalM';
+  d.innerHTML='<div class="mo-c" style="max-width:420px"><div class="mo-h"><h3 style="color:var(--teal)">&#x1F4E4; Compartir materiales</h3><button class="tbtn" onclick="this.closest(\'.mo\').remove()">'+I.x+'</button></div>'
+    +'<div class="fg"><label class="fl">Colaborador</label><select class="fs" id="matsh_col">'+cols.map(function(c){return '<option value="'+c.id+'">'+esc(c.name||c.email||'Colaborador')+(c.role?' · '+esc(c.role):'')+'</option>';}).join('')+'</select></div>'
+    +_matCalSelectorHtml(items)
+    +'<div class="fr"><div class="fg"><label class="fl">Urgencia</label><select class="fs" id="matsh_urg"><option value="baja">🟢 Baja</option><option value="media" selected>🟡 Media</option><option value="alta">🔴 Alta</option></select></div></div>'
+    +'<div class="fg"><label class="fl">Nota (opcional)</label><textarea class="ft" id="matsh_nota" rows="2" placeholder="Ej: pedir en el corralón de siempre, entregar el jueves..."></textarea></div>'
+    +'<button class="btn btn-w" style="background:var(--teal);color:#fff" onclick="confirmarCompartirMat(\''+tipo+'\')">&#x1F4E4; Enviar a su bandeja</button>'
+    +'<div class="txxs tc3 mt-6">Le llega como lista ('+label+') para tildar lo que va resolviendo.</div>'
+    +'</div>';
+  document.body.appendChild(d);
+}
+function confirmarCompartirMat(tipo){
+  var colId=(document.getElementById('matsh_col')||{}).value;
+  var items=_matCalElegidos(tipo);
+  if(!colId){toast('Elegí un colaborador','var(--orange)');return;}
+  if(!items.length){toast('Tildá al menos un material','var(--orange)');return;}
+  var label=tipo==='a_pedir'?'A pedir':'Pedidos';
+  var lista=items.map(function(i){return {id:i.id,nombre:i.matNombre||'Sin nombre',qty:i.qty,unit:i.unit||'',proveedor:i.proveedor||'',grupo:i.grupo||'',estado:i.estado};});
+  // Por grupo y los sueltos al final, como en la pantalla
+  lista.sort(function(x,y){return (x.grupo?0:1)-(y.grupo?0:1)||String(x.grupo).localeCompare(String(y.grupo));});
+  if(!D.mensajesColab)D.mensajesColab=[];
+  D.mensajesColab.push({id:uid(),proyectoId:S.proj,colabId:colId,tipo:'materiales',entidadId:null,
+    titulo:'📦 Materiales — '+label+' ('+lista.length+')',materiales:lista,
+    nota:((document.getElementById('matsh_nota')||{}).value||'').trim(),
+    urgencia:(document.getElementById('matsh_urg')||{}).value||'media',
+    fechaEnvio:nw(),updatedAt:nw(),estadoColab:'nuevo',respuesta:null,fechaRespuesta:null});
+  sv();
+  _publicarBandejaColab(colId);
+  document.getElementById('matCalM')?.remove();
+  var co=(D.colaboradores||[]).find(function(c){return c.id===colId;});
+  toast(lista.length+' material'+(lista.length>1?'es':'')+' enviado'+(lista.length>1?'s':'')+' a '+(co&&co.name||'colaborador')+' ✓','var(--teal)',3000);
+  setTimeout(function(){
+    if(co&&co.phone)notificarColabWA(colId);
+    else toast('El colaborador no tiene teléfono: le llega a su bandeja la próxima vez que abra el link','var(--orange)',5000);
+  },400);
 }
 function _openMatItemsGCal(tipo){
   var _items=_matCalElegidos(tipo);
@@ -11056,7 +11112,7 @@ function _historialColabHtml(colabId,co){
       h+='<div class="card" style="padding:12px;margin-bottom:8px;border-left:3px solid #7c3aed;background:#faf5ff">';
       h+='<div class="flex justify-between items-start gap-8"><div style="flex:1;min-width:0">';
       h+='<div class="txxs fw7" style="color:#7c3aed">✅ RESOLVIÓ UN PEDIDO DEL ESTUDIO</div>';
-      h+='<div class="ts fw7">'+({checklist:'✅',tarea:'📋',nota:'📝'}[m.tipo]||'📤')+' '+esc(m.titulo||'')+'</div>';
+      h+='<div class="ts fw7">'+({checklist:'✅',tarea:'📋',nota:'📝',materiales:'📦'}[m.tipo]||'📤')+' '+esc(m.titulo||'')+'</div>';
       h+='<div class="txxs tc3 mt-2">📅 '+fmts(e.t)+'</div>';
       if(m.respuesta)h+='<div class="txxs mt-4">💬 '+esc(m.respuesta)+'</div>';
       h+='</div><span style="background:'+eR[1]+'22;color:'+eR[1]+';border-radius:8px;padding:2px 8px;font-size:10px;font-weight:700;white-space:nowrap">'+eR[0]+'</span></div></div>';
@@ -11232,7 +11288,7 @@ function openPerfilColab(colabId,tab){
         h+='<div class="flex justify-between items-start gap-8 mb-6">';
         h+='<div style="flex:1"><div class="ts fw7">'+esc(m.titulo||'Sin título')+'</div>';
         var _esCarp=_esAvisoCarpeta(m);
-        h+='<div class="txxs tc3 mt-2">'+(_esCarp?'📁 Carpeta':({checklist:'✅ Checklist',tarea:'📋 Tarea',nota:'📝 Nota'}[m.tipo]||m.tipo))+' · '+fmts(m.fechaEnvio)+'</div>';
+        h+='<div class="txxs tc3 mt-2">'+(_esCarp?'📁 Carpeta':({checklist:'✅ Checklist',tarea:'📋 Tarea',nota:'📝 Nota',materiales:'📦 Materiales'}[m.tipo]||m.tipo))+' · '+fmts(m.fechaEnvio)+'</div>';
         if(m.nota&&!_esCarp)h+='<div class="txxs mt-4 tc3" style="font-style:italic">'+esc(m.nota)+'</div>';
         h+='</div>';
         h+='<span style="background:'+ec+'22;color:'+ec+';border-radius:8px;padding:2px 8px;font-size:10px;font-weight:700;flex-shrink:0;white-space:nowrap">'+(eL[m.estadoColab]||m.estadoColab)+'</span>';
@@ -11406,7 +11462,7 @@ function aceptarMsgColab(msgId,colabId){
     }
   }
   sv();openPerfilColab(colabId,'bandeja');
-  toast(m.tipo==='checklist'?'Checklist actualizado ✓':'Tarea aceptada ✓','var(--green)');
+  toast(m.tipo==='checklist'?'Checklist actualizado ✓':m.tipo==='materiales'?'Respuesta aceptada ✓':'Tarea aceptada ✓','var(--green)');
 }
 function rechazarMsgColab(msgId,colabId){
   var nota=prompt('Motivo del rechazo (opcional):');
@@ -12672,7 +12728,7 @@ function _bandejaBodyHtml(){
     return '<div class="card" style="border-left:3px solid var(--green);padding:12px;margin-bottom:8px">'
       +'<div class="flex justify-between items-start gap-8 mb-6">'
       +'<div style="flex:1"><div class="ts fw7">'+esc(m.titulo||'Sin título')+'</div>'
-      +'<div class="txxs tc3 mt-2">👤 '+esc(_coName)+' · '+({checklist:'✅ Checklist',tarea:'📋 Tarea',nota:'📝 Nota'}[m.tipo]||m.tipo)+' · '+fmts(m.fechaRespuesta||m.fechaEnvio)+'</div>'
+      +'<div class="txxs tc3 mt-2">👤 '+esc(_coName)+' · '+({checklist:'✅ Checklist',tarea:'📋 Tarea',nota:'📝 Nota',materiales:'📦 Materiales'}[m.tipo]||m.tipo)+' · '+fmts(m.fechaRespuesta||m.fechaEnvio)+'</div>'
       +'</div>'
       +'<span style="background:#dcfce7;color:#16a34a;border-radius:8px;padding:2px 8px;font-size:10px;font-weight:700;flex-shrink:0;white-space:nowrap">✅ Respondido</span>'
       +'</div>'
@@ -13054,7 +13110,7 @@ function _resumenColabHtml(colabId,co){
         +'<div class="txxs tc3">📅 '+fecha+'</div>'+_chipsInforme(f)+'</div></div></div>';
     } else if(e.k==='msg'){
       var m=e.m;
-      h+='<div class="card" style="padding:10px;margin-bottom:8px;border-left:3px solid #6366f1"><div class="ts fw7">➡ '+({checklist:'✅ Checklist',tarea:'📋 Tarea',nota:'📝 Nota'}[m.tipo]||'📤 Aviso')+': '+esc(m.titulo||'')+'</div><div class="txxs tc3">📅 '+fecha+'</div></div>';
+      h+='<div class="card" style="padding:10px;margin-bottom:8px;border-left:3px solid #6366f1"><div class="ts fw7">➡ '+({checklist:'✅ Checklist',tarea:'📋 Tarea',nota:'📝 Nota',materiales:'📦 Materiales'}[m.tipo]||'📤 Aviso')+': '+esc(m.titulo||'')+'</div><div class="txxs tc3">📅 '+fecha+'</div></div>';
     } else if(e.k==='resp'){
       var r=e.m;
       h+='<div class="card" style="padding:10px;margin-bottom:8px;border-left:3px solid var(--green)"><div class="ts fw7">⬅ Respondió: '+esc(r.titulo||'')+'</div><div class="txxs tc3">📅 '+fecha+'</div>'+(r.respuesta?'<div class="txxs mt-4">💬 '+esc(r.respuesta)+'</div>':'')+'</div>';
