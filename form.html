@@ -660,7 +660,8 @@ async function sendCarpeta(){
   // Guardar historial de envíos en localStorage
   try{
     var _hist=JSON.parse(localStorage.getItem('oc_cp_hist_'+TOKEN)||'[]');
-    _hist.unshift({fecha:new Date().toISOString(),count:archivos.length,imgs:archivos.filter(function(f){return f.tipo&&f.tipo.startsWith('image/');}).length,desc:($('carpetaDesc')||{}).value||''});
+    _hist.unshift({fecha:new Date().toISOString(),count:archivos.length,imgs:archivos.filter(function(f){return f.tipo&&f.tipo.startsWith('image/');}).length,desc:($('carpetaDesc')||{}).value||'',
+      nombres:archivos.map(function(f){return (f.tipo&&f.tipo.startsWith('image/')?'📸 ':'📄 ')+f.nombre+(f.descripcion?' — '+f.descripcion:'');})});
     if(_hist.length>20)_hist=_hist.slice(0,20);
     localStorage.setItem('oc_cp_hist_'+TOKEN,JSON.stringify(_hist));
   }catch(_){}
@@ -792,14 +793,45 @@ function showTab(t){
 function renderHistorialTab(){
   _loadFormHist();
   var el=$('hist-content');if(!el)return;
+  // Además de los informes: lo que subiste a tu carpeta y lo que te compartió el estudio
+  var ev=[];
+  _formHistorial.forEach(function(e,i){ev.push({t:e.fecha,k:'inf',e:e,i:i});});
+  var cph=[];try{cph=JSON.parse(localStorage.getItem('oc_cp_hist_'+TOKEN)||'[]');}catch(_){}
+  cph.forEach(function(c){ev.push({t:c.fecha,k:'cp',c:c});});
+  var grup={};
+  _bibLista().filter(function(a){return a.de!=='col';}).forEach(function(a){var d=String(a.fecha||'').slice(0,10);(grup[d]=grup[d]||{t:a.fecha||'',lista:[]}).lista.push(a);});
+  Object.keys(grup).forEach(function(d){ev.push({t:grup[d].t,k:'est',lista:grup[d].lista});});
+  ev.sort(function(a,b){return String(b.t||'').localeCompare(String(a.t||''));});
   var cnt=$('count-hist');
-  if(cnt){cnt.textContent=_formHistorial.length;cnt.style.display=_formHistorial.length?'inline-flex':'none';}
-  if(!_formHistorial.length){
-    el.innerHTML='<div class="empty-tab"><div class="e-icon">📭</div><div class="e-txt">No enviaste informes aún.</div></div>';
+  if(cnt){cnt.textContent=ev.length;cnt.style.display=ev.length?'inline-flex':'none';}
+  if(!ev.length){
+    el.innerHTML='<div class="empty-tab"><div class="e-icon">📭</div><div class="e-txt">Todavía no hay envíos.</div></div>';
     return;
   }
+  var fFecha=function(t){var d=new Date(t);return isNaN(d)?'':d.toLocaleDateString('es-AR',{day:'2-digit',month:'short',year:'2-digit'})+' '+d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});};
   var h='<div style="padding:4px 0">';
-  _formHistorial.forEach(function(e,i){
+  ev.forEach(function(x){
+    if(x.k==='cp'){
+      var c=x.c;
+      h+='<div style="background:var(--white);border:1px solid var(--brd);border-left:3px solid var(--green);border-radius:10px;padding:12px;margin-bottom:10px">'
+        +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px"><div style="font-size:13px;font-weight:700">📁 Subiste '+c.count+' archivo'+(c.count>1?'s':'')+(c.imgs?' · 📸 '+c.imgs:'')+'</div>'
+        +'<span style="font-size:10px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;border-radius:9px;padding:1px 8px;font-weight:700;white-space:nowrap">Enviado</span></div>'
+        +'<div style="font-size:11px;color:var(--text3);margin-top:2px">'+fFecha(c.fecha)+'</div>'
+        +((c.nombres||[]).length?'<div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">'+c.nombres.slice(0,6).map(esc).join('<br>')+(c.nombres.length>6?'<br>y '+(c.nombres.length-6)+' más':'')+'</div>':(c.desc?'<div style="font-size:11px;color:var(--text2);margin-top:6px">📝 '+esc(c.desc)+'</div>':''))
+        +'</div>';
+      return;
+    }
+    if(x.k==='est'){
+      var im=x.lista.filter(_bibEsImg),dc=x.lista.length-im.length;
+      h+='<div onclick="showTab(\'bdj\')" style="cursor:pointer;background:var(--white);border:1px solid var(--brd);border-left:3px solid #6366f1;border-radius:10px;padding:12px;margin-bottom:10px">'
+        +'<div style="font-size:13px;font-weight:700">🏗 El estudio te compartió '+x.lista.length+' archivo'+(x.lista.length>1?'s':'')+'</div>'
+        +'<div style="font-size:11px;color:var(--text3);margin-top:2px">'+fFecha(x.t)+'</div>'
+        +'<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">'+im.slice(0,6).map(function(a){return '<img src="'+esc(_bibThumb(a))+'" style="width:44px;height:44px;object-fit:cover;border-radius:6px" onerror="this.style.opacity=.25">';}).join('')
+        +(dc?'<div style="height:44px;border-radius:6px;background:var(--gray-ll);display:flex;align-items:center;padding:0 8px;font-size:11px;font-weight:700">📄 '+dc+'</div>':'')+'</div>'
+        +'<div style="font-size:11px;color:var(--teal);font-weight:700;margin-top:6px">Ver en Recibido →</div></div>';
+      return;
+    }
+    var e=x.e,i=x.i;
     var d=new Date(e.fecha);
     var dl=d.toLocaleDateString('es-AR',{day:'2-digit',month:'short',year:'2-digit'})+' '+d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
     h+='<div style="background:var(--white);border:1px solid var(--brd);border-radius:10px;padding:12px;margin-bottom:10px">';
