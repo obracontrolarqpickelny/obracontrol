@@ -200,7 +200,7 @@ details.mas>div{padding-top:8px}
         <button class="menu-card" id="mc-tar" onclick="showTab('tar')"><span class="m-cnt" style="display:none"></span><div class="m-ico">📋</div><div class="m-tit">Tarea</div><div class="m-sub">Algo para hacer</div></button>
         <button class="menu-card" id="mc-mat" onclick="showTab('mat')"><span class="m-cnt" style="display:none"></span><div class="m-ico">📦</div><div class="m-tit">Materiales</div><div class="m-sub">Hay · pedir · llegó</div></button>
         <button class="menu-card" id="mc-chk" onclick="showTab('chk')"><span class="m-cnt" style="display:none"></span><div class="m-ico">✅</div><div class="m-tit">Checklist</div><div class="m-sub">Lista de controles</div></button>
-        <button class="menu-card" id="mc-carpeta" onclick="abrirCarpetaEnForm()"><div class="m-ico">🖼️</div><div class="m-tit">Fotos y archivos</div><div class="m-sub">A tu carpeta</div></button>
+        <button class="menu-card" id="mc-carpeta" onclick="abrirCarpetaEnForm()"><span class="m-cnt" style="display:none"></span><div class="m-ico">🖼️</div><div class="m-tit">Fotos y archivos</div><div class="m-sub">A tu carpeta</div></button>
       </div>
     </div>
 
@@ -540,6 +540,7 @@ function notaArchivoCarpeta(id,valor){
 }
 function _pintarCarpeta(){
   var n=_carpetaFiles.length;
+  try{actualizarCarrito();}catch(_){}
   if(!n){$('carpetaPreview').style.display='none';$('carpetaThumb').innerHTML='';return;}
   $('carpetaCount').textContent=n+' archivo'+(n>1?'s':'')+' seleccionado'+(n>1?'s':'')+' · tocá ✕ para quitar';
   var esc_=function(s){return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');};
@@ -822,6 +823,15 @@ function actualizarCarrito(){
     var mc=$('mc-'+k);
     if(mc){var b=mc.querySelector('.m-cnt');if(b){b.textContent=c[k]?c[k]+' listo'+(c[k]>1?'s':''):'';b.style.display=c[k]?'inline-block':'none';}mc.classList.toggle('lleno',c[k]>0);}
   });
+  // "Fotos y archivos": se pinta con la cantidad de fotos adjuntas en lo que se
+  // está cargando, más lo elegido para la carpeta y todavía no enviado.
+  var nFotos=0;Object.keys(fotosItem).forEach(function(k){nFotos+=(fotosItem[k]||[]).length;});
+  var nCarp=(typeof _carpetaFiles!=='undefined'?_carpetaFiles.length:0);
+  var mcc=$('mc-carpeta');
+  if(mcc){var bc=mcc.querySelector('.m-cnt'),tot=nFotos+nCarp;
+    if(bc){bc.textContent=tot?tot+(tot>1?' fotos':' foto')+(nCarp?' ('+nCarp+' en carpeta)':''):'';bc.style.display=tot?'inline-block':'none';}
+    mcc.classList.toggle('lleno',tot>0);}
+  if(nFotos)partes.push('📸 '+nFotos+' foto'+(nFotos>1?'s':''));
   var n=$('cartN'),dd=$('cartD'),cc=$('count-cargar');
   if(n)n.textContent=total?total+' cosa'+(total>1?'s':'')+' lista'+(total>1?'s':'')+' para enviar':'Nada cargado todavía';
   if(dd)dd.textContent=total?partes.join(' · '):'Elegí qué querés cargar';
@@ -1128,12 +1138,12 @@ function agregarFotos(clave,input){
   if(!fotosItem[clave])fotosItem[clave]=[];
   Promise.all(files.map(function(f){return compressImage(f,300,0.55);})).then(function(lista){
     lista.forEach(function(d){if(d)fotosItem[clave].push({id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),src:d,nota:''});});
-    _pintarFotos(clave);
+    _pintarFotos(clave);actualizarCarrito();
   });
 }
 function quitarFoto(clave,id){
   fotosItem[clave]=(fotosItem[clave]||[]).filter(function(f){return f.id!==id;});
-  _pintarFotos(clave);
+  _pintarFotos(clave);actualizarCarrito();
 }
 function notaFoto(clave,id,valor){
   var f=(fotosItem[clave]||[]).find(function(x){return x.id===id;});
@@ -1225,6 +1235,9 @@ function collectData(){
   if(cmtList) cmtList.querySelectorAll('.item-card').forEach(function(el){
     var idx=parseInt(el.id.split('-').pop());
     var texto=v('cmt_'+idx+'_texto');
+    // Fotos sin texto también se mandan: antes el comentario se descartaba y
+    // las fotos adjuntas no llegaban nunca.
+    if(!texto&&(fotosItem['cmt_'+idx]||[]).length)texto='📷 Fotos';
     if(texto){
       data.comentarios.push(_conFotos({tipo:v('cmt_'+idx+'_tipo')||'general',texto:texto,rubro:v('cmt_'+idx+'_rubro')||'Otro',etapa:v('cmt_'+idx+'_etapa')||'',fecha:v('cmt_'+idx+'_fecha')||_hoyLocal()},'cmt_'+idx));
     }
@@ -1246,6 +1259,7 @@ function collectData(){
   if(tarList) tarList.querySelectorAll('.item-card').forEach(function(el,i){
     var idx=parseInt(el.id.split('-').pop());
     var titulo=v('tar_'+idx+'_titulo');
+    if(!titulo&&(fotosItem['tar_'+idx]||[]).length)titulo='📷 Tarea con fotos';
     if(titulo){
       data.tareas.push(_conFotos({titulo:titulo,descripcion:v('tar_'+idx+'_desc'),prioridad:v('tar_'+idx+'_pri')||'media'},'tar_'+idx));
     }

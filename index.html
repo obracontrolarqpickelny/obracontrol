@@ -886,7 +886,11 @@ async function _rescueBase64BeforeSync(){
     var _pidF=_obraDeForm(sub)||'';
     var _fidF=_pidF?(GD.moduleFolders[_pidF+'_colaboradores']||null):null;
     _lst.forEach(function(ref){
-      var _idF='fc_rescue_'+uid(),_orig=ref.get();
+      // La "foto principal" (foto) es la misma que la primera de la lista: si ya
+      // se reemplazó junto con ella, no se vuelve a encolar
+      var _orig=ref.get();
+      if(typeof _orig!=='string'||_orig.indexOf('data:')!==0)return;
+      var _idF='fc_rescue_'+uid();
       queueImageUpload(_idF,_orig,'colab_'+_idF+'.jpg',_pidF,_fidF).catch(function(){});
       ref.set('[foto:'+_idF+']',_orig);
     });
@@ -1883,6 +1887,8 @@ const _SK_UI=SK+'_s';
 // se desincronizaron: los filtros de Comentarios existían en S pero nadie los
 // guardaba, así que al cerrar la app se perdían.
 const _UI_KEYS=[
+  // PDF de Economía: incluir fotos de comprobantes
+  'pdfEcoFotos',
   // Tareas
   'taskFilter','taskEncFilter','taskSort',
   // Materiales (filtros, orden y secciones plegadas)
@@ -10798,7 +10804,7 @@ function getCarpeta(colabId){
 }
 function openPerfilColab(colabId,tab){
   var _fPend=(D.formulariosPendientes||[]).filter(function(f){return (f.token===colabId||f.colabId===colabId)&&f.estado==='pendiente';}).length;
-  if(!tab)tab=_fPend>0?'historial':'carpeta';
+  if(!tab)tab='resumen';
   var co=(D.colaboradores||[]).find(function(x){return x.id===colabId;});if(!co)return;
   // Marcar archivos de carpeta como vistos si el arquitecto abre la carpeta
   if(tab==='carpeta'){
@@ -10810,7 +10816,7 @@ function openPerfilColab(colabId,tab){
   }
   document.getElementById('carpetaM')?.remove();
   var d=document.createElement('div');d.className='mo open';d.id='carpetaM';
-  var tabDefs=[{id:'historial',label:'📋 Historial'},{id:'carpeta',label:'📁 Carpeta'},{id:'bandeja',label:'📥 Bandeja'},{id:'mensajes',label:'💬 Mensajes'}];
+  var tabDefs=[{id:'resumen',label:'🕒 Resumen'},{id:'historial',label:'📋 Historial'},{id:'carpeta',label:'📁 Carpeta'},{id:'bandeja',label:'📥 Bandeja'},{id:'mensajes',label:'💬 Mensajes'}];
   var h='<div class="mo-c" style="display:flex;flex-direction:column;max-height:90vh">';
   h+='<div class="mo-h"><h3>'+esc(co.name||co.email||'?')+'</h3><button class="tbtn" onclick="document.getElementById(\'carpetaM\').remove()">'+I.x+'</button></div>';
   h+='<div style="display:flex;gap:4px;margin-bottom:12px;overflow-x:auto;padding-bottom:2px">';
@@ -10827,7 +10833,9 @@ function openPerfilColab(colabId,tab){
   h+='</div>';
   h+='<div style="flex:1;overflow-y:auto">';
 
-  if(tab==='carpeta'){
+  if(tab==='resumen'){
+    h+=_resumenColabHtml(colabId,co);
+  } else if(tab==='carpeta'){
     // reuse carpeta render logic
     var cp=getCarpeta(colabId);var archivos=cp.archivos||[];
     _consolidarAvisosCarpeta(colabId);
@@ -10908,8 +10916,8 @@ function openPerfilColab(colabId,tab){
       h+='<div class="empty">📋<div class="ts mt-8">Sin informes enviados</div><div class="txxs tc3 mt-4">Los informes que envíe este colaborador aparecerán aquí.</div></div>';
     } else {
       forms.forEach(function(f){
-        var estadoCol={'pendiente':'var(--orange)','procesado':'var(--green)','descartado':'var(--red)'}[f.estado]||'var(--orange)';
-        var estadoLabel={'pendiente':'Pendiente','procesado':'Procesado','descartado':'Descartado'}[f.estado]||(f.estado||'Pendiente');
+        var estadoCol={'pendiente':'var(--orange)','procesado':'var(--green)','incorporado':'var(--green)','descartado':'var(--red)','papelera':'var(--gray-l)','eliminado':'var(--gray-l)'}[f.estado]||'var(--orange)';
+        var estadoLabel={'pendiente':'Pendiente','procesado':'Procesado','incorporado':'Incorporado','descartado':'Rechazado','papelera':'En papelera','eliminado':'Eliminado'}[f.estado]||(f.estado||'Pendiente');
         h+='<div class="card" style="padding:12px;margin-bottom:8px">';
         h+='<div class="flex justify-between items-start">';
         h+='<div style="flex:1"><div class="ts fw7">'+esc(f.ayudante||'Colaborador')+'</div>';
@@ -11338,7 +11346,9 @@ function _contarFotosInforme(o,prof){
   if(typeof o==='string')return (o.indexOf('data:image')===0||o.indexOf('[foto:')===0||o.indexOf('drive.google.com/thumbnail')>=0)?1:0;
   if(typeof o!=='object')return 0;
   var s=0;
-  for(var k in o){if(k!=='_entidad')s+=_contarFotosInforme(o[k],prof+1);}
+  // "foto" es la copia de la primera de "fotos": si hay lista, no se cuenta dos veces
+  var conLista=Array.isArray(o.fotos)&&o.fotos.length>0;
+  for(var k in o){if(k!=='_entidad'&&!(conLista&&k==='foto'))s+=_contarFotosInforme(o[k],prof+1);}
   return s;
 }
 /** Qué trae un informe, de un vistazo: 💰 3 · 📋 1 · ✅ 2 · 📸 4 */
@@ -11472,16 +11482,17 @@ function openEcoPDFDialog(){
   <div class="fg"><label class="fl" style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="pdf_incl_rubro_col" style="width:16px;height:16px" checked> <span>Incluir columnas Rubro / Ítem en la tabla</span></label></div>
   <div class="fg"><label class="fl" style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="pdf_incl_meses" style="width:16px;height:16px" checked> <span>&#x1F4C5; Incluir egresos por mes</span></label></div>
   <div class="fg"><label class="fl" style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="pdf_incl_metros" style="width:16px;height:16px" checked> <span>&#x1F4D0; Incluir m&#xE9;tricas por m&#xB2;</span></label></div>
+  <div class="fg"><label class="fl" style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="pdf_incl_fotos" style="width:16px;height:16px" ${S.pdfEcoFotos===false?'':'checked'} onchange="S.pdfEcoFotos=this.checked;saveUIState()"> <span>&#x1F4CE; Incluir fotos de comprobantes (numeradas en la tabla)</span></label></div>
   <div class="fg"><label class="fl">&#x1F512; Movimientos privados</label><select class="fs" id="pdf_priv">
     <option value="sin">No incluirlos — PDF para el cliente</option>
     <option value="con">Incluirlos — uso interno</option>
     <option value="solo">S&#xF3;lo los privados</option>
   </select><div class="txxs tc3 mt-2">Si los incluye, el PDF sale marcado como uso interno.</div></div>
-  <button class="btn btn-w mt-8" style="background:var(--cyan);color:#fff" onclick="exportEcoPDF($('pdf_incl_distrib')?.checked,$('pdf_incl_rubro_col')?.checked,$('pdf_incl_metros')?.checked,$('pdf_priv')?.value,$('pdf_incl_meses')?.checked);this.closest('.mo').remove()">Generar PDF</button></div>`;
+  <button class="btn btn-w mt-8" style="background:var(--cyan);color:#fff" onclick="exportEcoPDF($('pdf_incl_distrib')?.checked,$('pdf_incl_rubro_col')?.checked,$('pdf_incl_metros')?.checked,$('pdf_priv')?.value,$('pdf_incl_meses')?.checked,$('pdf_incl_fotos')?.checked);this.closest('.mo').remove()">Generar PDF</button></div>`;
   document.body.appendChild(d);
 }
 
-function exportEcoPDF(includeDistrib,includeRubroCol,includeMetros,privados,includeMeses){
+function exportEcoPDF(includeDistrib,includeRubroCol,includeMetros,privados,includeMeses,includeFotos){
   if(includeDistrib===undefined)includeDistrib=true;
   if(includeRubroCol===undefined)includeRubroCol=true;
   if(includeMetros===undefined)includeMetros=true;
@@ -11517,6 +11528,16 @@ function exportEcoPDF(includeDistrib,includeRubroCol,includeMetros,privados,incl
   const _saldoA={};
   (function(){var b=0;items.slice().sort(function(a,c){return _ecoDia(a).localeCompare(_ecoDia(c))||_ecoMomento(a).localeCompare(_ecoMomento(c));})
     .forEach(function(e){var m=parseFloat(e.monto)||0;b+=e.tipo==='ingreso'?m:-m;_saldoA[e.id]=b;});})();
+  // Comprobantes: cada movimiento con foto lleva un número (📎 N) en la tabla y
+  // la foto aparece al final, en el mismo orden, con ese número y sus datos.
+  const _compN={},_comps=[];
+  if(includeFotos)items.forEach(function(e){
+    var src=_resolveImg(e.imagen||'');
+    if(!src||e.imagenDeletedAt)return;
+    var esImg=src.indexOf('data:image')===0||src.indexOf('thumbnail?id=')>=0||src.indexOf('googleusercontent')>=0||/^\[foto:/.test(src);
+    if(!esImg)return;
+    _comps.push({e:e,src:src});_compN[e.id]=_comps.length;
+  });
   const rows=items.map(function(e){
     const esI=e.tipo==='ingreso';
     const _m=parseFloat(e.monto)||0;
@@ -11526,7 +11547,7 @@ function exportEcoPDF(includeDistrib,includeRubroCol,includeMetros,privados,incl
     var rubroTd=includeRubroCol?'<td style="padding:3px 4px;border-bottom:1px solid #eee;font-size:7pt;color:#475569">'+(e.rubro||'')+(_ecoItemTexto(e)?'<br><span style="color:#94a3b8">'+esc(_ecoItemTexto(e))+'</span>':'')+'</td>':'';
     return '<tr>'
       +'<td style="padding:3px 4px;border-bottom:1px solid #eee;font-size:7.5pt">'+fmt(e.fecha||e.date)+'</td>'
-      +'<td style="padding:3px 4px;border-bottom:1px solid #eee;font-size:7.5pt">'+(e.concepto||'')+(e.detalle?'<br><span style="color:#94a3b8;font-size:6.5pt">'+e.detalle+'</span>':'')+'</td>'
+      +'<td style="padding:3px 4px;border-bottom:1px solid #eee;font-size:7.5pt">'+(_compN[e.id]?'<span style="background:#0891b2;color:#fff;border-radius:3px;padding:0 3px;font-size:6.5pt;font-weight:700;margin-right:3px">📎 '+_compN[e.id]+'</span>':'')+(e.concepto||'')+(e.detalle?'<br><span style="color:#94a3b8;font-size:6.5pt">'+e.detalle+'</span>':'')+'</td>'
       +'<td style="padding:3px 4px;border-bottom:1px solid #eee;font-size:7.5pt">'+(e.medioPago||'')+'</td>'
       +'<td style="padding:3px 4px;border-bottom:1px solid #eee;font-size:7.5pt">'+(e.proveedor||'')+'</td>'
       +rubroTd
@@ -11639,6 +11660,12 @@ function exportEcoPDF(includeDistrib,includeRubroCol,includeMetros,privados,incl
     +'<div class="res-card" style="background:'+(saldo>=0?'#f0fdf4':'#fef2f2')+'"><div class="lbl">Saldo</div><div class="val" style="color:'+(saldo>=0?'#16a34a':'#dc2626')+';font-size:12pt">'+(saldo<0?'-':'')+'$'+_f2(Math.abs(saldo))+'</div></div>'
     +'</div>'
     +'<table><tr><th>Fecha</th><th>Concepto</th><th>Medio</th><th>Proveedor</th>'+rubroTh+'<th style="text-align:right">Monto</th><th class="th-bal" style="text-align:right">Saldo acum.</th></tr>'+rows+'</table>'
+    +(_comps.length?'<div style="margin-top:16px"><h2 style="font-size:9pt;color:#0891b2;border-bottom:1px solid #e5e7eb;padding-bottom:3px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">📎 Comprobantes ('+_comps.length+')</h2>'
+      +_comps.map(function(c,i){var e=c.e,esI=e.tipo==='ingreso';
+        return '<div style="display:inline-block;width:32%;margin:0 1% 10px 0;vertical-align:top;page-break-inside:avoid">'
+          +'<img src="'+esc(c.src)+'" style="width:100%;max-height:200px;object-fit:contain;border:1px solid #e2e8f0;border-radius:4px;background:#f8fafc">'
+          +'<div style="font-size:7pt;margin-top:2px"><b style="color:#0891b2">📎 '+(i+1)+'</b> · '+fmt(e.fecha||e.date)+' · '+esc(e.concepto||'')+'<br><b style="color:'+(esI?'#16a34a':'#dc2626')+'">'+(esI?'+':'-')+'$'+_f2(parseFloat(e.monto)||0)+'</b>'+(e.proveedor?' · '+esc(e.proveedor):'')+'</div></div>';
+      }).join('')+'</div>':'')
     +distribHtml
     +_ecoMesesPdfHtml(includeMeses,items)
     +metrosHtml
@@ -12670,14 +12697,117 @@ function _modalCarpetaForm(sub){
   if(_ex){_ex.innerHTML=h;}
   else{var d=document.createElement('div');d.className='mo open';d.id='ifmM';d.innerHTML=h;document.body.appendChild(d);}
 }
-// PDF de uno o varios envíos del colaborador, con fotos y sus comentarios
-function exportPdfColabForms(ids){
-  var subs=(D.formulariosPendientes||[]).filter(function(f){return ids.indexOf(f.id)>=0;});
+// ── Resumen del colaborador: todo lo enviado y recibido, en orden ──
+// Lo que manda él (informes y envíos de fotos y archivos) se puede tildar para
+// armar un PDF con uno, varios o todos, en orden cronológico y con las fotos.
+window._selColab={};
+function _formsDeColab(colabId){
+  return (D.formulariosPendientes||[]).filter(function(f){
+    return (f.token===colabId||f.colabId===colabId)&&f.mode!=='visto'&&f.estado!=='eliminado';
+  });
+}
+function _resumenColabHtml(colabId,co){
+  var forms=_formsDeColab(colabId);
+  var cp=(D.carpetas||[]).find(function(c){return c.colabId===colabId&&c.projectId===S.proj;});
+  var arch=(cp&&cp.archivos)||[];
+  var msgs=(D.mensajesColab||[]).filter(function(m){return m.colabId===colabId&&m.proyectoId===S.proj;});
+  var informes=forms.filter(function(f){return f.mode!=='carpeta';});
+  var fotosRec=0;forms.forEach(function(f){
+    if(f.mode==='carpeta')fotosRec+=_archivosDeEnvioCarpeta(f).filter(_esImagenArch).length;
+    else _itemsForm(f).forEach(function(it){if(it.x)fotosRec+=_fotosFormItem(it.x).length;});
+  });
+  var archCol=arch.filter(function(a){return a.subidoPor==='col';}).length;
+  var archArq=arch.filter(function(a){return a.subidoPor!=='col';}).length;
+  var resp=msgs.filter(function(m){return m.respuesta||m.estadoColab==='completado'||m.estadoColab==='aceptado';}).length;
+  var h='';
+  var dato=function(n,t){return '<div style="flex:1;min-width:84px;background:var(--gray-ll);border-radius:10px;padding:8px;text-align:center"><div style="font-size:18px;font-weight:800">'+n+'</div><div class="txxs tc3">'+t+'</div></div>';};
+  h+='<div class="txxs fw7 tc3 mb-6">⬅ LO QUE TE MANDÓ</div><div class="flex gap-6 mb-8 flex-wrap">'
+    +dato(informes.length,'informes')+dato(fotosRec,'fotos')+dato(archCol,'archivos en carpeta')+'</div>';
+  h+='<div class="txxs fw7 tc3 mb-6">➡ LO QUE LE MANDASTE</div><div class="flex gap-6 mb-12 flex-wrap">'
+    +dato(msgs.length,'tareas y avisos')+dato(resp,'respondidos')+dato(archArq,'archivos subidos')+'</div>';
+  // Línea de tiempo
+  var ev=[];
+  forms.forEach(function(f){ev.push({t:f.receivedAt||f.fecha||'',k:'form',f:f});});
+  msgs.forEach(function(m){
+    ev.push({t:m.fechaEnvio||'',k:'msg',m:m});
+    if(m.fechaRespuesta||m.respuesta)ev.push({t:m.fechaRespuesta||m.fechaEnvio||'',k:'resp',m:m});
+  });
+  // Archivos que subiste vos, agrupados por día
+  var porDia={};arch.filter(function(a){return a.subidoPor!=='col';}).forEach(function(a){var d=String(a.fecha||'').slice(0,10);(porDia[d]=porDia[d]||[]).push(a);});
+  Object.keys(porDia).forEach(function(d){ev.push({t:d+'T12:00:00',k:'arq',lista:porDia[d]});});
+  ev.sort(function(a,b){return String(b.t).localeCompare(String(a.t));});
+  var nSel=Object.keys(window._selColab).filter(function(k){return window._selColab[k];}).length;
+  h+='<div style="position:sticky;top:0;background:var(--surface,#fff);padding:6px 0 8px;z-index:2;display:flex;gap:6px;flex-wrap:wrap;align-items:center">'
+    +'<button class="btn btn-s" style="background:#0d9488;color:#fff" onclick="exportPdfColab(\''+colabId+'\','+(nSel?'true':'false')+')">📄 PDF '+(nSel?'de lo elegido ('+nSel+')':'de todo el historial')+'</button>'
+    +(nSel?'<button class="btn btn-sec btn-s" onclick="window._selColab={};openPerfilColab(\''+colabId+'\',\'resumen\')">Quitar selección</button>'
+      :'<span class="txxs tc3">o tildá los envíos que quieras incluir</span>')+'</div>';
+  if(!ev.length)h+='<div class="empty">🕒<div class="ts mt-8">Todavía no hay intercambio</div></div>';
+  var est={pendiente:['Pendiente','var(--orange)'],incorporado:['Incorporado','var(--green)'],descartado:['Rechazado','var(--red)'],papelera:['En papelera','var(--gray-l)']};
+  ev.forEach(function(e){
+    var fecha=fmts(e.t)||'';
+    if(e.k==='form'){
+      var f=e.f,es=est[f.estado]||[f.estado||'',''],sel=!!window._selColab[f.id];
+      var tit=f.mode==='carpeta'?'📁 Fotos y archivos':'📋 Informe'+(f.version>1?' v'+f.version:'');
+      h+='<div class="card" style="padding:10px;margin-bottom:8px;border-left:3px solid #0d9488;'+(sel?'background:#f0fdfa':'')+'">'
+        +'<div class="flex items-start gap-8">'
+        +'<input type="checkbox" '+(sel?'checked':'')+' onclick="event.stopPropagation();window._selColab[\''+f.id+'\']=this.checked;openPerfilColab(\''+colabId+'\',\'resumen\')" style="width:20px;height:20px;margin-top:2px;flex-shrink:0;accent-color:#0d9488">'
+        +'<div style="flex:1;min-width:0;cursor:pointer" onclick="document.getElementById(\'carpetaM\').remove();incorporarFormularioModal(\''+f.id+'\')">'
+        +'<div class="flex justify-between gap-6"><span class="ts fw7">⬅ '+tit+'</span><span class="txxs fw7" style="color:'+es[1]+';white-space:nowrap">'+es[0]+'</span></div>'
+        +'<div class="txxs tc3">📅 '+fecha+'</div>'+_chipsInforme(f)+'</div></div></div>';
+    } else if(e.k==='msg'){
+      var m=e.m;
+      h+='<div class="card" style="padding:10px;margin-bottom:8px;border-left:3px solid #6366f1"><div class="ts fw7">➡ '+({checklist:'✅ Checklist',tarea:'📋 Tarea',nota:'📝 Nota'}[m.tipo]||'📤 Aviso')+': '+esc(m.titulo||'')+'</div><div class="txxs tc3">📅 '+fecha+'</div></div>';
+    } else if(e.k==='resp'){
+      var r=e.m;
+      h+='<div class="card" style="padding:10px;margin-bottom:8px;border-left:3px solid var(--green)"><div class="ts fw7">⬅ Respondió: '+esc(r.titulo||'')+'</div><div class="txxs tc3">📅 '+fecha+'</div>'+(r.respuesta?'<div class="txxs mt-4">💬 '+esc(r.respuesta)+'</div>':'')+'</div>';
+    } else if(e.k==='arq'){
+      h+='<div class="card" style="padding:10px;margin-bottom:8px;border-left:3px solid #6366f1;cursor:pointer" onclick="openPerfilColab(\''+colabId+'\',\'carpeta\')"><div class="ts fw7">➡ Le subiste '+e.lista.length+' archivo'+(e.lista.length>1?'s':'')+' a la carpeta</div><div class="txxs tc3">📅 '+fecha+'</div></div>';
+    }
+  });
+  return h;
+}
+function exportPdfColab(colabId,soloElegidos){
+  var forms=_formsDeColab(colabId).filter(function(f){
+    return soloElegidos?!!window._selColab[f.id]:f.estado!=='papelera';
+  });
+  if(!forms.length){toast('No hay envíos para incluir','var(--orange)');return;}
+  exportPdfColabForms(forms.map(function(f){return f.id;}),{colabId:colabId,sueltos:!soloElegidos});
+}
+
+// PDF de lo que mandó un colaborador: uno, varios o todos los envíos, en orden
+// cronológico, con portada, índice y cada foto con su comentario.
+function exportPdfColabForms(ids,opts){
+  opts=opts||{};
+  var subs=(D.formulariosPendientes||[]).filter(function(f){return ids.indexOf(f.id)>=0;})
+    .sort(function(a,b){return String(a.receivedAt||a.fecha||'').localeCompare(String(b.receivedAt||b.fecha||''));});
   if(!subs.length){toast('Nada para exportar','var(--orange)');return;}
-  var foto=function(u,c){return '<div style="display:inline-block;width:160px;vertical-align:top;margin:4px"><img src="'+esc(_resolveImg(u))+'" style="width:160px;height:160px;object-fit:cover;border-radius:6px">'+(c?'<div style="font-size:10px;color:#475569">📝 '+esc(c)+'</div>':'')+'</div>';};
-  var h='<html><head><meta charset="utf-8"><title>Envíos del colaborador</title><style>body{font-family:Arial,sans-serif;font-size:12px;color:#1e293b;padding:16px}h2{font-size:15px;margin:18px 0 4px;color:#0d9488}.it{border-bottom:1px solid #e2e8f0;padding:6px 0;page-break-inside:avoid}.sec{font-weight:700;margin-top:10px}</style></head><body>';
-  subs.forEach(function(sub){
-    h+='<h2>📥 '+esc(sub.ayudante||'Colaborador')+' — '+esc(fmts(sub.receivedAt||sub.fecha||''))+(sub.version>1?' · v'+sub.version:'')+'</h2><div style="color:#64748b">'+esc(sub.obraName||'')+'</div>';
+  var colabId=opts.colabId||subs[0].token;
+  var co=(D.colaboradores||[]).find(function(c){return c.id===colabId;});
+  var nombre=(co&&co.name)||subs[0].ayudante||'Colaborador';
+  var obra=(D.projects||[]).find(function(p){return p.id===(subs[0].obraId||S.proj);});
+  var nFoto=0;
+  var foto=function(u,c){nFoto++;return '<div class="ft"><img src="'+esc(_resolveImg(u))+'"><div class="fc"><b>Foto '+nFoto+'</b>'+(c?' — '+esc(c):'')+'</div></div>';};
+  var desde=fmts(subs[0].receivedAt||subs[0].fecha||''),hasta=fmts(subs[subs.length-1].receivedAt||subs[subs.length-1].fecha||'');
+  var h='<html><head><meta charset="utf-8"><title>'+esc(nombre)+' — envíos</title><style>'
+    +'body{font-family:Arial,sans-serif;font-size:12px;color:#1e293b;padding:0 4px}'
+    +'h1{font-size:20px;margin:0 0 2px}h2{font-size:15px;margin:22px 0 2px;color:#0d9488;border-bottom:2px solid #0d9488;padding-bottom:3px;page-break-after:avoid}'
+    +'.meta{color:#64748b;font-size:11px;margin-bottom:6px}.sec{font-weight:700;margin:10px 0 2px;color:#334155}'
+    +'.it{border-bottom:1px solid #e2e8f0;padding:6px 0;page-break-inside:avoid}.it .l{color:#64748b;font-size:11px}'
+    +'.ft{display:inline-block;width:31%;vertical-align:top;margin:6px 1% 2px 0;page-break-inside:avoid}.ft img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;border:1px solid #e2e8f0}'
+    +'.fc{font-size:10px;color:#475569;margin-top:2px}table{width:100%;border-collapse:collapse;margin:8px 0 4px}th,td{border:1px solid #e2e8f0;padding:4px 6px;text-align:left;font-size:11px}th{background:#f1f5f9}'
+    +'.ok{color:#16a34a}.no{color:#dc2626}</style></head><body>';
+  h+='<h1>📥 Envíos de '+esc(nombre)+'</h1><div class="meta">'+esc(obra?obra.name:'')+' · '+subs.length+' envío'+(subs.length>1?'s':'')+' · del '+esc(desde)+' al '+esc(hasta)+'</div>';
+  // Índice
+  h+='<table><tr><th>#</th><th>Fecha</th><th>Tipo</th><th>Contenido</th><th>Estado</th></tr>';
+  subs.forEach(function(sub,n){
+    var tipo=sub.mode==='carpeta'?'Fotos y archivos':'Informe'+(sub.version>1?' v'+sub.version:'');
+    var cont=sub.mode==='carpeta'?_archivosDeEnvioCarpeta(sub).length+' archivo(s)':_itemsForm(sub).map(function(it){return it.tit;}).join(' · ').slice(0,120);
+    var es={pendiente:'Pendiente',incorporado:'Incorporado',descartado:'Rechazado',papelera:'Papelera'}[sub.estado]||sub.estado||'';
+    h+='<tr><td>'+(n+1)+'</td><td>'+esc(fmts(sub.receivedAt||sub.fecha||''))+'</td><td>'+esc(tipo)+'</td><td>'+esc(cont)+'</td><td>'+esc(es)+'</td></tr>';
+  });
+  h+='</table>';
+  subs.forEach(function(sub,n){
+    h+='<h2>'+(n+1)+'. '+(sub.mode==='carpeta'?'📁 Fotos y archivos':'📋 Informe'+(sub.version>1?' v'+sub.version:''))+' — '+esc(fmts(sub.receivedAt||sub.fecha||''))+'</h2>';
     if(sub.mode==='carpeta'){
       _archivosDeEnvioCarpeta(sub).forEach(function(a){h+=_esImagenArch(a)?foto(a.data,a.descripcion):'<div class="it">📄 '+esc(a.nombre||'')+(a.descripcion?' — '+esc(a.descripcion):'')+'</div>';});
       return;
@@ -12685,12 +12815,24 @@ function exportPdfColabForms(ids){
     var last='';
     _itemsForm(sub).forEach(function(it){
       if(it.sec!==last){last=it.sec;h+='<div class="sec">'+esc((_SEC_FORM[it.sec]||[''])[0])+'</div>';}
-      var st=(sub.itemsInc||[]).indexOf(it.key)>=0?' ✓':(sub.itemsRech||[]).indexOf(it.key)>=0?' ✕ rechazado':'';
-      h+='<div class="it"><div><strong>'+esc(it.tit)+'</strong>'+st+'</div>'+(it.lin?'<div style="color:#64748b">'+esc(it.lin)+'</div>':'');
+      var st=(sub.itemsInc||[]).indexOf(it.key)>=0?' <span class="ok">✓ incorporado</span>':(sub.itemsRech||[]).indexOf(it.key)>=0?' <span class="no">✕ rechazado</span>':'';
+      h+='<div class="it"><div><b>'+esc(it.tit)+'</b>'+st+'</div>'+(it.lin?'<div class="l">'+esc(it.lin)+'</div>':'');
       if(it.x)_fotosFormItem(it.x).forEach(function(f){h+=foto(f.url,f.caption);});
       h+='</div>';
     });
   });
+  // Historial completo: también los archivos de la carpeta que llegaron antes de
+  // que los envíos se registraran en la bandeja
+  if(opts.sueltos){
+    var enEnvio={};(D.formulariosPendientes||[]).forEach(function(f){if(f.mode==='carpeta')(f.archivosIds||[]).forEach(function(i){enEnvio[i]=1;});});
+    var cp=(D.carpetas||[]).find(function(c){return c.colabId===colabId&&c.projectId===(subs[0].obraId||S.proj);});
+    var sueltos=((cp&&cp.archivos)||[]).filter(function(a){return a.subidoPor==='col'&&!enEnvio[a.id];})
+      .sort(function(a,b){return String(a.fecha||'').localeCompare(String(b.fecha||''));});
+    if(sueltos.length){
+      h+='<h2>📁 Otros archivos que subió a su carpeta</h2>';
+      sueltos.forEach(function(a){h+=_esImagenArch(a)?foto(a.data,(fmts(a.fecha)||'')+(a.descripcion?' · '+a.descripcion:'')):'<div class="it">📄 '+esc(a.nombre||'')+' · '+esc(fmts(a.fecha)||'')+(a.descripcion?' — '+esc(a.descripcion):'')+'</div>';});
+    }
+  }
   h+='</body></html>';
   var w=window.open('','_blank');if(!w){toast('Permití ventanas emergentes para el PDF','var(--orange)');return;}
   w.document.write(_pdfSinEncabezado(h));w.document.close();
