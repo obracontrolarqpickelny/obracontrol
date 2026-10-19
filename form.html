@@ -400,7 +400,18 @@ var MSGS_RAW=P.get('msgs')||'';
 var COLAB_NAME_PARAM=P.get('colName')||'';
 var INBOX_MSGS=[];
 try{if(MSGS_RAW)INBOX_MSGS=JSON.parse(decodeURIComponent(escape(atob(MSGS_RAW))));}catch(e){console.warn('msgs parse:',e);}
-var INBOX_RESP={};  // msgId → {respuesta, done}
+// Lo que el colaborador ya resolvió. Antes vivía sólo en memoria: al recargar
+// volvía a aparecer como pendiente, y la respuesta sólo salía con un link.
+var _RESP_KEY='oc_inbox_resp_'+(P.get('token')||'anon');
+var INBOX_RESP={};  // msgId → {done, respuesta, itemStates, fecha, enviado, titulo, tipo}
+try{INBOX_RESP=JSON.parse(localStorage.getItem(_RESP_KEY)||'{}')||{};}catch(_){INBOX_RESP={};}
+function _guardarResp(){try{localStorage.setItem(_RESP_KEY,JSON.stringify(INBOX_RESP));}catch(_){}}
+// Resuelto: marcado como hecho acá, o ya respondido/aceptado del lado del estudio
+function _resuelto(m){
+  if(!m)return false;
+  if(INBOX_RESP[m.id]&&INBOX_RESP[m.id].done)return true;
+  return ['completado','aceptado','rechazado'].indexOf(m.estadoColab)>=0;
+}
 
 // La bandeja viajaba SOLO en el link: si el arquitecto asignaba algo después,
 // con el link viejo no aparecía nada. Ahora se guarda en el teléfono y, si hay
@@ -431,11 +442,11 @@ function _fusionarInbox(lista){
 }
 function _actualizarBadgeBandeja(){
   var _msgs=INBOX_MSGS.filter(function(m){return m&&m.tipo!=='biblioteca';});
-  var pend=_msgs.filter(function(m){return !(INBOX_RESP[m.id]&&INBOX_RESP[m.id].done);}).length;
+  var pend=_msgs.filter(function(m){return !_resuelto(m);}).length;
   var cnt=$('count-bdj'),bdg=$('badge-bdj');
   if(cnt){
-    cnt.textContent=_msgs.length;
-    cnt.style.display=_msgs.length?'inline-flex':'none';
+    cnt.textContent=pend;
+    cnt.style.display=pend?'inline-flex':'none';
     cnt.style.background=pend?'var(--red)':'var(--teal)'; // en rojo mientras haya pendientes
   }
   if(bdg)bdg.style.display='none'; // el número en rojo ya avisa
@@ -801,6 +812,7 @@ function renderHistorialTab(){
   var grup={};
   _bibLista().filter(function(a){return a.de!=='col';}).forEach(function(a){var d=String(a.fecha||'').slice(0,10);(grup[d]=grup[d]||{t:a.fecha||'',lista:[]}).lista.push(a);});
   Object.keys(grup).forEach(function(d){ev.push({t:grup[d].t,k:'est',lista:grup[d].lista});});
+  Object.keys(INBOX_RESP).forEach(function(k){var r=INBOX_RESP[k];if(r&&r.done)ev.push({t:r.fecha||'',k:'res',r:r,id:k});});
   ev.sort(function(a,b){return String(b.t||'').localeCompare(String(a.t||''));});
   var cnt=$('count-hist');
   if(cnt){cnt.textContent=ev.length;cnt.style.display=ev.length?'inline-flex':'none';}
@@ -821,6 +833,19 @@ function renderHistorialTab(){
         +'</div>';
       return;
     }
+    if(x.k==='res'){
+      // Lo resuelto de lo que mandó el estudio: violeta, distinto de los informes
+      var r=x.r,m=INBOX_MSGS.find(function(z){return z.id===x.id;})||{};
+      var tit=r.titulo||m.titulo||'Pedido del estudio',tipo=r.tipo||m.tipo||'';
+      h+='<div style="background:#faf5ff;border:1px solid #e9d5ff;border-left:3px solid #7c3aed;border-radius:10px;padding:12px;margin-bottom:10px">'
+        +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px"><div style="font-size:10px;font-weight:800;color:#7c3aed;letter-spacing:.3px">✅ RESOLVISTE UN PEDIDO DEL ESTUDIO</div>'
+        +'<span style="font-size:10px;'+(r.enviado?'background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0':'background:#fff7ed;color:#c2410c;border:1px solid #fed7aa')+';border-radius:9px;padding:1px 8px;font-weight:700;white-space:nowrap">'+(r.enviado?'Enviado':'Sin enviar')+'</span></div>'
+        +'<div style="font-size:13px;font-weight:700;margin-top:4px">'+({checklist:'✅',tarea:'📋',nota:'📝'}[tipo]||'📤')+' '+esc(tit)+'</div>'
+        +'<div style="font-size:11px;color:var(--text3);margin-top:2px">'+fFecha(r.fecha)+'</div>'
+        +(r.respuesta?'<div style="font-size:12px;color:var(--text2);margin-top:6px">💬 '+esc(r.respuesta)+'</div>':'')
+        +'</div>';
+      return;
+    }
     if(x.k==='est'){
       var im=x.lista.filter(_bibEsImg),dc=x.lista.length-im.length;
       h+='<div onclick="showTab(\'bdj\')" style="cursor:pointer;background:var(--white);border:1px solid var(--brd);border-left:3px solid #6366f1;border-radius:10px;padding:12px;margin-bottom:10px">'
@@ -832,6 +857,7 @@ function renderHistorialTab(){
       return;
     }
     var e=x.e,i=x.i;
+    h+='<div style="font-size:10px;font-weight:800;color:var(--teal);letter-spacing:.3px;margin:0 0 3px 2px">📋 INFORME ENVIADO</div>';
     var d=new Date(e.fecha);
     var dl=d.toLocaleDateString('es-AR',{day:'2-digit',month:'short',year:'2-digit'})+' '+d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
     h+='<div style="background:var(--white);border:1px solid var(--brd);border-radius:10px;padding:12px;margin-bottom:10px">';
@@ -1066,6 +1092,8 @@ function renderBandeja(){
     return;
   }
   // Sort by urgency then date
+  var _resueltos=_msgsB.filter(_resuelto);
+  _msgsB=_msgsB.filter(function(m){return !_resuelto(m);});
   var sorted=_msgsB.slice().sort(function(a,b){
     var uOrd={alta:0,media:1,baja:2};
     return (uOrd[a.urgencia]||1)-(uOrd[b.urgencia]||1)||(b.fechaEnvio||'').localeCompare(a.fechaEnvio||'');
@@ -1170,10 +1198,11 @@ function renderBandeja(){
     }
     h+='</div>';
   });
-  var pendingCount=_msgsB.filter(function(m){return !(INBOX_RESP[m.id]&&INBOX_RESP[m.id].done);}).length;
-  var doneCount=Object.keys(INBOX_RESP).filter(function(k){return INBOX_RESP[k].done;}).length;
-  if(doneCount>0){
-    h+='<button onclick="enviarRespuestasBandeja()" style="width:100%;padding:13px;background:var(--green);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;margin-top:8px">📤 Enviar '+doneCount+' respuesta'+(doneCount>1?'s':'')+' al arquitecto</button>';
+  if(!sorted.length)h+='<div class="empty-tab"><div class="e-icon">✅</div><div class="e-txt">No tenés pendientes.</div>'+(_resueltos.length?'<div style="font-size:12px;color:var(--text3);margin-top:6px">Lo que resolviste está en <strong>Historial</strong>.</div>':'')+'</div>';
+  // Respuestas que no llegaron a salir (sin conexión o sin servidor)
+  var sinEnviar=Object.keys(INBOX_RESP).filter(function(k){return INBOX_RESP[k].done&&!INBOX_RESP[k].enviado;}).length;
+  if(sinEnviar>0){
+    h+='<button onclick="enviarRespuestasBandeja()" style="width:100%;padding:13px;background:var(--orange);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;margin-top:8px">📤 Enviar '+sinEnviar+' respuesta'+(sinEnviar>1?'s':'')+' pendiente'+(sinEnviar>1?'s':'')+' al estudio</button>';
   }
   el.innerHTML=h;
   // Update badge
@@ -1184,13 +1213,35 @@ function toggleBandejaChkItem(msgId,idx){
   if(!INBOX_RESP[msgId])INBOX_RESP[msgId]={done:false,respuesta:'',itemStates:{}};
   if(!INBOX_RESP[msgId].itemStates)INBOX_RESP[msgId].itemStates={};
   INBOX_RESP[msgId].itemStates[idx]=!INBOX_RESP[msgId].itemStates[idx];
+  _guardarResp();
   renderBandeja();
 }
 function marcarBandejaItem(msgId){
   var resp=$('resp_'+msgId);
+  var m=INBOX_MSGS.find(function(x){return x.id===msgId;})||{};
   var _prevSt=(INBOX_RESP[msgId]&&INBOX_RESP[msgId].itemStates)||{};
-  INBOX_RESP[msgId]={done:true,respuesta:resp?resp.value.trim():'',itemStates:_prevSt};
+  INBOX_RESP[msgId]={done:true,respuesta:resp?resp.value.trim():'',itemStates:_prevSt,fecha:new Date().toISOString(),enviado:false,titulo:m.titulo||'',tipo:m.tipo||''};
+  _guardarResp();
   renderBandeja();
+  _enviarRespuestas([msgId]);
+}
+// Envía las respuestas por el servidor (llegan solas al estudio). Sin servidor
+// queda el botón para mandarlas por link, como antes.
+function _enviarRespuestas(ids){
+  if(!API_URL||!ids.length)return Promise.resolve(false);
+  var respuestas=ids.map(function(k){var r=INBOX_RESP[k];return {msgId:k,respuesta:r.respuesta||'',itemStates:r.itemStates||{}};});
+  var payload={id:'resp_'+TOKEN+'_'+Date.now().toString(36),mode:'bandeja_resp',token:TOKEN,obraId:OBRA_ID,obraName:OBRA_NAME,ayudante:colabName,respuestas:respuestas,fecha:new Date().toISOString()};
+  return _postServidor(payload).then(function(r){
+    if(r&&r.ok){ids.forEach(function(k){if(INBOX_RESP[k])INBOX_RESP[k].enviado=true;});_guardarResp();_avisoCorto('✓ Enviado al estudio');}
+    else _avisoCorto('No se pudo enviar ahora: queda para reintentar');
+    if(currentTab==='bdj')renderBandeja();if(currentTab==='hist')renderHistorialTab();
+    return !!(r&&r.ok);
+  }).catch(function(){_avisoCorto('Sin conexión: la respuesta queda para enviar');if(currentTab==='bdj')renderBandeja();return false;});
+}
+function _avisoCorto(t){
+  var el=document.createElement('div');el.textContent=t;
+  el.style.cssText='position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#0f172a;color:#fff;padding:8px 14px;border-radius:20px;font-size:13px;font-weight:600;z-index:9999';
+  document.body.appendChild(el);setTimeout(function(){el.remove();},2600);
 }
 
 // Responder con foto: arma un comentario ya titulado con lo recibido y abre la
@@ -1218,8 +1269,11 @@ function responderConFoto(msgId){
 }
 
 function enviarRespuestasBandeja(){
-  var respuestas=Object.keys(INBOX_RESP).filter(function(k){return INBOX_RESP[k].done;}).map(function(k){return {msgId:k,respuesta:INBOX_RESP[k].respuesta,itemStates:INBOX_RESP[k].itemStates||{}};});
-  if(!respuestas.length){alert('Marcá al menos un ítem como completado antes de enviar.');return;}
+  var pend=Object.keys(INBOX_RESP).filter(function(k){return INBOX_RESP[k].done&&!INBOX_RESP[k].enviado;});
+  if(!pend.length){alert('No hay respuestas pendientes de enviar.');return;}
+  if(API_URL){_enviarRespuestas(pend);return;}
+  var respuestas=pend.map(function(k){return {msgId:k,respuesta:INBOX_RESP[k].respuesta,itemStates:INBOX_RESP[k].itemStates||{}};});
+  pend.forEach(function(k){INBOX_RESP[k].enviado=true;});_guardarResp();
   var payload={mode:'bandeja_resp',token:TOKEN,obraId:OBRA_ID,obraName:OBRA_NAME,ayudante:colabName,respuestas:respuestas};
   var enc=btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
   var deepLink=APP_URL+'#r='+enc;

@@ -10923,6 +10923,12 @@ function _historialColabEntradas(colabId){
     if(String(a.fecha||'')>String(grupos[k].t))grupos[k].t=a.fecha;
   });
   Object.keys(grupos).forEach(function(k){var g=grupos[k];ev.push({t:g.t,k:'arch',de:g.de,lista:g.lista});});
+  // Lo que resolvió de lo que le mandaste (tareas, checklists, avisos)
+  (D.mensajesColab||[]).forEach(function(m){
+    if(m.colabId!==colabId||m.proyectoId!==S.proj)return;
+    if(['completado','aceptado','rechazado'].indexOf(m.estadoColab)<0&&!m.fechaRespuesta)return;
+    ev.push({t:m.fechaRespuesta||m.updatedAt||m.fechaEnvio||'',k:'resp',m:m});
+  });
   ev.sort(function(a,b){return String(b.t).localeCompare(String(a.t));});
   return ev;
 }
@@ -10949,13 +10955,23 @@ function _historialColabHtml(colabId,co){
       var arch=car?_archivosDeEnvioCarpeta(f):[];
       h+='<div class="card" style="padding:12px;margin-bottom:8px;border-left:3px solid '+(car?'#16a34a':'#0d9488')+'">';
       h+='<div class="flex justify-between items-start gap-8"><div style="flex:1;min-width:0">';
-      h+='<div class="ts fw7">⬅ '+(car?'📁 Subió fotos y archivos':'📋 Informe'+(f.version>1?' v'+f.version:''))+'</div>';
+      h+='<div class="ts fw7">⬅ '+(car?'📁 Subió '+_resumenEnvioCarpeta(f):'📋 Informe'+(f.version>1?' v'+f.version:''))+'</div>';
       h+='<div class="txxs tc3 mt-2">📅 '+fmts(e.t)+'</div>';
       h+=car?_miniArchivosHist(arch):_chipsInforme(f);
       h+='</div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">';
       h+='<span style="background:'+es[1]+'22;color:'+es[1]+';border-radius:8px;padding:2px 8px;font-size:10px;font-weight:700;white-space:nowrap">'+es[0]+'</span>';
       h+='<button onclick="document.getElementById(\'carpetaM\').remove();incorporarFormularioModal(\''+f.id+'\')" style="border:none;background:var(--teal);color:#fff;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer">Ver →</button>';
       h+='</div></div></div>';
+    } else if(e.k==='resp'){
+      // Distinto de los informes: violeta, con la leyenda "pedido del estudio"
+      var m=e.m,eR={completado:['Para revisar','var(--orange)'],aceptado:['Aceptado','var(--green)'],rechazado:['Rechazado','var(--red)']}[m.estadoColab]||['Respondido','#7c3aed'];
+      h+='<div class="card" style="padding:12px;margin-bottom:8px;border-left:3px solid #7c3aed;background:#faf5ff">';
+      h+='<div class="flex justify-between items-start gap-8"><div style="flex:1;min-width:0">';
+      h+='<div class="txxs fw7" style="color:#7c3aed">✅ RESOLVIÓ UN PEDIDO DEL ESTUDIO</div>';
+      h+='<div class="ts fw7">'+({checklist:'✅',tarea:'📋',nota:'📝'}[m.tipo]||'📤')+' '+esc(m.titulo||'')+'</div>';
+      h+='<div class="txxs tc3 mt-2">📅 '+fmts(e.t)+'</div>';
+      if(m.respuesta)h+='<div class="txxs mt-4">💬 '+esc(m.respuesta)+'</div>';
+      h+='</div><span style="background:'+eR[1]+'22;color:'+eR[1]+';border-radius:8px;padding:2px 8px;font-size:10px;font-weight:700;white-space:nowrap">'+eR[0]+'</span></div></div>';
     } else {
       var n=e.lista.length,col=e.de==='col';
       h+='<div class="card" style="padding:12px;margin-bottom:8px;border-left:3px solid '+(col?'#16a34a':'#6366f1')+'">';
@@ -11537,7 +11553,7 @@ function _contarFotosInforme(o,prof){
 function _chipsInforme(f){
   if(!f)return '';
   if(f.mode==='visto')return '<div class="txxs tc3 mt-4">👁 Abrió el link</div>';
-  if(f.mode==='carpeta'){var _ac=_archivosDeEnvioCarpeta(f);f={archivos:_ac};}
+  if(f.mode==='carpeta')return '<div class="txxs mt-6" style="color:var(--text2)">'+_resumenEnvioCarpeta(f)+'</div>';
   var n=function(a){return Array.isArray(a)?a.length:0;};
   var nChk=n(f.checklists)||((f.checklist&&(f.checklist.titulo||n(f.checklist.items)))?1:0);
   // [ícono, cantidad, singular, plural]
@@ -12503,10 +12519,7 @@ function _bandejaBodyHtml(){
   var procesados=all.filter(function(x){return x.estado!=='pendiente'&&_formMatch(x,q);});
   var papelera=papeleraItems.filter(function(x){return _formMatch(x,q);});
   function subSummary(sub){
-    if(sub.mode==='carpeta'){
-      var _ac=_archivosDeEnvioCarpeta(sub),_ai=_ac.filter(_esImagenArch).length;
-      return '📁 '+_ac.length+' archivo'+(_ac.length!==1?'s':'')+(_ai?' · 📸 '+_ai+' foto'+(_ai>1?'s':''):'');
-    }
+    if(sub.mode==='carpeta')return _resumenEnvioCarpeta(sub);
     if(sub.tareas!==undefined){
       var pts=[];
       if(sub.mensajeGeneral)pts.push('💬 '+sub.mensajeGeneral.slice(0,60)+(sub.mensajeGeneral.length>60?'…':''));
@@ -12851,6 +12864,14 @@ function _archivosDeEnvioCarpeta(sub){
   var ids={};(sub.archivosIds||[]).forEach(function(i){ids[i]=1;});
   return ((cp&&cp.archivos)||[]).filter(function(a){return ids[a.id];});
 }
+// Lo que realmente trae un envío de "Fotos y archivos": fotos y documentos por
+// separado (antes una sola foto se mostraba como "1 archivo · 1 foto").
+function _resumenEnvioCarpeta(sub){
+  var ac=_archivosDeEnvioCarpeta(sub),ni=ac.filter(_esImagenArch).length,nd=ac.length-ni,p=[];
+  if(ni)p.push('📸 '+ni+' foto'+(ni>1?'s':''));
+  if(nd)p.push('📄 '+nd+' documento'+(nd>1?'s':''));
+  return p.length?p.join(' · '):'📁 Sin archivos (ya no están en la carpeta)';
+}
 function _modalCarpetaForm(sub){
   window._fgForm=[];
   var arch=_archivosDeEnvioCarpeta(sub),isPend=sub.estado==='pendiente';
@@ -12859,7 +12880,7 @@ function _modalCarpetaForm(sub){
   h+='<div class="mo-h" style="padding:14px 16px"><h3 style="color:#16a34a;flex:1;min-width:0">📁 '+esc(sub.ayudante||'?')+'</h3>'
     +'<button class="tbtn" title="PDF de este envío" onclick="exportPdfColabForms([\''+sub.id+'\'])">📄</button>'
     +'<button class="tbtn" onclick="document.getElementById(\'ifmM\').remove()">'+I.x+'</button></div>';
-  h+='<div class="txxs tc3 mb-4" style="padding:0 16px">📅 '+fmts(sub.receivedAt||sub.fecha||'')+' · Fotos y archivos ('+arch.length+')</div>';
+  h+='<div class="txxs tc3 mb-4" style="padding:0 16px">📅 '+fmts(sub.receivedAt||sub.fecha||'')+' · '+_resumenEnvioCarpeta(sub)+'</div>';
   h+='<div style="flex:1;overflow-y:auto;padding:8px 16px">';
   if(!arch.length)h+='<div class="empty">Los archivos de este envío ya no están en la carpeta.</div>';
   if(im.length){
