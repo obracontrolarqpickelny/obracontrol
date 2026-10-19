@@ -441,7 +441,7 @@ function _fusionarInbox(lista){
   return hubo;
 }
 function _actualizarBadgeBandeja(){
-  var _msgs=INBOX_MSGS.filter(function(m){return m&&m.tipo!=='biblioteca';});
+  var _msgs=_sinDuplicados(INBOX_MSGS.filter(function(m){return m&&m.tipo!=='biblioteca';}));
   var pend=_msgs.filter(function(m){return !_resuelto(m);}).length;
   var cnt=$('count-bdj'),bdg=$('badge-bdj');
   if(cnt){
@@ -458,7 +458,9 @@ function _traerBandejaServidor(){
   var u=API_URL+(API_URL.indexOf('?')<0?'?':'&')+'action=bandeja&token='+encodeURIComponent(TOKEN)+'&secreto='+encodeURIComponent(API_SEC);
   fetch(u).then(function(r){return r.json();}).then(function(j){
     if(!j||!j.ok||!j.mensajes)return;
-    _fusionarInbox(j.mensajes);
+    // La lista del servidor es la vigente: reemplaza a la guardada en el teléfono
+    // (antes sólo se sumaba y quedaban avisos viejos o duplicados para siempre)
+    INBOX_MSGS=j.mensajes.slice();_guardarInboxLocal();
     _actualizarBadgeBandeja();
     if(currentTab==='bdj')renderBandeja();
   }).catch(function(){});
@@ -936,6 +938,21 @@ document.addEventListener('change',function(e){
 var _BIB_SEL={},_bibModoSel=false;
 var _BIB_OPEN_KEY='oc_bibopen_'+(TOKEN||'anon');
 function _bibAbierta(){try{return localStorage.getItem(_BIB_OPEN_KEY)!=='0';}catch(_){return true;}}
+// Si por un link viejo llegara el mismo pedido dos veces, se muestra uno solo (el más nuevo)
+// Sección de una lista de materiales compartida (también para las enviadas
+// antes de que se guardara: se deduce del título)
+function _seccionMat(m){return m.seccion||(/A pedir/i.test(m.titulo||'')?'a_pedir':/Pedidos/i.test(m.titulo||'')?'pedido':String(m.titulo||''));}
+function _sinDuplicados(lista){
+  var porClave={},out=[];
+  lista.forEach(function(m){
+    var k=(m.tipo==='materiales')?'mat|'+_seccionMat(m):(m.entidadId?m.tipo+'|'+m.entidadId:null);
+    if(!k){out.push(m);return;}
+    var p=porClave[k];
+    if(!p){porClave[k]=m;out.push(m);return;}
+    if(String(m.fechaEnvio||'')>String(p.fechaEnvio||'')){out[out.indexOf(p)]=m;porClave[k]=m;}
+  });
+  return out;
+}
 function _bibLista(){var m=INBOX_MSGS.find(function(x){return x&&x.tipo==='biblioteca';});return (m&&m.archivos)||[];}
 function _bibEsImg(a){return a&&String(a.tipo||'').indexOf('image/')===0;}
 function _bibThumb(a){return a.driveId?'https://drive.google.com/thumbnail?id='+a.driveId+'&sz=w400':a.url;}
@@ -1085,7 +1102,7 @@ var tipoLabels={checklist:'✅ Checklist',tarea:'📋 Tarea',nota:'📝 Nota',ma
 
 function renderBandeja(){
   var el=$('bdj-content');if(!el)return;
-  var _msgsB=INBOX_MSGS.filter(function(m){return m&&m.tipo!=='biblioteca';});
+  var _msgsB=_sinDuplicados(INBOX_MSGS.filter(function(m){return m&&m.tipo!=='biblioteca';}));
   if(!_msgsB.length){
     if(_bibLista().length){el.innerHTML=_bibHtml()+'<div class="empty-tab"><div class="e-txt">No tenés tareas ni avisos pendientes.</div></div>';_actualizarBadgeBandeja();return;}
     el.innerHTML='<div class="empty-tab"><div class="e-icon">📭</div><div class="e-txt">Tu bandeja está vacía.</div><div style="font-size:12px;color:var(--text3);margin-top:8px;line-height:1.5">El arquitecto no te ha enviado tareas ni checklists todavía,<br>o estás usando un link anterior.<br><strong>Pedile que te reenvíe el link actualizado.</strong></div></div>';
