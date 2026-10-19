@@ -3189,10 +3189,23 @@ function _buildMatGroups(items){
   });
   return {ungrouped:ungrouped,groups:groups};
 }
+// Carpeta "SIN AGRUPAR": los materiales sueltos de una sección van juntos en
+// una carpeta plegable, como los grupos (se recuerda si quedó abierta o cerrada).
+function _carpetaSinAgrupar(estado,n,inner,color){
+  if(!n)return '';
+  var collapsed=!!(S.matGrupoCollapsed&&S.matGrupoCollapsed[estado+'|__sin__']);
+  return '<div class="card mb-8" style="border-left:3px solid '+(color||'var(--gray-l)')+';padding:10px 12px;background:var(--gray-ll)">'
+    +'<div class="flex justify-between items-center" style="cursor:pointer" onclick="toggleMatGrupo(\''+estado+'\',\'__sin__\')">'
+    +'<span class="ts fw7" style="color:var(--text2)">&#x1F4C2; SIN AGRUPAR ('+n+')</span>'
+    +'<span class="txxs tc3">'+(collapsed?'&#x25B6;':'&#x25BC;')+'</span></div>'
+    +(collapsed?'':'<div class="mt-8">'+inner+'</div>')
+    +'</div>';
+}
 function toggleMatGrupo(estado,key){
   if(!S.matGrupoCollapsed)S.matGrupoCollapsed={};
   var k=estado+'|'+key;
   S.matGrupoCollapsed[k]=!S.matGrupoCollapsed[k];
+  try{saveUIState();}catch(_){}
   renderMatItems();
 }
 function _renderMatGroupCard(key,group,estado){
@@ -5907,6 +5920,7 @@ function renderMatItems(){
     _apedirH+='<div class="flex gap-4"><button class="btn btn-s btn-sec" title="Agregar al calendario" onclick="exportMatItemsGCal(\'a_pedir\')">&#x1F4C5;</button><button class="btn btn-s btn-sec" title="Cargar varios de una vez" onclick="abrirIngresoMultiple(\'a_pedir\')">📝 Lista</button><button class="btn btn-s btn-sec" onclick="openM(\'newAPedirM\')">'+ I.plus +' Nuevo</button></div></div>';
     if(!S.matAPedirMin){
       var _apGrp=_buildMatGroups(_apedir);
+      var _apIni=_apedirH.length;
       _apGrp.ungrouped.forEach(function(p){
       var mn=p.materialId?D.materiales.find(function(m){return m.id===p.materialId;}):null;
       _apedirH+='<div style="padding:8px 0;border-bottom:1px solid var(--gray-ll)"><div class="matrow">';
@@ -5923,7 +5937,11 @@ function renderMatItems(){
       _apedirH+='<button class="btn btn-sec btn-s" style="font-size:10px;color:var(--red)" onclick="delMatItem(\''+p.id+'\')">' +I.trash+'</button>';
       _apedirH+='</div></div></div>';
       });
+      // Grupos primero; los sueltos, en su carpeta "SIN AGRUPAR"
+      var _apSueltos=_apedirH.slice(_apIni);_apedirH=_apedirH.slice(0,_apIni);
+      var _apHayGrupos=Object.keys(_apGrp.groups).length>0;
       Object.keys(_apGrp.groups).forEach(function(key){_apedirH+=_renderMatGroupCard(key,_apGrp.groups[key],'a_pedir');});
+      _apedirH+=_apHayGrupos?_carpetaSinAgrupar('a_pedir',_apGrp.ungrouped.length,_apSueltos,'#8b5cf6'):_apSueltos;
     }
     _apedirH+='</div>';
   }
@@ -5938,6 +5956,7 @@ function renderMatItems(){
     _pedH+='<div class="flex gap-4"><button class="btn btn-s btn-sec" title="Agregar al calendario" onclick="exportMatItemsGCal(\'pedido\')">&#x1F4C5;</button><button class="btn btn-s btn-sec" title="Cargar varios de una vez" onclick="abrirIngresoMultiple(\'pedido\')">📝 Lista</button><button class="btn btn-s btn-sec" onclick="openM(\'newPedidoM\')">' +I.plus+' Nuevo</button></div></div>';
     if(!S.matPedMin){
       var _pedGrp=_buildMatGroups(_peds);
+      var _pedIni=_pedH.length;
       _pedGrp.ungrouped.forEach(function(p){
       var mn=p.materialId?D.materiales.find(function(m){return m.id===p.materialId;}):null;
       _pedH+='<div style="padding:8px 0;border-bottom:1px solid var(--gray-ll)">';
@@ -5956,7 +5975,10 @@ function renderMatItems(){
       _pedH+='<button class="btn btn-sec btn-s" style="font-size:10px;color:var(--red)" onclick="delMatItem(\''+p.id+'\')">' +I.trash+'</button>';
       _pedH+='</div></div></div>';
       });
+      var _pedSueltos=_pedH.slice(_pedIni);_pedH=_pedH.slice(0,_pedIni);
+      var _pedHayGrupos=Object.keys(_pedGrp.groups).length>0;
       Object.keys(_pedGrp.groups).forEach(function(key){_pedH+=_renderMatGroupCard(key,_pedGrp.groups[key],'pedido');});
+      _pedH+=_pedHayGrupos?_carpetaSinAgrupar('pedido',_pedGrp.ungrouped.length,_pedSueltos,'var(--orange)'):_pedSueltos;
     }
     _pedH+='</div>';
   }
@@ -5982,9 +6004,8 @@ function renderMatItems(){
         var _h='';
         Object.keys(_g.groups).sort().forEach(function(k){_h+=_renderSinCompGroupCard(k,_g.groups[k]);});
         var _filasSueltas=_filasSinComp(_g.ungrouped);
-        if(_filasSueltas.length&&Object.keys(_g.groups).length)
-          _h+='<div class="txxs tc3 fw7 mt-8 mb-4">Sin agrupar ('+_filasSueltas.length+')</div>';
-        _h+=_filasSueltas.map(function(fila){
+        var _scHayGrupos=Object.keys(_g.groups).length>0;
+        var _scSueltos=_filasSueltas.map(function(fila){
           if(fila.items.length>1)return _filaSinCompAgregada(fila,'border-bottom');
           var i=fila.items[0];
           return '<div class="matrow" style="padding:8px 0;border-bottom:1px solid var(--gray-ll)">'
@@ -6004,6 +6025,7 @@ function renderMatItems(){
           +'</div>'
           +'</div>';
         }).join('');
+        _h+=_scHayGrupos?_carpetaSinAgrupar('sincomp',_filasSueltas.length,_scSueltos,'var(--cyan)'):_scSueltos;
         return _h;
       })())
       +'</div>';
@@ -6925,15 +6947,53 @@ function exportMatItemsGCal(tipo){
   var d=document.createElement('div');d.className='mo open';d.id='matCalM';
   d.innerHTML='<div class="mo-c" style="max-width:400px"><div class="mo-h"><h3 style="color:var(--purple)">&#128197; Agregar al Calendario</h3><button class="tbtn" onclick="this.closest(\'.mo\').remove()">'+I.x+'</button></div>'
     +'<div class="alrt alrt-b mb-8">'+I.pkg+'<div class="ts flex-1"><strong>'+_label+'</strong><br><span class="txxs">'+_items.length+' ítem'+(parseInt(_items.length)!==1?'s':'')+' — '+(p?p.name:'')+'</span></div></div>'
-    +'<div class="fg"><label class="fl">Fecha</label><input class="fi" id="matcal_d" type="date" value="'+td()+'"></div>'
-    +'<div class="fg"><label class="fl">Hora</label><input class="fi" id="matcal_t" type="time" value="08:00"></div>'
+    +_matCalSelectorHtml(_items)
+    +'<div class="fr"><div class="fg"><label class="fl">Fecha</label><input class="fi" id="matcal_d" type="date" value="'+td()+'"></div>'
+    +'<div class="fg"><label class="fl">Hora</label><input class="fi" id="matcal_t" type="time" value="08:00"></div></div>'
     +'<button class="btn btn-w mb-8" style="background:#4285f4;color:#fff" onclick="_openMatItemsGCal(\''+tipo+'\')">&#128197; Google Calendar</button>'
     +'<button class="btn btn-w btn-sec" onclick="_downloadMatItemsICS(\''+tipo+'\')">&#128241; Calendario del dispositivo (.ics)</button>'
     +'</div>';
   document.body.appendChild(d);
 }
+// Elegir qué ítems van al evento: todos tildados de entrada, agrupados como en
+// la pantalla; se puede tildar o destildar uno por uno o un grupo entero.
+function _matCalSelectorHtml(items){
+  var g=_buildMatGroups(items),h='';
+  var fila=function(i){return '<label style="display:flex;align-items:center;gap:8px;padding:5px 2px;cursor:pointer;font-size:13px"><input type="checkbox" class="matcal_chk" value="'+i.id+'" checked onchange="_matCalCuenta()" style="width:18px;height:18px;flex-shrink:0">'
+    +'<span style="flex:1;min-width:0">'+esc(i.matNombre||'Sin nombre')+' <span class="tc3">· '+_fmtNum(i.qty)+' '+esc(i.unit||'')+'</span></span></label>';};
+  Object.keys(g.groups).sort().forEach(function(k){
+    var gr=g.groups[k];
+    h+='<div style="margin-top:6px"><label style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:800;color:var(--text2);cursor:pointer"><input type="checkbox" checked onchange="_matCalGrupo(this)" style="width:16px;height:16px">&#x1F3D7; '+esc(gr.label)+' ('+gr.items.length+')</label>'
+      +'<div style="padding-left:14px">'+gr.items.map(fila).join('')+'</div></div>';
+  });
+  if(g.ungrouped.length){
+    h+=(Object.keys(g.groups).length?'<div style="margin-top:6px;font-size:12px;font-weight:800;color:var(--text2)">&#x1F4C2; Sin agrupar</div><div style="padding-left:14px">':'<div>')
+      +g.ungrouped.map(fila).join('')+'</div>';
+  }
+  return '<div class="fg"><div class="flex justify-between items-center"><label class="fl" style="margin:0">Qué va al evento <span id="matcal_n">('+items.length+' de '+items.length+')</span></label>'
+    +'<span><button class="btn btn-g btn-s" style="font-size:11px" onclick="_matCalTodos(true)">Todos</button><button class="btn btn-g btn-s" style="font-size:11px" onclick="_matCalTodos(false)">Ninguno</button></span></div>'
+    +'<div style="max-height:38vh;overflow-y:auto;border:1px solid var(--gray-ll);border-radius:8px;padding:4px 8px;margin-top:4px">'+h+'</div></div>';
+}
+function _matCalCuenta(){
+  var t=document.querySelectorAll('.matcal_chk').length,n=document.querySelectorAll('.matcal_chk:checked').length;
+  var el=document.getElementById('matcal_n');if(el)el.textContent='('+n+' de '+t+')';
+}
+function _matCalTodos(on){document.querySelectorAll('#matCalM input[type=checkbox]').forEach(function(c){c.checked=on;});_matCalCuenta();}
+function _matCalGrupo(cb){
+  var box=cb.closest('div');if(box)box.querySelectorAll('.matcal_chk').forEach(function(c){c.checked=cb.checked;});
+  _matCalCuenta();
+}
+// Los ítems tildados en la ventana (si no hay ventana, todos)
+function _matCalElegidos(tipo){
+  var items=(D.matIngresos||[]).filter(function(i){return i.projectId===S.proj&&i.estado===tipo;});
+  var chks=document.querySelectorAll('.matcal_chk');
+  if(!chks.length)return items;
+  var sel={};document.querySelectorAll('.matcal_chk:checked').forEach(function(c){sel[c.value]=1;});
+  return items.filter(function(i){return sel[i.id];});
+}
 function _openMatItemsGCal(tipo){
-  var _items=(D.matIngresos||[]).filter(function(i){return i.projectId===S.proj&&i.estado===tipo;});
+  var _items=_matCalElegidos(tipo);
+  if(!_items.length){toast('Tildá al menos un material','var(--orange)');return;}
   var p=D.projects.find(function(x){return x.id===S.proj;});
   var _label=tipo==='a_pedir'?'A pedir':'Pedidos';
   var _d=$('matcal_d')?.value||td();var _t=($('matcal_t')?.value||'08:00').replace(':','');
@@ -6945,7 +7005,8 @@ function _openMatItemsGCal(tipo){
   document.getElementById('matCalM')?.remove();toast('Abriendo Google Calendar...','var(--green)');
 }
 function _downloadMatItemsICS(tipo){
-  var _items=(D.matIngresos||[]).filter(function(i){return i.projectId===S.proj&&i.estado===tipo;});
+  var _items=_matCalElegidos(tipo);
+  if(!_items.length){toast('Tildá al menos un material','var(--orange)');return;}
   var p=D.projects.find(function(x){return x.id===S.proj;});
   var _label=tipo==='a_pedir'?'A pedir':'Pedidos';
   var _d=$('matcal_d')?.value||td();var _t=$('matcal_t')?.value||'08:00';
