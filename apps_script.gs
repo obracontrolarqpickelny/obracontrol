@@ -20,7 +20,7 @@ var CARPETA_RAIZ = 'ObraControl_Datos';
 
 // Tope de fotos que se devuelven juntas en una sola respuesta (bytes de base64).
 // Por encima de esto la app las pide de a una para no trabarse.
-var TOPE_RESPUESTA = 6 * 1024 * 1024;
+var TOPE_RESPUESTA = 25 * 1024 * 1024; // las fotos ahora viajan en buena calidad
 
 // ─── UTILIDADES DE CARPETAS ───────────────────────────────────────
 
@@ -254,7 +254,7 @@ function doGet(e) {
       if (String(p.secreto || '') !== SECRETO) {
         return _json({ ok: false, error: 'Clave incorrecta.' });
       }
-      return _json({ ok: true, mensaje: 'Conectado', version: 2 });
+      return _json({ ok: true, mensaje: 'Conectado', version: 3 });
     }
 
     if (String(p.secreto || '') !== SECRETO) {
@@ -273,6 +273,29 @@ function doGet(e) {
       } catch (err) {
         return _json({ ok: true, mensajes: [] });
       }
+    }
+
+    // El colaborador baja un archivo de su biblioteca compartida (para armar un
+    // ZIP con varios). Sólo se entrega si ese archivo figura en SU biblioteca
+    // publicada: con la clave sola no se puede pedir cualquier archivo del Drive.
+    if (accion === 'archivo') {
+      var tka = String(p.token || ''), ida = String(p.id || '');
+      if (!tka || !ida) return _json({ ok: false, error: 'Faltan datos.' });
+      var fbA = _archivoPorNombre(_carpetaBandejaColab(), tka + '.json');
+      if (!fbA) return _json({ ok: false, error: 'Sin biblioteca.' });
+      var permitido = false;
+      try {
+        var datosA = JSON.parse(fbA.getBlob().getDataAsString());
+        (datosA.mensajes || []).forEach(function (m) {
+          (m.archivos || []).concat(m._archivos || []).forEach(function (a) { if (a && a.driveId === ida) permitido = true; });
+        });
+      } catch (err) {}
+      if (!permitido) return _json({ ok: false, error: 'Ese archivo no está compartido con vos.' });
+      var fileA = DriveApp.getFileById(ida);
+      var blobA = fileA.getBlob();
+      var b64A = Utilities.base64Encode(blobA.getBytes());
+      if (b64A.length > TOPE_RESPUESTA) return _json({ ok: false, error: 'Archivo demasiado grande.', grande: true });
+      return _json({ ok: true, nombre: fileA.getName(), mime: blobA.getContentType(), b64: b64A });
     }
 
     // Lista liviana de informes pendientes (sin fotos).

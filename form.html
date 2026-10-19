@@ -129,6 +129,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .sub-hdr{display:flex;align-items:center;gap:8px;margin-bottom:12px}
 .sub-back{border:none;background:var(--gray-ll);border-radius:8px;padding:7px 12px;font-size:13px;font-weight:700;color:var(--text2);cursor:pointer;font-family:inherit}
 .sub-tit{font-size:16px;font-weight:800}
+.done-toggle{display:flex;align-items:center;gap:4px;background:none;border:1.5px solid var(--brd);border-radius:20px;padding:5px 11px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text3);font-family:inherit;white-space:nowrap}
+.done-toggle.on{background:var(--green);border-color:var(--green);color:#fff}
+.menu-card .m-listo{position:absolute;top:8px;left:8px;background:var(--green);color:#fff;border-radius:10px;font-size:10px;font-weight:800;padding:2px 7px}
 
 /* "Más datos" desplegable: lo opcional queda guardado */
 details.mas{margin-bottom:10px}
@@ -207,21 +210,21 @@ details.mas>div{padding-top:8px}
     <!-- Comentarios — misma forma que "Nuevo comentario" de la app, para
          que al aceptarlos entren tal cual a la pestaña Comentarios de la obra. -->
     <div class="tab-pane" id="pane-msg">
-      <div class="sub-hdr"><button class="sub-back" onclick="showTab('cargar')">← Volver</button><span class="sub-tit">💬 Comentario</span></div>
+      <div class="sub-hdr"><button class="sub-back" onclick="showTab('cargar')">← Volver</button><span class="sub-tit" style="flex:1">💬 Comentario</span><button class="done-toggle" id="done-msg" onclick="toggleListo('msg')">✓ Marcar lista</button></div>
       <div id="list-cmt"></div>
       <button class="btn-add" onclick="addItem('cmt')">+ Otro comentario</button>
     </div>
 
     <!-- Gastos (movimientos) -->
     <div class="tab-pane" id="pane-mov">
-      <div class="sub-hdr"><button class="sub-back" onclick="showTab('cargar')">← Volver</button><span class="sub-tit">💰 Gasto</span></div>
+      <div class="sub-hdr"><button class="sub-back" onclick="showTab('cargar')">← Volver</button><span class="sub-tit" style="flex:1">💰 Gasto</span><button class="done-toggle" id="done-mov" onclick="toggleListo('mov')">✓ Marcar lista</button></div>
       <div id="list-mov"></div>
       <button class="btn-add" onclick="addItem('mov')">+ Otro gasto</button>
     </div>
 
     <!-- Tareas -->
     <div class="tab-pane" id="pane-tar">
-      <div class="sub-hdr"><button class="sub-back" onclick="showTab('cargar')">← Volver</button><span class="sub-tit">📋 Tarea</span></div>
+      <div class="sub-hdr"><button class="sub-back" onclick="showTab('cargar')">← Volver</button><span class="sub-tit" style="flex:1">📋 Tarea</span><button class="done-toggle" id="done-tar" onclick="toggleListo('tar')">✓ Marcar lista</button></div>
       <div id="list-tar"></div>
       <button class="btn-add" onclick="addItem('tar')">+ Otra tarea</button>
     </div>
@@ -229,7 +232,7 @@ details.mas>div{padding-top:8px}
     <!-- Materiales: existentes, a pedir y recibidos en un solo lugar. Cada grupo
          conserva su lista para que a la app le lleguen igual que antes. -->
     <div class="tab-pane" id="pane-mat">
-      <div class="sub-hdr"><button class="sub-back" onclick="showTab('cargar')">← Volver</button><span class="sub-tit">📦 Materiales</span></div>
+      <div class="sub-hdr"><button class="sub-back" onclick="showTab('cargar')">← Volver</button><span class="sub-tit" style="flex:1">📦 Materiales</span><button class="done-toggle" id="done-mat" onclick="toggleListo('mat')">✓ Marcar lista</button></div>
       <div class="mat-add">
         <button onclick="addMat('mex')">📦<br>Hay en obra</button>
         <button onclick="addMat('mpe')">🔔<br>Hay que pedir</button>
@@ -250,7 +253,7 @@ details.mas>div{padding-top:8px}
 
     <!-- Checklist -->
     <div class="tab-pane" id="pane-chk">
-      <div class="sub-hdr"><button class="sub-back" onclick="showTab('cargar')">← Volver</button><span class="sub-tit">✅ Checklist</span></div>
+      <div class="sub-hdr"><button class="sub-back" onclick="showTab('cargar')">← Volver</button><span class="sub-tit" style="flex:1">✅ Checklist</span><button class="done-toggle" id="done-chk" onclick="toggleListo('chk')">✓ Marcar lista</button></div>
       <div class="card">
         <div class="fg"><label class="fl">Título del checklist</label><input class="fi" id="chk_titulo" placeholder="Ej: Inspección de armadura, Control de losa..."></div>
         <div class="fg"><label class="fl">Ítems (uno por línea)</label><textarea class="ft" id="chk_items" rows="7" placeholder="Verificar estribos&#10;Revisar recubrimiento&#10;Controlar separación entre barras&#10;Limpiar fondos&#10;Verificar pasatubos"></textarea></div>
@@ -427,11 +430,12 @@ function _fusionarInbox(lista){
   return hubo;
 }
 function _actualizarBadgeBandeja(){
-  var pend=INBOX_MSGS.filter(function(m){return !(INBOX_RESP[m.id]&&INBOX_RESP[m.id].done);}).length;
+  var _msgs=INBOX_MSGS.filter(function(m){return m&&m.tipo!=='biblioteca';});
+  var pend=_msgs.filter(function(m){return !(INBOX_RESP[m.id]&&INBOX_RESP[m.id].done);}).length;
   var cnt=$('count-bdj'),bdg=$('badge-bdj');
   if(cnt){
-    cnt.textContent=INBOX_MSGS.length;
-    cnt.style.display=INBOX_MSGS.length?'inline-flex':'none';
+    cnt.textContent=_msgs.length;
+    cnt.style.display=_msgs.length?'inline-flex':'none';
     cnt.style.background=pend?'var(--red)':'var(--teal)'; // en rojo mientras haya pendientes
   }
   if(bdg)bdg.style.display='none'; // el número en rojo ya avisa
@@ -455,7 +459,22 @@ var unitOpts=UNITS.map(function(u){return '<option value="'+u+'">'+u+'</option>'
 var colabName='';
 var sessionId=_uid();
 var sendCount=0;
-var doneTabMap={cmt:false,mov:false,tar:false,mex:false,mpe:false,chk:false,mrec:false};
+// Secciones que el colaborador marcó como listas (vuelve a pedido del arquitecto)
+var doneTabMap={msg:false,mov:false,tar:false,mat:false,chk:false};
+function toggleListo(sec){
+  doneTabMap[sec]=!doneTabMap[sec];
+  _pintarListos();
+  if(doneTabMap[sec])showTab('cargar');
+}
+function _pintarListos(){
+  Object.keys(doneTabMap).forEach(function(sec){
+    var b=$('done-'+sec);if(b){b.classList.toggle('on',!!doneTabMap[sec]);b.textContent=doneTabMap[sec]?'✓ Lista':'✓ Marcar lista';}
+    var mc=$('mc-'+sec);if(!mc)return;
+    var t=mc.querySelector('.m-listo');
+    if(doneTabMap[sec]){if(!t){t=document.createElement('span');t.className='m-listo';mc.appendChild(t);}t.textContent='✓ Lista';}
+    else if(t)t.remove();
+  });
+}
 // Mismas listas que el formulario de Comentarios de la app principal.
 var RUB_F=['Estructura','Mamposteria','Inst. Sanitaria','Inst. Electrica','Inst. Gas','Revoques','Pisos','Pintura','Carpinteria','Cubierta','Otro'];
 var ETAPAS_F=['Excavacion','Fundaciones','Estructura','Mamposteria','Instalaciones','Revoques','Contrapisos','Pisos','Revestimientos','Pintura','Carpinteria','Cubierta','Terminaciones','Otro'];
@@ -580,10 +599,15 @@ async function sendCarpeta(){
     try{
       var data=await new Promise(function(res,rej){var r=new FileReader();r.onload=function(){res(r.result);};r.onerror=rej;r.readAsDataURL(f);});
       if(f.type.startsWith('image/')){
-        // Two-pass compression: first pass 720px/0.65, second if still > 60KB
-        data=await compressImg(data,720,0.65);
-        if(data.length>80000) data=await compressImg(data,480,0.5);
-        if(data.length>50000) data=await compressImg(data,360,0.45);
+        if(API_URL){
+          // Con servidor no hay límite de link: buena calidad
+          data=await compressImg(data,1600,0.8);
+        } else {
+          // Sin servidor viaja en el link de WhatsApp: hay que achicar mucho
+          data=await compressImg(data,720,0.65);
+          if(data.length>80000) data=await compressImg(data,480,0.5);
+          if(data.length>50000) data=await compressImg(data,360,0.45);
+        }
       }
       archivos.push({nombre:f.name,tipo:f.type||'application/octet-stream',data:data,descripcion:(_notaF||'').trim()||($('carpetaDesc')||{}).value||''});
     }catch(e){console.warn('file error',e);}
@@ -848,6 +872,154 @@ document.addEventListener('change',function(e){
   clearTimeout(_carritoT);_carritoT=setTimeout(actualizarCarrito,250);
 });
 
+// ── Biblioteca compartida (lo que el estudio y vos compartieron) ──
+// Llega del servidor como un mensaje especial ('_biblioteca'). Se ve en Recibido,
+// cada foto con su comentario, y se puede bajar una, varias o todas (en un ZIP).
+var _BIB_SEL={},_bibModoSel=false;
+var _BIB_OPEN_KEY='oc_bibopen_'+(TOKEN||'anon');
+function _bibAbierta(){try{return localStorage.getItem(_BIB_OPEN_KEY)!=='0';}catch(_){return true;}}
+function _bibLista(){var m=INBOX_MSGS.find(function(x){return x&&x.tipo==='biblioteca';});return (m&&m.archivos)||[];}
+function _bibEsImg(a){return a&&String(a.tipo||'').indexOf('image/')===0;}
+function _bibThumb(a){return a.driveId?'https://drive.google.com/thumbnail?id='+a.driveId+'&sz=w400':a.url;}
+function bibToggleAbierta(){try{localStorage.setItem(_BIB_OPEN_KEY,_bibAbierta()?'0':'1');}catch(_){}renderBandeja();}
+function bibModoSel(on){_bibModoSel=on;if(!on)_BIB_SEL={};renderBandeja();}
+function bibToggle(id){_BIB_SEL[id]=!_BIB_SEL[id];renderBandeja();}
+function bibVerFoto(i){
+  var a=_bibLista().filter(_bibEsImg)[i];if(!a)return;
+  var d=document.createElement('div');
+  d.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px';
+  d.onclick=function(){d.remove();};
+  d.innerHTML='<img src="'+esc(a.driveId?'https://drive.google.com/thumbnail?id='+a.driveId+'&sz=w1600':a.url)+'" style="max-width:100%;max-height:78vh;object-fit:contain;border-radius:6px">'
+    +((a.titulo||a.descripcion)?'<div style="color:#fff;font-size:13px;margin-top:10px;text-align:center">'+(a.titulo?'📋 '+esc(a.titulo)+'<br>':'')+(a.descripcion?'📝 '+esc(a.descripcion):'')+'</div>':'')
+    +'<div style="color:#cbd5e1;font-size:11px;margin-top:8px">Tocá para cerrar</div>';
+  document.body.appendChild(d);
+}
+function _bibHtml(){
+  var lista=_bibLista();if(!lista.length)return '';
+  var abierta=_bibAbierta();
+  var h='<div class="card" style="border-left:3px solid #16a34a">';
+  h+='<div onclick="bibToggleAbierta()" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer"><span style="font-size:14px;font-weight:800">📁 Biblioteca compartida ('+lista.length+')</span><span style="color:var(--text3)">'+(abierta?'▲':'▼')+'</span></div>';
+  if(!abierta)return h+'</div>';
+  var nSel=lista.filter(function(a){return _BIB_SEL[a.id];}).length;
+  h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin:10px 0">';
+  h+='<button class="btn-sm" style="background:var(--teal);color:#fff" onclick="bibDescargar(false)">⬇ Todo ('+lista.length+')</button>';
+  if(_bibModoSel){
+    h+='<button class="btn-sm" style="background:'+(nSel?'var(--green)':'#94a3b8')+';color:#fff" '+(nSel?'':'disabled')+' onclick="bibDescargar(true)">⬇ Elegidos ('+nSel+')</button>';
+    h+='<button class="btn-sm" style="background:var(--gray-ll);color:var(--text2)" onclick="bibModoSel(false)">Cancelar</button>';
+  } else h+='<button class="btn-sm" style="background:var(--gray-ll);color:var(--text2)" onclick="bibModoSel(true)">☑ Elegir</button>';
+  h+='</div>';
+  var imgs=lista.filter(_bibEsImg),docs=lista.filter(function(a){return !_bibEsImg(a);});
+  if(imgs.length){
+    h+='<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px">';
+    imgs.forEach(function(a,i){
+      var sel=!!_BIB_SEL[a.id];
+      h+='<div><div onclick="'+(_bibModoSel?'bibToggle(\''+a.id+'\')':'bibVerFoto('+i+')')+'" style="position:relative;padding-bottom:100%;border-radius:8px;overflow:hidden;background:var(--gray-ll);cursor:pointer;'+(sel?'outline:3px solid var(--green);outline-offset:-3px':'')+'">'
+        +'<img src="'+esc(_bibThumb(a))+'" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover" onerror="this.style.opacity=.25">'
+        +'<span style="position:absolute;bottom:3px;left:3px;background:rgba(0,0,0,.55);color:#fff;border-radius:5px;padding:0 5px;font-size:9px">'+(a.de==='col'?'👷 vos':'🏗 estudio')+'</span>'
+        +(_bibModoSel?'<span style="position:absolute;top:4px;left:4px;width:22px;height:22px;border-radius:6px;background:'+(sel?'var(--green)':'rgba(255,255,255,.9)')+';border:2px solid '+(sel?'var(--green)':'#94a3b8')+';color:#fff;font-size:14px;line-height:18px;text-align:center">'+(sel?'✓':'')+'</span>':'')
+        +'</div>'+((a.descripcion||a.titulo)?'<div style="font-size:10px;color:var(--text2);margin-top:2px;line-height:1.25;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">'+esc(a.descripcion||a.titulo)+'</div>':'')+'</div>';
+    });
+    h+='</div>';
+  }
+  docs.forEach(function(a){
+    var sel=!!_BIB_SEL[a.id];
+    h+='<div onclick="'+(_bibModoSel?'bibToggle(\''+a.id+'\')':'')+'" style="display:flex;align-items:center;gap:8px;background:var(--gray-ll);border-radius:8px;padding:8px;margin-top:6px;'+(sel?'outline:2px solid var(--green)':'')+'">'
+      +(_bibModoSel?'<span style="width:20px;height:20px;border-radius:5px;flex-shrink:0;background:'+(sel?'var(--green)':'#fff')+';border:2px solid '+(sel?'var(--green)':'#94a3b8')+';color:#fff;font-size:13px;line-height:16px;text-align:center">'+(sel?'✓':'')+'</span>':'')
+      +'<span style="font-size:20px">📄</span><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(a.nombre||'archivo')+'</div>'
+      +'<div style="font-size:10px;color:var(--text3)">'+(a.de==='col'?'👷 vos':'🏗 estudio')+(a.descripcion?' · 📝 '+esc(a.descripcion):'')+'</div></div>'
+      +(_bibModoSel?'':'<button class="btn-sm" style="background:var(--white);color:var(--teal);border:1px solid var(--brd)" onclick="event.stopPropagation();bibDescargarIds([\''+a.id+'\'])">⬇</button>')+'</div>';
+  });
+  return h+'</div>';
+}
+// Bajar archivos: por el servidor (devuelve el archivo y se arma un ZIP si son
+// varios). Si el servidor todavía no tiene esa función, se abren los links.
+function bibDescargar(soloElegidos){
+  var lista=_bibLista();
+  var ids=lista.filter(function(a){return !soloElegidos||_BIB_SEL[a.id];}).map(function(a){return a.id;});
+  return bibDescargarIds(ids);
+}
+function _bibBajarBlob(blob,nombre){
+  var url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=nombre;document.body.appendChild(a);a.click();
+  setTimeout(function(){URL.revokeObjectURL(url);a.remove();},1500);
+}
+function _bibU8(b64){var s=atob(b64),u=new Uint8Array(s.length);for(var i=0;i<s.length;i++)u[i]=s.charCodeAt(i);return u;}
+var _CRC_TF=null;
+function _crc32F(u8){
+  if(!_CRC_TF){_CRC_TF=new Uint32Array(256);for(var n=0;n<256;n++){var c=n;for(var k=0;k<8;k++)c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1);_CRC_TF[n]=c>>>0;}}
+  var crc=0xFFFFFFFF;for(var i=0;i<u8.length;i++)crc=_CRC_TF[(crc^u8[i])&0xFF]^(crc>>>8);
+  return (crc^0xFFFFFFFF)>>>0;
+}
+// ZIP sin compresión (las fotos ya vienen comprimidas). Misma lógica que la app.
+function _zipF(entradas){
+  var enc=new TextEncoder(),partes=[],central=[],off=0,d=new Date();
+  var hora=((d.getHours()<<11)|(d.getMinutes()<<5)|(d.getSeconds()>>1))&0xFFFF;
+  var fecha=(((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate())&0xFFFF;
+  entradas.forEach(function(e){
+    var nom=enc.encode(e.nombre),dat=e.datos,crc=_crc32F(dat);
+    var h=new DataView(new ArrayBuffer(30));
+    h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint16(6,0x0800,true);h.setUint16(8,0,true);
+    h.setUint16(10,hora,true);h.setUint16(12,fecha,true);h.setUint32(14,crc,true);
+    h.setUint32(18,dat.length,true);h.setUint32(22,dat.length,true);h.setUint16(26,nom.length,true);h.setUint16(28,0,true);
+    partes.push(new Uint8Array(h.buffer),nom,dat);
+    var c=new DataView(new ArrayBuffer(46));
+    c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);c.setUint16(8,0x0800,true);c.setUint16(10,0,true);
+    c.setUint16(12,hora,true);c.setUint16(14,fecha,true);c.setUint32(16,crc,true);
+    c.setUint32(20,dat.length,true);c.setUint32(24,dat.length,true);c.setUint16(28,nom.length,true);
+    c.setUint16(30,0,true);c.setUint16(32,0,true);c.setUint16(34,0,true);c.setUint16(36,0,true);c.setUint32(38,0,true);c.setUint32(42,off,true);
+    central.push(new Uint8Array(c.buffer),nom);
+    off+=30+nom.length+dat.length;
+  });
+  var tam=central.reduce(function(s,x){return s+x.length;},0);
+  var f=new DataView(new ArrayBuffer(22));
+  f.setUint32(0,0x06054b50,true);f.setUint16(8,entradas.length,true);f.setUint16(10,entradas.length,true);
+  f.setUint32(12,tam,true);f.setUint32(16,off,true);
+  return new Blob(partes.concat(central,[new Uint8Array(f.buffer)]),{type:'application/zip'});
+}
+function _bibNombreF(a,mime,i){
+  var n=String(a.nombre||'archivo').replace(/[\\\/:*?"<>|]/g,'_');
+  if(!/\.[a-z0-9]{2,5}$/i.test(n))n+='.'+((String(mime||'').split('/')[1]||'bin').replace('jpeg','jpg'));
+  return (i!==undefined?String(i+1).padStart(3,'0')+'_':'')+n;
+}
+async function bibDescargarIds(ids){
+  var lista=_bibLista().filter(function(a){return ids.indexOf(a.id)>=0;});
+  if(!lista.length)return;
+  var abrirLinks=function(){
+    lista.forEach(function(a,i){setTimeout(function(){
+      var u=a.driveId?'https://drive.google.com/uc?export=download&id='+a.driveId:a.url;
+      var l=document.createElement('a');l.href=u;l.target='_blank';l.rel='noopener';document.body.appendChild(l);l.click();l.remove();
+    },i*700);});
+  };
+  if(!API_URL||!TOKEN){abrirLinks();return;}
+  var entradas=[],faltan=0,txt=[];
+  for(var i=0;i<lista.length;i++){
+    var a=lista[i];
+    _bibAviso('Bajando '+(i+1)+' de '+lista.length+'...');
+    try{
+      var u=API_URL+(API_URL.indexOf('?')<0?'?':'&')+'action=archivo&token='+encodeURIComponent(TOKEN)+'&id='+encodeURIComponent(a.driveId||'')+'&secreto='+encodeURIComponent(API_SEC);
+      var j=await fetch(u).then(function(r){return r.json();});
+      if(!j||!j.ok){
+        if(j&&/desconocida/i.test(j.error||'')){_bibAviso('');abrirLinks();return;}
+        faltan++;continue;
+      }
+      if(lista.length===1){_bibAviso('');_bibBajarBlob(new Blob([_bibU8(j.b64)],{type:j.mime}),_bibNombreF(a,j.mime));return;}
+      var nom=_bibNombreF(a,j.mime,i);
+      entradas.push({nombre:nom,datos:_bibU8(j.b64)});
+      txt.push(nom+(a.titulo?' · '+a.titulo:'')+(a.descripcion?' — '+a.descripcion:''));
+    }catch(e){faltan++;}
+  }
+  _bibAviso('');
+  if(!entradas.length){alert('No se pudieron bajar los archivos. Probá más tarde o pedile al estudio que te los reenvíe.');return;}
+  entradas.push({nombre:'comentarios.txt',datos:new TextEncoder().encode(txt.join('\r\n'))});
+  _bibBajarBlob(_zipF(entradas),'Biblioteca_'+String(OBRA_NAME||'obra').replace(/[^\w]+/g,'_')+'.zip');
+  if(faltan)alert(faltan+' archivo(s) no se pudieron incluir.');
+}
+function _bibAviso(t){
+  var el=document.getElementById('bibAviso');
+  if(!t){if(el)el.remove();return;}
+  if(!el){el=document.createElement('div');el.id='bibAviso';el.style.cssText='position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#0f172a;color:#fff;padding:8px 14px;border-radius:20px;font-size:13px;font-weight:600;z-index:9999';document.body.appendChild(el);}
+  el.textContent=t;
+}
+
 // ── Bandeja de entrada ──────────────────
 var urgColors={alta:'#dc2626',media:'#f59e0b',baja:'#16a34a'};
 var urgLabels={alta:'🔴 Alta',media:'🟡 Media',baja:'🟢 Baja'};
@@ -855,16 +1027,19 @@ var tipoLabels={checklist:'✅ Checklist',tarea:'📋 Tarea',nota:'📝 Nota'};
 
 function renderBandeja(){
   var el=$('bdj-content');if(!el)return;
-  if(!INBOX_MSGS.length){
+  var _msgsB=INBOX_MSGS.filter(function(m){return m&&m.tipo!=='biblioteca';});
+  if(!_msgsB.length){
+    if(_bibLista().length){el.innerHTML=_bibHtml()+'<div class="empty-tab"><div class="e-txt">No tenés tareas ni avisos pendientes.</div></div>';_actualizarBadgeBandeja();return;}
     el.innerHTML='<div class="empty-tab"><div class="e-icon">📭</div><div class="e-txt">Tu bandeja está vacía.</div><div style="font-size:12px;color:var(--text3);margin-top:8px;line-height:1.5">El arquitecto no te ha enviado tareas ni checklists todavía,<br>o estás usando un link anterior.<br><strong>Pedile que te reenvíe el link actualizado.</strong></div></div>';
     return;
   }
   // Sort by urgency then date
-  var sorted=INBOX_MSGS.slice().sort(function(a,b){
+  var sorted=_msgsB.slice().sort(function(a,b){
     var uOrd={alta:0,media:1,baja:2};
     return (uOrd[a.urgencia]||1)-(uOrd[b.urgencia]||1)||(b.fechaEnvio||'').localeCompare(a.fechaEnvio||'');
   });
-  var h='';
+  var h=_bibHtml();
+  var _bibImgs=_bibLista().filter(_bibEsImg);
   sorted.forEach(function(msg){
     var isDone=INBOX_RESP[msg.id]&&INBOX_RESP[msg.id].done;
     var uColor=urgColors[msg.urgencia]||'#f59e0b';
@@ -879,7 +1054,20 @@ function renderBandeja(){
     h+='<span style="font-size:10px;color:var(--text3)">'+fecha+'</span>';
     h+='</div></div>';
     h+='<div style="font-size:14px;font-weight:700;margin-bottom:6px">'+esc(msg.titulo||'Sin título')+'</div>';
-    if(msg.nota)h+='<div style="font-size:12px;color:var(--text2);margin-bottom:8px;font-style:italic">📌 '+esc(msg.nota)+'</div>';
+    if(msg.nota&&!(msg._archivos||[]).length)h+='<div style="font-size:12px;color:var(--text2);margin-bottom:8px;font-style:italic">📌 '+esc(msg.nota)+'</div>';
+    // Aviso de archivos: se ven las fotos y documentos, no sólo los nombres
+    if((msg._archivos||[]).length){
+      h+='<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;margin-bottom:8px">';
+      msg._archivos.forEach(function(a){
+        if(_bibEsImg(a)){
+          var bi=_bibImgs.findIndex(function(x){return x.id===a.id;});
+          h+='<div onclick="'+(bi>=0?'bibVerFoto('+bi+')':'')+'" style="position:relative;padding-bottom:100%;border-radius:6px;overflow:hidden;background:var(--gray-ll);cursor:pointer"><img src="'+esc(_bibThumb(a))+'" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"></div>';
+        } else {
+          h+='<div onclick="bibDescargarIds([\''+a.id+'\'])" style="border-radius:6px;background:var(--gray-ll);padding:6px;font-size:10px;text-align:center;cursor:pointer;word-break:break-all">📄<br>'+esc(String(a.nombre||'').slice(0,18))+'</div>';
+        }
+      });
+      h+='</div>';
+    }
     // Full entity details from architect data
     var ent=msg._entidad;
     if(ent){
@@ -950,7 +1138,7 @@ function renderBandeja(){
     }
     h+='</div>';
   });
-  var pendingCount=INBOX_MSGS.filter(function(m){return !(INBOX_RESP[m.id]&&INBOX_RESP[m.id].done);}).length;
+  var pendingCount=_msgsB.filter(function(m){return !(INBOX_RESP[m.id]&&INBOX_RESP[m.id].done);}).length;
   var doneCount=Object.keys(INBOX_RESP).filter(function(k){return INBOX_RESP[k].done;}).length;
   if(doneCount>0){
     h+='<button onclick="enviarRespuestasBandeja()" style="width:100%;padding:13px;background:var(--green);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;margin-top:8px">📤 Enviar '+doneCount+' respuesta'+(doneCount>1?'s':'')+' al arquitecto</button>';
@@ -1136,7 +1324,10 @@ function agregarFotos(clave,input){
   if(input)input.value='';
   if(!files.length)return;
   if(!fotosItem[clave])fotosItem[clave]=[];
-  Promise.all(files.map(function(f){return compressImage(f,300,0.55);})).then(function(lista){
+  // Con servidor las fotos viajan completas: se guardan a 1280 px (antes 300 px,
+  // que se veían borrosas). Sin servidor van dentro del link y hay que achicarlas.
+  var _px=API_URL?1280:300,_q=API_URL?0.78:0.55;
+  Promise.all(files.map(function(f){return compressImage(f,_px,_q);})).then(function(lista){
     lista.forEach(function(d){if(d)fotosItem[clave].push({id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),src:d,nota:''});});
     _pintarFotos(clave);actualizarCarrito();
   });
@@ -1218,7 +1409,7 @@ function collectData(){
     obraName:OBRA_NAME,
     fecha:new Date().toISOString(),
     estado:'pendiente',
-    tabsDone:[], // ya no hay "pestaña lista": queda el campo por compatibilidad
+    tabsDone:Object.keys(doneTabMap).filter(function(k){return doneTabMap[k];}),
     mensajeGeneral:v('msg_general')||'',
     comentarios:[],
     movimientos:[],
@@ -1470,11 +1661,10 @@ function _saveFormHist(data,deepLink,enviadoServidor){
   try{
     _loadFormHist();
     var noP=JSON.parse(JSON.stringify(data));
-    noP.movimientos&&noP.movimientos.forEach(function(m){m.foto=null;});
-    noP.tareas&&noP.tareas.forEach(function(t){t.foto=null;});
-    noP.comentarios&&noP.comentarios.forEach(function(c){c.foto=null;});
-    noP.materialesExistentes&&noP.materialesExistentes.forEach(function(m){m.foto=null;});
-    if(noP.checklist)noP.checklist.foto=null;
+    // El historial guarda el texto, no las fotos (llenaban el almacenamiento del teléfono)
+    var _sinF=function(x){if(!x)return;x.foto=null;if(Array.isArray(x.fotos))x.fotos=x.fotos.map(function(f){return {nota:(f&&f.nota)||''};});};
+    ['movimientos','tareas','comentarios','materialesExistentes','materialesIngresados'].forEach(function(k){(noP[k]||[]).forEach(_sinF);});
+    _sinF(noP.checklist);
     var pts=[];
     if(data.mensajeGeneral)pts.push('💬 '+data.mensajeGeneral.slice(0,40));
     if((data.comentarios||[]).length)pts.push('💬 '+data.comentarios.length+' comentario'+(data.comentarios.length>1?'s':''));
@@ -1587,7 +1777,7 @@ function editarYReenviar(){
 function nuevoFormulario(){
   sessionId=_uid();
   sendCount=0;
-  doneTabMap={cmt:false,mov:false,tar:false,mex:false,mpe:false,mrec:false,chk:false};
+  doneTabMap={msg:false,mov:false,tar:false,mat:false,chk:false};_pintarListos();
   counters={cmt:0,mov:0,tar:0,mex:0,mpe:0,mrec:0};
   photoMap={};allPhotos=[];fotosItem={};
 

@@ -919,7 +919,8 @@ async function _rescueBase64BeforeSync(){
           var _afid='af_rescue_'+uid();
           var _isAfImg=af.data.startsWith('data:image');
           var _affname=_isAfImg?('arch_'+_afid+'.jpg'):('arch_'+_afid+'_'+af.name);
-          var _afFid=GD.moduleFolders[(item.projectId||'')+'_'+tbl]||null;
+          // La carpeta compartida con un colaborador va a la carpeta Colaboradores de la obra
+          var _afFid=GD.moduleFolders[(item.projectId||'')+'_'+(tbl==='carpetas'?'colaboradores':tbl)]||null;
           queueImageUpload(_afid,af.data,_affname,item.projectId||'',_afFid).catch(function(){});
           af.data='[foto:'+_afid+']';
         }
@@ -1104,6 +1105,7 @@ async function _saveToDriveImpl() {
     }
 
     D.lastSync = nw();
+    try{ _republicarBibliotecas(); }catch(_){}
     await saveToIDB(); // keep IDB in sync too
     _lsSave();
     GD.pendingSync = false;
@@ -1578,6 +1580,9 @@ async function _processPendingImagesImpl() {
       if(!_pidImg){_sinObra++;continue;}
       var result=await uploadImageToDrive(imgRec.data,imgRec.fileName,imgRec.folderId||null,_pidImg);
       if(result){
+        // Un PDF u otro documento se guarda con el link al archivo (antes quedaba
+        // el de la miniatura, y al descargar bajaba una imagen en vez del archivo)
+        if(typeof imgRec.data==='string'&&imgRec.data.indexOf('data:image')!==0&&result.viewUrl)result.url=result.viewUrl;
         replaceImageRef(D,item.imageId,result.url);
         // Actualizar updatedAt en TODOS los ítems que recibieron la URL real.
         // Sin esto, si Drive y local tienen el mismo timestamp, Drive gana en _silentMerge
@@ -10796,6 +10801,108 @@ function colabSendOrSave(id,sendWA){
   openColabNotes(id);
 }
 
+// ── Biblioteca compartida con un colaborador ──
+// Junta lo de su carpeta (subido por él o por vos) con las fotos que mandó
+// dentro de sus informes, cada una con su comentario. Una foto que ya se copió a
+// la carpeta al incorporar no se repite.
+function _bibliotecaColab(colabId,pid){
+  pid=pid||S.proj;
+  var out=[],vistos={};
+  var cp=(D.carpetas||[]).find(function(c){return c.colabId===colabId&&c.projectId===pid;});
+  ((cp&&cp.archivos)||[]).forEach(function(a){
+    if(!a)return;
+    if(a.data)vistos[a.data]=1;
+    out.push({id:a.id,nombre:a.nombre||'archivo',tipo:a.tipo||'',data:a.data,descripcion:a.descripcion||'',fecha:a.fecha||'',de:a.subidoPor==='col'?'col':'arq',origen:'carpeta'});
+  });
+  (D.formulariosPendientes||[]).forEach(function(f){
+    if(f.token!==colabId||f.mode==='carpeta'||f.mode==='visto'||f.estado==='papelera'||f.estado==='eliminado')return;
+    if((_obraDeForm(f)||'')!==pid)return;
+    var dia=String(f.receivedAt||f.fecha||'').slice(0,10);
+    _itemsForm(f).forEach(function(it){
+      if(!it.x)return;
+      _fotosFormItem(it.x).forEach(function(ph,k){
+        if(vistos[ph.url])return;vistos[ph.url]=1;
+        out.push({id:'inf_'+f.id+'_'+it.key+'_'+k,nombre:'informe_'+dia+'_'+_cNombreArchivo(it.tit).slice(0,30)+(k?'_'+(k+1):'')+'.jpg',
+          tipo:'image/jpeg',data:ph.url,descripcion:ph.caption||'',fecha:f.receivedAt||f.fecha||'',de:'col',origen:'informe',titulo:it.tit,formId:f.id});
+      });
+    });
+  });
+  return out;
+}
+function _bibToggle(colabId,id){
+  var s=window._selBib||(window._selBib={});
+  s[id]=!s[id];
+  openPerfilColab(colabId,'carpeta');
+}
+function _bibSelTodos(colabId,todos){
+  window._selBib={};
+  if(todos)(window._bibVista||[]).forEach(function(f){window._selBib[f.id]=true;});
+  openPerfilColab(colabId,'carpeta');
+}
+// Bytes de un archivo de la biblioteca: del dispositivo si está; si no, de Drive
+async function _bibBytes(f,idxDisp){
+  var u=String(f.data||'');
+  if(u.indexOf('data:')===0)return u;
+  var m=u.match(/^\[foto:(.+)\]$/);
+  if(m)return (typeof IMG_CACHE!=='undefined'&&IMG_CACHE[m[1]])||(idxDisp&&idxDisp.porId[m[1]])||null;
+  var did=_cDriveId(u);
+  if(did){
+    if(idxDisp&&idxDisp.porDrive[did])return idxDisp.porDrive[did];
+    if(_cTokenVigente())return await _descargarBytesDrive(did);
+  }
+  return null;
+}
+async function _bibIndiceDisp(){
+  var porId={},porDrive={};
+  try{if(GD.idbReady)(await idbGetAll('images')||[]).forEach(function(im){
+    if(!im||typeof im.data!=='string'||im.data.indexOf('data:')!==0)return;
+    if(im.id)porId[im.id]=im.data;if(im.driveId)porDrive[im.driveId]=im.data;});}catch(_){}
+  return {porId:porId,porDrive:porDrive};
+}
+function _bibNombre(f,du){
+  var n=String(f.nombre||'archivo');
+  if(!/\.[a-z0-9]{2,5}$/i.test(n))n+='.'+_cExt(du);
+  return n;
+}
+function _bajarBlob(blob,nombre){
+  var url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download=nombre;document.body.appendChild(a);a.click();
+  setTimeout(function(){URL.revokeObjectURL(url);a.remove();},1500);
+}
+async function _bibDescargarUno(colabId,id){
+  var f=_bibliotecaColab(colabId).find(function(x){return x.id===id;});if(!f)return;
+  toast('Preparando descarga...','var(--pri)',1500);
+  var du=await _bibBytes(f,await _bibIndiceDisp());
+  if(!du){
+    var did=_cDriveId(String(f.data||''));
+    if(did){window.open('https://drive.google.com/uc?export=download&id='+did,'_blank');return;}
+    toast('Ese archivo todavía no está disponible en este dispositivo ni en Drive','var(--orange)',4500);return;
+  }
+  _bajarBlob(new Blob([_u8DataUrl(du)],{type:(du.match(/^data:([^;,]+)/)||[])[1]||'application/octet-stream'}),_bibNombre(f,du));
+}
+// Descarga todo o lo elegido en un ZIP (un solo archivo si es uno)
+async function descargarBiblioteca(colabId,soloElegidos){
+  var vista=window._bibVista||_bibliotecaColab(colabId);
+  var lista=soloElegidos?vista.filter(function(f){return (window._selBib||{})[f.id];}):vista;
+  if(!lista.length){toast('No hay nada para descargar','var(--orange)');return;}
+  if(lista.length===1)return _bibDescargarUno(colabId,lista[0].id);
+  var co=(D.colaboradores||[]).find(function(c){return c.id===colabId;});
+  var idx=await _bibIndiceDisp(),entradas=[],faltan=0,usados={};
+  for(var i=0;i<lista.length;i++){
+    toast('Juntando archivos '+(i+1)+' de '+lista.length+'...','var(--pri)',1200);
+    var f=lista[i],du=await _bibBytes(f,idx);
+    if(!du){faltan++;continue;}
+    var nom=(f.de==='col'?'del_colaborador/':'tuyos/')+String(i+1).padStart(3,'0')+'_'+_bibNombre(f,du);
+    if(usados[nom])nom=nom.replace(/(\.[^.]+)$/,'_'+i+'$1');usados[nom]=1;
+    entradas.push({nombre:nom,datos:_u8DataUrl(du)});
+  }
+  var txt=lista.map(function(f,i){return String(i+1).padStart(3,'0')+' · '+(fmts(f.fecha)||'')+' · '+(f.de==='col'?'colaborador':'vos')+' · '+(f.nombre||'')+(f.titulo?' · '+f.titulo:'')+(f.descripcion?' — '+f.descripcion:'');}).join('\r\n');
+  entradas.push({nombre:'LEEME_comentarios.txt',datos:_u8Texto('Biblioteca compartida con '+((co&&co.name)||'colaborador')+'\r\nGenerado: '+new Date().toLocaleString('es-AR')+'\r\n\r\n'+txt+(faltan?'\r\n\r\nAviso: '+faltan+' archivo(s) no se pudieron incluir (no estaban en el dispositivo y Drive no está conectado).':''))});
+  if(entradas.length<2){toast('No pude obtener los archivos: conectá Drive e intentá de nuevo','var(--red)',5000);return;}
+  _bajarBlob(_zipCrear(entradas),'Biblioteca_'+_cNombreArchivo((co&&co.name)||'colaborador')+'_'+td()+'.zip');
+  toast('✓ '+(entradas.length-1)+' archivo(s) en el ZIP'+(faltan?' · '+faltan+' no disponible(s)':''),faltan?'var(--orange)':'var(--green)',5000);
+}
+
 function getCarpeta(colabId){
   if(!D.carpetas)D.carpetas=[];
   var cp=D.carpetas.find(function(c){return c.colabId===colabId&&c.projectId===S.proj;});
@@ -10819,7 +10926,8 @@ function openPerfilColab(colabId,tab){
   var tabDefs=[{id:'resumen',label:'🕒 Resumen'},{id:'historial',label:'📋 Historial'},{id:'carpeta',label:'📁 Carpeta'},{id:'bandeja',label:'📥 Bandeja'},{id:'mensajes',label:'💬 Mensajes'}];
   var h='<div class="mo-c" style="display:flex;flex-direction:column;max-height:90vh">';
   h+='<div class="mo-h"><h3>'+esc(co.name||co.email||'?')+'</h3><button class="tbtn" onclick="document.getElementById(\'carpetaM\').remove()">'+I.x+'</button></div>';
-  h+='<div style="display:flex;gap:4px;margin-bottom:12px;overflow-x:auto;padding-bottom:2px">';
+  // Pestañas en varias líneas si no entran (antes se cortaban con una barra de desplazamiento)
+  h+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">';
   tabDefs.forEach(function(t){
     var act=t.id===tab;
     var badge='';
@@ -10844,7 +10952,6 @@ function openPerfilColab(colabId,tab){
     h+='<div class="flex gap-6 mb-10 flex-wrap">';
     h+='<label class="btn btn-sec btn-s" style="cursor:pointer;display:flex;align-items:center;gap:5px">'+I.plus+' Subir<input type="file" multiple style="display:none" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.dwg,.zip" onchange="uploadArqCarpeta(\''+colabId+'\',this)"></label>';
     if(co.phone)h+='<button class="btn btn-sec btn-s" onclick="shareCarpetaUrl(\''+colabId+'\')">📤 Compartir</button>';
-    if(archivos.length)h+='<button class="btn btn-sec btn-s" onclick="downloadCarpetaAll(\''+colabId+'\')">⬇ Descargar todo</button>';
     h+='</div>';
     if(_pendMsgs>0&&co.phone){
       h+='<div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:8px;padding:10px 12px;margin-bottom:10px;display:flex;align-items:center;gap:10px">';
@@ -10853,58 +10960,84 @@ function openPerfilColab(colabId,tab){
       h+='<button class="btn btn-s" style="background:#d97706;color:#fff;flex-shrink:0" onclick="notificarColabWA(\''+colabId+'\')">📲 Notificar</button>';
       h+='</div>';
     }
-    if(!archivos.length){
-      h+='<div class="empty">📁<div class="ts mt-8">Carpeta vacía</div><div class="txxs tc3 mt-4">Subí archivos o compartí el link al colaborador.</div></div>';
+    // Biblioteca compartida: lo de la carpeta + las fotos que mandó dentro de sus
+    // informes (con su comentario). Se puede elegir y descargar todo o una parte.
+    var bib=_bibliotecaColab(colabId);
+    if(!bib.length){
+      h+='<div class="empty">📁<div class="ts mt-8">Biblioteca vacía</div><div class="txxs tc3 mt-4">Subí archivos o compartí el link al colaborador.</div></div>';
     } else {
       if(!S.carpetaSort)S.carpetaSort='desc';if(!S.carpetaFilter)S.carpetaFilter='all';
+      var selB=window._selBib||(window._selBib={}),modoSel=!!window._modoSelBib;
       h+='<div class="flex gap-6 items-center mb-8 flex-wrap">';
-      [{v:'all',l:'Todas'},{v:'img',l:'📸 Fotos'},{v:'doc',l:'📄 Archivos'}].forEach(function(f){
+      [{v:'all',l:'Todo'},{v:'img',l:'📸 Fotos'},{v:'doc',l:'📄 Archivos'},{v:'col',l:'👷 Del colaborador'},{v:'arq',l:'🏗 Tuyos'}].forEach(function(f){
         var active=S.carpetaFilter===f.v;
-        h+='<button style="border:none;background:'+(active?'var(--pri)':'var(--gray-ll)')+';color:'+(active?'#fff':'var(--text2)')+';border-radius:20px;padding:4px 12px;font-size:11px;cursor:pointer" onclick="S.carpetaFilter=\''+f.v+'\';openPerfilColab(\''+colabId+'\',\'carpeta\')">'+f.l+'</button>';
+        h+='<button style="border:none;background:'+(active?'var(--pri)':'var(--gray-ll)')+';color:'+(active?'#fff':'var(--text2)')+';border-radius:20px;padding:4px 12px;font-size:11px;cursor:pointer" onclick="S.carpetaFilter=\''+f.v+'\';saveUIState();openPerfilColab(\''+colabId+'\',\'carpeta\')">'+f.l+'</button>';
       });
-      h+='<button style="border:1px solid var(--gray-l);background:var(--surface);color:var(--text2);border-radius:20px;padding:4px 12px;font-size:11px;cursor:pointer;margin-left:auto" onclick="S.carpetaSort=S.carpetaSort===\'desc\'?\'asc\':\'desc\';openPerfilColab(\''+colabId+'\',\'carpeta\')">'+(S.carpetaSort==='desc'?'↓ Más nuevo':'↑ Más antiguo')+'</button>';
+      h+='<button style="border:1px solid var(--gray-l);background:var(--surface);color:var(--text2);border-radius:20px;padding:4px 12px;font-size:11px;cursor:pointer;margin-left:auto" onclick="S.carpetaSort=S.carpetaSort===\'desc\'?\'asc\':\'desc\';saveUIState();openPerfilColab(\''+colabId+'\',\'carpeta\')">'+(S.carpetaSort==='desc'?'↓ Más nuevo':'↑ Más antiguo')+'</button>';
       h+='</div>';
-      var filtered=archivos.filter(function(f){if(S.carpetaFilter==='img')return f.tipo&&f.tipo.startsWith('image/');if(S.carpetaFilter==='doc')return !f.tipo||!f.tipo.startsWith('image/');return true;});
-      var sorted=filtered.slice().sort(function(a,b){return S.carpetaSort==='asc'?new Date(a.fecha)-new Date(b.fecha):new Date(b.fecha)-new Date(a.fecha);});
-      var imgs=sorted.filter(function(f){return f.tipo&&f.tipo.startsWith('image/');});
-      var docs=sorted.filter(function(f){return !f.tipo||!f.tipo.startsWith('image/');});
+      var filtered=bib.filter(function(f){
+        if(S.carpetaFilter==='img')return _esImagenArch(f);
+        if(S.carpetaFilter==='doc')return !_esImagenArch(f);
+        if(S.carpetaFilter==='col')return f.de==='col';
+        if(S.carpetaFilter==='arq')return f.de!=='col';
+        return true;});
+      var sorted=filtered.slice().sort(function(a,b){return S.carpetaSort==='asc'?String(a.fecha).localeCompare(String(b.fecha)):String(b.fecha).localeCompare(String(a.fecha));});
+      var nSelB=sorted.filter(function(f){return selB[f.id];}).length;
+      // Barra de descarga
+      h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;background:var(--gray-ll);border-radius:10px;padding:8px">';
+      h+='<button class="btn btn-s" style="background:#0d9488;color:#fff" onclick="descargarBiblioteca(\''+colabId+'\',false)">⬇ Descargar todo ('+sorted.length+')</button>';
+      if(modoSel){
+        h+='<button class="btn btn-s" style="background:'+(nSelB?'#16a34a':'#94a3b8')+';color:#fff" '+(nSelB?'':'disabled')+' onclick="descargarBiblioteca(\''+colabId+'\',true)">⬇ Elegidos ('+nSelB+')</button>';
+        h+='<button class="btn btn-sec btn-s" onclick="_bibSelTodos(\''+colabId+'\','+(nSelB<sorted.length)+')">'+(nSelB<sorted.length?'☑ Todos':'☐ Ninguno')+'</button>';
+        h+='<button class="btn btn-sec btn-s" onclick="window._modoSelBib=false;window._selBib={};openPerfilColab(\''+colabId+'\',\'carpeta\')">Cancelar</button>';
+      } else {
+        h+='<button class="btn btn-sec btn-s" onclick="window._modoSelBib=true;openPerfilColab(\''+colabId+'\',\'carpeta\')">☑ Elegir</button>';
+      }
+      h+='</div>';
+      window._bibVista=sorted;
+      var imgs=sorted.filter(_esImagenArch);
+      var docs=sorted.filter(function(f){return !_esImagenArch(f);});
       if(imgs.length){
-        if(docs.length)h+='<div class="txxs fw7 tc3 mb-6">📸 Fotos ('+imgs.length+')</div>';
-        window._cLBImgs=imgs.map(function(f){return {data:_resolveImg(f.data),nombre:f.nombre,fecha:f.fecha,id:f.id,descripcion:f.descripcion||''};});
+        h+='<div class="txxs fw7 tc3 mb-6">📸 Fotos ('+imgs.length+')</div>';
+        window._cLBImgs=imgs.map(function(f){return {data:_resolveImg(f.data),nombre:f.nombre,fecha:f.fecha,id:f.id,descripcion:(f.titulo?'📋 '+f.titulo+(f.descripcion?' — ':''):'')+(f.descripcion||'')};});
         h+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:16px">';
         imgs.forEach(function(f,idx){
-          var upBy=f.subidoPor==='col'?'👷':'🏗';
-          f=Object.assign({},f,{data:_resolveImg(f.data)}); // resolver desde la caché local
-          var _fok=f.data&&!f.data.startsWith('[foto')&&!f.data.startsWith('[arch');
+          var src=_resolveImg(f.data),_fok=src&&String(src).indexOf('[')!==0,sel=!!selB[f.id];
+          var click=modoSel?'_bibToggle(\''+colabId+'\',\''+f.id+'\')':(_fok?'openCarpetaLightbox('+idx+')':'void(0)');
           h+='<div style="position:relative">';
-          h+='<div style="position:relative;padding-bottom:100%;overflow:hidden;border-radius:8px;cursor:pointer;background:var(--gray-ll)" onclick="'+(_fok?'openCarpetaLightbox('+idx+')':'void(0)')+'\">';
-          if(_fok){
-            h+='<img src="'+f.data+'" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">';
-            h+='<div style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;flex-direction:column;font-size:22px;color:var(--text3)">☁️<div style="font-size:9px;margin-top:2px">Sincronizando</div></div>';
-          } else {
-            h+='<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;font-size:22px;color:var(--text3)">☁️<div style="font-size:9px;margin-top:2px">Sincronizando</div></div>';
-          }
-          h+='<div style="position:absolute;bottom:3px;left:3px;background:rgba(0,0,0,.55);border-radius:5px;padding:1px 5px;font-size:9px;color:#fff">'+upBy+' '+fmts(f.fecha).slice(0,5)+'</div>';
+          h+='<div style="position:relative;padding-bottom:100%;overflow:hidden;border-radius:8px;cursor:pointer;background:var(--gray-ll);'+(sel?'outline:3px solid #16a34a;outline-offset:-3px':'')+'" onclick="'+click+'">';
+          h+=_fok?'<img src="'+esc(src)+'" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover" onerror="this.style.opacity=.25">'
+            :'<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;font-size:22px;color:var(--text3)">☁️<div style="font-size:9px;margin-top:2px">Sincronizando</div></div>';
+          h+='<div style="position:absolute;bottom:3px;left:3px;background:rgba(0,0,0,.55);border-radius:5px;padding:1px 5px;font-size:9px;color:#fff">'+(f.de==='col'?'👷':'🏗')+(f.origen==='informe'?'📋':'')+' '+fmts(f.fecha).slice(0,5)+'</div>';
+          if(f.descripcion)h+='<span style="position:absolute;bottom:3px;right:3px;background:rgba(0,0,0,.6);color:#fff;border-radius:4px;font-size:9px;padding:0 3px">📝</span>';
+          if(modoSel)h+='<span style="position:absolute;top:4px;left:4px;width:22px;height:22px;border-radius:6px;background:'+(sel?'#16a34a':'rgba(255,255,255,.9)')+';border:2px solid '+(sel?'#16a34a':'#94a3b8')+';color:#fff;font-size:14px;line-height:18px;text-align:center">'+(sel?'✓':'')+'</span>';
           h+='</div>';
-          h+='<div style="position:absolute;top:3px;right:3px;display:flex;flex-direction:column;gap:3px">';
-          h+='<button onclick="event.stopPropagation();dlImg(\''+f.data+'\',\''+esc(f.nombre)+'\')" style="background:rgba(0,0,0,.6);border:none;color:#fff;border-radius:50%;width:20px;height:20px;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0" title="Descargar">⬇</button>';
-          h+='<button style="background:rgba(0,0,0,.6);border:none;color:#fff;border-radius:50%;width:20px;height:20px;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0" onclick="event.stopPropagation();deleteCarpetaFile(\''+colabId+'\',\''+f.id+'\')">✕</button>';
-          h+='</div></div>';
+          if(!modoSel){
+            h+='<div style="position:absolute;top:3px;right:3px;display:flex;flex-direction:column;gap:3px">';
+            h+='<button onclick="event.stopPropagation();_bibDescargarUno(\''+colabId+'\',\''+f.id+'\')" style="background:rgba(0,0,0,.6);border:none;color:#fff;border-radius:50%;width:20px;height:20px;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0" title="Descargar">⬇</button>';
+            if(f.origen==='carpeta')h+='<button style="background:rgba(0,0,0,.6);border:none;color:#fff;border-radius:50%;width:20px;height:20px;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0" onclick="event.stopPropagation();deleteCarpetaFile(\''+colabId+'\',\''+f.id+'\')">✕</button>';
+            h+='</div>';
+          }
+          if(f.descripcion)h+='<div class="txxs" style="margin-top:2px;line-height:1.25;color:var(--text2);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">'+esc(f.descripcion)+'</div>';
+          h+='</div>';
         });
         h+='</div>';
       }
       if(docs.length){
-        if(imgs.length)h+='<div class="txxs fw7 tc3 mb-6 mt-4">📄 Archivos ('+docs.length+')</div>';
+        h+='<div class="txxs fw7 tc3 mb-6 mt-4">📄 Archivos ('+docs.length+')</div>';
         docs.forEach(function(f){
-          var upBy=f.subidoPor==='col'?('👷 '+esc(co.name||'Ayudante')):'🏗 Vos';
-          h+='<div class="card" style="padding:10px;margin-bottom:8px"><div class="flex items-center gap-6">';
+          var upBy=f.de==='col'?('👷 '+esc(co.name||'Colaborador')):'🏗 Vos',sel=!!selB[f.id];
+          h+='<div class="card" style="padding:10px;margin-bottom:8px;'+(sel?'outline:2px solid #16a34a':'')+'" '+(modoSel?'onclick="_bibToggle(\''+colabId+'\',\''+f.id+'\')"':'')+'><div class="flex items-center gap-6">';
+          if(modoSel)h+='<span style="width:22px;height:22px;border-radius:6px;flex-shrink:0;background:'+(sel?'#16a34a':'#fff')+';border:2px solid '+(sel?'#16a34a':'#94a3b8')+';color:#fff;font-size:14px;line-height:18px;text-align:center">'+(sel?'✓':'')+'</span>';
           h+='<span style="font-size:22px;flex-shrink:0">📄</span>';
           h+='<div style="flex:1;min-width:0"><div class="ts fw6 trun">'+esc(f.nombre)+'</div>';
           h+='<div class="txxs tc3">'+upBy+' · '+fmts(f.fecha)+'</div>';
-          if(f.descripcion)h+='<div class="txxs mt-2 tc3">'+esc(f.descripcion)+'</div>';
+          if(f.descripcion)h+='<div class="txxs mt-2 tc3">📝 '+esc(f.descripcion)+'</div>';
           h+='</div>';
-          h+='<a href="'+f.data+'" download="'+esc(f.nombre)+'" class="btn btn-sec btn-s" style="flex-shrink:0;padding:6px 10px;text-decoration:none">⬇</a>';
-          h+='<button class="btn btn-g btn-s" style="color:var(--red);flex-shrink:0" onclick="deleteCarpetaFile(\''+colabId+'\',\''+f.id+'\')">'+I.trash+'</button>';
+          if(!modoSel){
+            h+='<button class="btn btn-sec btn-s" style="flex-shrink:0;padding:6px 10px" onclick="_bibDescargarUno(\''+colabId+'\',\''+f.id+'\')">⬇</button>';
+            if(f.origen==='carpeta')h+='<button class="btn btn-g btn-s" style="color:var(--red);flex-shrink:0" onclick="deleteCarpetaFile(\''+colabId+'\',\''+f.id+'\')">'+I.trash+'</button>';
+          }
           h+='</div></div>';
         });
       }
@@ -11145,6 +11278,8 @@ function editarEntidadDesdeColab(tipo,entidadId){
   }
 }
 function openCarpeta(colabId){
+  // Versión vieja: todo va a la biblioteca de la ficha del colaborador
+  return openPerfilColab(colabId,'carpeta');
   var co=(D.colaboradores||[]).find(function(x){return x.id===colabId;});if(!co)return;
   var cp=getCarpeta(colabId);var archivos=cp.archivos||[];
   document.getElementById('carpetaM')?.remove();
@@ -12612,7 +12747,10 @@ function incorporarFormularioModal(id,detalleKey){
       var sc=_SEC_FORM[sec]||['',''];
       var quedan=de.some(function(it){return !_resueltoForm(sub,it.key);});
       h+='<div class="card" style="padding:10px;margin-bottom:8px;border-left:3px solid '+sc[1]+'">';
-      h+='<div class="flex items-center justify-between mb-6"><span class="ts fw7" style="color:'+sc[1]+'">'+sc[0]+'</span>'
+      // Sección que el colaborador marcó como lista en su formulario
+      var _secF={msg:'msg',cmt:'msg',mov:'mov',tar:'tar',mex:'mat',mpe:'mat',mrec:'mat',chk:'chk'}[sec];
+      var _lista=(sub.tabsDone||[]).indexOf(_secF)>=0;
+      h+='<div class="flex items-center justify-between mb-6"><span class="ts fw7" style="color:'+sc[1]+'">'+sc[0]+(_lista?' <span title="El colaborador la marcó como lista" style="background:#dcfce7;color:#16a34a;border-radius:8px;padding:1px 7px;font-size:10px;font-weight:700;margin-left:4px">✓ lista</span>':'')+'</span>'
         +((isPend&&quedan)?'<button onclick="incSec(\''+id+'\',\''+sec+'\')" style="border:none;background:#0d9488;color:#fff;border-radius:6px;padding:3px 9px;font-size:10px;cursor:pointer;white-space:nowrap">✓ Todo</button>':'')+'</div>';
       de.forEach(function(it){
         var inc=(sub.itemsInc||[]).indexOf(it.key)>=0,rech=(sub.itemsRech||[]).indexOf(it.key)>=0;
@@ -13433,9 +13571,21 @@ function shareFormColaborador(colId){
 }
 // Mensajes de un colaborador con los datos completos de la tarea/checklist,
 // sin las fotos en base64 (para que entren en el link y en el servidor).
-function _msgsColabEnriquecidos(colabId){
-  var msgs=(D.mensajesColab||[]).filter(function(m){return m.colabId===colabId&&m.proyectoId===S.proj;});
-  return msgs.map(function(m){
+// Biblioteca para el colaborador: sólo lo que ya está en Drive (links), nunca
+// base64. Lo que todavía se está subiendo le llega en la próxima publicación.
+function _bibliotecaParaColab(colabId,pid){
+  return _bibliotecaColab(colabId,pid).map(function(f){
+    var u=String(f.data||'');if(u.indexOf('http')!==0)return null;
+    return {id:f.id,nombre:f.nombre,tipo:f.tipo,url:u,driveId:_cDriveId(u),descripcion:f.descripcion||'',titulo:f.titulo||'',fecha:f.fecha||'',de:f.de};
+  }).filter(Boolean);
+}
+function _msgsColabEnriquecidos(colabId,pid){
+  pid=pid||S.proj;
+  var bib=_bibliotecaParaColab(colabId,pid),porId={};bib.forEach(function(f){porId[f.id]=f;});
+  var msgs=(D.mensajesColab||[]).filter(function(m){return m.colabId===colabId&&m.proyectoId===pid;});
+  var lista=msgs.map(function(m){
+    // Aviso de carpeta: viajan los archivos (links de Drive), no sólo los nombres
+    if(_esAvisoCarpeta(m))return Object.assign({},m,{_archivos:(m.archivoIds||[]).map(function(id){return porId[id];}).filter(Boolean)});
     var ent=null;
     if(m.tipo==='tarea')ent=(D.tareas||[]).find(function(t){return t.id===m.entidadId;})||null;
     else if(m.tipo==='checklist')ent=(D.checklists||[]).find(function(c){return c.id===m.entidadId;})||null;
@@ -13447,6 +13597,25 @@ function _msgsColabEnriquecidos(colabId){
       return Object.assign({},m,{_entidad:ec});
     }catch(_e){return m;}
   });
+  // La biblioteca completa viaja como un mensaje especial que el formulario no
+  // muestra como pendiente: el servidor la guarda tal cual, sin cambios.
+  lista.push({id:'_biblioteca',tipo:'biblioteca',titulo:'Biblioteca',archivos:bib,fechaEnvio:nw()});
+  return lista;
+}
+// Republica la biblioteca de cada colaborador cuando cambió (por ejemplo, al
+// terminar de subir fotos a Drive), así le llega sin que haya que avisarle.
+function _republicarBibliotecas(){
+  if(!SYNC.apiUrl||!SYNC.apiSecret)return;
+  if(!GD._bibSig)GD._bibSig={};
+  (D.colaboradores||[]).forEach(function(co){
+    if(!co||!co.id||co.estado==='revocado'||!co.projectId)return;
+    var bib=_bibliotecaParaColab(co.id,co.projectId);
+    var firma=bib.map(function(f){return f.id+'|'+f.url+'|'+f.descripcion;}).join(';');
+    if(GD._bibSig[co.id]===firma)return;
+    if(GD._bibSig[co.id]===undefined&&!bib.length){GD._bibSig[co.id]=firma;return;}
+    GD._bibSig[co.id]=firma;
+    _publicarBandejaColab(co.id,co.projectId);
+  });
 }
 /**
  * Publica la bandeja del colaborador en el servidor, para que le llegue sin
@@ -13454,14 +13623,14 @@ function _msgsColabEnriquecidos(colabId){
  * con el link viejo no veía nada. Silencioso y sin bloquear: si no hay servidor
  * configurado, todo sigue funcionando como antes (por el link).
  */
-function _publicarBandejaColab(colabId){
+function _publicarBandejaColab(colabId,pid){
   try{
     if(!SYNC.apiUrl||!SYNC.apiSecret||!colabId)return;
     fetch(SYNC.apiUrl,{
       method:'POST',
       headers:{'Content-Type':'text/plain;charset=utf-8'}, // evita el preflight CORS
       body:JSON.stringify({secreto:SYNC.apiSecret,accion:'bandeja',token:colabId,
-        mensajes:_msgsColabEnriquecidos(colabId)}),
+        mensajes:_msgsColabEnriquecidos(colabId,pid)}),
     }).catch(function(){});
   }catch(_){}
 }
