@@ -3671,11 +3671,19 @@ function _zocaloAlertas(){
 // Novedades de la bandeja de entrada: lo que llegó y todavía no miraste.
 // Son las mismas tres fuentes que cuenta la pestaña Pendientes, para que el
 // número del zócalo y el de la bandeja nunca digan cosas distintas.
+// Archivos nuevos que subió el colaborador a su carpeta y que todavía no tienen
+// su tarjeta de envío en la bandeja. Los que ya están en un envío no se cuentan
+// aparte: antes el número decía 1 y la bandeja se veía vacía.
+function _archivosNuevosCarpeta(cp){
+  var enEnvio={};
+  (D.formulariosPendientes||[]).forEach(function(f){if(f.mode==='carpeta')(f.archivosIds||[]).forEach(function(i){enEnvio[i]=1;});});
+  return (cp.archivos||[]).filter(function(f){return f.subidoPor==='col'&&f.visto===false&&!enEnvio[f.id];});
+}
 function _bandejaNovedades(){
   var informes=_formsDeObra().filter(function(x){return x.estado==='pendiente';}).length;
   var archivos=(D.carpetas||[]).filter(function(cp){return cp.projectId===S.proj;})
     .reduce(function(s,cp){
-      return s+(cp.archivos||[]).filter(function(f){return f.subidoPor==='col'&&f.visto===false;}).length;
+      return s+_archivosNuevosCarpeta(cp).length;
     },0);
   var respuestas=(D.mensajesColab||[]).filter(function(m){
     return m.proyectoId===S.proj&&m.estadoColab==='completado';
@@ -3914,7 +3922,7 @@ function createProj(){const n=$('pN').value.trim();if(!n){toast('Nombre obligato
 // ═══════ SHELL ═══════
 function renderShell(){
   const p=D.projects.find(x=>x.id===S.proj);if(!p){S.proj=null;render();return;}
-  const pT=pf('tareas');const pA=pf('alertas');const pendT=pT.filter(t=>t.status==='pendiente'||t.status==='en curso').length;const actAl=pA.filter(a=>!a.resolved).length;const pendForms=_formsDeObra().filter(x=>x.estado==='pendiente').length;const pendCarpeta=(D.carpetas||[]).filter(function(cp){return cp.projectId===S.proj;}).reduce(function(sum,cp){return sum+(cp.archivos||[]).filter(function(f){return f.subidoPor==='col'&&f.visto===false;}).length;},0);const pendMsgsColab=(D.mensajesColab||[]).filter(function(m){return m.proyectoId===S.proj&&m.estadoColab==='completado';}).length;const _nAlert=_alertaCount();
+  const pT=pf('tareas');const pA=pf('alertas');const pendT=pT.filter(t=>t.status==='pendiente'||t.status==='en curso').length;const actAl=pA.filter(a=>!a.resolved).length;const pendForms=_formsDeObra().filter(x=>x.estado==='pendiente').length;const pendCarpeta=(D.carpetas||[]).filter(function(cp){return cp.projectId===S.proj;}).reduce(function(sum,cp){return sum+_archivosNuevosCarpeta(cp).length;},0);const pendMsgsColab=(D.mensajesColab||[]).filter(function(m){return m.proyectoId===S.proj&&m.estadoColab==='completado';}).length;const _nAlert=_alertaCount();
   const drv=D.driveConfig?.[S.proj];const cloudCol=drv?'var(--green)':'var(--pri)';
   const _pendAlerts=pA.filter(a=>!a.resolved).length; // mantener badge en tareas si hay alertas legacy
   const mods=[{id:'dashboard',label:'Panel',ic:'dash'},{id:'visitas',label:'Visitas',ic:'clip'},{id:'tareas',label:'Tareas',ic:'list',badge:pendT+_pendAlerts},{id:'materiales',label:'Materiales',ic:'pkg'},{id:'checklist',label:'Checklist',ic:'chklist'},{id:'documentos',label:'Documentos',ic:'file'},{id:'comentarios',label:'Comentarios',ic:'msg'},{id:'colaboradores',label:'Colaboradores',ic:'share'},{id:'bandeja',label:'Bandeja',ic:'inbox',badge:pendForms+pendCarpeta+pendMsgsColab+_nAlert},{id:'economia',label:'Economía',ic:'eco'},{id:'informes',label:'Informes',ic:'dl'},{id:'config',label:'Config',ic:'gear'}];
@@ -12699,11 +12707,10 @@ function _bandejaBodyHtml(){
   // Carpeta items nuevos (no vistos) para mostrar en Pendientes
   var newCarpetaGroups=[];
   // Los archivos que ya tienen su envío en la bandeja no se repiten acá
-  var _enEnvio={};(D.formulariosPendientes||[]).forEach(function(f){if(f.mode==='carpeta')(f.archivosIds||[]).forEach(function(i){_enEnvio[i]=1;});});
   (D.carpetas||[]).filter(function(cp){return cp.projectId===S.proj;}).forEach(function(cp){
     var co2=(D.colaboradores||[]).find(function(c){return c.id===cp.colabId;});
     var coName=co2?co2.name:'Colaborador';
-    var newFiles=(cp.archivos||[]).filter(function(f){return f.subidoPor==='col'&&f.visto===false&&!_enEnvio[f.id];});
+    var newFiles=_archivosNuevosCarpeta(cp);
     if(newFiles.length) newCarpetaGroups.push({colabId:cp.colabId,coName:coName,count:newFiles.length,imgs:newFiles.filter(function(f){return f.tipo&&f.tipo.startsWith('image/');}).length});
   });
   function renderPapeleraCard(sub){
@@ -12815,7 +12822,7 @@ function _bandejaCounts(){
   var all=_formsDeObra().filter(function(x){return x.estado!=='eliminado'&&x.estado!=='papelera';});
   var newCarpeta=0;
   (D.carpetas||[]).filter(function(cp){return cp.projectId===S.proj;}).forEach(function(cp){
-    if((cp.archivos||[]).some(function(f){return f.subidoPor==='col'&&f.visto===false;}))newCarpeta++;
+    if(_archivosNuevosCarpeta(cp).length)newCarpeta++;
   });
   return {
     pendientes:all.filter(function(x){return x.estado==='pendiente';}).length,
