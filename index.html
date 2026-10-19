@@ -857,7 +857,33 @@ function _repairEcoMatLinks(){
 // ── Rescata imágenes base64 de D.economia (y archivos de otros módulos)
 // antes de que buildCleanData las stripee. Las encola en IDB y reemplaza
 // item.imagen con '[foto:imgId]' para que persistan y sean subibles.
+// Movimiento de Economía vinculado a un ingreso de material (si lo hay)
+function _ecoDeIngreso(i){
+  if(!i)return null;
+  var eco=D.economia||[];
+  return (i.ecoId&&eco.find(function(e){return e.id===i.ecoId;}))||eco.find(function(e){return e.matIngresoId===i.id;})||null;
+}
+// El comprobante (ticket, factura, remito) va en el movimiento de Economía, no en
+// el historial del material. Si un ingreso vinculado trae foto y su movimiento no
+// tiene comprobante, se le pasa; si el movimiento ya tiene, no se toca nada.
+function _comprobantesAEco(){
+  var n=0;
+  (D.matIngresos||[]).forEach(function(i){
+    if(!i.photos||!i.photos.length)return;
+    var e=_ecoDeIngreso(i);if(!e||e.imagen)return;
+    var ok=null;
+    i.photos.some(function(ph){
+      var u=typeof ph==='string'?ph:(ph&&ph.url)||'';
+      if(/^(data:image|https?:|\[foto:)/.test(u)){ok=u;return true;}
+      return false;
+    });
+    if(!ok)return;
+    e.imagen=ok;e.imagenDeletedAt=null;e.updatedAt=nw();n++;
+  });
+  return n;
+}
 async function _rescueBase64BeforeSync(){
+  try{_comprobantesAEco();}catch(_){}
   if(!GD.idbReady)return;
   var _tables=['tareas','alertas','visitas','comentarios','materiales','matIngresos','carpetas'];
   // Preparar antes las carpetas de cada obra que tenga algo para rescatar, así
@@ -3608,7 +3634,8 @@ function rSinCompDetail(mc,clave){
       +(i.observations?'<div class="txxs tc3 mt-1" style="white-space:pre-wrap">'+esc(i.observations)+'</div>':'')
       +(i.sourceType==='formulario'&&i.cargadoPor?'<div class="txxs mt-1" style="color:#16a34a;font-weight:700">&#x1F464; '+esc(i.cargadoPor)+'</div>':'')
       +(_eid?'<div class="txxs mt-2" style="color:var(--cyan)">&#x1F4B0; <button class="link-tag" style="font-size:11px;color:var(--cyan)" onclick="irAMovimiento(\''+_eid+'\')">Ver en Economía &#x2192;</button></div>':'')
-      +(i.photos&&i.photos.length?photoGrid(i.photos,'matIngresos',i.id):'')
+      // El comprobante vive en el movimiento de Economía: acá no se repite
+      +(!_eid&&i.photos&&i.photos.length?photoGrid(i.photos,'matIngresos',i.id):'')
       +'</div><div class="flex gap-4 ml-8 flex-shrink-0 wrap">'
       +'<button class="btn btn-g btn-s" onclick="editSinComp(\''+i.id+'\')" title="Editar">'+I.edit+'</button>'
       +'<button class="btn btn-sec btn-s" style="font-size:10px;color:var(--orange)" onclick="retrocederAPedido(\''+i.id+'\')" title="Retroceder a Pedido">&larr; Pedido</button>'
@@ -7073,7 +7100,7 @@ function rMatDetail(mc,mid){
           <div class="txxs tc3 mt-2">${fmts(i.fecha||i.date)}${i.proveedor?' | Prov: '+i.proveedor:''}${i.remito?' | Remito: '+i.remito:''}</div>
           ${i.observations?`<div class="txxs tc3 mt-1">${i.observations}</div>`:''}
           ${(()=>{const _eid=i.ecoId||((D.economia||[]).find(function(e){return e.matIngresoId===i.id;})||{}).id;return _eid?`<div class="txxs mt-2" style="color:var(--cyan)">&#x1F4B0; <button class="link-tag" style="font-size:11px;color:var(--cyan)" onclick="irAMovimiento('${_eid}')">Ver en Economía &#x2192;</button></div>`:'';})()}
-          ${i.photos&&i.photos.length?photoGrid(i.photos,'matIngresos',i.id):''}
+          ${(!_ecoDeIngreso(i)&&i.photos&&i.photos.length)?photoGrid(i.photos,'matIngresos',i.id):''}
         </div>
         <div class="flex gap-4 ml-8 flex-shrink-0 wrap">
           <button class="btn btn-g btn-s" onclick="editIng('${i.id}','${mid}')">${I.edit}</button>
@@ -11793,6 +11820,10 @@ function exportEcoPDF(includeDistrib,includeRubroCol,includeMetros,privados,incl
   if(includeFotos)items.forEach(function(e){
     var src=_resolveImg(e.imagen||'');
     if(!src||e.imagenDeletedAt)return;
+    // Un comprobante guardado como link de Drive ("ver archivo") se muestra con
+    // su vista previa: sirve para fotos y también para la primera hoja de un PDF
+    var _didC=src.indexOf('drive.google.com/file/d/')>=0?_cDriveId(src):null;
+    if(_didC)src='https://drive.google.com/thumbnail?id='+_didC+'&sz=w800';
     var esImg=src.indexOf('data:image')===0||src.indexOf('thumbnail?id=')>=0||src.indexOf('googleusercontent')>=0||/^\[foto:/.test(src);
     if(!esImg)return;
     _comps.push({e:e,src:src});_compN[e.id]=_comps.length;
