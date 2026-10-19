@@ -9964,9 +9964,11 @@ function renderEcoDistrib(){
   if(tog)tog.textContent=S.ecoDistribOpen?'▲':'▼';
   if(!S.ecoDistribOpen){body.style.display='none';return;}
   body.style.display='block';body.style.marginTop='12px';
+  var verPriv=S.ecoVerPrivados!==false;
   // Use egresos respecting active date filter
   var egrs=pf('economia').filter(function(e){
-    if(e.tipo!=='egreso')return false; // los privados cuentan en la vista de la app
+    if(e.tipo!=='egreso')return false;
+    if(!verPriv&&e.interno)return false; // igual que el saldo y los egresos por mes
     var d=e.fecha||e.date||'';
     if(S.ecoFechaDesde&&d<S.ecoFechaDesde)return false;
     if(S.ecoFechaHasta&&d>S.ecoFechaHasta)return false;
@@ -9999,7 +10001,7 @@ function renderEcoDistrib(){
       +'<button onclick="setEcoRubroFilter(\'\',\'\')" style="border:none;background:none;cursor:pointer;color:#0369a1;font-size:13px;font-weight:700;margin-left:4px;line-height:1" title="Quitar filtro">✕</button>'
       +'</div>'
     :'';
-  var html=_periodoLabel+filterHint+'<div class="txxs tc3 mb-8">Total egresos: <strong style="color:var(--red)">$'+_fmt2(totalEgr)+'</strong></div>';
+  var html=_periodoLabel+filterHint+(verPriv?'':'<div class="txxs tc3 mb-6">🔒 Sin movimientos privados</div>')+'<div class="txxs tc3 mb-8">Total egresos: <strong style="color:var(--red)">$'+_fmt2(totalEgr)+'</strong></div>';
   sorted.forEach(function(entry,i){
     var rub=entry[0];var data=entry[1];
     var pct=data.monto/totalEgr*100;
