@@ -12055,8 +12055,15 @@ function exportEcoPDF(includeDistrib,includeRubroCol,includeMetros,privados,incl
   // reciente al más viejo, sumar de arriba hacia abajo daba saldos al revés y el
   // renglón más reciente no coincidía con el saldo total.
   const _saldoA={};
-  (function(){var b=0;items.slice().sort(function(a,c){return _ecoDia(a).localeCompare(_ecoDia(c))||_ecoMomento(a).localeCompare(_ecoMomento(c));})
-    .forEach(function(e){var m=parseFloat(e.monto)||0;b+=e.tipo==='ingreso'?m:-m;_saldoA[e.id]=b;});})();
+  // Dentro de un mismo día se sigue el orden de la TABLA (leída del más viejo al
+  // más nuevo): si no, con varios movimientos el mismo día los saldos quedaban
+  // salteados y no se podía seguir la cuenta renglón por renglón.
+  (function(){
+    var b=0,pos={};items.forEach(function(e,i){pos[e.id]=i;});
+    var desc=(S.ecoSort||'')!=='fecha_asc'; // por defecto la tabla va del más nuevo al más viejo
+    items.slice().sort(function(a,c){return _ecoDia(a).localeCompare(_ecoDia(c))||(desc?pos[c.id]-pos[a.id]:pos[a.id]-pos[c.id]);})
+      .forEach(function(e){var m=parseFloat(e.monto)||0;b+=e.tipo==='ingreso'?m:-m;_saldoA[e.id]=b;});
+  })();
   // Comprobantes: cada movimiento con foto lleva un número (📎 N) en la tabla y
   // la foto aparece al final, en el mismo orden, con ese número y sus datos.
   const _compN={},_comps=[];
