@@ -7097,6 +7097,7 @@ function compartirMatColab(tipo){
     +_matCalSelectorHtml(items)
     +'<div class="fr"><div class="fg"><label class="fl">Urgencia</label><select class="fs" id="matsh_urg"><option value="baja">🟢 Baja</option><option value="media" selected>🟡 Media</option><option value="alta">🔴 Alta</option></select></div></div>'
     +'<div class="fg"><label class="fl">Nota (opcional)</label><textarea class="ft" id="matsh_nota" rows="2" placeholder="Ej: pedir en el corralón de siempre, entregar el jueves..."></textarea></div>'
+    +(function(){var x={};x['mat_'+tipo]=1;return _extrasEnvioHtml(x);})()
     +'<button class="btn btn-w" style="background:var(--teal);color:#fff" onclick="confirmarCompartirMat(\''+tipo+'\')">&#x1F4E4; Enviar a su bandeja</button>'
     +'<div class="txxs tc3 mt-6">Le llega como lista ('+label+') para tildar lo que va resolviendo.</div>'
     +'</div>';
@@ -7107,22 +7108,17 @@ function confirmarCompartirMat(tipo){
   var items=_matCalElegidos(tipo);
   if(!colId){toast('Elegí un colaborador','var(--orange)');return;}
   if(!items.length){toast('Tildá al menos un material','var(--orange)');return;}
-  var label=tipo==='a_pedir'?'A pedir':'Pedidos';
-  var lista=items.map(function(i){return {id:i.id,nombre:i.matNombre||'Sin nombre',qty:i.qty,unit:i.unit||'',proveedor:i.proveedor||'',grupo:i.grupo||'',estado:i.estado};});
-  // Por grupo y los sueltos al final, como en la pantalla
-  lista.sort(function(x,y){return (x.grupo?0:1)-(y.grupo?0:1)||String(x.grupo).localeCompare(String(y.grupo));});
-  _guardarPedidoColab({id:uid(),proyectoId:S.proj,colabId:colId,tipo:'materiales',entidadId:null,seccion:tipo,
-    titulo:'📦 Materiales — '+label+' ('+lista.length+')',materiales:lista,
-    nota:((document.getElementById('matsh_nota')||{}).value||'').trim(),
-    urgencia:(document.getElementById('matsh_urg')||{}).value||'media',
-    fechaEnvio:nw(),updatedAt:nw(),estadoColab:'nuevo',respuesta:null,fechaRespuesta:null});
+  var _nota=((document.getElementById('matsh_nota')||{}).value||'').trim();
+  var _urg=(document.getElementById('matsh_urg')||{}).value||'media';
+  var lista=items;
+  var _env=[_msgMatColab(colId,tipo,items,_urg,_nota)].concat(_guardarExtrasEnvio(colId,_urg,_nota));
   sv();
   _publicarBandejaColab(colId);
   document.getElementById('matCalM')?.remove();
   var co=(D.colaboradores||[]).find(function(c){return c.id===colId;});
-  toast(lista.length+' material'+(lista.length>1?'es':'')+' enviado'+(lista.length>1?'s':'')+' a '+(co&&co.name||'colaborador')+' ✓','var(--teal)',3000);
+  toast(lista.length+' material'+(lista.length>1?'es':'')+(_env.length>1?' y '+(_env.length-1)+' cosa'+(_env.length>2?'s':'')+' más':'')+' enviado'+(lista.length>1||_env.length>1?'s':'')+' a '+(co&&co.name||'colaborador')+' ✓','var(--teal)',3000);
   setTimeout(function(){
-    if(co&&co.phone)notificarColabWA(colId);
+    if(co&&co.phone)notificarColabWA(colId,_env);
     else toast('El colaborador no tiene teléfono: le llega a su bandeja la próxima vez que abra el link','var(--orange)',5000);
   },400);
 }
@@ -11724,7 +11720,7 @@ function _lineasAvisosColab(msgs,colabId){
   var res=otras.filter(function(m){return m.tipo!=='checklist'&&m.tipo!=='tarea';});
   if(chk.length)l.push('✅ '+chk.length+' checklist'+(chk.length>1?'s':'')+titulos(chk));
   if(tar.length)l.push('📋 '+tar.length+' tarea'+(tar.length>1?'s':'')+titulos(tar));
-  res.forEach(function(m){var t=String(m.titulo||'Nota').trim();l.push((m.tipo==='materiales'?'':'📝 ')+t);});
+  res.forEach(function(m){var t=String(m.titulo||'Nota').trim();l.push((m.tipo==='materiales'||m.comentarioId?'':'📝 ')+t);});
   return l;
 }
 /** Abre en grande las fotos de un aviso, con su nota. */
@@ -13905,7 +13901,10 @@ function _publicarBandejaColab(colabId,pid){
     }).catch(function(){});
   }catch(_){}
 }
-function notificarColabWA(colabId){
+// soloMsgs: los avisos que se acaban de compartir. Si viene, el WhatsApp nombra
+// sólo eso (antes listaba todo lo pendiente del colaborador, también lo de otros
+// días). Sin soloMsgs (botón "Notificar" de su ficha) avisa todo lo no visto.
+function notificarColabWA(colabId,soloMsgs){
   if(_limpiarDuplicadosColab())sv();
   _consolidarAvisosCarpeta(colabId);
   _publicarBandejaColab(colabId);
@@ -13928,7 +13927,9 @@ function notificarColabWA(colabId){
   });
   var msgsParam=enrichedMsgs.length?'&msgs='+encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(enrichedMsgs))))):'';
   var url=baseUrl+'?token='+encodeURIComponent(co.id)+'&obra='+encodeURIComponent(S.proj)+'&obraName='+encodeURIComponent(p&&p.name||'')+'&colName='+encodeURIComponent(co.name||'')+(SYNC.archTel?'&tel='+encodeURIComponent(SYNC.archTel):'')+'&sw=1&se='+(SYNC.sendEmail?'1':'0')+_apiUrlParams()+msgsParam;
-  var pendMsgs=msgs.filter(function(m){return m.estadoColab==='nuevo';});
+  var _solo=null;
+  if(soloMsgs&&soloMsgs.length){_solo={};soloMsgs.forEach(function(m){if(m)_solo[m.id||m]=1;});}
+  var pendMsgs=_solo?msgs.filter(function(m){return _solo[m.id];}):msgs.filter(function(m){return m.estadoColab==='nuevo';});
   // Agrupado por tipo ("📸 2 fotos nuevas" y no dos renglones de "1 archivo").
   // Sin esc(): es texto para WhatsApp, no HTML, y "&" salía como "&amp;".
   var resumen=_lineasAvisosColab(pendMsgs,colabId).map(function(l){return '• '+l;}).join('\n');
@@ -14433,6 +14434,72 @@ function _adoptServerCfg(){
   return true;
 }
 
+// ── Envío mixto ──
+// En cualquier "enviar a colaborador" se pueden sumar cosas de otras pestañas
+// (tareas, checklists, materiales, comentarios) y sale todo en un solo aviso.
+// excluir: lo que ya se está eligiendo en esa ventana, para no repetirlo.
+function _extrasEnvioHtml(excluir){
+  excluir=excluir||{};
+  var secs=[];
+  var add=function(k,tit,items,fn){if(!excluir[k]&&items.length)secs.push({k:k,tit:tit,items:items,fn:fn});};
+  add('tarea','📋 Tareas pendientes',(D.tareas||[]).filter(function(t){return t.projectId===S.proj&&!t.done;}),function(t){return esc(t.title||'Sin título');});
+  add('chk','✅ Checklists',(D.checklists||[]).filter(function(c){return c.projectId===S.proj;}),function(c){var it=c.items||[];return esc(c.title||'Checklist')+' <span class="txxs tc3">'+it.filter(function(i){return i.done;}).length+'/'+it.length+'</span>';});
+  var mat=function(i){return esc(i.matNombre||'Sin nombre')+' <span class="txxs tc3">· '+esc(String(i.qty==null?'':i.qty))+' '+esc(i.unit||'')+(i.grupo?' · 🏗 '+esc(i.grupo):'')+'</span>';};
+  add('mat_a_pedir','📝 Materiales a pedir',(D.matIngresos||[]).filter(function(i){return i.projectId===S.proj&&i.estado==='a_pedir';}),mat);
+  add('mat_pedido','📋 Materiales pedidos',(D.matIngresos||[]).filter(function(i){return i.projectId===S.proj&&i.estado==='pedido';}),mat);
+  add('cmt','💬 Comentarios',(D.comentarios||[]).filter(function(c){return c.projectId===S.proj&&c.text;}).slice().sort(function(a,b){return String(b.date||'').localeCompare(String(a.date||''));}).slice(0,40),
+    function(c){return esc(String(c.text).slice(0,90))+(String(c.text).length>90?'…':'')+(c.date?' <span class="txxs tc3">· '+esc(fmts(c.date)||'')+'</span>':'');});
+  if(!secs.length)return '';
+  return '<details class="envx" style="border:1px dashed var(--teal);border-radius:8px;padding:8px 10px;margin:4px 0 12px">'
+    +'<summary class="ts fw7" style="cursor:pointer;color:var(--teal)">➕ ¿Sumar otras cosas a este envío? <span id="envx_n" class="txxs"></span></summary>'
+    +'<div class="txxs tc3 mt-4 mb-6">Elegí de otras pestañas: sale todo junto, en un solo aviso.</div>'
+    +secs.map(function(sc){
+      return '<details style="margin-bottom:6px"><summary class="txs fw7" style="cursor:pointer;padding:4px 0">'+sc.tit+' ('+sc.items.length+')</summary>'
+        +'<div style="max-height:220px;overflow-y:auto">'
+        +sc.items.map(function(it){
+          return '<label style="display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid var(--gray-ll);cursor:pointer">'
+            +'<input type="checkbox" class="envx_chk" value="'+sc.k+':'+it.id+'" onchange="_envxContar()" style="width:16px;height:16px;flex-shrink:0">'
+            +'<span class="ts">'+sc.fn(it)+'</span></label>';
+        }).join('')+'</div></details>';
+    }).join('')+'</details>';
+}
+function _envxContar(){
+  var n=document.querySelectorAll('.envx_chk:checked').length,el=document.getElementById('envx_n');
+  if(el)el.textContent=n?'· '+n+' sumado'+(n>1?'s':''):'';
+}
+// Lista de materiales para la bandeja del colaborador (un aviso por sección)
+function _msgMatColab(colId,tipo,items,urg,nota){
+  var label=tipo==='a_pedir'?'A pedir':'Pedidos';
+  var lista=items.map(function(i){return {id:i.id,nombre:i.matNombre||'Sin nombre',qty:i.qty,unit:i.unit||'',proveedor:i.proveedor||'',grupo:i.grupo||'',estado:i.estado};});
+  // Por grupo y los sueltos al final, como en la pantalla
+  lista.sort(function(x,y){return (x.grupo?0:1)-(y.grupo?0:1)||String(x.grupo).localeCompare(String(y.grupo));});
+  return _guardarPedidoColab({id:uid(),proyectoId:S.proj,colabId:colId,tipo:'materiales',entidadId:null,seccion:tipo,
+    titulo:'📦 Materiales — '+label+' ('+lista.length+')',materiales:lista,nota:nota||'',urgencia:urg||'media',
+    fechaEnvio:nw(),updatedAt:nw(),estadoColab:'nuevo',respuesta:null,fechaRespuesta:null});
+}
+// Guarda lo tildado en "¿Sumar otras cosas?" y devuelve los avisos creados
+function _guardarExtrasEnvio(colId,urg,nota){
+  var por={},out=[];
+  document.querySelectorAll('.envx_chk:checked').forEach(function(cb){
+    var i=cb.value.indexOf(':');var k=cb.value.slice(0,i);(por[k]=por[k]||[]).push(cb.value.slice(i+1));
+  });
+  var base=function(o){return Object.assign({id:uid(),proyectoId:S.proj,colabId:colId,nota:nota||'',urgencia:urg||'media',fechaEnvio:nw(),updatedAt:nw(),estadoColab:'nuevo',respuesta:null,fechaRespuesta:null},o);};
+  (por.tarea||[]).forEach(function(id){var t=(D.tareas||[]).find(function(x){return x.id===id;});if(t)out.push(_guardarPedidoColab(base({tipo:'tarea',entidadId:id,titulo:t.title||''})));});
+  (por.chk||[]).forEach(function(id){var c=(D.checklists||[]).find(function(x){return x.id===id;});if(c)out.push(_guardarPedidoColab(base({tipo:'checklist',entidadId:id,titulo:c.title||''})));});
+  ['a_pedir','pedido'].forEach(function(tp){
+    var ids=por['mat_'+tp]||[];if(!ids.length)return;
+    var its=(D.matIngresos||[]).filter(function(x){return ids.indexOf(x.id)>=0;});
+    if(its.length)out.push(_msgMatColab(colId,tp,its,urg,nota));
+  });
+  (por.cmt||[]).forEach(function(id){
+    var c=(D.comentarios||[]).find(function(x){return x.id===id;});if(!c)return;
+    var tx=String(c.text||'');
+    out.push(_guardarPedidoColab(base({tipo:'nota',entidadId:null,comentarioId:id,
+      titulo:'💬 Comentario: '+tx.slice(0,50)+(tx.length>50?'…':''),
+      nota:tx+(nota?'\n\n📌 '+nota:'')})));
+  });
+  return out;
+}
 function shareToInbox(tipo,entidadId,titulo){
   if(!titulo){
     if(tipo==='checklist'){var _ch=(D.checklists||[]).find(function(x){return x.id===entidadId;});titulo=_ch?_ch.title:'';}
@@ -14447,6 +14514,7 @@ function shareToInbox(tipo,entidadId,titulo){
     +'<div class="fg"><label class="fl">Colaborador</label><select class="fs" id="sti_col">'+opts+'</select></div>'
     +'<div class="fg"><label class="fl">Urgencia</label><select class="fs" id="sti_urg"><option value="baja">🟢 Baja</option><option value="media" selected>🟡 Media</option><option value="alta">🔴 Alta</option></select></div>'
     +'<div class="fg"><label class="fl">Nota (opcional)</label><textarea class="ft" id="sti_nota" rows="2" placeholder="Indicaciones adicionales..."></textarea></div>'
+    +_extrasEnvioHtml()
     +'<button class="btn btn-w mt-8" style="background:var(--teal);color:#fff" onclick="confirmarShareToInbox(\''+tipo+'\',\''+entidadId+'\',\''+esc(titulo)+'\')">Enviar a bandeja ✓</button></div>';
   document.body.appendChild(d);
 }
@@ -14460,6 +14528,7 @@ function _seccionMat(m){return m.seccion||(/A pedir/i.test(m.titulo||'')?'a_pedi
 function _clavePedidoColab(m){
   if(!m||_esAvisoCarpeta(m))return null;
   if(m.tipo==='materiales')return m.colabId+'|'+m.proyectoId+'|mat|'+_seccionMat(m);
+  if(m.comentarioId)return m.colabId+'|'+m.proyectoId+'|cmt|'+m.comentarioId;
   if(!m.entidadId)return null;
   return m.colabId+'|'+m.proyectoId+'|'+m.tipo+'|'+m.entidadId;
 }
@@ -14523,6 +14592,7 @@ function openAsignarModal(colId){
         +'</label>';
     });
   }
+  h+=_extrasEnvioHtml({tarea:1,chk:1});
   h+='</div>';
   h+='<div style="position:sticky;bottom:0;background:var(--white);padding:12px 0 0;border-top:1px solid var(--brd);margin-top:8px">';
   h+='<button class="btn btn-w" style="background:var(--teal);color:#fff" onclick="confirmarAsignar(\''+colId+'\')">✅ Enviar a bandeja del colaborador</button>';
@@ -14532,23 +14602,28 @@ function openAsignarModal(colId){
 function confirmarAsignar(colId){
   var urg=document.getElementById('asig_urg')?.value||'media';
   var nota=document.getElementById('asig_nota')?.value.trim()||'';
-  var checks=document.querySelectorAll('#asignarMod input[type=checkbox]:checked');
-  if(!checks.length){toast('Seleccioná al menos un ítem','var(--orange)');return;}
+  var checks=document.querySelectorAll('#asignarMod input[type=checkbox]:checked:not(.envx_chk)');
+  var nExtra=document.querySelectorAll('#asignarMod .envx_chk:checked').length;
+  if(!checks.length&&!nExtra){toast('Seleccioná al menos un ítem','var(--orange)');return;}
   if(!D.mensajesColab)D.mensajesColab=[];
+  var _env=[];
   checks.forEach(function(cb){
     var parts=cb.value.split(':');var tipo=parts[0];var entId=parts[1];
     var titulo='';
     if(tipo==='chk'){var ch=(D.checklists||[]).find(function(x){return x.id===entId;});titulo=ch?ch.title:'';}
     else if(tipo==='tarea'){var t=(D.tareas||[]).find(function(x){return x.id===entId;});titulo=t?t.title:'';}
-    _guardarPedidoColab({id:uid(),proyectoId:S.proj,colabId:colId,tipo:tipo==='chk'?'checklist':'tarea',entidadId:entId,titulo:titulo,nota:nota,urgencia:urg,fechaEnvio:nw(),updatedAt:nw(),estadoColab:'nuevo',respuesta:null,fechaRespuesta:null});
+    _env.push(_guardarPedidoColab({id:uid(),proyectoId:S.proj,colabId:colId,tipo:tipo==='chk'?'checklist':'tarea',entidadId:entId,titulo:titulo,nota:nota,urgencia:urg,fechaEnvio:nw(),updatedAt:nw(),estadoColab:'nuevo',respuesta:null,fechaRespuesta:null}));
   });
+  _env=_env.concat(_guardarExtrasEnvio(colId,urg,nota));
   sv();
+  _publicarBandejaColab(colId);
   document.getElementById('asignarMod')?.remove();
   render();
   var _coA=(D.colaboradores||[]).find(function(c){return c.id===colId;});
-  toast(checks.length+' ítem'+(checks.length>1?'s':'')+' asignados a '+(_coA&&_coA.name||'colaborador')+' ✓','var(--teal)',2500);
+  var _nA=checks.length+nExtra;
+  toast(_nA+' ítem'+(_nA>1?'s':'')+' asignados a '+(_coA&&_coA.name||'colaborador')+' ✓','var(--teal)',2500);
   setTimeout(function(){
-    if(_coA&&_coA.phone){notificarColabWA(colId);}
+    if(_coA&&_coA.phone){notificarColabWA(colId,_env);}
     else{toast('⚠️ El colaborador no tiene teléfono — entrá a su perfil para notificarlo','var(--orange)',4500);}
   },400);
 }
@@ -14558,15 +14633,16 @@ function confirmarShareToInbox(tipo,entidadId,titulo){
   var nota=document.getElementById('sti_nota')?.value.trim()||'';
   if(!colId)return;
   if(!D.mensajesColab)D.mensajesColab=[];
-  _guardarPedidoColab({id:uid(),proyectoId:S.proj,colabId:colId,tipo:tipo,entidadId:entidadId,titulo:titulo,nota:nota,urgencia:urg,fechaEnvio:nw(),updatedAt:nw(),estadoColab:'nuevo',respuesta:null,fechaRespuesta:null});
+  var _env=[_guardarPedidoColab({id:uid(),proyectoId:S.proj,colabId:colId,tipo:tipo,entidadId:entidadId,titulo:titulo,nota:nota,urgencia:urg,fechaEnvio:nw(),updatedAt:nw(),estadoColab:'nuevo',respuesta:null,fechaRespuesta:null})]
+    .concat(_guardarExtrasEnvio(colId,urg,nota));
   sv();
   _publicarBandejaColab(colId); // que le llegue aunque use un link anterior
   document.getElementById('stiMod')?.remove();
   var co=(D.colaboradores||[]).find(function(c){return c.id===colId;});
-  toast('Asignado a '+(co&&co.name||'colaborador')+' ✓','var(--teal)',2500);
+  toast((_env.length>1?_env.length+' envíos asignados':'Asignado')+' a '+(co&&co.name||'colaborador')+' ✓','var(--teal)',2500);
   render();
   setTimeout(function(){
-    if(co&&co.phone){notificarColabWA(colId);}
+    if(co&&co.phone){notificarColabWA(colId,_env);}
     else{toast('⚠️ El colaborador no tiene teléfono — entrá a su perfil para notificarlo','var(--orange)',4500);}
   },400);
 }
