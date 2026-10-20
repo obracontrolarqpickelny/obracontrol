@@ -1611,6 +1611,7 @@ async function _processPendingImagesImpl() {
         // el de la miniatura, y al descargar bajaba una imagen en vez del archivo)
         if(typeof imgRec.data==='string'&&imgRec.data.indexOf('data:image')!==0&&result.viewUrl)result.url=result.viewUrl;
         replaceImageRef(D,item.imageId,result.url);
+        _registrarFotoDrive(item.imageId,result.url,result.driveId);
         // Actualizar updatedAt en TODOS los ítems que recibieron la URL real.
         // Sin esto, si Drive y local tienen el mismo timestamp, Drive gana en _silentMerge
         // y revierte la URL real al placeholder [foto:imgId] — causando ícono de nube.
@@ -1648,6 +1649,91 @@ async function _processPendingImagesImpl() {
   updatePendingBadge().catch(function(){});
 }
 
+// ── Índice de fotos subidas ──
+// D.fotosDrive guarda, para cada foto que llegó a Drive, su link. Viaja con los
+// datos a todos los dispositivos: si en alguno quedó la marca [foto:id] (porque la
+// foto sólo estaba en el teléfono que la subió), se reemplaza sola por el link.
+// Antes el reemplazo se hacía sólo en el dispositivo que subía y sin marcar el
+// registro como nuevo: al sincronizar ganaba la versión vieja con la marca y la
+// foto "desaparecía" en los demás.
+function _replRef(obj,id,url){
+  var ch=false;
+  if(!obj||typeof obj!=='object')return false;
+  if(Array.isArray(obj)){obj.forEach(function(x){if(_replRef(x,id,url))ch=true;});return ch;}
+  Object.keys(obj).forEach(function(k){
+    var v=obj[k];
+    if(typeof v==='string'){if(v==='[foto:'+id+']'){obj[k]=url;ch=true;}}
+    else if(v&&typeof v==='object'){if(_replRef(v,id,url))ch=true;}
+  });
+  return ch;
+}
+// Reemplaza la marca en todos los registros y los marca como actualizados
+function _ponerFotoEnDatos(id,url){
+  var n=0;
+  Object.keys(D).forEach(function(k){
+    if(k==='fotosDrive'||k==='tombstones'||!Array.isArray(D[k]))return;
+    D[k].forEach(function(r){if(r&&typeof r==='object'&&_replRef(r,id,url)){r.updatedAt=nw();n++;}});
+  });
+  return n;
+}
+function _registrarFotoDrive(id,url,driveId){
+  if(!id||!url)return 0;
+  if(!D.fotosDrive)D.fotosDrive={};
+  D.fotosDrive[id]={url:url,driveId:driveId||null,ts:nw()};
+  return _ponerFotoEnDatos(id,url);
+}
+// Une el índice que vino de Drive y aplica todo lo que todavía tenga la marca
+function _aplicarFotosDrive(otro){
+  if(!D.fotosDrive)D.fotosDrive={};
+  if(otro&&typeof otro==='object')Object.keys(otro).forEach(function(id){if(!D.fotosDrive[id]&&otro[id]&&otro[id].url)D.fotosDrive[id]=otro[id];});
+  var pend=_marcasFotoEnDatos(),n=0;
+  pend.forEach(function(id){var f=D.fotosDrive[id];if(f&&f.url)n+=_ponerFotoEnDatos(id,f.url);});
+  return n;
+}
+// Ids de las fotos que figuran como [foto:id] en los datos
+function _marcasFotoEnDatos(){
+  var ids={};
+  (function rec(o){
+    if(!o)return;
+    if(typeof o==='string'){var m=/^\[foto:([^\]]+)\]$/.exec(o);if(m)ids[m[1]]=1;return;}
+    if(typeof o!=='object')return;
+    if(Array.isArray(o))o.forEach(rec);else Object.keys(o).forEach(function(k){if(k!=='fotosDrive')rec(o[k]);});
+  })(D);
+  return Object.keys(ids);
+}
+// Busca en Drive (por el id, que va en el nombre del archivo) las fotos que en
+// este dispositivo figuran sin link y no están guardadas localmente. Si las
+// encuentra, repara la referencia en todos lados y la deja en el índice.
+async function _buscarFotosPerdidas(ids){
+  if(!GD.online||!GD.accessToken)return 0;
+  if(!ids){
+    if(GD._fotosBuscadasTs&&Date.now()-GD._fotosBuscadasTs<10*60*1000)return 0;
+    GD._fotosBuscadasTs=Date.now();
+    ids=_marcasFotoEnDatos();
+  }
+  var n=0;
+  for(var i=0;i<ids.length&&i<40;i++){
+    var id=ids[i];
+    try{
+      if(D.fotosDrive&&D.fotosDrive[id]){n+=_ponerFotoEnDatos(id,D.fotosDrive[id].url);continue;}
+      // ¿La subió este mismo dispositivo?
+      var rec=GD.idbReady?await idbGet('images',id).catch(function(){return null;}):null;
+      if(rec&&rec.driveUrl){n+=_registrarFotoDrive(id,rec.driveUrl,rec.driveId);continue;}
+      if(rec&&rec.data&&!rec.uploaded)continue; // está acá y se va a subir en la cola
+      if(!/^[A-Za-z0-9_\-]+$/.test(id))continue;
+      var q="name contains '"+id+"' and trashed=false";
+      var res=await fetchWithTimeout('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(q)+'&fields=files(id,name,mimeType,webViewLink)&pageSize=5',{headers:driveHeaders()},20000);
+      if(!res.ok)continue;
+      var js=await res.json();
+      var f=(js.files||[]).find(function(x){return (x.name||'').indexOf(id)>=0;});
+      if(!f)continue;
+      var url=(f.mimeType||'').indexOf('image/')===0?'https://drive.google.com/thumbnail?id='+f.id+'&sz=w800':(f.webViewLink||'https://drive.google.com/file/d/'+f.id+'/view');
+      n+=_registrarFotoDrive(id,url,f.id);
+    }catch(e){console.warn('buscar foto',id,e);}
+  }
+  if(n){sv();if(!_isUserTyping()&&!document.querySelector('.mo.open'))render();toast(n+' foto(s) recuperadas desde Drive ✓','var(--green)',3000);}
+  return n;
+}
 function replaceImageRef(obj, oldId, newUrl) {
   if (!obj) return;
   if (Array.isArray(obj)) { obj.forEach(i => replaceImageRef(i, oldId, newUrl)); return; }
@@ -2270,7 +2356,8 @@ function _silentMerge(driveData){
   }
   _repairEcoMatLinks(); // Rebuild any broken eco↔matIngreso links after merge
   _repairProjectIds();  // Fix items with missing or mismatched projectId
-  if(_recuperarEnviosMat())changed=true;
+  if(_recuperarEnviosMat()){changed=true;setTimeout(sv,0);} // que también suba a Drive
+  if(_aplicarFotosDrive(driveData.fotosDrive)){changed=true;setTimeout(sv,0);}
   return changed;
 }
 // Reparación única, autorizada por Federico (19-oct-2026): en "casa GROSSI LOPEZ"
@@ -2323,6 +2410,7 @@ async function loadFromDriveAndMerge(silent){
     if(_cambio&&!_isPinLocked()&&!document.querySelector('.mo.open')&&!_isUserTyping())render();
     if(!silent)toast('Datos sincronizados con Drive','var(--green)',2500);
     fetchFormulariosPending();
+    _buscarFotosPerdidas().catch(function(){});
   }catch(e){
     console.warn('Drive load failed:',e);
     if(!silent)updateSyncIndicator('error');
@@ -2410,7 +2498,7 @@ async function readPhotos(inputId, modKey){
     if(GD.idbReady){
       var imgId='img_'+uid();
       try{
-        await queueImageUpload(imgId,compressed,'foto_'+uid()+'.jpg',S.proj,fid);
+        await queueImageUpload(imgId,compressed,'foto_'+imgId+'.jpg',S.proj,fid);
         // queueImageUpload no avisa si falla: se confirma que la copia quedó
         // escrita antes de reemplazar la foto por su marca.
         var _escrita=await idbGet('images',imgId);
@@ -10528,7 +10616,11 @@ function verEco(id){
       if(rec&&rec.data){
         openFileData(rec.data,item.concepto||'comprobante');
       } else {
-        toast('Imagen pendiente de subir a Drive — Reconectá y volvé a intentar.','var(--orange)',5000);
+        toast('Buscando el comprobante en Drive…','var(--teal)',2500);
+        _buscarFotosPerdidas([_idbImgId]).then(function(n){
+          if(n&&item.imagen&&item.imagen.indexOf('[foto')!==0)verEco(id);
+          else toast('Este comprobante quedó sólo en el dispositivo que lo cargó. Abrí la app ahí con Drive conectado y se sube solo.','var(--orange)',7000);
+        });
       }
     }).catch(function(){toast('No se pudo recuperar la imagen local','var(--orange)',3000);});
     return;
