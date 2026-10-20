@@ -9636,7 +9636,7 @@ function rEconomia(mc,p){
     return `<div class="card" id="eco_item_${item.id}" style="padding:12px;border-left:3px solid ${col};${item.id===S.ecoResalt?'outline:2px solid var(--cyan);':''}">
       <div class="flex justify-between items-start mb-4">
         <div class="flex-1">
-          <div class="ts fw6">${item.concepto||'Sin concepto'}${_notaBadge('economia',item.id,'detalle')}${item.interno?' <span style="font-size:9px;background:#f1f5f9;border-radius:3px;padding:1px 4px;color:#64748b">&#x1F512; Priv.</span>':''}${(item.sourceType==='formulario'||_esDot)?' <span style="font-size:9px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:1px 6px;color:#16a34a">'+(_esDot?'&#x1F4BB; DOT':'&#x1F464; '+(item.cargadoPor||item.sourceName||''))+'</span>':''}</div>
+          <div class="ts fw6">${item.concepto||'Sin concepto'}${_notaBadge('economia',item.id,'detalle')}${item.interno?' <span style="font-size:9px;background:#f1f5f9;border-radius:3px;padding:1px 4px;color:#64748b;white-space:nowrap">&#x1F512; Priv.</span>':''}${(item.sourceType==='formulario'||_esDot)?' <span style="font-size:9px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:1px 6px;color:#16a34a;white-space:nowrap;display:inline-block;vertical-align:middle">'+(_esDot?'&#x1F4BB; DOT':'&#x1F464; '+(item.cargadoPor||item.sourceName||''))+'</span>':''}</div>
           <div class="txxs tc3 mt-2">${fmts(item.fecha||item.date)} | ${item.medioPago||''} ${item.proveedor?`| <strong>${item.proveedor}</strong>`:''} ${(item.rubro||_ecoItemTexto(item))?`<span style="background:#f1f5f9;border-radius:3px;padding:1px 5px;margin-left:2px;color:#475569">${item.rubro||'Sin rubro'}${_ecoItemTexto(item)?' / '+_ecoItemTexto(item):''}</span>`:''}</div>
         </div>
         <div class="fw8" style="color:${col};font-size:15px;flex-shrink:0;margin-left:8px">${sign}$${(parseFloat(item.monto)||0).toLocaleString('es-AR')}</div>
@@ -9888,7 +9888,7 @@ function renderEcoItems(){
     return `<div class="card" id="eco_item_${item.id}" style="padding:12px;border-left:3px solid ${col};${item.id===S.ecoResalt?'outline:2px solid var(--cyan);':''  }">
       <div class="flex justify-between items-start mb-4">
         <div class="flex-1">
-          <div class="ts fw6">${item.concepto||'Sin concepto'}${_notaBadge('economia',item.id,'detalle')}${item.interno?' <span style="font-size:9px;background:#f1f5f9;border-radius:3px;padding:1px 4px;color:#64748b">&#x1F512; Priv.</span>':''}${(item.sourceType==='formulario'||_esDot)?' <span style="font-size:9px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:1px 6px;color:#16a34a">'+(_esDot?'&#x1F4BB; DOT':'&#x1F464; '+(item.cargadoPor||item.sourceName||''))+'</span>':''}</div>
+          <div class="ts fw6">${item.concepto||'Sin concepto'}${_notaBadge('economia',item.id,'detalle')}${item.interno?' <span style="font-size:9px;background:#f1f5f9;border-radius:3px;padding:1px 4px;color:#64748b;white-space:nowrap">&#x1F512; Priv.</span>':''}${(item.sourceType==='formulario'||_esDot)?' <span style="font-size:9px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:1px 6px;color:#16a34a;white-space:nowrap;display:inline-block;vertical-align:middle">'+(_esDot?'&#x1F4BB; DOT':'&#x1F464; '+(item.cargadoPor||item.sourceName||''))+'</span>':''}</div>
           <div class="txxs tc3 mt-2">${fmts(item.fecha||item.date)} | ${item.medioPago||''} ${item.proveedor?`| <strong>${item.proveedor}</strong>`:''} ${(item.rubro||_ecoItemTexto(item))?`<span style="background:#f1f5f9;border-radius:3px;padding:1px 5px;margin-left:2px;color:#475569">${item.rubro||'Sin rubro'}${_ecoItemTexto(item)?' / '+_ecoItemTexto(item):''}</span>`:''}</div>
         </div>
         <div class="fw8" style="color:${col};font-size:15px;flex-shrink:0;margin-left:8px">${sign}$${(parseFloat(item.monto)||0).toLocaleString('es-AR')}</div>
@@ -13967,6 +13967,12 @@ function notificarColabWA(colabId,soloMsgs){
   var _solo=null;
   if(soloMsgs&&soloMsgs.length){_solo={};soloMsgs.forEach(function(m){if(m)_solo[m.id||m]=1;});}
   var pendMsgs=_solo?msgs.filter(function(m){return _solo[m.id];}):msgs.filter(function(m){return m.estadoColab==='nuevo';});
+  // En una lista de materiales que ya tenía, el aviso nombra sólo lo que se tildó
+  // ahora: si tenía 1 y se mandan 5, dice (5) y no (6).
+  if(_solo)pendMsgs=pendMsgs.map(function(m){
+    var n=window._envioMatN&&window._envioMatN[m.id];
+    return n?Object.assign({},m,{titulo:String(m.titulo||'').replace(/\(\d+\)\s*$/,'')+'('+n+')'}):m;
+  });
   // Agrupado por tipo ("📸 2 fotos nuevas" y no dos renglones de "1 archivo").
   // Sin esc(): es texto para WhatsApp, no HTML, y "&" salía como "&amp;".
   var resumen=_lineasAvisosColab(pendMsgs,colabId).map(function(l){return '• '+l;}).join('\n');
@@ -14513,6 +14519,7 @@ function _msgMatColab(colId,tipo,items,urg,nota){
   var msg=_guardarPedidoColab({id:uid(),proyectoId:S.proj,colabId:colId,tipo:'materiales',entidadId:null,seccion:tipo,
     titulo:'📦 Materiales — '+label+' ('+lista.length+')',materiales:lista,nota:nota||'',urgencia:urg||'media',
     fechaEnvio:nw(),updatedAt:nw(),estadoColab:'nuevo',respuesta:null,fechaRespuesta:null});
+  window._envioMatN=window._envioMatN||{};window._envioMatN[msg.id]=items.length;
   // Registro en el propio material: la insignia 📤 no depende de que el aviso
   // siga existiendo o conserve la lista.
   var f=nw();
