@@ -3191,10 +3191,30 @@ function _notaBadge(tbl,id,campo){
 }
 // Material ya compartido con un colaborador: insignia 📤 que al tocarla dice a
 // quién se mandó, cuándo y en qué quedó.
+function _fmtEnvio(f){
+  var d=new Date(f);if(isNaN(d))return fmts(f)||'';
+  return d.toLocaleDateString('es-AR',{day:'2-digit',month:'short'})+' '+d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+}
 function _enviosColabMat(id){
-  return (D.mensajesColab||[]).filter(function(m){
+  var msgs=(D.mensajesColab||[]).filter(function(m){
     return m.tipo==='materiales'&&(m.materiales||[]).some(function(it){return it.id===id;});
-  }).sort(function(a,b){return String(b.fechaEnvio||'').localeCompare(String(a.fechaEnvio||''));});
+  });
+  var it=(D.matIngresos||[]).find(function(x){return x.id===id;});
+  var regs=(it&&it.enviosColab)||[];
+  var out=msgs.map(function(m){
+    var fs=regs.filter(function(r){return r.msgId===m.id;}).map(function(r){return r.fecha;});
+    return {m:m,fechas:fs.length?fs:[m.fechaEnvio]};
+  });
+  // Envíos registrados cuyo aviso ya no lo incluye (borrado, rechazado, etc.)
+  var porMsg={};
+  regs.forEach(function(r){
+    if(msgs.some(function(m){return m.id===r.msgId;}))return;
+    var k=r.msgId||r.fecha;
+    if(!porMsg[k]){porMsg[k]={m:{colabId:r.colabId,urgencia:r.urgencia,nota:r.nota,seccion:r.seccion,estadoColab:'_reg'},fechas:[]};out.push(porMsg[k]);}
+    porMsg[k].fechas.push(r.fecha);
+  });
+  out.forEach(function(e){e.fechas.sort();});
+  return out.sort(function(a,b){return String(b.fechas[b.fechas.length-1]||'').localeCompare(String(a.fechas[a.fechas.length-1]||''));});
 }
 function _envioColabBadge(id){
   var n=_enviosColabMat(id).length;
@@ -3205,14 +3225,15 @@ function _envioColabBadge(id){
 function verEnviosColabMat(id){
   var it=(D.matIngresos||[]).find(function(x){return x.id===id;});
   var envs=_enviosColabMat(id);if(!envs.length)return;
-  var estL={nuevo:['Enviado, todavía no lo abrió','#64748b'],visto:['Lo vio, sin responder','#0891b2'],completado:['Respondió — falta que lo revises en la bandeja','#16a34a'],aceptado:['Respuesta aceptada','#16a34a'],rechazado:['Respuesta rechazada','#dc2626']};
+  var estL={_reg:['Ya no figura en su bandeja','#94a3b8'],nuevo:['Enviado, todavía no lo abrió','#64748b'],visto:['Lo vio, sin responder','#0891b2'],completado:['Respondió — falta que lo revises en la bandeja','#16a34a'],aceptado:['Respuesta aceptada','#16a34a'],rechazado:['Respuesta rechazada','#dc2626']};
   var urgL={alta:'🔴 Alta',media:'🟡 Media',baja:'🟢 Baja'};
   document.getElementById('verEnvColM')?.remove();
   var d=document.createElement('div');d.className='mo open';d.id='verEnvColM';
   d.innerHTML='<div class="mo-c" style="max-width:420px"><div class="mo-h"><h3 style="color:#0f766e">&#x1F4E4; Enviado a colaborador</h3>'
     +'<button class="tbtn" onclick="document.getElementById(\'verEnvColM\').remove()">'+I.x+'</button></div>'
     +'<div class="ts fw7 mb-8">'+esc(it?(it.matNombre||'Sin nombre'):'Material')+(it&&it.qty?' <span class="txxs tc3">· '+esc(String(it.qty))+' '+esc(it.unit||'')+'</span>':'')+'</div>'
-    +envs.map(function(m){
+    +envs.map(function(en){
+      var m=en.m;
       var co=(D.colaboradores||[]).find(function(c){return c.id===m.colabId;});
       var e=estL[m.estadoColab||'nuevo']||[m.estadoColab,'#64748b'];
       var idx=(m.materiales||[]).findIndex(function(x){return x.id===id;});
@@ -3220,8 +3241,8 @@ function verEnviosColabMat(id){
       var fila=function(k,v){return v?'<div class="txxs" style="margin-top:3px"><span class="tc3">'+k+':</span> '+v+'</div>':'';};
       return '<div style="background:#f0fdfa;border:1px solid #99f6e4;border-radius:8px;padding:10px 12px;margin-bottom:8px">'
         +'<div class="ts fw7">&#x1F464; '+esc(co?co.name:'Colaborador')+(co&&co.role?' <span class="txxs tc3">· '+esc(co.role)+'</span>':'')+'</div>'
-        +fila('Enviado',esc(fmts(m.fechaEnvio)||''))
-        +fila('Lista',esc(String(m.titulo||'').replace(/^📦\s*/,'')))
+        +fila(en.fechas.length>1?'Enviado ('+en.fechas.length+' veces)':'Enviado',en.fechas.map(function(f){return esc(_fmtEnvio(f));}).join(' · '))
+        +fila('Lista',m.titulo?esc(String(m.titulo).replace(/^📦\s*/,'')):(m.seccion==='a_pedir'?'Materiales — A pedir':m.seccion==='pedido'?'Materiales — Pedidos':''))
         +fila('Urgencia',urgL[m.urgencia]||'')
         +fila('Estado','<span style="color:'+e[1]+';font-weight:700">'+esc(e[0])+'</span>')
         +(marcado===null?'':fila('Este material',marcado?'<span style="color:#16a34a;font-weight:700">☑ Lo marcó como resuelto</span>':'☐ No lo marcó'))
@@ -14473,9 +14494,18 @@ function _msgMatColab(colId,tipo,items,urg,nota){
   var lista=items.map(function(i){return {id:i.id,nombre:i.matNombre||'Sin nombre',qty:i.qty,unit:i.unit||'',proveedor:i.proveedor||'',grupo:i.grupo||'',estado:i.estado};});
   // Por grupo y los sueltos al final, como en la pantalla
   lista.sort(function(x,y){return (x.grupo?0:1)-(y.grupo?0:1)||String(x.grupo).localeCompare(String(y.grupo));});
-  return _guardarPedidoColab({id:uid(),proyectoId:S.proj,colabId:colId,tipo:'materiales',entidadId:null,seccion:tipo,
+  var msg=_guardarPedidoColab({id:uid(),proyectoId:S.proj,colabId:colId,tipo:'materiales',entidadId:null,seccion:tipo,
     titulo:'📦 Materiales — '+label+' ('+lista.length+')',materiales:lista,nota:nota||'',urgencia:urg||'media',
     fechaEnvio:nw(),updatedAt:nw(),estadoColab:'nuevo',respuesta:null,fechaRespuesta:null});
+  // Registro en el propio material: la insignia 📤 no depende de que el aviso
+  // siga existiendo o conserve la lista.
+  var f=nw();
+  items.forEach(function(i){
+    if(!i.enviosColab)i.enviosColab=[];
+    i.enviosColab.push({colabId:colId,fecha:f,msgId:msg.id,seccion:tipo,urgencia:urg||'media',nota:nota||''});
+    i.updatedAt=f;
+  });
+  return msg;
 }
 // Guarda lo tildado en "¿Sumar otras cosas?" y devuelve los avisos creados
 function _guardarExtrasEnvio(colId,urg,nota){
@@ -14537,6 +14567,21 @@ function _guardarPedidoColab(nuevo){
   if(!D.mensajesColab)D.mensajesColab=[];
   var k=_clavePedidoColab(nuevo);
   var prev=k?D.mensajesColab.find(function(m){return _pendienteColab(m)&&_clavePedidoColab(m)===k;}):null;
+  if(prev&&prev.tipo==='materiales'&&nuevo.materiales){
+    // Se suman a la lista que ya tenía (antes la nueva reemplazaba a la anterior y
+    // los materiales enviados antes desaparecían). Los que ya estaban conservan su
+    // lugar, así lo que el colaborador tildó sigue correspondiendo al mismo ítem.
+    var lst=(prev.materiales||[]).slice();
+    nuevo.materiales.forEach(function(it){
+      var i=lst.findIndex(function(x){return x.id&&x.id===it.id;});
+      if(i>=0)lst[i]=Object.assign({},lst[i],it);else lst.push(it);
+    });
+    prev.materiales=lst;
+    prev.titulo=String(nuevo.titulo||prev.titulo||'').replace(/\(\d+\)\s*$/,'')+'('+lst.length+')';
+    ['nota','urgencia','seccion'].forEach(function(f){if(nuevo[f]!==undefined)prev[f]=nuevo[f];});
+    prev.fechaEnvio=nw();prev.updatedAt=nw();prev.estadoColab='nuevo';
+    return prev;
+  }
   if(prev){
     ['titulo','nota','urgencia','materiales','seccion'].forEach(function(f){if(nuevo[f]!==undefined)prev[f]=nuevo[f];});
     prev.fechaEnvio=nw();prev.updatedAt=nw();prev.estadoColab='nuevo';
