@@ -2270,7 +2270,22 @@ function _silentMerge(driveData){
   }
   _repairEcoMatLinks(); // Rebuild any broken eco↔matIngreso links after merge
   _repairProjectIds();  // Fix items with missing or mismatched projectId
+  if(_recuperarEnviosMat())changed=true;
   return changed;
+}
+// Reparación única, autorizada por Federico (19-oct-2026): en "casa GROSSI LOPEZ"
+// estos 5 pedidos se le habían compartido a Edu, pero al compartirle después el
+// Nylon la lista se pisó y perdieron la insignia 📤. Se les devuelve el registro
+// del envío (hora aproximada, la del WhatsApp de las 19:33). Sólo a los que no
+// tienen ningún registro: si ya lo tienen no hace nada.
+function _recuperarEnviosMat(){
+  var ids=['u50m0mf0','100inxlp','5gnrs80b','tqut4v1f','ift0r6c7'],n=0;
+  (D.matIngresos||[]).forEach(function(i){
+    if(i.projectId!=='4rfqtz5y'||ids.indexOf(i.id)<0||(i.enviosColab&&i.enviosColab.length))return;
+    i.enviosColab=[{colabId:'kzzxwg45',fecha:'2026-10-19T22:33:00.000Z',msgId:null,seccion:'pedido',urgencia:'media',nota:'',recuperado:true}];
+    i.updatedAt=nw();n++;
+  });
+  return n>0;
 }
 // ── Saneamiento: asegura que todos los ítems de enlace/documento de una visita
 // tengan el projectId correcto y elimina referencias huérfanas.
@@ -3210,7 +3225,7 @@ function _enviosColabMat(id){
   regs.forEach(function(r){
     if(msgs.some(function(m){return m.id===r.msgId;}))return;
     var k=r.msgId||r.fecha;
-    if(!porMsg[k]){porMsg[k]={m:{colabId:r.colabId,urgencia:r.urgencia,nota:r.nota,seccion:r.seccion,estadoColab:'_reg'},fechas:[]};out.push(porMsg[k]);}
+    if(!porMsg[k]){porMsg[k]={m:{colabId:r.colabId,urgencia:r.urgencia,nota:r.nota,seccion:r.seccion,estadoColab:'_reg',recuperado:r.recuperado},fechas:[]};out.push(porMsg[k]);}
     porMsg[k].fechas.push(r.fecha);
   });
   out.forEach(function(e){e.fechas.sort();});
@@ -3245,6 +3260,7 @@ function verEnviosColabMat(id){
         +fila('Lista',m.titulo?esc(String(m.titulo).replace(/^📦\s*/,'')):(m.seccion==='a_pedir'?'Materiales — A pedir':m.seccion==='pedido'?'Materiales — Pedidos':''))
         +fila('Urgencia',urgL[m.urgencia]||'')
         +fila('Estado','<span style="color:'+e[1]+';font-weight:700">'+esc(e[0])+'</span>')
+        +(m.recuperado?'<div class="txxs tc3" style="margin-top:4px;font-style:italic">Registro recuperado: la hora es aproximada.</div>':'')
         +(marcado===null?'':fila('Este material',marcado?'<span style="color:#16a34a;font-weight:700">☑ Lo marcó como resuelto</span>':'☐ No lo marcó'))
         +fila('Respondió',m.fechaRespuesta?esc(fmts(m.fechaRespuesta)):'')
         +(m.nota?'<div class="txxs" style="margin-top:6px;white-space:pre-wrap;background:#fff;border-radius:6px;padding:6px 8px">&#x1F4DD; '+esc(m.nota)+'</div>':'')
