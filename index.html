@@ -11922,6 +11922,13 @@ function openEcoPDFDialog(){
   document.body.appendChild(d);
 }
 
+// Pastilla de quién cargó el movimiento (colaborador o DOT), igual que en la pantalla
+function _pdfPastillaColab(e){
+  var esDot=/^dot$/i.test(String(e.cargadoPor||e.sourceName||'').trim());
+  if(e.sourceType!=='formulario'&&!esDot)return '';
+  var quien=esDot?'💻 DOT':'👤 '+esc(e.cargadoPor||e.sourceName||'');
+  return ' <span style="display:inline-block;white-space:nowrap;vertical-align:middle;font-size:6.5pt;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:0 5px;color:#16a34a;font-weight:600">'+quien+'</span>';
+}
 function exportEcoPDF(includeDistrib,includeRubroCol,includeMetros,privados,includeMeses,includeFotos){
   if(includeDistrib===undefined)includeDistrib=true;
   if(includeRubroCol===undefined)includeRubroCol=true;
@@ -11981,7 +11988,7 @@ function exportEcoPDF(includeDistrib,includeRubroCol,includeMetros,privados,incl
     var rubroTd=includeRubroCol?'<td style="padding:3px 4px;border-bottom:1px solid #eee;font-size:7pt;color:#475569">'+(e.rubro||'')+(_ecoItemTexto(e)?'<br><span style="color:#94a3b8">'+esc(_ecoItemTexto(e))+'</span>':'')+'</td>':'';
     return '<tr>'
       +'<td style="padding:3px 4px;border-bottom:1px solid #eee;font-size:7.5pt">'+fmt(e.fecha||e.date)+'</td>'
-      +'<td style="padding:3px 4px;border-bottom:1px solid #eee;font-size:7.5pt">'+(_compN[e.id]?'<span style="background:#0891b2;color:#fff;border-radius:3px;padding:0 3px;font-size:6.5pt;font-weight:700;margin-right:3px">📎 '+_compN[e.id]+'</span>':'')+(e.concepto||'')+(e.detalle?'<br><span style="color:#94a3b8;font-size:6.5pt">'+e.detalle+'</span>':'')+'</td>'
+      +'<td style="padding:3px 4px;border-bottom:1px solid #eee;font-size:7.5pt">'+(_compN[e.id]?'<span style="background:#0891b2;color:#fff;border-radius:3px;padding:0 3px;font-size:6.5pt;font-weight:700;margin-right:3px">📎 '+_compN[e.id]+'</span>':'')+(e.concepto||'')+_pdfPastillaColab(e)+(e.detalle?'<br><span style="color:#94a3b8;font-size:6.5pt">'+e.detalle+'</span>':'')+'</td>'
       +'<td style="padding:3px 4px;border-bottom:1px solid #eee;font-size:7.5pt">'+(e.medioPago||'')+'</td>'
       +'<td style="padding:3px 4px;border-bottom:1px solid #eee;font-size:7.5pt">'+(e.proveedor||'')+'</td>'
       +rubroTd
