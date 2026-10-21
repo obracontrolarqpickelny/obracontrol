@@ -957,7 +957,7 @@ async function _rescueBase64BeforeSync(){
   // 3. photos[].url — fotos base64 en tareas/visitas (incluye las que llegan
   // en informes de colaboradores via _doIncItem). Sin esto buildCleanData las
   // reemplaza por '[foto-local-no-sincronizada]' y se pierden para siempre.
-  ['tareas','visitas','comentarios','alertas','checklists'].forEach(function(tbl){
+  ['tareas','visitas','comentarios','alertas','checklists','notas'].forEach(function(tbl){
     (D[tbl]||[]).forEach(function(item){
       (item.photos||[]).forEach(function(ph){
         if(ph&&typeof ph.url==='string'&&ph.url.startsWith('data:')){
@@ -1992,10 +1992,10 @@ const UNI=['u','kg','m','m2','m3','l','bolsa 20kg','bolsa 25kg','bolsa 40kg','bo
 const DCT=['Planos','Pliegos','Presupuestos','Computos','Certificados','Ordenes','Legales','Informes','Fotos','Otro'];
 const MEDIOS=['Efectivo','Transferencia','Mercado Pago','Cheque','Tarjeta débito','Tarjeta crédito','Cuenta DNI','Naranja X','Otro'];
 const SC={'En curso':'#f59e0b',Pausada:'#94a3b8',Finalizada:'#22c55e','Por iniciar':'#3b82f6'};
-const MC={dashboard:'#D97706',visitas:'#3b82f6',tareas:'#0891b2',materiales:'#7c3aed',alertas:'#dc2626',checklist:'#db2777',documentos:'#475569',comentarios:'#ea580c',colaboradores:'#16a34a',economia:'#0891b2',informes:'#D97706',config:'#64748b',bandeja:'#0d9488'};
-const MCBG={dashboard:'#FFFBEB',visitas:'#EFF6FF',tareas:'#ECFEFF',materiales:'#F5F3FF',alertas:'#FEF2F2',checklist:'#FDF2F8',documentos:'#F8FAFC',comentarios:'#FFF7ED',colaboradores:'#F0FDF4',economia:'#ECFEFF',informes:'#FFFBEB',config:'#F8FAFC',bandeja:'#f0fdfa'};
+const MC={dashboard:'#D97706',visitas:'#3b82f6',tareas:'#0891b2',materiales:'#7c3aed',alertas:'#dc2626',checklist:'#db2777',documentos:'#475569',comentarios:'#ea580c',colaboradores:'#16a34a',economia:'#0891b2',informes:'#D97706',config:'#64748b',bandeja:'#0d9488',notas:'#ca8a04'};
+const MCBG={dashboard:'#FFFBEB',visitas:'#EFF6FF',tareas:'#ECFEFF',materiales:'#F5F3FF',alertas:'#FEF2F2',checklist:'#FDF2F8',documentos:'#F8FAFC',comentarios:'#FFF7ED',colaboradores:'#F0FDF4',economia:'#ECFEFF',informes:'#FFFBEB',config:'#F8FAFC',bandeja:'#f0fdfa',notas:'#FEFCE8'};
 
-let D={user:null,projects:[],visitas:[],tareas:[],materiales:[],matIngresos:[],alertas:[],documentos:[],enlaces:[],checklists:[],comentarios:[],colaboradores:[],economia:[],auditLog:[],formulariosPendientes:[],carpetas:[],mensajesColab:[],papeleraDrive:[],driveConfig:{},lastSync:null};
+let D={user:null,projects:[],visitas:[],notas:[],tareas:[],materiales:[],matIngresos:[],alertas:[],documentos:[],enlaces:[],checklists:[],comentarios:[],colaboradores:[],economia:[],auditLog:[],formulariosPendientes:[],carpetas:[],mensajesColab:[],papeleraDrive:[],driveConfig:{},lastSync:null};
 let S={proj:null,mod:'dashboard',menu:false,searchOpen:false,searchQ:'',taskFilter:'',taskEncFilter:'',taskSort:'',chkSort:'',chkCollapsed:{},taskCollapsed:{},visitaDetail:null,matDetail:null,matNoteEditing:null,matIngSort:'rec',cmtFilter:'',cmtSearch:'',cmtTipoFilter:'',ecoFilter:'',ecoTipoFilter:'',ecoSort:'',docSort:'',matFilter:'',matCatFilter:'',matSort:'',matSinCompMin:false,matExistMin:false,matAPedirMin:false,matPedMin:false,ecoMetrosOpen:false,bandejaTab:'pendientes'};
 try{S.chkCollapsed=JSON.parse(localStorage.getItem('_cc')||'{}')}catch(e){}
 try{S.taskCollapsed=JSON.parse(localStorage.getItem('_tc')||'{}')}catch(e){}
@@ -2005,6 +2005,8 @@ const _SK_UI=SK+'_s';
 // se desincronizaron: los filtros de Comentarios existían en S pero nadie los
 // guardaba, así que al cerrar la app se perdían.
 const _UI_KEYS=[
+  // Notas (filtros, cuaderno y borrador del asiento rápido)
+  'notasCuaderno','notasTipo','notasBuscar','notaTipoNueva','notaCuadernoNuevo','notaBorrador','notaAdj',
   // PDF de Economía: incluir fotos de comprobantes
   'pdfEcoFotos',
   // Tareas
@@ -2170,7 +2172,7 @@ function mergeLocalData(){
   try{
     const ls=localStorage.getItem(SK);if(!ls)return;
     const ld=JSON.parse(ls);
-    const arrKeys=['visitas','tareas','materiales','matIngresos','alertas','checklists','documentos','enlaces','comentarios','colaboradores','economia','auditLog','formulariosPendientes','carpetas','mensajesColab','projects'];
+    const arrKeys=['visitas','tareas','materiales','matIngresos','alertas','checklists','documentos','enlaces','comentarios','colaboradores','economia','auditLog','formulariosPendientes','carpetas','mensajesColab','projects','notas'];
     arrKeys.forEach(k=>{
       if(ld[k]&&Array.isArray(ld[k])){
         const existing=new Set((D[k]||[]).map(x=>x.id));
@@ -2185,7 +2187,7 @@ function _isUserTyping(){var ae=document.activeElement;if(!ae)return false;var t
 // Returns true if any data actually changed (items added/removed/updated).
 function _silentMerge(driveData){
   if(!driveData)return false;
-  var arrKeys=['visitas','tareas','materiales','matIngresos','alertas','checklists','documentos','enlaces','comentarios','colaboradores','economia','auditLog','formulariosPendientes','projects','mensajesColab','carpetas'];
+  var arrKeys=['visitas','tareas','materiales','matIngresos','alertas','checklists','documentos','enlaces','comentarios','colaboradores','economia','auditLog','formulariosPendientes','projects','mensajesColab','carpetas','notas'];
   // Unir tombstones de Drive + local
   var driveTombs=(driveData.tombstones&&Array.isArray(driveData.tombstones))?driveData.tombstones:[];
   var localTombs=D.tombstones||[];
@@ -2381,7 +2383,7 @@ function _repairProjectIds(){
   if(!projs.length)return; // sin proyectos cargados — no tocar nada (evita borrar todo en estado inicial)
   var known=new Set(projs.map(function(p){return p.id;}));
   // Para tablas con projectId explícito: eliminar items de proyectos que no existen
-  ['visitas','tareas','materiales','matIngresos','alertas','checklists','documentos','enlaces','comentarios','colaboradores','economia'].forEach(function(tbl){
+  ['visitas','tareas','materiales','matIngresos','alertas','checklists','documentos','enlaces','comentarios','colaboradores','economia','notas'].forEach(function(tbl){
     if(!D[tbl])return;
     var before=D[tbl].length;
     D[tbl]=D[tbl].filter(function(x){
@@ -3051,7 +3053,7 @@ async function _cargarCacheImagenes(){
 }
 
 function photoGrid(photos,tbl,itemId){if(!photos||!photos.length)return '';
-  const isVisita=tbl==='visitas'||tbl==='tareas'||tbl==='materiales'||tbl==='matIngresos'||tbl==='alertas'||tbl==='comentarios'||tbl==='checklists';
+  const isVisita=tbl==='visitas'||tbl==='tareas'||tbl==='materiales'||tbl==='matIngresos'||tbl==='alertas'||tbl==='comentarios'||tbl==='checklists'||tbl==='notas';
   return `<div class="pgrid mt-8">${photos.map((p,i)=>{
     const u=typeof p==='string'?p:p.url;
     // Preferir localUrl (base64 local) si es real; fallback a url (Drive URL o placeholder)
@@ -3993,7 +3995,7 @@ function _getEnvBadge(entId,tipo){
     +'</span>';
 }
 function colBadge(txt,col,s){return `<span class="bg${s?' bg-s':''}" style="background:${col}18;color:${col};border:1px solid ${col}30">${txt}</span>`;}
-function modHeader(mod,title,rHTML){const c=MC[mod]||'#64748b';const bg=MCBG[mod]||'#f8fafc';const icMap={dashboard:'dash',visitas:'clip',tareas:'list',alertas:'bell',materiales:'pkg',checklist:'chklist',documentos:'file',comentarios:'msg',informes:'dl',config:'gear',colaboradores:'share',economia:'eco'};return `<div class="mod-hdr"><h2><span class="mod-icon" style="background:${bg};color:${c}">${I[icMap[mod]]||I.dash}</span>${title}</h2>${rHTML||''}</div>`;}
+function modHeader(mod,title,rHTML){const c=MC[mod]||'#64748b';const bg=MCBG[mod]||'#f8fafc';const icMap={dashboard:'dash',visitas:'clip',tareas:'list',alertas:'bell',materiales:'pkg',checklist:'chklist',documentos:'file',comentarios:'msg',informes:'dl',config:'gear',colaboradores:'share',economia:'eco',notas:'edit'};return `<div class="mod-hdr"><h2><span class="mod-icon" style="background:${bg};color:${c}">${I[icMap[mod]]||I.dash}</span>${title}</h2>${rHTML||''}</div>`;}
 function progress(v,mx,col){const p=mx>0?Math.min(v/mx*100,100):0;return `<div class="prog"><div class="prog-bar" style="width:${p}%;background:${col||'var(--pri)'}"></div></div>`;}
 function priSelector(hid,cur){return `<div class="fg"><label class="fl">Prioridad</label><div class="flex gap-4">${PRI.map(p=>`<button type="button" class="btn btn-s pri-${p}${(cur||'media')===p?' btn-act':''}" onclick="selPri('${hid}','${p}',this)">${p}</button>`).join('')}</div><input type="hidden" id="${hid}" value="${cur||'media'}"></div>`;}
 function selPri(hid,val,btn){$(hid).value=val;btn.parentElement.querySelectorAll('.btn').forEach(b=>b.classList.remove('btn-act'));btn.classList.add('btn-act');}
@@ -4094,11 +4096,12 @@ function renderShell(){
   const pT=pf('tareas');const pA=pf('alertas');const pendT=pT.filter(t=>t.status==='pendiente'||t.status==='en curso').length;const actAl=pA.filter(a=>!a.resolved).length;const pendForms=_formsDeObra().filter(x=>x.estado==='pendiente').length;const pendCarpeta=(D.carpetas||[]).filter(function(cp){return cp.projectId===S.proj;}).reduce(function(sum,cp){return sum+_archivosNuevosCarpeta(cp).length;},0);const pendMsgsColab=(D.mensajesColab||[]).filter(function(m){return m.proyectoId===S.proj&&m.estadoColab==='completado';}).length;const _nAlert=_alertaCount();
   const drv=D.driveConfig?.[S.proj];const cloudCol=drv?'var(--green)':'var(--pri)';
   const _pendAlerts=pA.filter(a=>!a.resolved).length; // mantener badge en tareas si hay alertas legacy
-  const mods=[{id:'dashboard',label:'Panel',ic:'dash'},{id:'visitas',label:'Visitas',ic:'clip'},{id:'tareas',label:'Tareas',ic:'list',badge:pendT+_pendAlerts},{id:'materiales',label:'Materiales',ic:'pkg'},{id:'checklist',label:'Checklist',ic:'chklist'},{id:'documentos',label:'Documentos',ic:'file'},{id:'comentarios',label:'Comentarios',ic:'msg'},{id:'colaboradores',label:'Colaboradores',ic:'share'},{id:'bandeja',label:'Bandeja',ic:'inbox',badge:pendForms+pendCarpeta+pendMsgsColab+_nAlert},{id:'economia',label:'Economía',ic:'eco'},{id:'informes',label:'Informes',ic:'dl'},{id:'config',label:'Config',ic:'gear'}];
+  const mods=[{id:'dashboard',label:'Panel',ic:'dash'},{id:'visitas',label:'Visitas',ic:'clip'},{id:'notas',label:'Notas',ic:'edit'},{id:'tareas',label:'Tareas',ic:'list',badge:pendT+_pendAlerts},{id:'materiales',label:'Materiales',ic:'pkg'},{id:'checklist',label:'Checklist',ic:'chklist'},{id:'documentos',label:'Documentos',ic:'file'},{id:'comentarios',label:'Comentarios',ic:'msg'},{id:'colaboradores',label:'Colaboradores',ic:'share'},{id:'bandeja',label:'Bandeja',ic:'inbox',badge:pendForms+pendCarpeta+pendMsgsColab+_nAlert},{id:'economia',label:'Economía',ic:'eco'},{id:'informes',label:'Informes',ic:'dl'},{id:'config',label:'Config',ic:'gear'}];
   const mi=mods.map(m=>{const c=MC[m.id];const act=S.mod===m.id;return `<button class="smi${act?' act':''}" style="${act?'background:'+c+'08;color:'+c+';border-left-color:'+c:''}" onclick="S.mod='${m.id}';S.menu=false;S.visitaDetail=null;S.matDetail=null;S.matSinCompDetail=null;render();"><span style="color:${act?c:'var(--text3)'}">${I[m.ic]||''}</span><span style="flex:1;text-align:left">${m.label}</span>${m.badge>0?`<span class="sbadge">${m.badge}</span>`:''}</button>`;}).join('');
   const allBnav=[
     {id:'dashboard',ic:'dash',l:'Panel'},
     {id:'visitas',ic:'clip',l:'Visitas'},
+    {id:'notas',ic:'edit',l:'Notas'},
     {id:'tareas',ic:'list',l:'Tareas'},
     {id:'materiales',ic:'pkg',l:'Material'},
     {id:'economia',ic:'eco',l:'Economía'},
@@ -4155,14 +4158,14 @@ function _installMorph(el){
     set:function(html){patchHTML(this,html);}
   });
 }
-function renderModule(mod,p){const mc=$('mc');if(!mc)return;if(S.visitaDetail){var _vck=(D.visitas||[]).find(function(x){return x.id===S.visitaDetail;});if(!_vck||_vck.projectId!==S.proj){S.visitaDetail=null;}else{rVisitaDetail(mc,S.visitaDetail);return;}}if(S.matDetail){rMatDetail(mc,S.matDetail);return;}if(S.matSinCompDetail){if(mod==='materiales'){rSinCompDetail(mc,S.matSinCompDetail);return;}S.matSinCompDetail=null;}switch(mod){case 'dashboard':rDash(mc,p);break;case 'visitas':rVisitas(mc);break;case 'tareas':rTareas(mc);break;case 'materiales':rMat(mc);break;case 'alertas':rAlertas(mc);break;case 'checklist':rChecklist(mc);break;case 'documentos':rDocs(mc);break;case 'comentarios':rComentarios(mc);break;case 'informes':rInformes(mc,p);break;case 'colaboradores':rColaboradores(mc,p);break;case 'bandeja':rBandeja(mc,p);break;case 'economia':rEconomia(mc,p);break;case 'config':rConfig(mc,p);break;}if(S.searchOpen)setTimeout(()=>{const si=$('searchInput');if(si)si.focus();},100);}
+function renderModule(mod,p){const mc=$('mc');if(!mc)return;if(S.visitaDetail){var _vck=(D.visitas||[]).find(function(x){return x.id===S.visitaDetail;});if(!_vck||_vck.projectId!==S.proj){S.visitaDetail=null;}else{rVisitaDetail(mc,S.visitaDetail);return;}}if(S.matDetail){rMatDetail(mc,S.matDetail);return;}if(S.matSinCompDetail){if(mod==='materiales'){rSinCompDetail(mc,S.matSinCompDetail);return;}S.matSinCompDetail=null;}switch(mod){case 'dashboard':rDash(mc,p);break;case 'visitas':rVisitas(mc);break;case 'notas':rNotas(mc);break;case 'tareas':rTareas(mc);break;case 'materiales':rMat(mc);break;case 'alertas':rAlertas(mc);break;case 'checklist':rChecklist(mc);break;case 'documentos':rDocs(mc);break;case 'comentarios':rComentarios(mc);break;case 'informes':rInformes(mc,p);break;case 'colaboradores':rColaboradores(mc,p);break;case 'bandeja':rBandeja(mc,p);break;case 'economia':rEconomia(mc,p);break;case 'config':rConfig(mc,p);break;}if(S.searchOpen)setTimeout(()=>{const si=$('searchInput');if(si)si.focus();},100);}
 
 function navStep(dir){
-  const ids=['dashboard','visitas','tareas','materiales','economia','documentos','checklist','comentarios','bandeja','informes'];
+  const ids=['dashboard','visitas','notas','tareas','materiales','economia','documentos','checklist','comentarios','bandeja','informes'];
   var cur=ids.indexOf(S.mod);
   if(cur===-1){
     // If current mod not in nav list, find nearest neighbor
-    const mc=['dashboard','visitas','tareas','materiales','economia','documentos','checklist','comentarios','informes','config','colaboradores','alertas'];
+    const mc=['dashboard','visitas','notas','tareas','materiales','economia','documentos','checklist','comentarios','informes','config','colaboradores','alertas'];
     var ci=mc.indexOf(S.mod);
     cur=ci>=0?Math.min(ci,ids.length-1):0;
   }
@@ -4472,6 +4475,7 @@ function renderSR(){
     {t:'materiales', f:['name','category','notes'],            l:'Material',      c:'var(--purple)', m:'materiales',    nav:(x)=>x.visitaId?`S.visitaDetail='${x.visitaId}';S.mod='visitas';`:`S.matDetail='${x.id}';S.mod='materiales';`},
     {t:'alertas',    f:['message'],                            l:'Alerta',        c:'var(--red)',    m:'tareas',        nav:(x)=>x.visitaId?`S.visitaDetail='${x.visitaId}';S.mod='visitas';`:`S.mod='tareas';`},
     {t:'comentarios',f:['text','rubro','etapa'],               l:'Comentario',    c:'var(--orange)', m:'comentarios',   nav:()=>`S.mod='comentarios';`},
+    {t:'notas',      f:['titulo','texto','personas','cuaderno'], l:'Nota',          c:'#ca8a04',       m:'notas',         nav:()=>`S.mod='notas';`},
     {t:'documentos', f:['name','notes','fileName','category'], l:'Documento',     c:'var(--slate)',  m:'documentos',    nav:(x)=>x.visitaId?`S.visitaDetail='${x.visitaId}';S.mod='visitas';`:`S.mod='documentos';`},
     {t:'checklists', f:['title'],                              l:'Checklist',     c:'var(--pink)',   m:'checklist',     nav:(x)=>x.visitaId?`S.visitaDetail='${x.visitaId}';S.mod='visitas';`:`S.mod='checklist';`},
     {t:'economia',   f:['concepto','proveedor','medioPago','detalle','rubro','item'],   l:'Economía',      c:'var(--cyan)',   m:'economia',      nav:()=>`S.mod='economia';S.ecoFilter=q;`},
@@ -5774,7 +5778,7 @@ function addTombstone(tbl,id){
 function applyTombstones(tombs,obj){
   if(!tombs||!tombs.length)return;
   var ids=new Set(tombs.map(function(t){return t.id;}));
-  var tbls=['projects','visitas','tareas','materiales','matIngresos','alertas','checklists','documentos','enlaces','comentarios','economia','mensajesColab'];
+  var tbls=['projects','visitas','tareas','materiales','matIngresos','alertas','checklists','documentos','enlaces','comentarios','economia','mensajesColab','notas'];
   tbls.forEach(function(tbl){
     if(Array.isArray(obj[tbl]))obj[tbl]=obj[tbl].filter(function(x){return !ids.has(x.id);});
   });
@@ -7853,6 +7857,432 @@ function saveEditEnl(id){
 
 
 /* ===== MÓDULO: COMENTARIOS ===== */
+// ═══════ NOTAS — libro de obra ═══════
+// Registro del día a día: texto, dictado, fotos y dibujos a mano alzada, en
+// cuadernos. Cada nota se puede pasar a tarea, checklist, movimiento o
+// comentario. DOT las lee y escribe en D.notas (ver DOT_NOTAS.md).
+var NOTA_TIPOS={registro:'📝 Registro',avance:'🏗 Avance de obra',reunion:'🤝 Reunión / acuerdo',llamada:'📞 Llamada',pendiente:'⏳ Pendiente',idea:'💡 Idea'};
+var NOTA_CUADERNO_DEF='Libro de obra';
+function _notaHora(){var d=new Date();return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+function _notaCuadernos(){
+  var s={};s[NOTA_CUADERNO_DEF]=1;
+  pf('notas').forEach(function(n){if(n.cuaderno)s[n.cuaderno]=1;});
+  if(S.notaCuadernoNuevo)s[S.notaCuadernoNuevo]=1;
+  return Object.keys(s);
+}
+function _notasFiltradas(){
+  var q=_normTxt(S.notasBuscar||'');
+  return pf('notas').filter(function(n){
+    if(S.notasCuaderno&&(n.cuaderno||NOTA_CUADERNO_DEF)!==S.notasCuaderno)return false;
+    if(S.notasTipo&&(n.tipo||'registro')!==S.notasTipo)return false;
+    if(q){var t=_normTxt([n.titulo,n.texto,n.personas,n.cuaderno].join(' '));if(!q.split(/\s+/).every(function(w){return t.indexOf(w)>=0;}))return false;}
+    return true;
+  }).sort(function(a,b){return String(b.fecha||'').localeCompare(String(a.fecha||''))||String(b.hora||'').localeCompare(String(a.hora||''))||String(b.date||'').localeCompare(String(a.date||''));});
+}
+function _notaDiaLargo(f){
+  var d=_parseLocal(f);if(isNaN(d))return f||'Sin fecha';
+  var t=d.toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  return t.charAt(0).toUpperCase()+t.slice(1);
+}
+// Guarda una imagen (foto o dibujo) primero en el dispositivo y deja la marca
+// [foto:id]; la subida a Drive sigue sola, como el resto de las fotos.
+async function _guardarImgNota(dataUrl){
+  var fid=GD.moduleFolders[S.proj+'_notas']||GD.moduleFolders[S.proj+'_imagenes']||null;
+  if(GD.idbReady){
+    var imgId='img_'+uid();
+    try{
+      await queueImageUpload(imgId,dataUrl,'nota_'+imgId+'.jpg',S.proj,fid);
+      var w=await idbGet('images',imgId);
+      if(w&&w.data){GD._fotosEnCola=true;return '[foto:'+imgId+']';}
+    }catch(_){}
+  }
+  return dataUrl;
+}
+function rNotas(mc){
+  var c=MC.notas;
+  var cuads=_notaCuadernos();
+  var cuadNueva=S.notaCuadernoNuevo||S.notasCuaderno||NOTA_CUADERNO_DEF;
+  var tipoNueva=S.notaTipoNueva||'registro';
+  var adj=S.notaAdj||[];
+  var lista=_notasFiltradas();
+  var chip=function(act,txt,fn,col){return '<button class="btn btn-s" style="white-space:nowrap;'+(act?'background:'+(col||c)+';color:#fff':'background:var(--gray-ll);color:var(--text2)')+'" onclick="'+fn+'">'+txt+'</button>';};
+  var h=modHeader('notas','Notas',
+    '<div class="flex gap-4"><button class="btn btn-sec btn-s" onclick="exportNotasPDF()">'+I.pdf+' PDF</button>'
+    +'<button class="btn btn-s" style="background:'+c+';color:#fff" onclick="abrirNota()">'+I.plus+' Nota</button></div>');
+  // Asiento rápido
+  h+='<div class="card mb-12" style="border-left:3px solid '+c+'">'
+    +'<div class="flex gap-6 mb-8" style="flex-wrap:wrap">'
+    +'<select class="fs" style="margin:0;flex:1;min-width:140px" onchange="S.notaTipoNueva=this.value;saveUIState()">'+Object.keys(NOTA_TIPOS).map(function(k){return '<option value="'+k+'"'+(k===tipoNueva?' selected':'')+'>'+NOTA_TIPOS[k]+'</option>';}).join('')+'</select>'
+    +'<select class="fs" style="margin:0;flex:1;min-width:140px" onchange="if(this.value===\'__nuevo\'){nuevoCuadernoNota();}else{S.notaCuadernoNuevo=this.value;saveUIState();}">'+cuads.map(function(k){return '<option'+(k===cuadNueva?' selected':'')+'>'+esc(k)+'</option>';}).join('')+'<option value="__nuevo">➕ Nuevo cuaderno…</option></select>'
+    +'</div>'
+    +'<textarea class="ft" id="nota_q" rows="3" style="margin:0" placeholder="¿Qué pasó hoy en la obra? Ej: Se hormigonó la losa del sector A. Hablé con Juan (plomero): arranca el lunes." onblur="S.notaBorrador=this.value;saveUIState()">'+esc(S.notaBorrador||'')+'</textarea>'
+    +(adj.length?'<div class="flex gap-6 mt-6" style="flex-wrap:wrap">'+adj.map(function(u,i){return '<div style="position:relative"><img src="'+esc(_resolveImg(u))+'" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--brd)"><button onclick="S.notaAdj.splice('+i+',1);saveUIState();render()" style="position:absolute;top:-6px;right:-6px;border:none;background:var(--red);color:#fff;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer">✕</button></div>';}).join('')+'</div>':'')
+    +'<div class="flex gap-6 mt-8 items-center" style="flex-wrap:wrap">'
+    +'<button class="btn btn-sec btn-s" id="nota_mic" onclick="dictarNota(\'nota_q\',this)">🎤 Dictar</button>'
+    +'<label class="btn btn-sec btn-s" style="cursor:pointer">📷 Foto<input type="file" accept="image/*" multiple style="display:none" onchange="fotosNotaRapida(this)"></label>'
+    +'<button class="btn btn-sec btn-s" onclick="abrirDibujoNota(null)">✏️ Dibujar</button>'
+    +'<div style="flex:1"></div>'
+    +'<button class="btn btn-s" style="background:'+c+';color:#fff" onclick="guardarNotaRapida()">'+I.save+' Asentar</button>'
+    +'</div>'
+    +'<div class="txxs tc3 mt-6">Se asienta con la fecha y hora de ahora. Para otra fecha o más datos usá <b>+ Nota</b>.</div>'
+    +'</div>';
+  // Filtros
+  h+='<div class="flex gap-6 mb-8" style="overflow-x:auto;padding-bottom:2px">'
+    +chip(!S.notasCuaderno,'📚 Todos',"S.notasCuaderno='';saveUIState();render()")
+    +cuads.map(function(k){return chip(S.notasCuaderno===k,'📒 '+esc(k),"S.notasCuaderno='"+esc(k).replace(/'/g,"\\'")+"';saveUIState();render()");}).join('')
+    +'</div>'
+    +'<div class="flex gap-6 mb-10" style="flex-wrap:wrap">'
+    +'<input class="fi" style="margin:0;flex:1;min-width:160px" placeholder="🔎 Buscar en las notas…" value="'+esc(S.notasBuscar||'')+'" onchange="S.notasBuscar=this.value;saveUIState();render()">'
+    +'<select class="fs" style="margin:0;width:auto" onchange="S.notasTipo=this.value;saveUIState();render()"><option value="">Todos los tipos</option>'+Object.keys(NOTA_TIPOS).map(function(k){return '<option value="'+k+'"'+(S.notasTipo===k?' selected':'')+'>'+NOTA_TIPOS[k]+'</option>';}).join('')+'</select>'
+    +'</div>';
+  if(!lista.length){
+    h+='<div class="empty"><span style="color:'+c+'">'+I.edit+'</span><div class="ts mt-8">'+((S.notasBuscar||S.notasTipo||S.notasCuaderno)?'Sin notas con ese filtro':'Todavía no hay notas')+'</div><div class="txxs tc3 mt-4">Asentá lo que pasa en la obra: avances, acuerdos, llamadas, ideas.</div></div>';
+  } else {
+    var fij=lista.filter(function(n){return n.fijada;});
+    if(fij.length){h+='<div class="txs fw7 mb-6" style="color:'+c+'">📌 Fijadas</div>'+fij.map(_notaCard).join('');}
+    var dia='';
+    lista.forEach(function(n){
+      if(n.fijada)return;
+      if(n.fecha!==dia){dia=n.fecha;h+='<div class="txs fw7 mt-12 mb-6" style="color:var(--text2);border-bottom:2px solid '+c+'33;padding-bottom:3px">📅 '+esc(_notaDiaLargo(dia))+'</div>';}
+      h+=_notaCard(n);
+    });
+  }
+  mc.innerHTML=h;
+}
+function _notaCard(n){
+  var c=MC.notas;
+  var ph=(n.photos||[]).filter(function(p){return p&&!p.deletedAt;});
+  var esDot=/^dot$/i.test(String(n.cargadoPor||'').trim());
+  var pill=function(t,bg,col){return '<span style="font-size:9px;background:'+bg+';color:'+col+';border-radius:9px;padding:1px 7px;font-weight:700;white-space:nowrap;display:inline-block">'+t+'</span>';};
+  var der=(n.derivados||[]).map(function(d){
+    var lb={tareas:'📋 Tarea',checklists:'✅ Checklist',economia:'💰 Movimiento',comentarios:'💬 Comentario'}[d.tbl]||d.tbl;
+    var nav={tareas:'tareas',checklists:'checklist',economia:'economia',comentarios:'comentarios'}[d.tbl]||'notas';
+    return '<button class="link-tag" style="font-size:10px" onclick="S.mod=\''+nav+'\';render()">→ '+lb+(d.titulo?': '+esc(String(d.titulo).slice(0,40)):'')+'</button>';
+  }).join(' ');
+  return '<div class="card mb-8" style="border-left:3px solid '+(n.fijada?c:'var(--brd)')+';padding:10px 12px">'
+    +'<div class="flex gap-4 items-center" style="flex-wrap:wrap">'
+    +'<span class="txxs fw7 tc3">'+esc(n.hora||'')+'</span>'
+    +pill(NOTA_TIPOS[n.tipo||'registro']||n.tipo,'#fef9c3','#a16207')
+    +((n.cuaderno&&n.cuaderno!==NOTA_CUADERNO_DEF)?pill('📒 '+esc(n.cuaderno),'#f1f5f9','#475569'):'')
+    +(n.personas?pill('👥 '+esc(n.personas),'#eff6ff','#2563eb'):'')
+    +(esDot?pill('💻 DOT','#f0fdf4','#16a34a'):'')
+    +(n.fijada?'<span title="Fijada">📌</span>':'')
+    +'</div>'
+    +(n.titulo?'<div class="ts fw7 mt-4">'+esc(n.titulo)+'</div>':'')
+    +(n.texto?'<div class="ts mt-4" style="white-space:pre-wrap;line-height:1.55">'+esc(n.texto)+'</div>':'')
+    +(ph.length?photoGrid(ph,'notas',n.id):'')
+    +(der?'<div class="mt-6 flex gap-6" style="flex-wrap:wrap">'+der+'</div>':'')
+    +'<div class="flex gap-4 mt-8" style="flex-wrap:wrap">'
+    +'<button class="btn btn-g btn-s" title="Editar" onclick="abrirNota(\''+n.id+'\')">'+I.edit+'</button>'
+    +'<button class="btn btn-g btn-s" title="'+(n.fijada?'Desfijar':'Fijar arriba')+'" onclick="fijarNota(\''+n.id+'\')">📌</button>'
+    +'<button class="btn btn-sec btn-s" style="font-size:11px" onclick="derivarNotaMenu(\''+n.id+'\')">↪ Pasar a…</button>'
+    +'<button class="btn btn-g btn-s" style="color:var(--red);margin-left:auto" title="Eliminar" onclick="borrarNota(\''+n.id+'\')">'+I.trash+'</button>'
+    +'</div></div>';
+}
+function nuevoCuadernoNota(){
+  var n=(prompt('Nombre del cuaderno nuevo (ej: Instalación eléctrica, Reuniones con el cliente):')||'').trim();
+  if(n){S.notaCuadernoNuevo=n;S.notasCuaderno=n;saveUIState();}
+  render();
+}
+async function fotosNotaRapida(input){
+  var urls=await _leerFotosNota(input);
+  if(!urls.length)return;
+  S.notaAdj=(S.notaAdj||[]).concat(urls);saveUIState();
+  var ta=$('nota_q');if(ta)S.notaBorrador=ta.value;
+  render();
+}
+async function _leerFotosNota(input){
+  var files=Array.from((input&&input.files)||[]),out=[];
+  for(var i=0;i<files.length;i++){
+    var du=await new Promise(function(res){var r=new FileReader();r.onload=function(e){res(e.target.result);};r.onerror=function(){res(null);};r.readAsDataURL(files[i]);});
+    if(!du)continue;
+    try{du=await compressImage(du,1280,0.75);}catch(_){}
+    out.push(await _guardarImgNota(du));
+  }
+  return out;
+}
+function guardarNotaRapida(){
+  if(typeof requireWrite==='function'&&!requireWrite())return;
+  var ta=$('nota_q');var tx=((ta&&ta.value)||'').trim();
+  var adj=S.notaAdj||[];
+  if(!tx&&!adj.length){toast('Escribí, dictá o agregá una foto','var(--orange)');return;}
+  var n={id:uid(),projectId:S.proj,fecha:td(),hora:_notaHora(),tipo:S.notaTipoNueva||'registro',
+    cuaderno:S.notaCuadernoNuevo||S.notasCuaderno||NOTA_CUADERNO_DEF,titulo:'',texto:tx,personas:'',
+    photos:adj.map(function(u){return mkPhoto(u,'');}),fijada:false,derivados:[],
+    cargadoPor:(D.user&&D.user.name)||'',date:nw(),updatedAt:nw()};
+  if(!D.notas)D.notas=[];
+  D.notas.push(n);
+  S.notaBorrador='';S.notaAdj=[];saveUIState();
+  audit('notas','create',(tx||'nota').slice(0,30));sv();render();toast('Nota asentada ✓','var(--green)');
+}
+function abrirNota(id){
+  var n=id?(D.notas||[]).find(function(x){return x.id===id;}):null;
+  window._notaEdit={id:id||null,photos:n?JSON.parse(JSON.stringify(n.photos||[])):[]};
+  var cuads=_notaCuadernos(),cu=n?(n.cuaderno||NOTA_CUADERNO_DEF):(S.notaCuadernoNuevo||S.notasCuaderno||NOTA_CUADERNO_DEF);
+  document.getElementById('notaM')?.remove();
+  var d=document.createElement('div');d.className='mo open';d.id='notaM';
+  d.innerHTML='<div class="mo-c" style="max-width:560px"><div class="mo-h"><h3 style="color:'+MC.notas+'">'+(n?'Editar nota':'Nueva nota')+'</h3><button class="tbtn" onclick="document.getElementById(\'notaM\').remove()">'+I.x+'</button></div>'
+    +'<div class="fr"><div class="fg"><label class="fl">Fecha</label><input class="fi" type="date" id="nm_f" value="'+esc(n?n.fecha:td())+'"></div>'
+    +'<div class="fg"><label class="fl">Hora</label><input class="fi" type="time" id="nm_h" value="'+esc(n?(n.hora||''):_notaHora())+'"></div></div>'
+    +'<div class="fr"><div class="fg"><label class="fl">Tipo</label><select class="fs" id="nm_t">'+Object.keys(NOTA_TIPOS).map(function(k){return '<option value="'+k+'"'+(k===((n&&n.tipo)||S.notaTipoNueva||'registro')?' selected':'')+'>'+NOTA_TIPOS[k]+'</option>';}).join('')+'</select></div>'
+    +'<div class="fg"><label class="fl">Cuaderno</label><input class="fi" id="nm_c" list="nm_cl" value="'+esc(cu)+'"><datalist id="nm_cl">'+cuads.map(function(k){return '<option value="'+esc(k)+'">';}).join('')+'</datalist></div></div>'
+    +'<div class="fg"><label class="fl">Título (opcional)</label><input class="fi" id="nm_ti" value="'+esc(n?(n.titulo||''):'')+'" placeholder="Ej: Hormigonado losa sector A"></div>'
+    +'<div class="fg"><label class="fl">Con quién (opcional)</label><input class="fi" id="nm_p" value="'+esc(n?(n.personas||''):'')+'" placeholder="Ej: Juan (plomero), propietario"></div>'
+    +'<div class="fg"><label class="fl">Nota</label><textarea class="ft" id="nm_tx" rows="6">'+esc(n?(n.texto||''):'')+'</textarea></div>'
+    +'<div id="nm_ph"></div>'
+    +'<div class="flex gap-6 mb-10" style="flex-wrap:wrap">'
+    +'<button class="btn btn-sec btn-s" onclick="dictarNota(\'nm_tx\',this)">🎤 Dictar</button>'
+    +'<label class="btn btn-sec btn-s" style="cursor:pointer">📷 Foto<input type="file" accept="image/*" multiple style="display:none" onchange="fotosNotaEdit(this)"></label>'
+    +'<button class="btn btn-sec btn-s" onclick="abrirDibujoNota(\'edit\')">✏️ Dibujar</button>'
+    +'</div>'
+    +'<button class="btn btn-w" style="background:'+MC.notas+';color:#fff" onclick="guardarNota()">'+I.save+' Guardar</button>'
+    +'</div>';
+  document.body.appendChild(d);
+  _notaEditFotos();
+}
+function _notaEditFotos(){
+  var el=document.getElementById('nm_ph');if(!el||!window._notaEdit)return;
+  var ph=window._notaEdit.photos.filter(function(p){return p&&!p.deletedAt;});
+  el.innerHTML=ph.length?'<div class="flex gap-6 mb-10" style="flex-wrap:wrap">'+window._notaEdit.photos.map(function(p,i){
+    if(!p||p.deletedAt)return '';
+    return '<div style="position:relative"><img src="'+esc(_resolveImg(p.url))+'" style="width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid var(--brd)"><button onclick="window._notaEdit.photos.splice('+i+',1);_notaEditFotos()" style="position:absolute;top:-6px;right:-6px;border:none;background:var(--red);color:#fff;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer">✕</button></div>';
+  }).join('')+'</div>':'';
+}
+async function fotosNotaEdit(input){
+  var urls=await _leerFotosNota(input);
+  urls.forEach(function(u){window._notaEdit.photos.push(mkPhoto(u,''));});
+  _notaEditFotos();
+}
+function guardarNota(){
+  if(typeof requireWrite==='function'&&!requireWrite())return;
+  var e=window._notaEdit||{};
+  var v=function(id){var x=document.getElementById(id);return x?x.value.trim():'';};
+  var tx=v('nm_tx'),ti=v('nm_ti');
+  if(!tx&&!ti&&!(e.photos||[]).length){toast('La nota está vacía','var(--orange)');return;}
+  if(!D.notas)D.notas=[];
+  var n=e.id?D.notas.find(function(x){return x.id===e.id;}):null;
+  var datos={fecha:v('nm_f')||td(),hora:v('nm_h'),tipo:v('nm_t')||'registro',cuaderno:v('nm_c')||NOTA_CUADERNO_DEF,titulo:ti,personas:v('nm_p'),texto:tx,photos:e.photos||[],updatedAt:nw()};
+  if(n)Object.assign(n,datos);
+  else D.notas.push(Object.assign({id:uid(),projectId:S.proj,fijada:false,derivados:[],cargadoPor:(D.user&&D.user.name)||'',date:nw()},datos));
+  if(datos.cuaderno!==NOTA_CUADERNO_DEF)S.notaCuadernoNuevo=datos.cuaderno;
+  document.getElementById('notaM')?.remove();
+  audit('notas',n?'update':'create',(ti||tx).slice(0,30));sv();render();toast(n?'Nota actualizada ✓':'Nota guardada ✓','var(--green)');
+}
+function fijarNota(id){
+  var n=(D.notas||[]).find(function(x){return x.id===id;});if(!n)return;
+  n.fijada=!n.fijada;n.updatedAt=nw();sv();render();
+}
+function borrarNota(id){
+  if(!confirmDel('¿Eliminar esta nota?'))return;
+  D.notas=(D.notas||[]).filter(function(x){return x.id!==id;});
+  addTombstone('notas',id);audit('notas','delete',id);sv();render();
+}
+// Dictado: se suma al texto lo que se va diciendo, hasta tocar de nuevo
+function dictarNota(taId,btn){
+  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){toast('El dictado por voz no está disponible en este navegador (probá con Chrome)','var(--orange)',4000);return;}
+  if(window._notaRec){try{window._notaRec.stop();}catch(_){}return;}
+  var rec=new SR();rec.lang='es-AR';rec.continuous=true;rec.interimResults=false;
+  window._notaRec=rec;
+  var txt0=btn?btn.textContent:'';
+  rec.onstart=function(){if(btn){btn.textContent='🔴 Escuchando… (tocá para terminar)';btn.style.color='var(--red)';}};
+  rec.onend=function(){window._notaRec=null;if(btn){btn.textContent=txt0;btn.style.color='';}var ta=document.getElementById(taId);if(ta&&taId==='nota_q'){S.notaBorrador=ta.value;saveUIState();}};
+  rec.onerror=function(e){if(e.error!=='no-speech'&&e.error!=='aborted')toast('Micrófono: '+e.error,'var(--orange)',3000);};
+  rec.onresult=function(e){
+    var ta=document.getElementById(taId);if(!ta)return;
+    for(var i=e.resultIndex;i<e.results.length;i++){
+      if(!e.results[i].isFinal)continue;
+      var t=e.results[i][0].transcript.trim();if(!t)continue;
+      t=t.charAt(0).toUpperCase()+t.slice(1);
+      ta.value=ta.value+(ta.value&&!/\s$/.test(ta.value)?(/[.!?]$/.test(ta.value.trim())?' ':'. '):'')+t;
+    }
+  };
+  try{rec.start();}catch(_){window._notaRec=null;toast('No se pudo iniciar el micrófono','var(--orange)');}
+}
+// ── Dibujo a mano alzada ──
+function abrirDibujoNota(destino){
+  window._dibDest=destino;
+  var cols=['#111827','#dc2626','#2563eb','#16a34a','#ea580c','#ca8a04'];
+  document.getElementById('dibM')?.remove();
+  var d=document.createElement('div');d.className='mo open';d.id='dibM';d.style.zIndex='2600';
+  d.innerHTML='<div class="mo-c" style="max-width:900px;width:96vw;padding:10px">'
+    +'<div class="flex gap-6 items-center mb-6" style="flex-wrap:wrap">'
+    +cols.map(function(cl,i){return '<button class="dib-col" data-c="'+cl+'" onclick="_dibSet({color:\''+cl+'\',goma:false},this)" style="width:26px;height:26px;border-radius:50%;background:'+cl+';border:3px solid '+(i===0?'#fbbf24':'#fff')+';box-shadow:0 0 0 1px #cbd5e1;cursor:pointer"></button>';}).join('')
+    +'<select class="fs" style="margin:0;width:auto" onchange="_dibSet({ancho:+this.value})"><option value="2">Fino</option><option value="4" selected>Medio</option><option value="9">Grueso</option><option value="22">Marcador</option></select>'
+    +'<button class="btn btn-sec btn-s" id="dib_goma" onclick="_dibSet({goma:!window._dib.goma})">🧽 Goma</button>'
+    +'<button class="btn btn-sec btn-s" onclick="_dibDeshacer()">↶ Deshacer</button>'
+    +'<button class="btn btn-sec btn-s" onclick="_dibFondo(\'cuad\')">▦ Cuadrícula</button>'
+    +'<label class="btn btn-sec btn-s" style="cursor:pointer">🖼 Sobre foto<input type="file" accept="image/*" style="display:none" onchange="_dibFoto(this)"></label>'
+    +'<button class="btn btn-sec btn-s" style="color:var(--red)" onclick="_dibFondo(\'blanco\')">🗑 Limpiar</button>'
+    +'<div style="flex:1"></div>'
+    +'<button class="btn btn-sec btn-s" onclick="document.getElementById(\'dibM\').remove()">Cancelar</button>'
+    +'<button class="btn btn-s" style="background:'+MC.notas+';color:#fff" onclick="_dibGuardar()">'+I.save+' Usar dibujo</button>'
+    +'</div>'
+    +'<canvas id="dib_cv" style="width:100%;height:62vh;touch-action:none;border:1px solid var(--brd);border-radius:8px;background:#fff;display:block"></canvas>'
+    +'</div>';
+  document.body.appendChild(d);
+  var cv=document.getElementById('dib_cv');
+  var ctx=cv.getContext('2d');
+  window._dib={cv:cv,ctx:ctx,w:0,h:0,color:cols[0],ancho:4,goma:false,hist:[],fondo:null};
+  _dibAjustar();
+  // La ventana tarda un instante en aparecer: se vuelve a medir cuando ya se ve
+  requestAnimationFrame(function(){_dibAjustar();});setTimeout(_dibAjustar,250);
+  window.onresize=function(){if(document.getElementById('dib_cv'))_dibAjustar();};
+  var dib=false,ult=null;
+  var pos=function(ev){var b=cv.getBoundingClientRect();return {x:ev.clientX-b.left,y:ev.clientY-b.top};};
+  cv.onpointerdown=function(ev){ev.preventDefault();_dibAjustar();try{cv.setPointerCapture(ev.pointerId);}catch(_){}_dibSnap();dib=true;ult=pos(ev);var D2=window._dib,ctx=D2.ctx;ctx.beginPath();ctx.fillStyle=D2.goma?'#fff':D2.color;ctx.arc(ult.x,ult.y,(D2.goma?D2.ancho*3:D2.ancho)/2,0,Math.PI*2);ctx.fill();};
+  cv.onpointermove=function(ev){if(!dib)return;var p=pos(ev),D2=window._dib,ctx=D2.ctx;ctx.strokeStyle=D2.goma?'#fff':D2.color;ctx.lineWidth=D2.goma?D2.ancho*3:D2.ancho*(ev.pressure&&ev.pointerType==='pen'?(0.5+ev.pressure):1);ctx.beginPath();ctx.moveTo(ult.x,ult.y);ctx.lineTo(p.x,p.y);ctx.stroke();ult=p;};
+  cv.onpointerup=cv.onpointercancel=function(){dib=false;};
+}
+// Ajusta el lienzo a su tamaño en pantalla conservando lo ya dibujado
+function _dibAjustar(){
+  var D2=window._dib;if(!D2)return;
+  var cv=D2.cv,w=cv.clientWidth,h=cv.clientHeight;
+  if(w<50||h<50){w=Math.min(window.innerWidth*0.92,880);h=window.innerHeight*0.62;}
+  if(Math.abs(w-D2.w)<2&&Math.abs(h-D2.h)<2)return;
+  var dpr=Math.min(window.devicePixelRatio||1,2);
+  var prev=null;if(D2.w>0){prev=document.createElement('canvas');prev.width=cv.width;prev.height=cv.height;prev.getContext('2d').drawImage(cv,0,0);}
+  cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr);
+  var ctx=cv.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.lineCap='round';ctx.lineJoin='round';
+  D2.ctx=ctx;D2.w=w;D2.h=h;D2.hist=[];
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);
+  if(prev)ctx.drawImage(prev,0,0,prev.width,prev.height,0,0,w,h);
+}
+function _dibSet(o,btn){
+  Object.assign(window._dib,o);
+  if(btn&&o.color)document.querySelectorAll('.dib-col').forEach(function(b){b.style.borderColor=b===btn?'#fbbf24':'#fff';});
+  var g=document.getElementById('dib_goma');if(g)g.style.background=window._dib.goma?'#fde68a':'';
+}
+function _dibSnap(){var D2=window._dib;D2.hist.push(D2.ctx.getImageData(0,0,D2.cv.width,D2.cv.height));if(D2.hist.length>30)D2.hist.shift();}
+function _dibDeshacer(){var D2=window._dib;var im=D2.hist.pop();if(im)D2.ctx.putImageData(im,0,0);}
+function _dibFondo(tipo,sinSnap){
+  var D2=window._dib;if(!sinSnap)_dibSnap();
+  var ctx=D2.ctx;ctx.fillStyle='#fff';ctx.fillRect(0,0,D2.w,D2.h);
+  if(tipo==='cuad'){ctx.strokeStyle='#e2e8f0';ctx.lineWidth=1;for(var x=0;x<D2.w;x+=20){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,D2.h);ctx.stroke();}for(var y=0;y<D2.h;y+=20){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(D2.w,y);ctx.stroke();}}
+}
+function _dibFoto(input){
+  var f=input.files&&input.files[0];if(!f)return;
+  var rd=new FileReader();
+  rd.onload=function(e){var img=new Image();img.onload=function(){
+    var D2=window._dib;_dibSnap();D2.ctx.fillStyle='#fff';D2.ctx.fillRect(0,0,D2.w,D2.h);
+    var k=Math.min(D2.w/img.width,D2.h/img.height),w=img.width*k,h=img.height*k;
+    D2.ctx.drawImage(img,(D2.w-w)/2,(D2.h-h)/2,w,h);
+  };img.src=e.target.result;};
+  rd.readAsDataURL(f);
+}
+async function _dibGuardar(){
+  var D2=window._dib;if(!D2)return;
+  var du=D2.cv.toDataURL('image/jpeg',0.85);
+  document.getElementById('dibM')?.remove();
+  var ref=await _guardarImgNota(du);
+  if(window._dibDest==='edit'&&window._notaEdit){window._notaEdit.photos.push(mkPhoto(ref,'✏️ Dibujo'));_notaEditFotos();}
+  else{var ta=$('nota_q');if(ta)S.notaBorrador=ta.value;S.notaAdj=(S.notaAdj||[]).concat([ref]);saveUIState();render();}
+  toast('Dibujo agregado ✓','var(--green)');
+}
+// ── Pasar una nota a otra pestaña ──
+function derivarNotaMenu(id){
+  document.getElementById('derNotaM')?.remove();
+  var d=document.createElement('div');d.className='mo open';d.id='derNotaM';
+  var b=function(t,fn,sub){return '<button class="btn btn-sec btn-w mb-8" style="justify-content:flex-start;text-align:left" onclick="document.getElementById(\'derNotaM\').remove();'+fn+'"><div><div class="ts fw7">'+t+'</div><div class="txxs tc3">'+sub+'</div></div></button>';};
+  d.innerHTML='<div class="mo-c" style="max-width:420px"><div class="mo-h"><h3>↪ Pasar la nota a…</h3><button class="tbtn" onclick="document.getElementById(\'derNotaM\').remove()">'+I.x+'</button></div>'
+    +b('📋 Tarea',"derivarNota('"+id+"','tareas')",'Se crea una tarea pendiente con el texto y las fotos')
+    +b('✅ Checklist',"derivarNota('"+id+"','checklists')",'Cada renglón de la nota pasa a ser un ítem')
+    +b('💰 Movimiento',"derivarNota('"+id+"','economia')",'Se abre el formulario de Economía ya completado para que revises el monto')
+    +b('💬 Comentario',"derivarNota('"+id+"','comentarios')",'Se copia a Comentarios de la obra')
+    +'<div class="txxs tc3 mt-4">La nota queda en el libro, con el vínculo a lo que se creó.</div></div>';
+  document.body.appendChild(d);
+}
+function _notaVincular(n,tbl,id,titulo){
+  if(!n)return;
+  if(!n.derivados)n.derivados=[];
+  n.derivados.push({tbl:tbl,id:id||null,titulo:titulo||'',ts:nw()});
+  n.updatedAt=nw();
+}
+function derivarNota(id,tbl){
+  var n=(D.notas||[]).find(function(x){return x.id===id;});if(!n)return;
+  var lineas=String(n.texto||'').split('\n').map(function(l){return l.replace(/^\s*([-•*·]|\d+[.)])\s*/,'').trim();}).filter(Boolean);
+  var tit=(n.titulo||lineas[0]||'Nota del '+fmts(n.fecha)).slice(0,90);
+  var fotos=(n.photos||[]).filter(function(p){return p&&!p.deletedAt;}).map(function(p){return mkPhoto(p.url,p.caption||'');});
+  if(tbl==='tareas'){
+    var t={id:uid(),projectId:S.proj,title:tit,description:n.texto||'',priority:'media',status:'pendiente',rubro:'',dueDate:'',encargado:'',photos:fotos,archivos:[],checklistId:'',origenNota:n.id,date:nw(),updatedAt:nw()};
+    D.tareas.push(t);_notaVincular(n,'tareas',t.id,t.title);
+    sv();render();toast('Tarea creada ✓','var(--green)');return;
+  }
+  if(tbl==='checklists'){
+    // Sin título, el primer renglón es el título y el resto, los ítems
+    var ckTit=n.titulo||(lineas.length>1?lineas[0]:'Checklist '+fmts(n.fecha));
+    var items=(!n.titulo&&lineas.length>1)?lineas.slice(1):lineas;
+    if(!items.length){toast('La nota no tiene renglones para armar un checklist','var(--orange)');return;}
+    var ck={id:uid(),projectId:S.proj,title:ckTit,priority:'media',date:td(),updatedAt:nw(),origenNota:n.id,items:items.map(function(l){return {id:uid(),text:l,done:false};})};
+    if(!D.checklists)D.checklists=[];
+    D.checklists.push(ck);_notaVincular(n,'checklists',ck.id,ck.title);
+    sv();render();toast('Checklist creado con '+ck.items.length+' ítem'+(ck.items.length>1?'s':'')+' ✓','var(--green)');return;
+  }
+  if(tbl==='comentarios'){
+    var cm={id:uid(),projectId:S.proj,text:(n.titulo?n.titulo+'\n':'')+(n.texto||''),tipo:'general',rubro:'General',etapa:'',tareaId:'',photos:fotos,archivos:[],origenNota:n.id,date:nw(),updatedAt:nw()};
+    D.comentarios.push(cm);_notaVincular(n,'comentarios',cm.id,tit);
+    sv();render();toast('Comentario creado ✓','var(--green)');return;
+  }
+  if(tbl==='economia'){
+    window._notaDerivando={id:n.id,ts:Date.now()};
+    var m=/\$\s*([\d.]+(?:,\d{1,2})?)/.exec(n.texto||'')||/\b(\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?)\b/.exec(n.texto||'');
+    S.mod='economia';render();
+    setTimeout(function(){
+      openM('newEcoM');
+      var set=function(i,v){var x=document.getElementById(i);if(x&&v!=null){x.value=v;x.dispatchEvent(new Event('input'));}};
+      set('eco_concepto',tit);set('eco_detalle',n.texto||'');set('eco_fecha',n.fecha||td());
+      if(m)set('eco_monto',String(m[1]).replace(/\./g,'').replace(',','.'));
+    },150);
+  }
+}
+// Al guardar el movimiento que salió de una nota, queda el vínculo
+function _notaVincularDerivado(tbl,id,titulo){
+  var nd=window._notaDerivando;window._notaDerivando=null;
+  if(!nd||Date.now()-nd.ts>3600000)return;
+  _notaVincular((D.notas||[]).find(function(x){return x.id===nd.id;}),tbl,id,titulo);
+}
+// ── PDF del libro de obra ──
+function exportNotasPDF(){
+  var lista=_notasFiltradas().slice().sort(function(a,b){return String(a.fecha||'').localeCompare(String(b.fecha||''))||String(a.hora||'').localeCompare(String(b.hora||''));});
+  if(!lista.length){toast('No hay notas para exportar','var(--orange)');return;}
+  var p=D.projects.find(function(x){return x.id===S.proj;})||{};
+  var filtros=[];
+  if(S.notasCuaderno)filtros.push('Cuaderno: '+S.notasCuaderno);
+  if(S.notasTipo)filtros.push(NOTA_TIPOS[S.notasTipo]);
+  if(S.notasBuscar)filtros.push('"'+S.notasBuscar+'"');
+  var dia='',body='';
+  lista.forEach(function(n){
+    if(n.fecha!==dia){dia=n.fecha;body+='<h2>'+esc(_notaDiaLargo(dia))+'</h2>';}
+    var fotos=(n.photos||[]).filter(function(ph){return ph&&!ph.deletedAt;}).map(function(ph){return _resolveImg(ph.url);}).filter(function(u){return u&&u.indexOf('[')!==0;});
+    body+='<div class="nota"><div class="cab"><b>'+esc(n.hora||'')+'</b> · '+esc(NOTA_TIPOS[n.tipo||'registro']||'')
+      +((n.cuaderno&&n.cuaderno!==NOTA_CUADERNO_DEF)?' · 📒 '+esc(n.cuaderno):'')+(n.personas?' · 👥 '+esc(n.personas):'')
+      +(/^dot$/i.test(String(n.cargadoPor||''))?' · 💻 DOT':'')+'</div>'
+      +(n.titulo?'<div class="tit">'+esc(n.titulo)+'</div>':'')
+      +(n.texto?'<div class="tx">'+esc(n.texto)+'</div>':'')
+      +(fotos.length?'<div class="fotos">'+fotos.map(function(u){return '<img src="'+esc(u)+'">';}).join('')+'</div>':'')
+      +'</div>';
+  });
+  var h='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Libro de obra - '+esc(p.name||'')+'</title><style>@page{size:A4;margin:16mm}body{font-family:Arial,sans-serif;max-width:210mm;margin:0 auto;padding:16px;color:#1f2937}'
+    +'h1{font-size:14pt;border-bottom:3px solid #ca8a04;padding-bottom:4px;margin:0 0 2px}.sub{font-size:8.5pt;color:#64748b;margin-bottom:12px}'
+    +'h2{font-size:10pt;color:#a16207;border-bottom:1px solid #fde68a;padding-bottom:2px;margin:14px 0 6px;page-break-after:avoid}'
+    +'.nota{border-left:3px solid #fde68a;padding:4px 10px;margin-bottom:8px;page-break-inside:avoid}.cab{font-size:8pt;color:#64748b}.tit{font-size:10pt;font-weight:700;margin-top:2px}.tx{font-size:9.5pt;white-space:pre-wrap;line-height:1.45;margin-top:2px}'
+    +'.fotos{margin-top:4px}.fotos img{width:31%;max-height:170px;object-fit:contain;margin:0 1% 4px 0;border:1px solid #e2e8f0;border-radius:3px;vertical-align:top}'
+    +'@media print{.no-print{display:none}}</style></head><body>'
+    +'<h1>Libro de obra</h1><div class="sub">Obra: '+esc(p.name||'')+' | '+lista.length+' nota'+(lista.length>1?'s':'')+(filtros.length?' — '+esc(filtros.join(' | ')):'')+'</div>'
+    +body
+    +'<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:24px;border-top:2px solid #D97706;padding-top:12px"><div><div style="font-size:15px;font-weight:800;color:#D97706">FEDERICO PICKELNY</div><div style="font-size:10pt;font-weight:700;color:#555;margin-top:1px">ARQUITECTO</div><div style="font-size:9pt;color:#666;margin-top:1px">MP 2304</div></div><div style="text-align:right"><div style="font-size:9pt;color:#666">&#9742; 264 4397772</div><div style="font-size:9pt;color:#666">&#9993; federicopickelny@gmail.com</div><div style="font-size:9pt;color:#666">&#127968; B. Rivadavia Oeste 114</div></div></div>'
+    +'</body></html>';
+  var w=window.open('','_blank');if(!w){toast('Activá ventanas emergentes','var(--orange)');return;}
+  w.document.write(h);w.document.close();
+  _imprimirConFotos(w).then(function(){
+    var btn=w.document.createElement('button');
+    btn.textContent='Imprimir / Guardar PDF (A4)';
+    btn.style.cssText='position:fixed;top:10px;right:10px;background:#D97706;color:#fff;border:none;padding:10px 18px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,.2)';
+    btn.className='no-print';btn.onclick=function(){w.print();};
+    w.document.body.appendChild(btn);w.print();
+  });
+}
+
 function rComentarios(mc){
   const _dir=(S.cmtSort==='asc')?1:-1;
   const allItems=[...pf('comentarios')].sort((a,b)=>_dir*(a.date||'').localeCompare(b.date||''));
@@ -10603,7 +11033,7 @@ async function saveEco(){
     var _origEco=(D.economia||[]).find(function(x){return x.id===_eid;});
     if(_origEco)_origEco.dobleId=_dobId;
   }
-audit('economia','create',concepto.slice(0,30));sv();closeM('newEcoM');render();toast('Movimiento registrado');
+_notaVincularDerivado('economia',_eid,concepto);audit('economia','create',concepto.slice(0,30));sv();closeM('newEcoM');render();toast('Movimiento registrado');
 }
 function verEco(id){
   const item=D.economia.find(x=>x.id===id);if(!item)return;
