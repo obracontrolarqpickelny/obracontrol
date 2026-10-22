@@ -10234,12 +10234,13 @@ function rEconomia(mc,p){
     </div>
     <div id="eco_metros_body" style="${S.ecoMetrosOpen?'margin-top:12px':'display:none'}"></div>
   </div>
+  ${_reintegroResumen()}
   <div id="eco_items_list">${!items.length?`<div class="empty" style="padding:24px 0"><span style="color:${c}">${I.eco}</span><div class="ts mt-8">${hasFilter?'Sin resultados para este filtro':'Sin movimientos'}</div>${hasFilter?`<button class="btn btn-sec btn-s mt-8" onclick="S.ecoFilter='';S.ecoTipoFilter='';if($('eco_search'))$('eco_search').value='';renderEcoItems()">Limpiar filtro</button>`:''}</div>`:items.map(item=>{
     const _esDot=/^dot$/i.test(String(item.cargadoPor||item.sourceName||'').trim());
     const esIng=item.tipo==='ingreso';
     const col=esIng?'var(--green)':'var(--red)';
     const sign=esIng?'+':'-';
-    return `<div class="card" id="eco_item_${item.id}" style="padding:12px;border-left:3px solid ${col};${item.id===S.ecoResalt?'outline:2px solid var(--cyan);':''}">
+    return `<div class="card" id="eco_item_${item.id}" style="padding:12px;${_reintPad(item)}border-left:3px solid ${col};${item.id===S.ecoResalt?'outline:2px solid var(--cyan);':''}">${_reintegroStrip(item)}
       <div class="flex justify-between items-start mb-4">
         <div class="flex-1">
           <div class="ts fw6">${item.concepto||'Sin concepto'}${_notaBadge('economia',item.id,'detalle')}${_desdeNotaTag(item)}${item.interno?' <span style="font-size:9px;background:#f1f5f9;border-radius:3px;padding:1px 4px;color:#64748b;white-space:nowrap">&#x1F512; Priv.</span>':''}${(item.sourceType==='formulario'||_esDot)?' <span style="font-size:9px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:1px 6px;color:#16a34a;white-space:nowrap;display:inline-block;vertical-align:middle">'+(_esDot?'&#x1F4BB; DOT':'&#x1F464; '+(item.cargadoPor||item.sourceName||''))+'</span>':''}</div>
@@ -10491,7 +10492,7 @@ function renderEcoItems(){
     const esIng=item.tipo==='ingreso';
     const col=esIng?'var(--green)':'var(--red)';
     const sign=esIng?'+':'-';
-    return `<div class="card" id="eco_item_${item.id}" style="padding:12px;border-left:3px solid ${col};${item.id===S.ecoResalt?'outline:2px solid var(--cyan);':''  }">
+    return `<div class="card" id="eco_item_${item.id}" style="padding:12px;${_reintPad(item)}border-left:3px solid ${col};${item.id===S.ecoResalt?'outline:2px solid var(--cyan);':''  }">${_reintegroStrip(item)}
       <div class="flex justify-between items-start mb-4">
         <div class="flex-1">
           <div class="ts fw6">${item.concepto||'Sin concepto'}${_notaBadge('economia',item.id,'detalle')}${_desdeNotaTag(item)}${item.interno?' <span style="font-size:9px;background:#f1f5f9;border-radius:3px;padding:1px 4px;color:#64748b;white-space:nowrap">&#x1F512; Priv.</span>':''}${(item.sourceType==='formulario'||_esDot)?' <span style="font-size:9px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:1px 6px;color:#16a34a;white-space:nowrap;display:inline-block;vertical-align:middle">'+(_esDot?'&#x1F4BB; DOT':'&#x1F464; '+(item.cargadoPor||item.sourceName||''))+'</span>':''}</div>
@@ -12539,6 +12540,84 @@ function _pdfPastillaColab(e){
   var quien=esDot?'💻 DOT':'👤 '+esc(e.cargadoPor||e.sourceName||'');
   return ' <span style="display:inline-block;white-space:nowrap;vertical-align:middle;font-size:6.5pt;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:0 5px;color:#16a34a;font-weight:600">'+quien+'</span>';
 }
+// ── Gastos a reintegrar ──
+// Gastos que pagó el profesional (o la caja chica) y que el propietario tiene que
+// devolver. Se marcan con la franja vertical del costado: A REINTEGRAR → REINTEGRADO.
+// "Registrar pago" asienta el ingreso por el total y los marca como reintegrados.
+function _reintPad(it){return it&&it.tipo==='egreso'?'position:relative;padding-right:36px;':'';}
+function _reintegroStrip(it){
+  if(!it||it.tipo!=='egreso')return '';
+  var st=it.reintegro||'';
+  var cfg=st==='pendiente'?{bg:'#ffedd5',col:'#c2410c',bd:'#fdba74',t:'A REINTEGRAR',op:1,tit:'A reintegrar. Tocá cuando te lo paguen'}
+    :st==='reintegrado'?{bg:'#f0fdf4',col:'#16a34a',bd:'#bbf7d0',t:'✓ REINTEGRADO',op:.85,tit:'Reintegrado'+(it.reintegroAt?' el '+fmts(it.reintegroAt):'')+'. Tocá para quitar la marca'}
+    :{bg:'transparent',col:'#cbd5e1',bd:'var(--gray-ll)',t:'REINTEGRO',op:.7,tit:'Marcar como gasto a reintegrar (lo pagaste vos o la caja chica)'};
+  return '<div onclick="event.stopPropagation();toggleReintegro(\''+it.id+'\')" title="'+cfg.tit+'" style="position:absolute;top:0;right:0;bottom:0;width:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;background:'+cfg.bg+';border-left:1px solid '+cfg.bd+';border-radius:0 var(--r,10px) var(--r,10px) 0;opacity:'+cfg.op+'">'
+    +'<span style="writing-mode:vertical-rl;transform:rotate(180deg);font-size:9px;font-weight:800;letter-spacing:1.2px;color:'+cfg.col+';white-space:nowrap;user-select:none">'+cfg.t+'</span></div>';
+}
+function toggleReintegro(id){
+  var e=(D.economia||[]).find(function(x){return x.id===id;});if(!e)return;
+  var st=e.reintegro||'';
+  if(!st){e.reintegro='pendiente';e.reintegroAt=null;}
+  else if(st==='pendiente'){e.reintegro='reintegrado';e.reintegroAt=nw();}
+  else{e.reintegro='';e.reintegroAt=null;e.reintegroPagoId=null;}
+  e.updatedAt=nw();sv();render();
+  toast(e.reintegro==='pendiente'?'Marcado A REINTEGRAR':e.reintegro==='reintegrado'?'✓ Reintegrado':'Marca de reintegro quitada',e.reintegro==='pendiente'?'#c2410c':e.reintegro==='reintegrado'?'var(--green)':'var(--text3)',2000);
+}
+function _reintPendientes(){return pf('economia').filter(function(e){return e.tipo==='egreso'&&e.reintegro==='pendiente';}).sort(function(a,b){return String(a.fecha||'').localeCompare(String(b.fecha||''));});}
+function _reintegroResumen(){
+  var l=_reintPendientes();if(!l.length)return '';
+  var tot=l.reduce(function(s,e){return s+(parseFloat(e.monto)||0);},0);
+  return '<div class="card mb-12" style="border-left:5px solid #f97316;background:#fff7ed;padding:10px 12px">'
+    +'<div class="flex justify-between items-center gap-8" style="flex-wrap:wrap">'
+    +'<div><div class="txxs fw7" style="color:#c2410c;text-transform:uppercase;letter-spacing:.8px">A reintegrar</div>'
+    +'<div class="fw8" style="font-size:18px;color:#c2410c">$'+tot.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})+'</div>'
+    +'<div class="txxs tc3">'+l.length+' gasto'+(l.length>1?'s':'')+' pagado'+(l.length>1?'s':'')+' por vos o la caja chica</div></div>'
+    +'<button class="btn btn-s" style="background:#f97316;color:#fff;white-space:nowrap" onclick="abrirPagoReintegro()">💵 Registrar pago</button>'
+    +'</div></div>';
+}
+function abrirPagoReintegro(){
+  var l=_reintPendientes();if(!l.length){toast('No hay gastos a reintegrar','var(--orange)');return;}
+  var f2=function(n){return (parseFloat(n)||0).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});};
+  document.getElementById('reintM')?.remove();
+  var d=document.createElement('div');d.className='mo open';d.id='reintM';
+  d.innerHTML='<div class="mo-c" style="max-width:480px"><div class="mo-h"><h3 style="color:#c2410c">💵 Registrar pago de reintegro</h3><button class="tbtn" onclick="document.getElementById(\'reintM\').remove()">'+I.x+'</button></div>'
+    +'<div class="txxs tc3 mb-6">Tildá lo que te pagaron. Se asienta un ingreso por el total y esos gastos quedan como reintegrados.</div>'
+    +'<div style="max-height:260px;overflow-y:auto;border:1px solid var(--brd);border-radius:8px;margin-bottom:10px">'
+    +l.map(function(e){return '<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--gray-ll);cursor:pointer">'
+      +'<input type="checkbox" class="reint_chk" value="'+e.id+'" data-m="'+(parseFloat(e.monto)||0)+'" checked onchange="_reintTotal()" style="width:16px;height:16px;flex-shrink:0">'
+      +'<div style="flex:1;min-width:0"><div class="ts fw6" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(e.concepto||'Sin concepto')+'</div><div class="txxs tc3">'+esc(fmts(e.fecha||e.date)||'')+(e.proveedor?' · '+esc(e.proveedor):'')+'</div></div>'
+      +'<div class="ts fw7" style="color:var(--red);white-space:nowrap">$'+f2(e.monto)+'</div></label>';}).join('')
+    +'</div>'
+    +'<div class="flex justify-between items-center mb-10"><span class="ts fw7">Total del pago</span><span class="fw8" id="reint_tot" style="font-size:18px;color:var(--green)"></span></div>'
+    +'<div class="fr"><div class="fg"><label class="fl">Fecha del pago</label><input class="fi" type="date" id="reint_f" value="'+td()+'"></div>'
+    +'<div class="fg"><label class="fl">Medio de pago</label><input class="fi" id="reint_mp" list="reint_mpl" value="Transferencia"><datalist id="reint_mpl"><option value="Transferencia"><option value="Efectivo"><option value="Cheque"></datalist></div></div>'
+    +'<div class="fg"><label class="fl">Concepto</label><input class="fi" id="reint_c" value="Reintegro de gastos al profesional"></div>'
+    +'<button class="btn btn-w" style="background:var(--green);color:#fff" onclick="confirmarPagoReintegro()">✓ Asentar el ingreso y marcar reintegrados</button>'
+    +'</div>';
+  document.body.appendChild(d);_reintTotal();
+}
+function _reintTotal(){
+  var t=0,n=0;document.querySelectorAll('.reint_chk:checked').forEach(function(c){t+=parseFloat(c.dataset.m)||0;n++;});
+  var el=document.getElementById('reint_tot');if(el)el.textContent='$'+t.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})+(n?'  ('+n+')':'');
+  return t;
+}
+function confirmarPagoReintegro(){
+  if(typeof requireWrite==='function'&&!requireWrite())return;
+  var ids=[];document.querySelectorAll('.reint_chk:checked').forEach(function(c){ids.push(c.value);});
+  if(!ids.length){toast('Tildá al menos un gasto','var(--orange)');return;}
+  var gs=(D.economia||[]).filter(function(e){return ids.indexOf(e.id)>=0;});
+  var tot=Math.round(gs.reduce(function(s,e){return s+(parseFloat(e.monto)||0);},0)*100)/100;
+  var v=function(id){var x=document.getElementById(id);return x?x.value.trim():'';};
+  var fecha=v('reint_f')||td();
+  var pid=uid();
+  D.economia.push({id:pid,projectId:S.proj,tipo:'ingreso',fecha:fecha,concepto:v('reint_c')||'Reintegro de gastos al profesional',monto:tot,medioPago:v('reint_mp'),proveedor:'',
+    detalle:gs.map(function(e){return '• '+fmts(e.fecha||e.date)+' — '+(e.concepto||'')+': $'+(parseFloat(e.monto)||0).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});}).join('\n'),
+    reintegroDe:ids,interno:false,date:nw(),updatedAt:nw()});
+  gs.forEach(function(e){e.reintegro='reintegrado';e.reintegroAt=fecha;e.reintegroPagoId=pid;e.updatedAt=nw();});
+  document.getElementById('reintM')?.remove();
+  audit('economia','create','Reintegro '+gs.length+' gastos');sv();render();
+  toast('Ingreso de $'+tot.toLocaleString('es-AR')+' asentado · '+gs.length+' gasto'+(gs.length>1?'s':'')+' reintegrado'+(gs.length>1?'s':'')+' ✓','var(--green)',3500);
+}
 function exportEcoPDF(includeDistrib,includeRubroCol,includeMetros,privados,includeMeses,includeFotos){
   if(includeDistrib===undefined)includeDistrib=true;
   if(includeRubroCol===undefined)includeRubroCol=true;
@@ -12605,7 +12684,7 @@ function exportEcoPDF(includeDistrib,includeRubroCol,includeMetros,privados,incl
     var rubroTd=includeRubroCol?'<td style="padding:3px 4px;border-bottom:1px solid #eee;font-size:7pt;color:#475569">'+(e.rubro||'')+(_ecoItemTexto(e)?'<br><span style="color:#94a3b8">'+esc(_ecoItemTexto(e))+'</span>':'')+'</td>':'';
     return '<tr>'
       +'<td style="padding:3px 4px;border-bottom:1px solid #eee;font-size:7.5pt">'+fmt(e.fecha||e.date)+'</td>'
-      +'<td style="padding:3px 4px;border-bottom:1px solid #eee;font-size:7.5pt">'+(_compN[e.id]?'<span style="background:#0891b2;color:#fff;border-radius:3px;padding:0 3px;font-size:6.5pt;font-weight:700;margin-right:3px">📎 '+_compN[e.id]+'</span>':'')+(e.concepto||'')+_pdfPastillaColab(e)+(e.detalle?'<br><span style="color:#94a3b8;font-size:6.5pt">'+e.detalle+'</span>':'')+'</td>'
+      +'<td style="padding:3px 4px;border-bottom:1px solid #eee;font-size:7.5pt">'+(_compN[e.id]?'<span style="background:#0891b2;color:#fff;border-radius:3px;padding:0 3px;font-size:6.5pt;font-weight:700;margin-right:3px">📎 '+_compN[e.id]+'</span>':'')+(e.concepto||'')+_pdfPastillaColab(e)+(e.tipo==='egreso'&&e.reintegro==='pendiente'?' <span style="display:inline-block;white-space:nowrap;vertical-align:middle;font-size:6.5pt;background:#ffedd5;border:1px solid #fdba74;border-radius:8px;padding:0 5px;color:#c2410c;font-weight:700">A REINTEGRAR</span>':e.tipo==='egreso'&&e.reintegro==='reintegrado'?' <span style="display:inline-block;white-space:nowrap;vertical-align:middle;font-size:6.5pt;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:0 5px;color:#16a34a;font-weight:600">✓ REINTEGRADO</span>':'')+(e.detalle?'<br><span style="color:#94a3b8;font-size:6.5pt">'+e.detalle+'</span>':'')+'</td>'
       +'<td style="padding:3px 4px;border-bottom:1px solid #eee;font-size:7.5pt">'+(e.medioPago||'')+'</td>'
       +'<td style="padding:3px 4px;border-bottom:1px solid #eee;font-size:7.5pt">'+(e.proveedor||'')+'</td>'
       +rubroTd
@@ -12717,6 +12796,7 @@ function exportEcoPDF(includeDistrib,includeRubroCol,includeMetros,privados,incl
     +'<div class="res-card" style="background:#fef2f2"><div class="lbl">Egresos</div><div class="val" style="color:#dc2626">$'+_f2(tEgr)+'</div></div>'
     +'<div class="res-card" style="background:'+(saldo>=0?'#f0fdf4':'#fef2f2')+'"><div class="lbl">Saldo</div><div class="val" style="color:'+(saldo>=0?'#16a34a':'#dc2626')+';font-size:12pt">'+(saldo<0?'-':'')+'$'+_f2(Math.abs(saldo))+'</div></div>'
     +'</div>'
+    +(function(){var _r=items.filter(function(e){return e.tipo==='egreso'&&e.reintegro==='pendiente';});if(!_r.length)return '';var _t=_r.reduce(function(s2,e){return s2+(parseFloat(e.monto)||0);},0);return '<div style="background:#fff7ed;border-left:4px solid #f97316;border-radius:4px;padding:6px 10px;margin-bottom:10px;font-size:9pt"><b style="color:#c2410c">A reintegrar al profesional: $'+_f2(_t)+'</b> <span style="color:#64748b">('+_r.length+' gasto'+(_r.length>1?'s':'')+' marcado'+(_r.length>1?'s':'')+' A REINTEGRAR)</span></div>';})()
     +'<table><tr><th>Fecha</th><th>Concepto</th><th>Medio</th><th>Proveedor</th>'+rubroTh+'<th style="text-align:right">Monto</th><th class="th-bal" style="text-align:right">Saldo acum.</th></tr>'+rows+'</table>'
     +(_comps.length?'<div style="margin-top:16px"><h2 style="font-size:9pt;color:#0891b2;border-bottom:1px solid #e5e7eb;padding-bottom:3px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">📎 Comprobantes ('+_comps.length+')</h2>'
       +_comps.map(function(c,i){var e=c.e,esI=e.tipo==='ingreso';
