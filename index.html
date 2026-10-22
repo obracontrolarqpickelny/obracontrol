@@ -3249,13 +3249,14 @@ function _matUnitBanner(m){
 // Cualquier ítem de estas pestañas puede marcarse como alerta. No es un módulo
 // aparte: es una marca sobre lo que ya existe, para juntar en un solo lugar todo
 // lo que requiere acción inmediata.
-var ALERT_TBLS=['tareas','matIngresos','materiales','checklists','comentarios'];
+var ALERT_TBLS=['tareas','matIngresos','materiales','checklists','comentarios','notas'];
 var ALERT_META={
   tareas:{ic:'📋',lbl:'Tarea',mod:'tareas'},
   matIngresos:{ic:'📦',lbl:'Material',mod:'materiales'},
   materiales:{ic:'📦',lbl:'Material',mod:'materiales'},
   checklists:{ic:'✅',lbl:'Checklist',mod:'checklist'},
-  comentarios:{ic:'💬',lbl:'Comentario',mod:'comentarios'}
+  comentarios:{ic:'💬',lbl:'Comentario',mod:'comentarios'},
+  notas:{ic:'📝',lbl:'Nota',mod:'notas'}
 };
 
 function toggleAlerta(tbl,id){
@@ -3264,6 +3265,7 @@ function toggleAlerta(tbl,id){
   it.alerta=!it.alerta;
   it.alertaAt=it.alerta?nw():null;
   it.updatedAt=nw();
+  _notaSyncAlerta(tbl,it);
   sv();render();
   toast(it.alerta?'🚨 Marcado como alerta':'Alerta quitada',it.alerta?'var(--red)':'var(--text3)',2000);
 }
@@ -3890,7 +3892,9 @@ function resolverAlerta(tbl,id){
   else if(tbl==='comentarios')it.cumplido=true;
   else if(tbl==='checklists')(it.items||[]).forEach(function(i){i.done=true;});
   else if(tbl==='matIngresos'&&it.estado==='a_pedir')it.estado='pedido';
+  else if(tbl==='notas'){it.hecha=true;_notaPropagarHecha(it,true);}
   it.alerta=false;it.alertaAt=null;it.updatedAt=nw();
+  _notaSyncAlerta(tbl,it);
   sv();render();
   toast('✓ Resuelto y quitado de alertas','var(--green)',2500);
 }
@@ -3904,13 +3908,13 @@ function _renderAlertasBandeja(){
   }
   return lista.map(function(e){
     var it=e.item,tbl=e.tbl,meta=ALERT_META[tbl]||{ic:'•',lbl:tbl,mod:'dashboard'};
-    var titulo=it.title||it.matNombre||it.text||it.name||it.concepto||'(sin título)';
+    var titulo=it.title||it.titulo||it.matNombre||it.text||it.texto||it.name||it.concepto||'(sin título)';
     var sub=[];
     if(tbl==='tareas'){sub.push(it.status||'pendiente');if(it.encargado)sub.push('👤 '+it.encargado);}
     else if(tbl==='matIngresos'){sub.push(it.estado==='a_pedir'?'A pedir':it.estado==='pedido'?'Pedido':'Ingresado');if(it.qty)sub.push(it.qty+' '+(it.unit||''));}
     else if(tbl==='checklists'){var _d=(it.items||[]).filter(function(i){return i.done;}).length;sub.push(_d+'/'+(it.items||[]).length+' completados');}
     else if(tbl==='comentarios'){sub.push(it.rubro||'General');if(it.cumplido)sub.push('✓ realizado');}
-    var _hecho=(tbl==='tareas'&&it.status==='completada')||(tbl==='comentarios'&&it.cumplido);
+    var _hecho=(tbl==='tareas'&&it.status==='completada')||(tbl==='comentarios'&&it.cumplido)||(tbl==='notas'&&_notaHecha(it));
     return '<div class="card" style="border-left:3px solid var(--red);padding:12px;margin-bottom:8px">'
       +'<div class="flex justify-between items-start gap-8 mb-6">'
       +'<div style="flex:1;min-width:0">'
@@ -5543,7 +5547,7 @@ function rTareas(mc){
   ${_encChip}${!sorted.length?`<div class="empty"><span style="color:${c}">${I.list}</span><div class="ts mt-8">${S.taskEncFilter?`Sin tareas para "${S.taskEncFilter}"<br><button class="btn btn-sec btn-s mt-8" onclick="S.taskEncFilter='';render()">Ver todas</button>`:'Sin tareas'}</div></div>`:sorted.map(t=>{
     const over=t.dueDate&&(t.status==='pendiente'||t.status==='en curso')&&dd(td(),t.dueDate)<0;const vN=t.visitaId?D.visitas.find(v=>v.id===t.visitaId)?.title:null;
     const _esDot=/^dot$/i.test(String(t.cargadoPor||t.sourceName||'').trim());
-    const _tcl=!!(S.taskCollapsed&&S.taskCollapsed[t.id]);return `<div class="card" style="border-left:3px solid ${over?'var(--red)':({urgente:'var(--red)',alta:'var(--orange)',media:'var(--pri)',baja:'var(--green)'}[t.priority]||c)}"><div style="display:flex;align-items:flex-start;gap:6px;cursor:pointer" onclick="toggleTaskCollapsed('${t.id}')"><div class="ts fw6 flex-1" style="${t.status==='completada'?'text-decoration:line-through;color:var(--gray-l)':''}">${t.title}${t.pdfGenerado?' <span style="font-size:9px;background:#f1f5f9;border-radius:3px;padding:1px 4px;color:#64748b">PDF</span>':''}${((t.sourceType==='formulario'&&t.cargadoPor)||_esDot)?' <span style="font-size:9px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:1px 6px;color:#16a34a;font-weight:700">'+(_esDot?'&#x1F4BB; DOT':'&#x1F464; '+esc(t.cargadoPor))+'</span>':''}${_getEnvBadge(t.id,'tarea')}${_alertTag(t)}</div><span style="font-size:12px;color:var(--gray-l);padding:0 2px;user-select:none;flex-shrink:0">${_tcl?'&#x25BC;':'&#x25B2;'}</span></div>${_tcl?'':(`${t.description?`<div class="ts tc3 mt-4" style="white-space:pre-wrap">${t.description}</div>`:''}${t.comment?`<div style="font-size:11px;color:var(--text2);font-style:italic;margin-top:4px;white-space:pre-wrap">&#x1F4DD; ${esc(t.comment)}</div>`:''}${_taskChkHtml(t)}<div class="flex gap-4 mt-6 wrap items-center">${priBadge(t.priority||'media',true)} ${stBadge(t.status||'pendiente',true)}${t.dueDate?`<span class="txxs" style="color:${over?'var(--red)':'var(--gray-l)'}">${fmts(t.dueDate)}${over?' VENCIDA':''}</span>`:''}${t.encargado?`<span class="txxs" style="color:var(--cyan)">👤 ${t.encargado}</span>`:''}${vN?`<span class="link-tag" onclick="event.stopPropagation();S.visitaDetail='${t.visitaId}';S.mod='visitas';render();">${I.link} ${vN}</span>`:!vN&&t.date?`<span class="txxs tc3">📅 Creado: ${fmts(t.date)}</span>`:''}</div>${t.photos&&t.photos.length?photoGrid(t.photos,'tareas',t.id):''} ${t.archivos&&t.archivos.length?`<div class="mt-4">${t.archivos.map(f=>`<div class="flex items-center gap-6 txxs tc3"><span>${I.file}</span><span style="color:var(--slate);flex:1">${f.name}</span><button class="btn btn-sec btn-s" onclick="event.stopPropagation();viewArchivo('tareas','${t.id}','${f.id||f.name||''}')">👁</button><button class="btn btn-sec btn-s" onclick="event.stopPropagation();delArchivo('tareas','${t.id}','${f.id||f.name||''}')" style="color:var(--red)">${I.trash}</button></div>`).join('')}</div>`:''}<div class="flex gap-4 mt-8 wrap">${t.status!=='completada'?`<button class="btn btn-ok btn-s" onclick="updT('${t.id}','completada')">${I.check}</button>`:''}<button class="btn btn-sec btn-s" onclick="editTarea('${t.id}')">${I.edit} Editar</button><button class="btn btn-sec btn-s" style="color:var(--blue)" title="Vincular con una visita" onclick="vincularVisitaItem('tareas','${t.id}')">&#x1F4CB;</button><button class="btn btn-g btn-s" title="Agregar al calendario" onclick="exportTareaGCal('${t.id}')">&#128197;</button><button class="btn btn-sec btn-s" title="Enviar a bandeja del colaborador" onclick="shareToInbox('tarea','${t.id}')">${I.share}</button>${_alertBtn('tareas',t.id,t.alerta)}<button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delI('tareas','${t.id}')">${I.trash}</button></div>`)}</div>`;
+    const _tcl=!!(S.taskCollapsed&&S.taskCollapsed[t.id]);return `<div class="card" style="border-left:3px solid ${over?'var(--red)':({urgente:'var(--red)',alta:'var(--orange)',media:'var(--pri)',baja:'var(--green)'}[t.priority]||c)}"><div style="display:flex;align-items:flex-start;gap:6px;cursor:pointer" onclick="toggleTaskCollapsed('${t.id}')"><div class="ts fw6 flex-1" style="${t.status==='completada'?'text-decoration:line-through;color:var(--gray-l)':''}">${t.title}${t.pdfGenerado?' <span style="font-size:9px;background:#f1f5f9;border-radius:3px;padding:1px 4px;color:#64748b">PDF</span>':''}${((t.sourceType==='formulario'&&t.cargadoPor)||_esDot)?' <span style="font-size:9px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:1px 6px;color:#16a34a;font-weight:700">'+(_esDot?'&#x1F4BB; DOT':'&#x1F464; '+esc(t.cargadoPor))+'</span>':''}${_getEnvBadge(t.id,'tarea')}${_alertTag(t)}${_desdeNotaTag(t)}</div><span style="font-size:12px;color:var(--gray-l);padding:0 2px;user-select:none;flex-shrink:0">${_tcl?'&#x25BC;':'&#x25B2;'}</span></div>${_tcl?'':(`${t.description?`<div class="ts tc3 mt-4" style="white-space:pre-wrap">${t.description}</div>`:''}${t.comment?`<div style="font-size:11px;color:var(--text2);font-style:italic;margin-top:4px;white-space:pre-wrap">&#x1F4DD; ${esc(t.comment)}</div>`:''}${_taskChkHtml(t)}<div class="flex gap-4 mt-6 wrap items-center">${priBadge(t.priority||'media',true)} ${stBadge(t.status||'pendiente',true)}${t.dueDate?`<span class="txxs" style="color:${over?'var(--red)':'var(--gray-l)'}">${fmts(t.dueDate)}${over?' VENCIDA':''}</span>`:''}${t.encargado?`<span class="txxs" style="color:var(--cyan)">👤 ${t.encargado}</span>`:''}${vN?`<span class="link-tag" onclick="event.stopPropagation();S.visitaDetail='${t.visitaId}';S.mod='visitas';render();">${I.link} ${vN}</span>`:!vN&&t.date?`<span class="txxs tc3">📅 Creado: ${fmts(t.date)}</span>`:''}</div>${t.photos&&t.photos.length?photoGrid(t.photos,'tareas',t.id):''} ${t.archivos&&t.archivos.length?`<div class="mt-4">${t.archivos.map(f=>`<div class="flex items-center gap-6 txxs tc3"><span>${I.file}</span><span style="color:var(--slate);flex:1">${f.name}</span><button class="btn btn-sec btn-s" onclick="event.stopPropagation();viewArchivo('tareas','${t.id}','${f.id||f.name||''}')">👁</button><button class="btn btn-sec btn-s" onclick="event.stopPropagation();delArchivo('tareas','${t.id}','${f.id||f.name||''}')" style="color:var(--red)">${I.trash}</button></div>`).join('')}</div>`:''}<div class="flex gap-4 mt-8 wrap">${t.status!=='completada'?`<button class="btn btn-ok btn-s" onclick="updT('${t.id}','completada')">${I.check}</button>`:''}<button class="btn btn-sec btn-s" onclick="editTarea('${t.id}')">${I.edit} Editar</button><button class="btn btn-sec btn-s" style="color:var(--blue)" title="Vincular con una visita" onclick="vincularVisitaItem('tareas','${t.id}')">&#x1F4CB;</button><button class="btn btn-g btn-s" title="Agregar al calendario" onclick="exportTareaGCal('${t.id}')">&#128197;</button><button class="btn btn-sec btn-s" title="Enviar a bandeja del colaborador" onclick="shareToInbox('tarea','${t.id}')">${I.share}</button>${_alertBtn('tareas',t.id,t.alerta)}<button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delI('tareas','${t.id}')">${I.trash}</button></div>`)}</div>`;
   }).join('')}
   <div class="mo" id="newTareaM"><div class="mo-c"><div class="mo-h"><h3 style="color:${c}">Nueva Tarea</h3><button class="tbtn" onclick="closeM('newTareaM')">${I.x}</button></div><div class="fg"><label class="fl">Titulo *</label><input class="fi" id="nt_t"></div><div class="fg"><label class="fl">Descripcion</label><textarea class="ft" id="nt_de"></textarea></div>${priSelector('nt_p','media')}<div class="fr"><div class="fg"><label class="fl">Rubro</label><select class="fs" id="nt_r"><option value="">-</option>${RUB.map(r=>`<option>${r}</option>`).join('')}</select></div><div class="fg"><label class="fl">Vencimiento</label><input class="fi" id="nt_d" type="date"></div></div><div class="fg"><label class="fl">Encargado</label><div class="ac-wrap"><input class="fi" id="nt_enc" placeholder="Nombre o rol del encargado" autocomplete="off" oninput="_renderEncChips('nt_enc','nt_enc_chips')"></div><div id="nt_enc_chips" class="flex gap-4 wrap mt-4"></div></div><div class="fg"><label class="fl">Fotos</label><input type="file" accept="image/*" multiple id="nt_ph" class="fi" style="padding:6px"></div><div class="fg"><label class="fl">Archivos adjuntos</label><input type="file" multiple id="nt_af" class="fi" style="padding:6px"></div><div class="fg"><label class="fl">Vincular checklist (opcional)</label><select class="fs" id="nt_chk"><option value="">Sin checklist</option>${pf('checklists').map(ch=>`<option value="${ch.id}">${ch.title}</option>`).join('')}</select></div><button class="btn btn-w mt-8" style="background:${c};color:#fff" onclick="saveTarea()">Crear</button></div></div>`;
   setTimeout(function(){_renderEncChips('nt_enc','nt_enc_chips');},80);
@@ -7565,7 +7569,7 @@ function rChecklist(mc){const items=pf('checklists');const c=MC.checklist;const 
   mc.innerHTML=`${modHeader('checklist','Checklists',`<div class="flex gap-4"><button class="btn btn-s" style="background:${c};color:#fff" onclick="openM('newChkM')">${I.plus} Nueva</button><button class="btn btn-sec btn-s" onclick="showChkHistorial()">&#x1F4CB; Historial</button></div>`)}
   <div style="display:flex;align-items:center;gap:6px;margin:8px 0 12px"><span class="txxs fw6 tc3" style="white-space:nowrap">Ordenar:</span><select class="fs" style="font-size:12px;padding:4px 8px 4px 6px;min-width:150px;max-width:100%" onchange="S.chkSort=this.value;render()"><option value="" ${!S.chkSort||S.chkSort==='pri_asc'?'selected':''}>&#x26A1; Mayor prioridad</option><option value="pri_desc" ${S.chkSort==='pri_desc'?'selected':''}>&#x26A1; Menor prioridad</option><option value="fecha_desc" ${S.chkSort==='fecha_desc'?'selected':''}>&#x1F4C5; M&aacute;s reciente</option><option value="fecha_asc" ${S.chkSort==='fecha_asc'?'selected':''}>&#x1F4C5; M&aacute;s antiguo</option></select></div>
   ${visitItems.length?`<div class="alrt alrt-y mb-8">${I.clip}<div class="ts fw6 flex-1">Checklists de visitas (${visitItems.length})</div></div>`:''}
-  ${!genItems.length?`<div class="empty"><span style="color:${c}">${I.chklist}</span><div class="ts mt-8">Sin checklists</div></div>`:sortedChk.map(ch=>{const dn=ch.items.filter(i=>i.done).length;const tot=ch.items.length;const _cl=!!(S.chkCollapsed&&S.chkCollapsed[ch.id]);const _prog=dn===tot&&tot>0?'var(--green)':dn>0?'#f0a500':'#e02020';const _envBdg=_getEnvBadge(ch.id,'checklist');return `<div class="card" style="border-left:3px solid ${c}"><div class="flex justify-between items-center" style="cursor:pointer" onclick="toggleChkCollapsed('${ch.id}')"><div style="flex:1;min-width:0"><div class="ts fw7">${ch.title}${_envBdg}${_alertTag(ch)}</div><div class="txxs tc3 mt-2" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">${priBadge(ch.priority||'media',true)}<span>&#x1F4C5; ${fmts(ch.date||ch.updatedAt)}</span><span data-chk-score="${ch.id}" style="color:${_prog};font-weight:700">${dn}/${tot}</span></div>${ch.note?`<div style="font-size:11px;color:var(--text2);font-style:italic;margin-top:4px;white-space:pre-wrap">📝 ${ch.note}</div>`:''}</div><span style="font-size:14px;color:var(--gray-l);padding:0 6px;user-select:none">${_cl?'&#x25BC;':'&#x25B2;'}</span></div>${_cl?'':(`<div onclick="event.stopPropagation()"><button class="btn btn-sec btn-s mt-8" style="width:100%" onclick="openChkNote('${ch.id}')">${ch.note?'&#x270F; Editar nota':'&#x1F4DD; Agregar nota'}</button><div class="mb-6 mt-8">${progress(dn,tot,c)}<div data-chk-score="${ch.id}" class="txxs mt-4" style="color:${_prog};font-weight:700">${dn}/${tot}</div></div>${ch.items.map(it=>`<div class="chk-item"><div class="chk-box${it.done?' checked':''}" onclick="togC('${ch.id}','${it.id}',this)">${it.done?I.check:''}</div><div class="chk-text${it.done?' done':''} flex-1">${it.text}</div><button class="btn btn-g btn-s" onclick="editChkItem('${ch.id}','${it.id}')">${I.edit}</button><button class="btn btn-g btn-s" onclick="if(confirmDel())dCI('${ch.id}','${it.id}')">${I.trash}</button></div>`).join('')}<div class="flex gap-4 mt-8"><input class="fi" id="ac_${ch.id}" placeholder="Agregar..." style="flex:1" onkeydown="if(event.key==='Enter')aCI('${ch.id}')"><button class="btn btn-s" style="background:${c};color:#fff" onclick="aCI('${ch.id}')">${I.plus}</button></div>${ch.photos&&ch.photos.length?photoGrid(ch.photos,'checklists',ch.id):''}<div class="flex gap-6 mt-6"><button class="btn btn-sec btn-s" onclick="editChk('${ch.id}')">${I.edit} Editar</button><button class="btn btn-sec btn-s" style="color:var(--blue)" title="Vincular con una visita" onclick="vincularVisitaItem('checklists','${ch.id}')">&#x1F4CB;</button><label class="btn btn-sec btn-s" style="cursor:pointer;display:inline-flex;align-items:center" title="Agregar fotos al checklist">&#x1F4F7;<input type="file" accept="image/*" multiple id="chkph_${ch.id}" style="display:none" onchange="addChkPhotos('${ch.id}',this)"></label><button class="btn btn-sec btn-s" title="Enviar a bandeja del colaborador" onclick="shareToInbox('checklist','${ch.id}')">${I.share}</button>${_alertBtn('checklists',ch.id,ch.alerta)}<button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delI('checklists','${ch.id}')">${I.trash} Eliminar</button></div></div>`)}</div>`;}).join('')}<div class="mo" id="newChkM"><div class="mo-c"><div class="mo-h"><h3 style="color:${c}">Nueva Checklist</h3><button class="tbtn" onclick="closeM('newChkM')">${I.x}</button></div><div class="fg"><label class="fl">Titulo *</label><input class="fi" id="ck_t"></div>${priSelector('ck_p','media')}<div class="fg"><label class="fl">Items (uno por linea)</label><textarea class="ft" id="ck_i" placeholder="Verificar estribos&#10;Revisar recubrimiento"></textarea></div><button class="btn btn-w mt-8" style="background:${c};color:#fff" onclick="saveCk()">Crear</button></div></div>`;}
+  ${!genItems.length?`<div class="empty"><span style="color:${c}">${I.chklist}</span><div class="ts mt-8">Sin checklists</div></div>`:sortedChk.map(ch=>{const dn=ch.items.filter(i=>i.done).length;const tot=ch.items.length;const _cl=!!(S.chkCollapsed&&S.chkCollapsed[ch.id]);const _prog=dn===tot&&tot>0?'var(--green)':dn>0?'#f0a500':'#e02020';const _envBdg=_getEnvBadge(ch.id,'checklist');return `<div class="card" style="border-left:3px solid ${c}"><div class="flex justify-between items-center" style="cursor:pointer" onclick="toggleChkCollapsed('${ch.id}')"><div style="flex:1;min-width:0"><div class="ts fw7">${ch.title}${_envBdg}${_alertTag(ch)}${_desdeNotaTag(ch)}</div><div class="txxs tc3 mt-2" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">${priBadge(ch.priority||'media',true)}<span>&#x1F4C5; ${fmts(ch.date||ch.updatedAt)}</span><span data-chk-score="${ch.id}" style="color:${_prog};font-weight:700">${dn}/${tot}</span></div>${ch.note?`<div style="font-size:11px;color:var(--text2);font-style:italic;margin-top:4px;white-space:pre-wrap">📝 ${ch.note}</div>`:''}</div><span style="font-size:14px;color:var(--gray-l);padding:0 6px;user-select:none">${_cl?'&#x25BC;':'&#x25B2;'}</span></div>${_cl?'':(`<div onclick="event.stopPropagation()"><button class="btn btn-sec btn-s mt-8" style="width:100%" onclick="openChkNote('${ch.id}')">${ch.note?'&#x270F; Editar nota':'&#x1F4DD; Agregar nota'}</button><div class="mb-6 mt-8">${progress(dn,tot,c)}<div data-chk-score="${ch.id}" class="txxs mt-4" style="color:${_prog};font-weight:700">${dn}/${tot}</div></div>${ch.items.map(it=>`<div class="chk-item"><div class="chk-box${it.done?' checked':''}" onclick="togC('${ch.id}','${it.id}',this)">${it.done?I.check:''}</div><div class="chk-text${it.done?' done':''} flex-1">${it.text}</div><button class="btn btn-g btn-s" onclick="editChkItem('${ch.id}','${it.id}')">${I.edit}</button><button class="btn btn-g btn-s" onclick="if(confirmDel())dCI('${ch.id}','${it.id}')">${I.trash}</button></div>`).join('')}<div class="flex gap-4 mt-8"><input class="fi" id="ac_${ch.id}" placeholder="Agregar..." style="flex:1" onkeydown="if(event.key==='Enter')aCI('${ch.id}')"><button class="btn btn-s" style="background:${c};color:#fff" onclick="aCI('${ch.id}')">${I.plus}</button></div>${ch.photos&&ch.photos.length?photoGrid(ch.photos,'checklists',ch.id):''}<div class="flex gap-6 mt-6"><button class="btn btn-sec btn-s" onclick="editChk('${ch.id}')">${I.edit} Editar</button><button class="btn btn-sec btn-s" style="color:var(--blue)" title="Vincular con una visita" onclick="vincularVisitaItem('checklists','${ch.id}')">&#x1F4CB;</button><label class="btn btn-sec btn-s" style="cursor:pointer;display:inline-flex;align-items:center" title="Agregar fotos al checklist">&#x1F4F7;<input type="file" accept="image/*" multiple id="chkph_${ch.id}" style="display:none" onchange="addChkPhotos('${ch.id}',this)"></label><button class="btn btn-sec btn-s" title="Enviar a bandeja del colaborador" onclick="shareToInbox('checklist','${ch.id}')">${I.share}</button>${_alertBtn('checklists',ch.id,ch.alerta)}<button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delI('checklists','${ch.id}')">${I.trash} Eliminar</button></div></div>`)}</div>`;}).join('')}<div class="mo" id="newChkM"><div class="mo-c"><div class="mo-h"><h3 style="color:${c}">Nueva Checklist</h3><button class="tbtn" onclick="closeM('newChkM')">${I.x}</button></div><div class="fg"><label class="fl">Titulo *</label><input class="fi" id="ck_t"></div>${priSelector('ck_p','media')}<div class="fg"><label class="fl">Items (uno por linea)</label><textarea class="ft" id="ck_i" placeholder="Verificar estribos&#10;Revisar recubrimiento"></textarea></div><button class="btn btn-w mt-8" style="background:${c};color:#fff" onclick="saveCk()">Crear</button></div></div>`;}
 function closeChkHist(){var el=document.getElementById('chkHistM');if(el)el.remove();}
 
 function showChkHistorial(){
@@ -7959,9 +7963,12 @@ function _notaCard(n){
   var der=(n.derivados||[]).map(function(d){
     var lb={tareas:'📋 Tarea',checklists:'✅ Checklist',economia:'💰 Movimiento',comentarios:'💬 Comentario'}[d.tbl]||d.tbl;
     var nav={tareas:'tareas',checklists:'checklist',economia:'economia',comentarios:'comentarios'}[d.tbl]||'notas';
-    return '<button class="link-tag" style="font-size:10px" onclick="S.mod=\''+nav+'\';render()">→ '+lb+(d.titulo?': '+esc(String(d.titulo).slice(0,40)):'')+'</button>';
+    var it=d.id?(D[d.tbl]||[]).find(function(x){return x.id===d.id;}):null;
+    var ok=it&&_itemCompleto(d.tbl,it);
+    return '<button class="link-tag" style="font-size:10px;'+(ok?'color:var(--green)':'')+'" onclick="_irAVinculado(\''+d.tbl+'\',\''+(d.id||'')+'\')">→ '+lb+(d.titulo?': '+esc(String(d.titulo).slice(0,40)):'')+(ok?' ✓':'')+(it?'':(d.id&&d.tbl!=='economia'?' (borrado)':''))+'</button>';
   }).join(' ');
-  return '<div class="card mb-8" style="border-left:3px solid '+(n.fijada?c:'var(--brd)')+';padding:10px 12px">'
+  var hecha=_notaHecha(n);
+  return '<div class="card mb-8" id="nota_'+n.id+'" style="border-left:3px solid '+(n.alerta?'var(--red)':hecha?'var(--green)':n.fijada?c:'var(--brd)')+';padding:10px 12px;'+(S.notaFoco===n.id?'box-shadow:0 0 0 2px '+c+';':'')+(hecha?'background:#f0fdf4;':'')+'">'
     +'<div class="flex gap-4 items-center" style="flex-wrap:wrap">'
     +'<span class="txxs fw7 tc3">'+esc(n.hora||'')+'</span>'
     +pill(NOTA_TIPOS[n.tipo||'registro']||n.tipo,'#fef9c3','#a16207')
@@ -7969,14 +7976,18 @@ function _notaCard(n){
     +(n.personas?pill('👥 '+esc(n.personas),'#eff6ff','#2563eb'):'')
     +(esDot?pill('💻 DOT','#f0fdf4','#16a34a'):'')
     +(n.fijada?'<span title="Fijada">📌</span>':'')
+    +_alertTag(n)
+    +(hecha?pill('✓ Hecha','#dcfce7','#16a34a'):'')
     +'</div>'
-    +(n.titulo?'<div class="ts fw7 mt-4">'+esc(n.titulo)+'</div>':'')
-    +(n.texto?'<div class="ts mt-4" style="white-space:pre-wrap;line-height:1.55">'+esc(n.texto)+'</div>':'')
+    +(n.titulo?'<div class="ts fw7 mt-4" style="'+(hecha?'text-decoration:line-through;color:var(--text3)':'')+'">'+esc(n.titulo)+'</div>':'')
+    +(n.texto?'<div class="ts mt-4" style="white-space:pre-wrap;line-height:1.55;'+(hecha?'color:var(--text3)':'')+'">'+esc(n.texto)+'</div>':'')
     +(ph.length?photoGrid(ph,'notas',n.id):'')
     +(der?'<div class="mt-6 flex gap-6" style="flex-wrap:wrap">'+der+'</div>':'')
     +'<div class="flex gap-4 mt-8" style="flex-wrap:wrap">'
     +'<button class="btn btn-g btn-s" title="Editar" onclick="abrirNota(\''+n.id+'\')">'+I.edit+'</button>'
     +'<button class="btn btn-g btn-s" title="'+(n.fijada?'Desfijar':'Fijar arriba')+'" onclick="fijarNota(\''+n.id+'\')">📌</button>'
+    +_alertBtn('notas',n.id,n.alerta)
+    +'<button class="btn btn-s" title="'+(hecha?'Volver a pendiente':'Marcar como hecha')+'" onclick="toggleNotaHecha(\''+n.id+'\')" style="'+(hecha?'background:var(--green);color:#fff':'background:var(--gray-ll);color:var(--text2)')+'">✓</button>'
     +'<button class="btn btn-sec btn-s" style="font-size:11px" onclick="derivarNotaMenu(\''+n.id+'\')">↪ Pasar a…</button>'
     +'<button class="btn btn-g btn-s" style="color:var(--red);margin-left:auto" title="Eliminar" onclick="borrarNota(\''+n.id+'\')">'+I.trash+'</button>'
     +'</div></div>';
@@ -8194,6 +8205,79 @@ function derivarNotaMenu(id){
     +'<div class="txxs tc3 mt-4">La nota queda en el libro, con el vínculo a lo que se creó.</div></div>';
   document.body.appendChild(d);
 }
+// ── Vínculo nota ↔ lo que se creó desde ella ──
+// Lo creado guarda origenNota; la nota guarda derivados. Alerta y "hecho" se
+// mantienen iguales de los dos lados.
+function _itemCompleto(tbl,it){
+  if(!it)return false;
+  if(tbl==='tareas')return it.status==='completada';
+  if(tbl==='comentarios')return !!it.cumplido;
+  if(tbl==='checklists')return (it.items||[]).length>0&&(it.items||[]).every(function(i){return i.done;});
+  if(tbl==='notas')return _notaHecha(it);
+  return false;
+}
+// Los completables que salieron de la nota (un movimiento no se "completa")
+function _notaVinculados(n){
+  return (n.derivados||[]).map(function(d){var it=d.id?(D[d.tbl]||[]).find(function(x){return x.id===d.id;}):null;return it?{tbl:d.tbl,it:it}:null;}).filter(Boolean);
+}
+// Hecha: marcada a mano, o todo lo que salió de ella ya está completo
+function _notaHecha(n){
+  if(!n)return false;
+  if(n.hecha)return true;
+  var v=_notaVinculados(n).filter(function(x){return x.tbl!=='economia';});
+  return v.length>0&&v.every(function(x){return _itemCompleto(x.tbl,x.it);});
+}
+function _notaPropagarHecha(n,on){
+  _notaVinculados(n).forEach(function(x){
+    var it=x.it;
+    if(x.tbl==='tareas')it.status=on?'completada':(it.status==='completada'?'pendiente':it.status);
+    else if(x.tbl==='comentarios')it.cumplido=!!on;
+    else if(x.tbl==='checklists'&&on)(it.items||[]).forEach(function(i){i.done=true;});
+    else return;
+    it.updatedAt=nw();
+  });
+}
+function toggleNotaHecha(id){
+  var n=(D.notas||[]).find(function(x){return x.id===id;});if(!n)return;
+  var on=!_notaHecha(n);
+  n.hecha=on;n.updatedAt=nw();
+  _notaPropagarHecha(n,on);
+  sv();render();
+  toast(on?'✓ Nota hecha'+(_notaVinculados(n).length?' (y lo vinculado también)':''):'Nota pendiente de nuevo',on?'var(--green)':'var(--text3)',2200);
+}
+// La alerta se replica: de la nota a lo creado, y de lo creado a su nota (y hermanos)
+function _notaSyncAlerta(tbl,it){
+  var n=tbl==='notas'?it:(it&&it.origenNota?(D.notas||[]).find(function(x){return x.id===it.origenNota;}):null);
+  if(!n)return;
+  var on=!!it.alerta,at=it.alertaAt||null;
+  var todos=[{tbl:'notas',it:n}].concat(_notaVinculados(n).filter(function(x){return ALERT_TBLS.indexOf(x.tbl)>=0;}));
+  todos.forEach(function(x){if(x.it===it||!!x.it.alerta===on)return;x.it.alerta=on;x.it.alertaAt=at;x.it.updatedAt=nw();});
+}
+// Etiqueta en la otra pestaña: de qué nota salió; al tocarla va a la nota
+function _desdeNotaTag(it){
+  if(!it||!it.origenNota)return '';
+  var n=(D.notas||[]).find(function(x){return x.id===it.origenNota;});
+  if(!n)return '';
+  return ' <button onclick="event.stopPropagation();irANota(\''+n.id+'\')" title="Creado desde una nota del '+esc(fmts(n.fecha)||'')+' — tocá para verla" style="border:none;background:#fef9c3;color:#a16207;border-radius:9px;padding:1px 7px;font-size:9px;font-weight:700;cursor:pointer;white-space:nowrap;display:inline-block;vertical-align:middle">📝 Desde nota'+(_notaHecha(n)?' ✓':'')+'</button>';
+}
+function irANota(id){
+  var n=(D.notas||[]).find(function(x){return x.id===id;});if(!n)return;
+  S.mod='notas';S.notaFoco=id;
+  if(S.notasCuaderno&&(n.cuaderno||NOTA_CUADERNO_DEF)!==S.notasCuaderno)S.notasCuaderno='';
+  S.notasTipo='';S.notasBuscar='';
+  render();
+  setTimeout(function(){var el=document.getElementById('nota_'+id);if(el)el.scrollIntoView({behavior:'smooth',block:'center'});},120);
+  setTimeout(function(){if(S.notaFoco===id){S.notaFoco=null;if(S.mod==='notas')render();}},4000);
+}
+function _irAVinculado(tbl,id){
+  var mod={tareas:'tareas',checklists:'checklist',economia:'economia',comentarios:'comentarios'}[tbl]||'notas';
+  S.mod=mod;render();
+  if(!id)return;
+  setTimeout(function(){
+    var el=document.querySelector('[data-id="'+id+'"],#t_'+id+',#cm_'+id+',#ck_'+id);
+    if(el)el.scrollIntoView({behavior:'smooth',block:'center'});
+  },150);
+}
 function _notaVincular(n,tbl,id,titulo){
   if(!n)return;
   if(!n.derivados)n.derivados=[];
@@ -8206,7 +8290,7 @@ function derivarNota(id,tbl){
   var tit=(n.titulo||lineas[0]||'Nota del '+fmts(n.fecha)).slice(0,90);
   var fotos=(n.photos||[]).filter(function(p){return p&&!p.deletedAt;}).map(function(p){return mkPhoto(p.url,p.caption||'');});
   if(tbl==='tareas'){
-    var t={id:uid(),projectId:S.proj,title:tit,description:n.texto||'',priority:'media',status:'pendiente',rubro:'',dueDate:'',encargado:'',photos:fotos,archivos:[],checklistId:'',origenNota:n.id,date:nw(),updatedAt:nw()};
+    var t={id:uid(),projectId:S.proj,title:tit,description:n.texto||'',priority:'media',status:_notaHecha(n)?'completada':'pendiente',rubro:'',dueDate:'',encargado:'',photos:fotos,archivos:[],checklistId:'',origenNota:n.id,alerta:!!n.alerta,alertaAt:n.alerta?(n.alertaAt||nw()):null,date:nw(),updatedAt:nw()};
     D.tareas.push(t);_notaVincular(n,'tareas',t.id,t.title);
     sv();render();toast('Tarea creada ✓','var(--green)');return;
   }
@@ -8215,13 +8299,13 @@ function derivarNota(id,tbl){
     var ckTit=n.titulo||(lineas.length>1?lineas[0]:'Checklist '+fmts(n.fecha));
     var items=(!n.titulo&&lineas.length>1)?lineas.slice(1):lineas;
     if(!items.length){toast('La nota no tiene renglones para armar un checklist','var(--orange)');return;}
-    var ck={id:uid(),projectId:S.proj,title:ckTit,priority:'media',date:td(),updatedAt:nw(),origenNota:n.id,items:items.map(function(l){return {id:uid(),text:l,done:false};})};
+    var ck={id:uid(),projectId:S.proj,title:ckTit,priority:'media',date:td(),updatedAt:nw(),origenNota:n.id,alerta:!!n.alerta,alertaAt:n.alerta?(n.alertaAt||nw()):null,items:items.map(function(l){return {id:uid(),text:l,done:false};})};
     if(!D.checklists)D.checklists=[];
     D.checklists.push(ck);_notaVincular(n,'checklists',ck.id,ck.title);
     sv();render();toast('Checklist creado con '+ck.items.length+' ítem'+(ck.items.length>1?'s':'')+' ✓','var(--green)');return;
   }
   if(tbl==='comentarios'){
-    var cm={id:uid(),projectId:S.proj,text:(n.titulo?n.titulo+'\n':'')+(n.texto||''),tipo:'general',rubro:'General',etapa:'',tareaId:'',photos:fotos,archivos:[],origenNota:n.id,date:nw(),updatedAt:nw()};
+    var cm={id:uid(),projectId:S.proj,text:(n.titulo?n.titulo+'\n':'')+(n.texto||''),tipo:'general',rubro:'General',etapa:'',tareaId:'',photos:fotos,archivos:[],origenNota:n.id,cumplido:_notaHecha(n),alerta:!!n.alerta,alertaAt:n.alerta?(n.alertaAt||nw()):null,date:nw(),updatedAt:nw()};
     D.comentarios.push(cm);_notaVincular(n,'comentarios',cm.id,tit);
     sv();render();toast('Comentario creado ✓','var(--green)');return;
   }
@@ -8242,6 +8326,7 @@ function _notaVincularDerivado(tbl,id,titulo){
   var nd=window._notaDerivando;window._notaDerivando=null;
   if(!nd||Date.now()-nd.ts>3600000)return;
   _notaVincular((D.notas||[]).find(function(x){return x.id===nd.id;}),tbl,id,titulo);
+  var it=(D[tbl]||[]).find(function(x){return x.id===id;});if(it)it.origenNota=nd.id;
 }
 // ── PDF del libro de obra ──
 function exportNotasPDF(){
@@ -8396,6 +8481,7 @@ function renderCmtItems(){saveUIState();
     if(cm.etapa)h+=colBadge(cm.etapa,'var(--blue)',true);
     if(done)h+='<span style="background:#16a34a;color:#fff;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px">✓ Realizado</span>';
     h+=_alertTag(cm);
+    h+=_desdeNotaTag(cm);
     // Mostrar la autoría de DOT o del formulario sin cambiar el origen guardado.
     const _esDot=/^dot$/i.test(String(cm.cargadoPor||cm.sourceName||'').trim());
     if((cm.sourceType==='formulario'&&(cm.cargadoPor||cm.sourceName))||_esDot)h+='<span style="font-size:9px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:1px 6px;color:#16a34a;font-weight:700;white-space:nowrap">'+(_esDot?'&#x1F4BB; DOT':'&#x1F464; '+esc(cm.cargadoPor||cm.sourceName))+'</span>';
@@ -10156,7 +10242,7 @@ function rEconomia(mc,p){
     return `<div class="card" id="eco_item_${item.id}" style="padding:12px;border-left:3px solid ${col};${item.id===S.ecoResalt?'outline:2px solid var(--cyan);':''}">
       <div class="flex justify-between items-start mb-4">
         <div class="flex-1">
-          <div class="ts fw6">${item.concepto||'Sin concepto'}${_notaBadge('economia',item.id,'detalle')}${item.interno?' <span style="font-size:9px;background:#f1f5f9;border-radius:3px;padding:1px 4px;color:#64748b;white-space:nowrap">&#x1F512; Priv.</span>':''}${(item.sourceType==='formulario'||_esDot)?' <span style="font-size:9px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:1px 6px;color:#16a34a;white-space:nowrap;display:inline-block;vertical-align:middle">'+(_esDot?'&#x1F4BB; DOT':'&#x1F464; '+(item.cargadoPor||item.sourceName||''))+'</span>':''}</div>
+          <div class="ts fw6">${item.concepto||'Sin concepto'}${_notaBadge('economia',item.id,'detalle')}${_desdeNotaTag(item)}${item.interno?' <span style="font-size:9px;background:#f1f5f9;border-radius:3px;padding:1px 4px;color:#64748b;white-space:nowrap">&#x1F512; Priv.</span>':''}${(item.sourceType==='formulario'||_esDot)?' <span style="font-size:9px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:1px 6px;color:#16a34a;white-space:nowrap;display:inline-block;vertical-align:middle">'+(_esDot?'&#x1F4BB; DOT':'&#x1F464; '+(item.cargadoPor||item.sourceName||''))+'</span>':''}</div>
           <div class="txxs tc3 mt-2">${fmts(item.fecha||item.date)} | ${item.medioPago||''} ${item.proveedor?`| <strong>${item.proveedor}</strong>`:''} ${(item.rubro||_ecoItemTexto(item))?`<span style="background:#f1f5f9;border-radius:3px;padding:1px 5px;margin-left:2px;color:#475569">${item.rubro||'Sin rubro'}${_ecoItemTexto(item)?' / '+_ecoItemTexto(item):''}</span>`:''}</div>
         </div>
         <div class="fw8" style="color:${col};font-size:15px;flex-shrink:0;margin-left:8px">${sign}$${(parseFloat(item.monto)||0).toLocaleString('es-AR')}</div>
@@ -10408,7 +10494,7 @@ function renderEcoItems(){
     return `<div class="card" id="eco_item_${item.id}" style="padding:12px;border-left:3px solid ${col};${item.id===S.ecoResalt?'outline:2px solid var(--cyan);':''  }">
       <div class="flex justify-between items-start mb-4">
         <div class="flex-1">
-          <div class="ts fw6">${item.concepto||'Sin concepto'}${_notaBadge('economia',item.id,'detalle')}${item.interno?' <span style="font-size:9px;background:#f1f5f9;border-radius:3px;padding:1px 4px;color:#64748b;white-space:nowrap">&#x1F512; Priv.</span>':''}${(item.sourceType==='formulario'||_esDot)?' <span style="font-size:9px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:1px 6px;color:#16a34a;white-space:nowrap;display:inline-block;vertical-align:middle">'+(_esDot?'&#x1F4BB; DOT':'&#x1F464; '+(item.cargadoPor||item.sourceName||''))+'</span>':''}</div>
+          <div class="ts fw6">${item.concepto||'Sin concepto'}${_notaBadge('economia',item.id,'detalle')}${_desdeNotaTag(item)}${item.interno?' <span style="font-size:9px;background:#f1f5f9;border-radius:3px;padding:1px 4px;color:#64748b;white-space:nowrap">&#x1F512; Priv.</span>':''}${(item.sourceType==='formulario'||_esDot)?' <span style="font-size:9px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:1px 6px;color:#16a34a;white-space:nowrap;display:inline-block;vertical-align:middle">'+(_esDot?'&#x1F4BB; DOT':'&#x1F464; '+(item.cargadoPor||item.sourceName||''))+'</span>':''}</div>
           <div class="txxs tc3 mt-2">${fmts(item.fecha||item.date)} | ${item.medioPago||''} ${item.proveedor?`| <strong>${item.proveedor}</strong>`:''} ${(item.rubro||_ecoItemTexto(item))?`<span style="background:#f1f5f9;border-radius:3px;padding:1px 5px;margin-left:2px;color:#475569">${item.rubro||'Sin rubro'}${_ecoItemTexto(item)?' / '+_ecoItemTexto(item):''}</span>`:''}</div>
         </div>
         <div class="fw8" style="color:${col};font-size:15px;flex-shrink:0;margin-left:8px">${sign}$${(parseFloat(item.monto)||0).toLocaleString('es-AR')}</div>
