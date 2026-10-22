@@ -2236,6 +2236,7 @@ function _silentMerge(driveData){
         // sin esto el registro entero se reemplaza y se pierden archivos de un lado)
         var _diArch=Array.isArray(di.archivos)?di.archivos.slice():null;
         if(ld>dd){Object.assign(di,li);changed=true;}
+        if(_aplicarBorradosMerge(li,di))changed=true;
         if(k==='carpetas'){
           // Carpetas de colaboradores: sin updatedAt confiable por archivo, así que
           // se unen ambos lados por id para no perder subidas de ningún lado.
@@ -2527,25 +2528,83 @@ async function readPhotos(inputId, modKey){
 function mkPhoto(url,cap){return{id:uid(),url,caption:cap||'',date:td(),author:D.user?.name||'',comments:[]};}
 
 // ─── LIGHTBOX ───
+// ── Borrados firmes ──
+// Un borrado se aplica sobre los datos ACTUALES (después del cartel de
+// confirmación pudo llegar una sincronización que reemplazó el registro: antes se
+// borraba de una copia vieja y la foto seguía ahí), se ve al instante, y deja
+// anotado qué se borró para que ninguna sincronización lo vuelva a traer.
+function _clavesFoto(p){
+  var k=[];if(!p)return k;
+  var u=typeof p==='string'?p:(p.url||'');
+  if(typeof p==='object'){
+    if(p.id)k.push('id:'+p.id);
+    if(p.driveId)k.push('d:'+p.driveId);
+    if(typeof p.localUrl==='string'){var ml=/^\[foto:([^\]]+)\]$/.exec(p.localUrl);if(ml)k.push('m:'+ml[1]);}
+  }
+  if(u){
+    var m=/^\[foto:([^\]]+)\]$/.exec(u);
+    if(m)k.push('m:'+m[1]);
+    else if(u.indexOf('data:')!==0){
+      var d=/drive\.google\.com\/(?:thumbnail\?id=|file\/d\/|open\?id=|uc\?id=)([\w-]+)/.exec(u);
+      k.push(d?'d:'+d[1]:'u:'+u);
+    }
+  }
+  return k;
+}
+function _clavesArch(a){var k=[];if(!a)return k;if(a.id)k.push('id:'+a.id);if(a.driveId)k.push('d:'+a.driveId);if(!a.id&&a.name)k.push('n:'+a.name);return k;}
+function _coincide(claves,lista){return claves.some(function(k){return lista.indexOf(k)>=0;});}
+function _anotarBorrado(item,campo,claves){
+  var l=item[campo]||[];
+  claves.forEach(function(k){if(l.indexOf(k)<0)l.push(k);});
+  item[campo]=l.slice(-300);
+}
+function _driveIdDeFoto(p){
+  if(!p)return null;
+  if(typeof p==='object'&&p.driveId)return p.driveId;
+  var u=typeof p==='string'?p:(p.url||'');
+  var d=/drive\.google\.com\/(?:thumbnail\?id=|file\/d\/|open\?id=|uc\?id=)([\w-]+)/.exec(u||'');
+  return d?d[1]:null;
+}
+// La papelera de Drive va después y en segundo plano: el borrado ya se ve hecho
+function _papeleraDriveDespues(driveId,desc){
+  if(!driveId)return;
+  _borrarDeDriveSeguro(driveId,desc).then(function(r){
+    if(r&&r.ok)sv();
+    else if(r&&r.motivo==='sin sesión de Drive')toast('Reconectá Drive para mandar también el archivo a la papelera','var(--orange)',5000);
+  }).catch(function(){});
+}
+// En la sincronización: lo borrado en cualquiera de los dos lados no vuelve
+function _aplicarBorradosMerge(li,di){
+  var ch=false;
+  var fb=[].concat(li.fotosBorradas||[],di.fotosBorradas||[]).filter(function(k,i,a){return a.indexOf(k)===i;});
+  if(fb.length){
+    if((di.fotosBorradas||[]).length!==fb.length){di.fotosBorradas=fb;ch=true;}
+    if(Array.isArray(di.photos)){var n0=di.photos.length;di.photos=di.photos.filter(function(p){return !_coincide(_clavesFoto(p),fb);});if(di.photos.length!==n0)ch=true;}
+  }
+  var ab=[].concat(li.adjBorrados||[],di.adjBorrados||[]).filter(function(k,i,a){return a.indexOf(k)===i;});
+  if(ab.length){
+    if((di.adjBorrados||[]).length!==ab.length){di.adjBorrados=ab;ch=true;}
+    if(Array.isArray(di.archivos)){var a0=di.archivos.length;di.archivos=di.archivos.filter(function(a){return !_coincide(_clavesArch(a),ab);});if(di.archivos.length!==a0)ch=true;}
+  }
+  return ch;
+}
 async function delVisitaArchivo(vid, idx){
   if(!requireDelete())return;
   var v=D.visitas.find(function(x){return x.id===vid;});
   if(!v||!v.archivos||!v.archivos[idx])return;
-  var arch=v.archivos[idx];
+  var arch=v.archivos[idx],claves=_clavesArch(arch);
   if(!await confirmarBorradoArchivo({titulo:'Eliminar este archivo',nombre:arch.name||'archivo',
     contexto:String(v.title||v.date||'').slice(0,80)}))return;
-  // La posición pudo moverse mientras el cartel estaba abierto.
-  var pos=v.archivos.indexOf(arch);
+  v=(D.visitas||[]).find(function(x){return x.id===vid;});
+  var pos=v?(v.archivos||[]).findIndex(function(a){return _coincide(_clavesArch(a),claves);}):-1;
   if(pos<0){toast('Ese archivo ya no está','var(--orange)');render();return;}
-  if(arch.driveId){
-    var r=await _borrarDeDriveSeguro(arch.driveId,'archivo de visita '+(arch.name||''),{tbl:'visitas',id:vid});
-    if(!r.ok&&r.motivo==='sin sesión de Drive')toast('Reconectá Drive para eliminar también el archivo','var(--orange)',5000);
-  }
   v.archivos.splice(pos,1);
+  _anotarBorrado(v,'adjBorrados',claves);
   v.updatedAt=nw();
   audit('visitas','delArchivo',arch.name||'');
   sv();render();
   toast('Archivo eliminado');
+  _papeleraDriveDespues(arch.driveId,'archivo de visita '+(arch.name||''));
 }
 
 
@@ -2591,15 +2650,16 @@ async function delArchivo(tbl,itemId,archId){
   if(!item||!item.archivos)return;
   var af=_findAf(item.archivos,archId);
   if(!af){toast('Archivo no encontrado','var(--orange)');return;}
+  var claves=_clavesArch(af);
   if(!await confirmarBorradoArchivo({titulo:'Eliminar archivo adjunto',nombre:af.name||'adjunto',
     contexto:String(item.title||item.concepto||item.text||'').slice(0,80)}))return;
-  if(af.driveId){
-    var r=await _borrarDeDriveSeguro(af.driveId,'adjunto '+(af.name||''),{tbl:tbl,id:itemId});
-    if(!r.ok&&r.motivo==='sin sesión de Drive')toast('Reconectá Drive para eliminar también el archivo','var(--orange)',5000);
-  }
-  item.archivos=item.archivos.filter(function(f){return f.id!==archId&&f.name!==archId;});
-  item.updatedAt=nw(); // sin esto el merge podía no ver el borrado como "más reciente" y lo revertía
+  item=(D[tbl]||[]).find(function(x){return x.id===itemId;});
+  if(!item){toast('Ese registro ya no está','var(--orange)');render();return;}
+  item.archivos=(item.archivos||[]).filter(function(f){return !_coincide(_clavesArch(f),claves);});
+  _anotarBorrado(item,'adjBorrados',claves);
+  item.updatedAt=nw();
   sv();render();toast('Archivo eliminado');
+  _papeleraDriveDespues(af.driveId,'adjunto '+(af.name||''));
 }
 // Dónde abrir un documento. La copia de Drive no lleva el archivo (se reemplaza
 // por una marca), así que en otro dispositivo `fileData` es esa marca y no el
@@ -2625,15 +2685,16 @@ async function delArchivoCmt(cmId,archId){
   if(!cm||!cm.archivos)return;
   var af=_findAf(cm.archivos,archId);
   if(!af){toast('Archivo no encontrado','var(--orange)');return;}
+  var claves=_clavesArch(af);
   if(!await confirmarBorradoArchivo({titulo:'Eliminar archivo adjunto',nombre:af.name||'adjunto',
     contexto:String(cm.text||cm.message||'').slice(0,80)}))return;
-  if(af.driveId){
-    var r=await _borrarDeDriveSeguro(af.driveId,'adjunto '+(af.name||''),{tbl:'comentarios',id:cmId});
-    if(!r.ok&&r.motivo==='sin sesión de Drive')toast('Reconectá Drive para eliminar también el archivo','var(--orange)',5000);
-  }
-  cm.archivos=cm.archivos.filter(function(f){return f.id!==archId&&f.name!==archId;});
-  cm.updatedAt=nw(); // sin esto el merge podía no ver el borrado como "más reciente" y lo revertía
+  cm=(D.comentarios||[]).find(function(x){return x.id===cmId;});
+  if(!cm){toast('Ese comentario ya no está','var(--orange)');render();return;}
+  cm.archivos=(cm.archivos||[]).filter(function(f){return !_coincide(_clavesArch(f),claves);});
+  _anotarBorrado(cm,'adjBorrados',claves);
+  cm.updatedAt=nw();
   sv();render();toast('Archivo eliminado');
+  _papeleraDriveDespues(af.driveId,'adjunto '+(af.name||''));
 }
 
 async function delPhoto(tbl, itemId, idx){
@@ -2642,15 +2703,7 @@ async function delPhoto(tbl, itemId, idx){
   if(!item||!item.photos)return;
   var photo=item.photos[idx];
   if(!photo)return;
-  var driveId=(typeof photo==='object'&&photo.driveId)||null;
-  // Si URL es de Drive (thumbnail), extraer fileId
-  if(!driveId&&typeof photo==='object'&&photo.url&&photo.url.includes('drive.google.com/thumbnail')){
-    var m=photo.url.match(/[?&]id=([^&]+)/);
-    if(m)driveId=m[1];
-  } else if(!driveId&&typeof photo==='string'&&photo.includes('drive.google.com/thumbnail')){
-    var m2=photo.match(/[?&]id=([^&]+)/);
-    if(m2)driveId=m2[1];
-  }
+  var claves=_clavesFoto(photo),driveId=_driveIdDeFoto(photo);
   var _u=typeof photo==='string'?photo:((photo&&photo.url)||'');
   var okDel=await confirmarBorradoArchivo({
     titulo:'Eliminar esta foto',
@@ -2659,20 +2712,16 @@ async function delPhoto(tbl, itemId, idx){
     miniatura:_resolveImg(_u),
   });
   if(!okDel)return;
-  // El índice pudo cambiar mientras el cartel estaba abierto (una sync que trajo
-  // cambios). Se vuelve a ubicar la foto por identidad y no por posición: con el
-  // índice viejo se podía terminar borrando la foto equivocada.
-  var pos=item.photos.indexOf(photo);
+  item=(D[tbl]||[]).find(function(x){return x.id===itemId;});
+  var pos=item?(item.photos||[]).findIndex(function(p){return _coincide(_clavesFoto(p),claves);}):-1;
   if(pos<0){toast('Esa foto ya no está','var(--orange)');render();return;}
-  if(driveId){
-    var r=await _borrarDeDriveSeguro(driveId,'foto de '+tbl,{tbl:tbl,id:itemId,idx:pos});
-    if(!r.ok&&r.motivo==='sin sesión de Drive')toast('Reconectá Drive para eliminar también el archivo','var(--orange)',5000);
-  }
   item.photos.splice(pos,1);
-  item.updatedAt=nw(); // preservar eliminación en merge
+  _anotarBorrado(item,'fotosBorradas',claves);
+  item.updatedAt=nw();
   try{audit(tbl,'delPhoto',String(item.title||item.id||''));}catch(_){}
   sv();render();
-  toast('Foto enviada a la papelera de Drive','var(--green)',4000);
+  toast('Foto eliminada','var(--green)',2500);
+  _papeleraDriveDespues(driveId,'foto de '+tbl);
 }
 
 function openPhotoEditor(tbl, itemId, idx){
@@ -11162,11 +11211,13 @@ function verEco(id){
   }
 }
 async function delEcoImagen(id){
-  const item=D.economia.find(x=>x.id===id);if(!item)return;
+  let item=D.economia.find(x=>x.id===id);if(!item)return;
   if(!await confirmarBorradoArchivo({titulo:'Eliminar comprobante',
     nombre:String(item.concepto||'comprobante'),
     contexto:'Movimiento de economía',
     miniatura:_resolveImg(item.imagen||'')}))return;
+  item=D.economia.find(x=>x.id===id);
+  if(!item){toast('Ese movimiento ya no está','var(--orange)');render();return;}
   // Mandar a la papelera de Drive si es un archivo de Drive
   if(item.imagen&&item.imagen.includes('drive.google.com')){
     var _m=item.imagen.match(/[?&]id=([^&]+)/);
