@@ -7971,13 +7971,12 @@ function rNotas(mc){
     +'<select class="fs" style="margin:0;flex:1;min-width:140px" onchange="if(this.value===\'__nuevo\'){nuevoCuadernoNota();}else{S.notaCuadernoNuevo=this.value;saveUIState();}">'+cuads.map(function(k){return '<option'+(k===cuadNueva?' selected':'')+'>'+esc(k)+'</option>';}).join('')+'<option value="__nuevo">➕ Nuevo cuaderno…</option></select>'
     +'</div>'
     +'<textarea class="ft" id="nota_q" rows="3" style="margin:0" placeholder="¿Qué pasó hoy en la obra? Ej: Se hormigonó la losa del sector A. Hablé con Juan (plomero): arranca el lunes." onblur="S.notaBorrador=this.value;saveUIState()">'+esc(S.notaBorrador||'')+'</textarea>'
-    +(adj.length?'<div class="flex gap-6 mt-6" style="flex-wrap:wrap">'+adj.map(function(u,i){return '<div style="position:relative"><img src="'+esc(_resolveImg(u))+'" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--brd)"><button onclick="S.notaAdj.splice('+i+',1);saveUIState();render()" style="position:absolute;top:-6px;right:-6px;border:none;background:var(--red);color:#fff;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer">✕</button></div>';}).join('')+'</div>':'')
-    +'<div class="flex gap-6 mt-8 items-center" style="flex-wrap:wrap">'
-    +'<button class="btn btn-sec btn-s" id="nota_mic" onclick="dictarNota(\'nota_q\',this)">🎤 Dictar</button>'
-    +'<label class="btn btn-sec btn-s" style="cursor:pointer">📷 Foto<input type="file" accept="image/*" multiple style="display:none" onchange="fotosNotaRapida(this)"></label>'
-    +'<button class="btn btn-sec btn-s" onclick="abrirDibujoNota(null)">✏️ Dibujar</button>'
-    +'<div style="flex:1"></div>'
-    +'<button class="btn btn-s" style="background:'+c+';color:#fff" onclick="guardarNotaRapida()">'+I.save+' Asentar</button>'
+    +(adj.length?'<div id="nota_adj" class="flex gap-6 mt-6" style="flex-wrap:wrap">'+adj.map(function(u,i){return '<div style="position:relative"><img src="'+esc(_resolveImg(u))+'" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--brd)"><button onclick="S.notaAdj.splice('+i+',1);saveUIState();render()" style="position:absolute;top:-6px;right:-6px;border:none;background:var(--red);color:#fff;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer">✕</button></div>';}).join('')+'</div>':'')
+    +'<div class="flex gap-4 mt-8 items-center" style="flex-wrap:nowrap">'
+    +'<button class="btn btn-sec btn-s" id="nota_mic" style="flex:1;white-space:nowrap;padding-left:6px;padding-right:6px;justify-content:center" onclick="dictarNota(\'nota_q\',this)">🎤 Dictar</button>'
+    +'<label class="btn btn-sec btn-s" style="flex:1;white-space:nowrap;padding-left:6px;padding-right:6px;justify-content:center;cursor:pointer">📷 Foto<input type="file" accept="image/*" multiple style="display:none" onchange="fotosNotaRapida(this)"></label>'
+    +'<button class="btn btn-sec btn-s" style="flex:1;white-space:nowrap;padding-left:6px;padding-right:6px;justify-content:center" onclick="abrirDibujoNota(null)">✏️ Dibujar</button>'
+    +'<button class="btn btn-s" style="flex:1;white-space:nowrap;padding-left:6px;padding-right:6px;justify-content:center;background:'+c+';color:#fff" onclick="guardarNotaRapida()">'+I.save+' Asentar</button>'
     +'</div>'
     +'<div class="txxs tc3 mt-6">Se asienta con la fecha y hora de ahora. Para otra fecha o más datos usá <b>+ Nota</b>.</div>'
     +'</div>';
@@ -8075,6 +8074,9 @@ function guardarNotaRapida(){
   if(!D.notas)D.notas=[];
   D.notas.push(n);
   S.notaBorrador='';S.notaAdj=[];saveUIState();
+  // El redibujado conserva lo escrito en el campo: se vacía a mano
+  if(ta)ta.value='';
+  var _adjEl=document.getElementById('nota_adj');if(_adjEl)_adjEl.remove();
   audit('notas','create',(tx||'nota').slice(0,30));sv();render();toast('Nota asentada ✓','var(--green)');
 }
 function abrirNota(id){
