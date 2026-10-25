@@ -8031,6 +8031,12 @@ function _notasFiltradas(){
     return S.notasOrden==='asc'?-r:r;
   });
 }
+// En las fijadas (que van arriba, fuera de los días) la fecha va en la tarjeta
+function _notaDiaCorto(f){
+  var d=_parseLocal(f);if(!f||isNaN(d))return 'Sin fecha';
+  var t=d.toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+  return t.charAt(0).toUpperCase()+t.slice(1);
+}
 function _notaDiaLargo(f){
   var d=_parseLocal(f);if(isNaN(d))return f||'Sin fecha';
   var t=d.toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
@@ -8093,7 +8099,7 @@ function rNotas(mc){
     h+='<div class="empty"><span style="color:'+c+'">'+I.edit+'</span><div class="ts mt-8">'+((S.notasBuscar||S.notasTipo)?'Sin notas con ese filtro':S.notasCuaderno?'El cuaderno «'+esc(S.notasCuaderno)+'» todavía no tiene notas':'Todavía no hay notas')+'</div><div class="txxs tc3 mt-4">Asentá lo que pasa en la obra: avances, acuerdos, llamadas, ideas.</div></div>';
   } else {
     var fij=lista.filter(function(n){return n.fijada;});
-    if(fij.length){h+='<div class="txs fw7 mb-6" style="color:'+c+'">📌 Fijadas</div>'+fij.map(_notaCard).join('');}
+    if(fij.length){h+='<div class="txs fw7 mb-6" style="color:'+c+'">📌 Fijadas</div>'+fij.map(function(n){return _notaCard(n,true);}).join('');}
     var dia='';
     lista.forEach(function(n){
       if(n.fijada)return;
@@ -8103,7 +8109,7 @@ function rNotas(mc){
   }
   mc.innerHTML=h;
 }
-function _notaCard(n){
+function _notaCard(n,conFecha){
   var c=MC.notas;
   var ph=(n.photos||[]).filter(function(p){return p&&!p.deletedAt;});
   var esDot=/^dot$/i.test(String(n.cargadoPor||'').trim());
@@ -8118,7 +8124,7 @@ function _notaCard(n){
   var hecha=_notaHecha(n);
   return '<div class="card mb-8" id="nota_'+n.id+'" style="border-left:3px solid '+(n.alerta?'var(--red)':hecha?'var(--green)':n.fijada?c:'var(--brd)')+';padding:10px 12px;'+(S.notaFoco===n.id?'box-shadow:0 0 0 2px '+c+';':'')+(hecha?'background:#f0fdf4;':'')+'">'
     +'<div class="flex gap-4 items-center" style="flex-wrap:wrap">'
-    +'<span class="txxs fw7 tc3">'+esc(n.hora||'')+'</span>'
+    +(conFecha?'<span class="txxs fw7" style="color:var(--text2);white-space:nowrap">📅 '+esc(_notaDiaCorto(n.fecha))+(n.hora?' · '+esc(n.hora):'')+'</span>':'<span class="txxs fw7 tc3">'+esc(n.hora||'')+'</span>')
     +pill(NOTA_TIPOS[n.tipo||'registro']||n.tipo,'#fef9c3','#a16207')
     +((n.cuaderno&&n.cuaderno!==NOTA_CUADERNO_DEF)?pill('📒 '+esc(n.cuaderno),'#f1f5f9','#475569'):'')
     +(n.personas?pill('👥 '+esc(n.personas),'#eff6ff','#2563eb'):'')
