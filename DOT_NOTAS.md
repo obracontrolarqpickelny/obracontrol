@@ -49,6 +49,14 @@ Están en la lista **`notas`** del nivel principal, al lado de `tareas`, `econom
 | `cargadoPor` | **Siempre `"dot"`**: así la nota se muestra con la pastilla 💻 DOT. |
 | `date`, `updatedAt` | Fecha y hora de ahora en ISO UTC. Al editar una nota, actualizá `updatedAt`. |
 
+## Cuadernos
+
+Los cuadernos de cada obra se guardan en la lista **`cuadernosNotas`**. Cada uno tiene esta forma: `{"id": "...", "projectId": "<obra>", "nombre": "Instalación eléctrica", "date": "<ISO>", "updatedAt": "<ISO>"}`.
+
+- **"Libro de obra"** es el cuaderno principal y no hace falta crearlo.
+- Si asentás una nota en un cuaderno que no figura en `cuadernosNotas`, igual aparece en la app. Para que quede creado aunque no tenga notas, agregalo también a esa lista.
+- Usá exactamente el mismo nombre en el campo `cuaderno` de la nota y en `nombre`.
+
 ## Cómo asentar
 
 1. Bajá la versión **actual** del archivo, justo antes de escribir.

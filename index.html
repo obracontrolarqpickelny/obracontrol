@@ -2009,7 +2009,7 @@ const SC={'En curso':'#f59e0b',Pausada:'#94a3b8',Finalizada:'#22c55e','Por inici
 const MC={dashboard:'#D97706',visitas:'#3b82f6',tareas:'#0891b2',materiales:'#7c3aed',alertas:'#dc2626',checklist:'#db2777',documentos:'#475569',comentarios:'#ea580c',colaboradores:'#16a34a',economia:'#0891b2',informes:'#D97706',config:'#64748b',bandeja:'#0d9488',notas:'#ca8a04'};
 const MCBG={dashboard:'#FFFBEB',visitas:'#EFF6FF',tareas:'#ECFEFF',materiales:'#F5F3FF',alertas:'#FEF2F2',checklist:'#FDF2F8',documentos:'#F8FAFC',comentarios:'#FFF7ED',colaboradores:'#F0FDF4',economia:'#ECFEFF',informes:'#FFFBEB',config:'#F8FAFC',bandeja:'#f0fdfa',notas:'#FEFCE8'};
 
-let D={user:null,projects:[],visitas:[],notas:[],tareas:[],materiales:[],matIngresos:[],alertas:[],documentos:[],enlaces:[],checklists:[],comentarios:[],colaboradores:[],economia:[],auditLog:[],formulariosPendientes:[],carpetas:[],mensajesColab:[],papeleraDrive:[],driveConfig:{},lastSync:null};
+let D={user:null,projects:[],visitas:[],notas:[],cuadernosNotas:[],tareas:[],materiales:[],matIngresos:[],alertas:[],documentos:[],enlaces:[],checklists:[],comentarios:[],colaboradores:[],economia:[],auditLog:[],formulariosPendientes:[],carpetas:[],mensajesColab:[],papeleraDrive:[],driveConfig:{},lastSync:null};
 let S={proj:null,mod:'dashboard',menu:false,searchOpen:false,searchQ:'',taskFilter:'',taskEncFilter:'',taskSort:'',chkSort:'',chkCollapsed:{},taskCollapsed:{},visitaDetail:null,matDetail:null,matNoteEditing:null,matIngSort:'rec',cmtFilter:'',cmtSearch:'',cmtTipoFilter:'',ecoFilter:'',ecoTipoFilter:'',ecoSort:'',docSort:'',matFilter:'',matCatFilter:'',matSort:'',matSinCompMin:false,matExistMin:false,matAPedirMin:false,matPedMin:false,ecoMetrosOpen:false,bandejaTab:'pendientes'};
 try{S.chkCollapsed=JSON.parse(localStorage.getItem('_cc')||'{}')}catch(e){}
 try{S.taskCollapsed=JSON.parse(localStorage.getItem('_tc')||'{}')}catch(e){}
@@ -2186,7 +2186,7 @@ function mergeLocalData(){
   try{
     const ls=localStorage.getItem(SK);if(!ls)return;
     const ld=JSON.parse(ls);
-    const arrKeys=['visitas','tareas','materiales','matIngresos','alertas','checklists','documentos','enlaces','comentarios','colaboradores','economia','auditLog','formulariosPendientes','carpetas','mensajesColab','projects','notas'];
+    const arrKeys=['visitas','tareas','materiales','matIngresos','alertas','checklists','documentos','enlaces','comentarios','colaboradores','economia','auditLog','formulariosPendientes','carpetas','mensajesColab','projects','notas','cuadernosNotas'];
     arrKeys.forEach(k=>{
       if(ld[k]&&Array.isArray(ld[k])){
         const existing=new Set((D[k]||[]).map(x=>x.id));
@@ -2201,7 +2201,7 @@ function _isUserTyping(){var ae=document.activeElement;if(!ae)return false;var t
 // Returns true if any data actually changed (items added/removed/updated).
 function _silentMerge(driveData){
   if(!driveData)return false;
-  var arrKeys=['visitas','tareas','materiales','matIngresos','alertas','checklists','documentos','enlaces','comentarios','colaboradores','economia','auditLog','formulariosPendientes','projects','mensajesColab','carpetas','notas'];
+  var arrKeys=['visitas','tareas','materiales','matIngresos','alertas','checklists','documentos','enlaces','comentarios','colaboradores','economia','auditLog','formulariosPendientes','projects','mensajesColab','carpetas','notas','cuadernosNotas'];
   // Unir tombstones de Drive + local
   var driveTombs=(driveData.tombstones&&Array.isArray(driveData.tombstones))?driveData.tombstones:[];
   var localTombs=D.tombstones||[];
@@ -2398,7 +2398,7 @@ function _repairProjectIds(){
   if(!projs.length)return; // sin proyectos cargados — no tocar nada (evita borrar todo en estado inicial)
   var known=new Set(projs.map(function(p){return p.id;}));
   // Para tablas con projectId explícito: eliminar items de proyectos que no existen
-  ['visitas','tareas','materiales','matIngresos','alertas','checklists','documentos','enlaces','comentarios','colaboradores','economia','notas'].forEach(function(tbl){
+  ['visitas','tareas','materiales','matIngresos','alertas','checklists','documentos','enlaces','comentarios','colaboradores','economia','notas','cuadernosNotas'].forEach(function(tbl){
     if(!D[tbl])return;
     var before=D[tbl].length;
     D[tbl]=D[tbl].filter(function(x){
@@ -5849,7 +5849,7 @@ function addTombstone(tbl,id){
 function applyTombstones(tombs,obj){
   if(!tombs||!tombs.length)return;
   var ids=new Set(tombs.map(function(t){return t.id;}));
-  var tbls=['projects','visitas','tareas','materiales','matIngresos','alertas','checklists','documentos','enlaces','comentarios','economia','mensajesColab','notas'];
+  var tbls=['projects','visitas','tareas','materiales','matIngresos','alertas','checklists','documentos','enlaces','comentarios','economia','mensajesColab','notas','cuadernosNotas'];
   tbls.forEach(function(tbl){
     if(Array.isArray(obj[tbl]))obj[tbl]=obj[tbl].filter(function(x){return !ids.has(x.id);});
   });
@@ -7935,11 +7935,42 @@ function saveEditEnl(id){
 var NOTA_TIPOS={registro:'📝 Registro',avance:'🏗 Avance de obra',reunion:'🤝 Reunión / acuerdo',llamada:'📞 Llamada',pendiente:'⏳ Pendiente',idea:'💡 Idea'};
 var NOTA_CUADERNO_DEF='Libro de obra';
 function _notaHora(){var d=new Date();return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+// Los cuadernos se guardan como registros (D.cuadernosNotas), así un cuaderno
+// nuevo existe aunque todavía no tenga notas y llega a todos los dispositivos.
+// Antes sólo vivía en la pantalla: al elegir otro cuaderno desaparecía.
+function _cuadRegs(){return (D.cuadernosNotas||[]).filter(function(c){return c.projectId===S.proj&&c.nombre;});}
 function _notaCuadernos(){
-  var s={};s[NOTA_CUADERNO_DEF]=1;
+  var s={};
+  _cuadRegs().forEach(function(c){s[c.nombre]=1;});
   pf('notas').forEach(function(n){if(n.cuaderno)s[n.cuaderno]=1;});
-  if(S.notaCuadernoNuevo)s[S.notaCuadernoNuevo]=1;
-  return Object.keys(s);
+  delete s[NOTA_CUADERNO_DEF];
+  return [NOTA_CUADERNO_DEF].concat(Object.keys(s).sort(function(a,b){return a.localeCompare(b,'es');}));
+}
+function _crearCuaderno(nombre){
+  nombre=String(nombre||'').trim().replace(/\s+/g,' ');
+  if(!nombre)return '';
+  var ya=_notaCuadernos().find(function(k){return k.toLowerCase()===nombre.toLowerCase();});
+  if(ya&&ya!==NOTA_CUADERNO_DEF&&!_cuadRegs().some(function(c){return c.nombre===ya;})){
+    if(!D.cuadernosNotas)D.cuadernosNotas=[];
+    D.cuadernosNotas.push({id:uid(),projectId:S.proj,nombre:ya,date:nw(),updatedAt:nw()});sv();
+  }
+  if(ya)return ya;
+  if(!D.cuadernosNotas)D.cuadernosNotas=[];
+  D.cuadernosNotas.push({id:uid(),projectId:S.proj,nombre:nombre,date:nw(),updatedAt:nw()});
+  sv();
+  return nombre;
+}
+// Cuaderno donde va el asiento rápido
+function _cuadSel(){
+  var l=_notaCuadernos();
+  if(S.notaCuadernoNuevo&&l.indexOf(S.notaCuadernoNuevo)>=0)return S.notaCuadernoNuevo;
+  if(S.notasCuaderno&&l.indexOf(S.notasCuaderno)>=0)return S.notasCuaderno;
+  return NOTA_CUADERNO_DEF;
+}
+function _notaFiltrarCuad(nombre){
+  S.notasCuaderno=nombre||'';
+  if(nombre)S.notaCuadernoNuevo=nombre; // lo que se asienta mirando un cuaderno va a ese cuaderno
+  saveUIState();render();
 }
 function _notasFiltradas(){
   var q=_normTxt(S.notasBuscar||'');
@@ -7975,7 +8006,8 @@ async function _guardarImgNota(dataUrl){
 function rNotas(mc){
   var c=MC.notas;
   var cuads=_notaCuadernos();
-  var cuadNueva=S.notaCuadernoNuevo||S.notasCuaderno||NOTA_CUADERNO_DEF;
+  if(S.notasCuaderno&&cuads.indexOf(S.notasCuaderno)<0)S.notasCuaderno='';
+  var cuadNueva=_cuadSel();
   var tipoNueva=S.notaTipoNueva||'registro';
   var adj=S.notaAdj||[];
   var lista=_notasFiltradas();
@@ -7987,7 +8019,7 @@ function rNotas(mc){
   h+='<div class="card mb-12" style="border-left:3px solid '+c+'">'
     +'<div class="flex gap-6 mb-8" style="flex-wrap:wrap">'
     +'<select class="fs" style="margin:0;flex:1;min-width:140px" onchange="S.notaTipoNueva=this.value;saveUIState()">'+Object.keys(NOTA_TIPOS).map(function(k){return '<option value="'+k+'"'+(k===tipoNueva?' selected':'')+'>'+NOTA_TIPOS[k]+'</option>';}).join('')+'</select>'
-    +'<select class="fs" style="margin:0;flex:1;min-width:140px" onchange="if(this.value===\'__nuevo\'){nuevoCuadernoNota();}else{S.notaCuadernoNuevo=this.value;saveUIState();}">'+cuads.map(function(k){return '<option'+(k===cuadNueva?' selected':'')+'>'+esc(k)+'</option>';}).join('')+'<option value="__nuevo">➕ Nuevo cuaderno…</option></select>'
+    +'<select class="fs" style="margin:0;flex:1;min-width:140px" onchange="if(this.value===\'__nuevo\'){nuevoCuadernoNota();}else{S.notaCuadernoNuevo=this.value;saveUIState();}" title="Cuaderno donde se asienta">'+cuads.map(function(k){return '<option value="'+esc(k)+'"'+(k===cuadNueva?' selected':'')+'>📒 '+esc(k)+'</option>';}).join('')+'<option value="__nuevo">➕ Nuevo cuaderno…</option></select>'
     +'</div>'
     +'<textarea class="ft" id="nota_q" rows="3" style="margin:0" placeholder="¿Qué pasó hoy en la obra? Ej: Se hormigonó la losa del sector A. Hablé con Juan (plomero): arranca el lunes." onblur="S.notaBorrador=this.value;saveUIState()">'+esc(S.notaBorrador||'')+'</textarea>'
     +(adj.length?'<div id="nota_adj" class="flex gap-6 mt-6" style="flex-wrap:wrap">'+adj.map(function(u,i){return '<div style="position:relative"><img src="'+esc(_resolveImg(u))+'" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--brd)"><button onclick="S.notaAdj.splice('+i+',1);saveUIState();render()" style="position:absolute;top:-6px;right:-6px;border:none;background:var(--red);color:#fff;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer">✕</button></div>';}).join('')+'</div>':'')
@@ -8000,9 +8032,10 @@ function rNotas(mc){
     +'<div class="txxs tc3 mt-6">Se asienta con la fecha y hora de ahora. Para otra fecha o más datos usá <b>+ Nota</b>.</div>'
     +'</div>';
   // Filtros
-  h+='<div class="flex gap-6 mb-8" style="overflow-x:auto;padding-bottom:2px">'
-    +chip(!S.notasCuaderno,'📚 Todos',"S.notasCuaderno='';saveUIState();render()")
-    +cuads.map(function(k){return chip(S.notasCuaderno===k,'📒 '+esc(k),"S.notasCuaderno='"+esc(k).replace(/'/g,"\\'")+"';saveUIState();render()");}).join('')
+  h+='<div class="flex gap-6 mb-8" style="flex-wrap:wrap">'
+    +chip(!S.notasCuaderno,'📚 Todos',"_notaFiltrarCuad('')")
+    +cuads.map(function(k){return '<button class="btn btn-s" data-c="'+esc(k)+'" style="white-space:nowrap;'+(S.notasCuaderno===k?'background:'+c+';color:#fff':'background:var(--gray-ll);color:var(--text2)')+'" onclick="_notaFiltrarCuad(this.dataset.c)">📒 '+esc(k)+'</button>';}).join('')
+    +'<button class="btn btn-sec btn-s" style="white-space:nowrap" title="Crear, renombrar o borrar cuadernos" onclick="abrirCuadernos()">⚙ Cuadernos</button>'
     +'</div>'
     +'<div class="flex gap-6 mb-10" style="flex-wrap:wrap">'
     +'<input class="fi" style="margin:0;flex:1;min-width:160px" placeholder="🔎 Buscar en las notas…" value="'+esc(S.notasBuscar||'')+'" onchange="S.notasBuscar=this.value;saveUIState();render()">'
@@ -8010,7 +8043,7 @@ function rNotas(mc){
     +'<select class="fs" style="margin:0;width:auto" onchange="S.notasTipo=this.value;saveUIState();render()"><option value="">Todos los tipos</option>'+Object.keys(NOTA_TIPOS).map(function(k){return '<option value="'+k+'"'+(S.notasTipo===k?' selected':'')+'>'+NOTA_TIPOS[k]+'</option>';}).join('')+'</select>'
     +'</div>';
   if(!lista.length){
-    h+='<div class="empty"><span style="color:'+c+'">'+I.edit+'</span><div class="ts mt-8">'+((S.notasBuscar||S.notasTipo||S.notasCuaderno)?'Sin notas con ese filtro':'Todavía no hay notas')+'</div><div class="txxs tc3 mt-4">Asentá lo que pasa en la obra: avances, acuerdos, llamadas, ideas.</div></div>';
+    h+='<div class="empty"><span style="color:'+c+'">'+I.edit+'</span><div class="ts mt-8">'+((S.notasBuscar||S.notasTipo)?'Sin notas con ese filtro':S.notasCuaderno?'El cuaderno «'+esc(S.notasCuaderno)+'» todavía no tiene notas':'Todavía no hay notas')+'</div><div class="txxs tc3 mt-4">Asentá lo que pasa en la obra: avances, acuerdos, llamadas, ideas.</div></div>';
   } else {
     var fij=lista.filter(function(n){return n.fijada;});
     if(fij.length){h+='<div class="txs fw7 mb-6" style="color:'+c+'">📌 Fijadas</div>'+fij.map(_notaCard).join('');}
@@ -8063,9 +8096,57 @@ function _notaCard(n){
 // Ícono de compartir con colaborador (nodos), en el tamaño que haga falta
 function _nodos(px){return I.share.replace('width="20" height="20"','width="'+(px||14)+'" height="'+(px||14)+'" style="vertical-align:-2px"');}
 function nuevoCuadernoNota(){
-  var n=(prompt('Nombre del cuaderno nuevo (ej: Instalación eléctrica, Reuniones con el cliente):')||'').trim();
-  if(n){S.notaCuadernoNuevo=n;S.notasCuaderno=n;saveUIState();}
+  var n=_crearCuaderno(prompt('Nombre del cuaderno nuevo (ej: Instalación eléctrica, Reuniones con el cliente):'));
+  if(n){S.notaCuadernoNuevo=n;S.notasCuaderno=n;saveUIState();toast('Cuaderno «'+n+'» creado ✓','var(--green)',2000);}
   render();
+}
+// ── Administrar cuadernos ──
+function abrirCuadernos(){
+  document.getElementById('cuadM')?.remove();
+  var d=document.createElement('div');d.className='mo open';d.id='cuadM';
+  document.body.appendChild(d);
+  _pintarCuadernos();
+}
+function _pintarCuadernos(){
+  var d=document.getElementById('cuadM');if(!d)return;
+  var cuenta={};pf('notas').forEach(function(n){var k=n.cuaderno||NOTA_CUADERNO_DEF;cuenta[k]=(cuenta[k]||0)+1;});
+  d.innerHTML='<div class="mo-c" style="max-width:440px"><div class="mo-h"><h3 style="color:'+MC.notas+'">📒 Cuadernos</h3><button class="tbtn" onclick="document.getElementById(\'cuadM\').remove();render()">'+I.x+'</button></div>'
+    +_notaCuadernos().map(function(k){
+      var def=k===NOTA_CUADERNO_DEF;
+      return '<div class="flex items-center gap-6" style="padding:8px 4px;border-bottom:1px solid var(--gray-ll)">'
+        +'<div style="flex:1;min-width:0"><div class="ts fw7" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📒 '+esc(k)+'</div><div class="txxs tc3">'+(cuenta[k]||0)+' nota'+((cuenta[k]||0)===1?'':'s')+(def?' · cuaderno principal':'')+'</div></div>'
+        +(def?'':'<button class="btn btn-g btn-s" data-c="'+esc(k)+'" title="Renombrar" onclick="renombrarCuaderno(this.dataset.c)">'+I.edit+'</button>'
+        +'<button class="btn btn-g btn-s" style="color:var(--red)" data-c="'+esc(k)+'" title="Borrar" onclick="borrarCuaderno(this.dataset.c)">'+I.trash+'</button>')
+        +'</div>';
+    }).join('')
+    +'<button class="btn btn-w mt-10" style="background:'+MC.notas+';color:#fff" onclick="var _n=_crearCuaderno(prompt(\'Nombre del cuaderno nuevo:\'));if(_n){S.notaCuadernoNuevo=_n;saveUIState();}_pintarCuadernos()">'+I.plus+' Nuevo cuaderno</button>'
+    +'</div>';
+}
+function renombrarCuaderno(viejo){
+  var nuevo=String(prompt('Nuevo nombre para «'+viejo+'»:',viejo)||'').trim().replace(/\s+/g,' ');
+  if(!nuevo||nuevo===viejo)return;
+  var otro=_notaCuadernos().find(function(k){return k!==viejo&&k.toLowerCase()===nuevo.toLowerCase();});
+  if(otro&&!confirm('Ya existe el cuaderno «'+otro+'». ¿Pasar todas las notas de «'+viejo+'» a ese cuaderno?'))return;
+  var destino=otro||nuevo;
+  pf('notas').forEach(function(n){if((n.cuaderno||NOTA_CUADERNO_DEF)===viejo){n.cuaderno=destino;n.updatedAt=nw();}});
+  _cuadRegs().filter(function(c){return c.nombre===viejo;}).forEach(function(c){
+    if(otro){D.cuadernosNotas=D.cuadernosNotas.filter(function(x){return x.id!==c.id;});addTombstone('cuadernosNotas',c.id);}
+    else{c.nombre=destino;c.updatedAt=nw();}
+  });
+  if(!otro)_crearCuaderno(destino);
+  if(S.notasCuaderno===viejo)S.notasCuaderno=destino;
+  if(S.notaCuadernoNuevo===viejo)S.notaCuadernoNuevo=destino;
+  saveUIState();sv();_pintarCuadernos();toast('Cuaderno renombrado ✓','var(--green)',2000);
+}
+function borrarCuaderno(nombre){
+  var notas=pf('notas').filter(function(n){return (n.cuaderno||NOTA_CUADERNO_DEF)===nombre;});
+  if(!confirm(notas.length?'¿Borrar el cuaderno «'+nombre+'»? Sus '+notas.length+' nota'+(notas.length>1?'s':'')+' pasan a «'+NOTA_CUADERNO_DEF+'» (no se borra ninguna nota).':'¿Borrar el cuaderno «'+nombre+'»?'))return;
+  notas.forEach(function(n){n.cuaderno=NOTA_CUADERNO_DEF;n.updatedAt=nw();});
+  _cuadRegs().filter(function(c){return c.nombre===nombre;}).forEach(function(c){addTombstone('cuadernosNotas',c.id);});
+  D.cuadernosNotas=(D.cuadernosNotas||[]).filter(function(c){return !(c.projectId===S.proj&&c.nombre===nombre);});
+  if(S.notasCuaderno===nombre)S.notasCuaderno='';
+  if(S.notaCuadernoNuevo===nombre)S.notaCuadernoNuevo='';
+  saveUIState();sv();_pintarCuadernos();toast('Cuaderno borrado','var(--text3)',2000);
 }
 async function fotosNotaRapida(input){
   var urls=await _leerFotosNota(input);
@@ -8090,7 +8171,7 @@ function guardarNotaRapida(){
   var adj=S.notaAdj||[];
   if(!tx&&!adj.length){toast('Escribí, dictá o agregá una foto','var(--orange)');return;}
   var n={id:uid(),projectId:S.proj,fecha:td(),hora:_notaHora(),tipo:S.notaTipoNueva||'registro',
-    cuaderno:S.notaCuadernoNuevo||S.notasCuaderno||NOTA_CUADERNO_DEF,titulo:'',texto:tx,personas:'',
+    cuaderno:_cuadSel(),titulo:'',texto:tx,personas:'',
     photos:adj.map(function(u){return mkPhoto(u,'');}),fijada:false,derivados:[],
     cargadoPor:(D.user&&D.user.name)||'',date:nw(),updatedAt:nw()};
   if(!D.notas)D.notas=[];
@@ -8104,14 +8185,14 @@ function guardarNotaRapida(){
 function abrirNota(id){
   var n=id?(D.notas||[]).find(function(x){return x.id===id;}):null;
   window._notaEdit={id:id||null,photos:n?JSON.parse(JSON.stringify(n.photos||[])):[]};
-  var cuads=_notaCuadernos(),cu=n?(n.cuaderno||NOTA_CUADERNO_DEF):(S.notaCuadernoNuevo||S.notasCuaderno||NOTA_CUADERNO_DEF);
+  var cuads=_notaCuadernos(),cu=n?(n.cuaderno||NOTA_CUADERNO_DEF):_cuadSel();
   document.getElementById('notaM')?.remove();
   var d=document.createElement('div');d.className='mo open';d.id='notaM';
   d.innerHTML='<div class="mo-c" style="max-width:560px"><div class="mo-h"><h3 style="color:'+MC.notas+'">'+(n?'Editar nota':'Nueva nota')+'</h3><button class="tbtn" onclick="document.getElementById(\'notaM\').remove()">'+I.x+'</button></div>'
     +'<div class="fr"><div class="fg"><label class="fl">Fecha</label><input class="fi" type="date" id="nm_f" value="'+esc(n?n.fecha:td())+'"></div>'
     +'<div class="fg"><label class="fl">Hora</label><input class="fi" type="time" id="nm_h" value="'+esc(n?(n.hora||''):_notaHora())+'"></div></div>'
     +'<div class="fr"><div class="fg"><label class="fl">Tipo</label><select class="fs" id="nm_t">'+Object.keys(NOTA_TIPOS).map(function(k){return '<option value="'+k+'"'+(k===((n&&n.tipo)||S.notaTipoNueva||'registro')?' selected':'')+'>'+NOTA_TIPOS[k]+'</option>';}).join('')+'</select></div>'
-    +'<div class="fg"><label class="fl">Cuaderno</label><select class="fs" id="nm_c" onchange="if(this.value===\'__nuevo\'){var _n=(prompt(\'Nombre del cuaderno nuevo:\')||\'\').trim();if(_n){var _o=document.createElement(\'option\');_o.text=_n;_o.value=_n;this.insertBefore(_o,this.lastElementChild);this.value=_n;}else{this.selectedIndex=0;}}">'+(cuads.indexOf(cu)<0?cuads.concat([cu]):cuads).map(function(k){return '<option value="'+esc(k)+'"'+(k===cu?' selected':'')+'>'+esc(k)+'</option>';}).join('')+'<option value="__nuevo">➕ Nuevo cuaderno…</option></select></div></div>'
+    +'<div class="fg"><label class="fl">Cuaderno</label><select class="fs" id="nm_c" onchange="if(this.value===\'__nuevo\'){var _n=_crearCuaderno(prompt(\'Nombre del cuaderno nuevo:\'));if(_n){if(![].some.call(this.options,function(o){return o.value===_n;})){var _o=document.createElement(\'option\');_o.text=_n;_o.value=_n;this.insertBefore(_o,this.lastElementChild);}this.value=_n;}else{this.selectedIndex=0;}}">'+(cuads.indexOf(cu)<0?cuads.concat([cu]):cuads).map(function(k){return '<option value="'+esc(k)+'"'+(k===cu?' selected':'')+'>'+esc(k)+'</option>';}).join('')+'<option value="__nuevo">➕ Nuevo cuaderno…</option></select></div></div>'
     +'<div class="fg"><label class="fl">Título (opcional)</label><input class="fi" id="nm_ti" value="'+esc(n?(n.titulo||''):'')+'" placeholder="Ej: Hormigonado losa sector A"></div>'
     +'<div class="fg"><label class="fl">Con quién (opcional)</label><input class="fi" id="nm_p" value="'+esc(n?(n.personas||''):'')+'" placeholder="Ej: Juan (plomero), propietario"></div>'
     +'<div class="fg"><label class="fl">Nota</label><textarea class="ft" id="nm_tx" rows="6">'+esc(n?(n.texto||''):'')+'</textarea></div>'
@@ -8150,7 +8231,7 @@ function guardarNota(){
   var datos={fecha:v('nm_f')||td(),hora:v('nm_h'),tipo:v('nm_t')||'registro',cuaderno:v('nm_c')||NOTA_CUADERNO_DEF,titulo:ti,personas:v('nm_p'),texto:tx,photos:e.photos||[],updatedAt:nw()};
   if(n)Object.assign(n,datos);
   else D.notas.push(Object.assign({id:uid(),projectId:S.proj,fijada:false,derivados:[],cargadoPor:(D.user&&D.user.name)||'',date:nw()},datos));
-  if(datos.cuaderno!==NOTA_CUADERNO_DEF)S.notaCuadernoNuevo=datos.cuaderno;
+  if(datos.cuaderno!==NOTA_CUADERNO_DEF){_crearCuaderno(datos.cuaderno);S.notaCuadernoNuevo=datos.cuaderno;saveUIState();}
   document.getElementById('notaM')?.remove();
   audit('notas',n?'update':'create',(ti||tx).slice(0,30));sv();render();toast(n?'Nota actualizada ✓':'Nota guardada ✓','var(--green)');
 }
@@ -8171,7 +8252,7 @@ function dictarNota(taId,btn){
   var rec=new SR();rec.lang='es-AR';rec.continuous=true;rec.interimResults=false;
   window._notaRec=rec;
   var txt0=btn?btn.textContent:'';
-  rec.onstart=function(){if(btn){btn.textContent='🔴 Escuchando… (tocá para terminar)';btn.style.color='var(--red)';}};
+  rec.onstart=function(){if(btn){btn.textContent='🔴 Parar';btn.title='Escuchando… tocá para terminar';btn.style.color='var(--red)';}};
   rec.onend=function(){window._notaRec=null;if(btn){btn.textContent=txt0;btn.style.color='';}var ta=document.getElementById(taId);if(ta&&taId==='nota_q'){S.notaBorrador=ta.value;saveUIState();}};
   rec.onerror=function(e){if(e.error!=='no-speech'&&e.error!=='aborted')toast('Micrófono: '+e.error,'var(--orange)',3000);};
   rec.onresult=function(e){
