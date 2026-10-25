@@ -8484,7 +8484,7 @@ function _chatBtns(tbl,it){
   var hs=_chatHilos(tbl,it);if(!hs.length)return '';
   return hs.map(function(h){
     var co=(D.colaboradores||[]).find(function(c){return c.id===h.colabId;})||{};
-    var n=(h.m&&h.m.chat||[]).length,nl=(h.m&&h.m.chatNoLeidoArq)||0,lk=h.m&&h.m.likeCol;
+    var n=(h.m&&h.m.chat||[]).length,nl=(h.m&&h.m.chatNoLeidoArq)||0,lk=false;
     var nombre=String(co.name||'Colaborador').split(' ')[0];
     return ' <button onclick="event.stopPropagation();abrirChat(\''+tbl+'\',\''+it.id+'\',\''+h.colabId+'\')" title="Conversación con '+esc(co.name||'el colaborador')+'" style="border:1px solid '+(nl?'#0d9488':'#99f6e4')+';background:'+(nl?'#0d9488':'#f0fdfa')+';color:'+(nl?'#fff':'#0f766e')+';border-radius:9px;padding:1px 7px;font-size:9px;font-weight:700;cursor:pointer;white-space:nowrap;display:inline-block;vertical-align:middle">💬 '+esc(nombre)+(n?' ('+n+')':'')+(nl?' · '+nl+' nuevo'+(nl>1?'s':''):'')+(lk?' 👍':'')+'</button>';
   }).join('');
@@ -8514,14 +8514,17 @@ function _chatBurbujas(m,paraPdf){
     var mio=c.de==='arq';
     var fotos=(c.fotos||[]).map(function(u){var r=(String(u).indexOf('data:')===0?u:'')||_resolveImg(u)||_chatMini[u]||'';return r&&r.indexOf('[')!==0?r:'';}).filter(Boolean);
     var fh=new Date(c.ts);var cuando=isNaN(fh)?'':fh.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit'})+' '+fh.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
-    if(paraPdf)return '<div style="margin:3px 0;font-size:8pt"><span style="color:#64748b">'+esc(cuando)+'</span> <b style="color:'+(mio?'#0f766e':'#7c3aed')+'">'+esc(c.autor||(mio?'Estudio':'Colaborador'))+':</b> '+esc(c.texto||'')
+    var _lkOtro=mio?c.likeCol:c.likeArq;
+    if(paraPdf)return '<div style="margin:3px 0;font-size:8pt"><span style="color:#64748b">'+esc(cuando)+'</span> <b style="color:'+(mio?'#0f766e':'#7c3aed')+'">'+esc(c.autor||(mio?'Estudio':'Colaborador'))+':</b> '+esc(c.texto||'')+(_lkOtro?' <span style="font-size:7pt">👍</span>':'')
       +(fotos.length?'<div style="margin-top:2px">'+fotos.map(function(u){return '<img src="'+esc(u)+'" style="width:70px;height:70px;object-fit:cover;border-radius:3px;border:1px solid #ddd;margin-right:3px">';}).join('')+'</div>':'')+'</div>';
-    return '<div style="display:flex;justify-content:'+(mio?'flex-end':'flex-start')+';margin:6px 0">'
-      +'<div style="max-width:82%;background:'+(mio?'#ccfbf1':'#f1f5f9')+';border-radius:12px;'+(mio?'border-bottom-right-radius:3px':'border-bottom-left-radius:3px')+';padding:7px 10px">'
+    return '<div style="display:flex;flex-direction:column;align-items:'+(mio?'flex-end':'flex-start')+';margin:6px 0">'
+      +'<div '+(!mio?'onclick="_chatTap(\''+c.id+'\')" ondblclick="event.preventDefault()" ':'')+'style="max-width:82%;background:'+(mio?'#ccfbf1':'#f1f5f9')+';border-radius:12px;'+(mio?'border-bottom-right-radius:3px':'border-bottom-left-radius:3px')+';padding:7px 10px;user-select:none;-webkit-user-select:none;touch-action:manipulation">'
       +'<div class="txxs fw7" style="color:'+(mio?'#0f766e':'#7c3aed')+'">'+esc(c.autor||(mio?'Estudio':'Colaborador'))+'</div>'
       +(c.texto?'<div class="ts" style="white-space:pre-wrap;line-height:1.45">'+esc(c.texto)+'</div>':'')
       +(fotos.length?'<div class="flex gap-4 mt-4" style="flex-wrap:wrap">'+fotos.map(function(u){return '<img src="'+esc(u)+'" onclick="window.open(this.src,\'_blank\')" style="width:96px;height:96px;object-fit:cover;border-radius:8px;cursor:zoom-in">';}).join('')+'</div>':'')
-      +'<div style="font-size:9px;color:var(--text3);text-align:right;margin-top:2px">'+esc(cuando)+(mio&&!_chatCerrado(m)?' <button onclick="borrarMsgChat(\''+c.id+'\')" title="Borrar mensaje" style="border:none;background:none;cursor:pointer;font-size:10px;padding:0 0 0 4px">🗑</button>':'')+'</div></div></div>';
+      +'<div style="font-size:9px;color:var(--text3);text-align:right;margin-top:2px">'+esc(cuando)+(mio&&!_chatCerrado(m)?' <button onclick="event.stopPropagation();borrarMsgChat(\''+c.id+'\')" title="Borrar mensaje" style="border:none;background:none;cursor:pointer;font-size:10px;padding:0 0 0 4px">🗑</button>':'')+'</div></div>'
+      +(_lkOtro?'<div title="'+(mio?'Le gustó al colaborador':'Te gustó')+'" style="font-size:12px;margin-top:-6px;'+(mio?'margin-right:8px':'margin-left:8px')+';background:var(--white);border:1px solid var(--brd);border-radius:10px;padding:0 5px;line-height:18px">👍</div>':'')
+      +'</div>';
   }).join('');
 }
 function _chatPintar(){
@@ -8536,9 +8539,8 @@ function _chatPintar(){
   d.innerHTML='<div class="mo-c" style="max-width:560px;display:flex;flex-direction:column;max-height:92vh">'
     +'<div class="mo-h"><h3 style="color:#0f766e">💬 '+esc(co.name||'Colaborador')+'</h3><button class="tbtn" onclick="document.getElementById(\'chatM\').remove();render()">'+I.x+'</button></div>'
     +'<div class="txxs tc3 mb-6">'+(c.tbl==='tareas'?'📋 Tarea':'💬 Comentario')+': <b>'+esc(tit)+'</b></div>'
-    +((m&&(m.likeArq||m.likeCol))?'<div class="txxs mb-6" style="color:#0f766e">'+(m.likeCol?'👍 '+esc(co.name||'Colaborador')+' ':'')+(m.likeArq?'👍 Vos':'')+'</div>':'')
     +'<div id="chat_lista" style="flex:1;overflow-y:auto;min-height:120px;background:#fafafa;border:1px solid var(--brd);border-radius:10px;padding:6px 10px;margin-bottom:8px">'
-    +((m&&(m.chat||[]).length)?_chatBurbujas(m):'<div class="txxs tc3" style="text-align:center;padding:24px 0">Todavía no hay mensajes. Escribí el primero.</div>')
+    +((m&&(m.chat||[]).length)?_chatBurbujas(m)+(!cerrado&&m.chat.some(function(x){return x.de==='col';})?'<div style="font-size:9px;color:var(--text3);text-align:center;margin-top:2px">Tocá dos veces un mensaje del colaborador para darle 👍</div>':''):'<div class="txxs tc3" style="text-align:center;padding:24px 0">Todavía no hay mensajes. Escribí el primero.</div>')
     +'</div>'
     +((m&&m.estadoColab==='completado')
       ?'<div style="background:#ecfdf5;border:1px solid #6ee7b7;border-radius:8px;padding:10px">'
@@ -8554,7 +8556,6 @@ function _chatPintar(){
       +'<button class="btn btn-sec btn-s" style="flex:1;justify-content:center;padding-left:4px;padding-right:4px" onclick="dictarNota(\'chat_tx\',this)">🎤</button>'
       +'<label class="btn btn-sec btn-s" style="flex:1;justify-content:center;cursor:pointer;padding-left:4px;padding-right:4px">📷<input type="file" accept="image/*" multiple style="display:none" onchange="_chatFotos(this)"></label>'
       +'<button class="btn btn-sec btn-s" style="flex:1;justify-content:center;padding-left:4px;padding-right:4px" onclick="abrirDibujoNota(\'chat\')">✏️</button>'
-      +'<button class="btn btn-s" title="Responder con un pulgar arriba" style="flex:1;justify-content:center;padding-left:4px;padding-right:4px;'+(m&&m.likeArq?'background:#0d9488;color:#fff':'background:var(--gray-ll);color:var(--text2)')+'" onclick="toggleLikeChat()">👍</button>'
       +'<button class="btn btn-s" style="flex:2;justify-content:center;background:#0d9488;color:#fff;white-space:nowrap" onclick="enviarChat()">Enviar ➤</button>'
       +'</div>'
       +'<button class="btn btn-sec btn-s btn-w mt-8" style="justify-content:center;color:var(--green)" onclick="chatCompletar()">✓ Dar por completada</button>')
@@ -8648,6 +8649,19 @@ function chatAceptar(msgId){
   if(document.getElementById('chatM'))_chatPintar();else render();
   toast('✓ Aceptada como completada','var(--green)',2000);
 }
+var _chatUltTapA={};
+function _chatTap(cid){
+  var ahora=Date.now();
+  if(_chatUltTapA.id===cid&&ahora-_chatUltTapA.t<380){_chatUltTapA={};_chatReaccionar(cid);return;}
+  _chatUltTapA={id:cid,t:ahora};
+}
+function _chatReaccionar(cid){
+  var m=_chatMsgActual();if(!m||_chatCerrado(m))return;
+  var c=(m.chat||[]).find(function(x){return x.id===cid;});if(!c)return;
+  c.likeArq=c.likeArq?null:nw();m.updatedAt=nw();
+  _chatPintar();
+  setTimeout(function(){sv();_publicarBandejaColab(m.colabId,m.proyectoId||S.proj);},30);
+}
 function toggleLikeChat(){
   var m=_chatAsegurarMsg();
   m.likeArq=m.likeArq?null:nw();m.updatedAt=nw();
@@ -8655,15 +8669,35 @@ function toggleLikeChat(){
 }
 // Conversación en los PDF de tareas y comentarios
 function _chatPdfHtml(tbl,id){
-  var hs=_chatMsgsDe(tbl,id).filter(function(m){return (m.chat||[]).length||m.likeArq||m.likeCol;});
+  var hs=_chatMsgsDe(tbl,id).filter(function(m){return (m.chat||[]).length;});
   if(!hs.length)return '';
   return hs.map(function(m){
     var co=(D.colaboradores||[]).find(function(x){return x.id===m.colabId;})||{};
     return '<div style="margin-top:6px;border-top:1px dashed #cbd5e1;padding-top:4px">'
       +'<div style="font-size:7.5pt;font-weight:700;color:#0f766e">💬 Conversación con '+esc(co.name||'Colaborador')+(_chatCerrado(m)?' · cerrada':'')
-      +(m.likeCol?' · 👍 '+esc(co.name||'Colaborador'):'')+(m.likeArq?' · 👍 Estudio':'')+'</div>'
+      +'</div>'
       +_chatBurbujas(m,true)+'</div>';
   }).join('');
+}
+// Todas las conversaciones de la obra, para el historial de la Bandeja
+function _chatHistorialHtml(){
+  var l=(D.mensajesColab||[]).filter(function(m){return m.proyectoId===S.proj&&(m.chat||[]).length;});
+  if(!l.length)return '';
+  var ult=function(m){return (m.chat||[]).reduce(function(a,c){return String(c.ts)>a?String(c.ts):a;},'');};
+  l.sort(function(a,b){return ult(b).localeCompare(ult(a));});
+  return '<div class="txs fw7 mb-8" style="color:#0d9488">💬 Conversaciones ('+l.length+')</div>'
+    +l.map(function(m){
+      var co=(D.colaboradores||[]).find(function(c){return c.id===m.colabId;})||{};
+      var u=m.chat[m.chat.length-1]||{},cerr=_chatCerrado(m),nl=m.chatNoLeidoArq||0;
+      var quien=u.de==='arq'?'Vos':(co.name||'Colaborador').split(' ')[0];
+      return '<div class="card" style="border-left:3px solid '+(cerr?'var(--gray-l)':'#0d9488')+';padding:10px 12px;margin-bottom:8px;cursor:pointer" onclick="abrirChatMsg(\''+m.id+'\')">'
+        +'<div class="flex justify-between items-center gap-8"><div style="flex:1;min-width:0">'
+        +'<div class="ts fw7">'+(m.tipo==='tarea'?'📋 ':'💬 ')+esc(String(m.titulo||'').replace(/^💬\s*(Comentario:\s*)?/,'').slice(0,70))+'</div>'
+        +'<div class="txxs tc3 mt-2">👤 '+esc(co.name||'Colaborador')+' · '+m.chat.length+' mensaje'+(m.chat.length>1?'s':'')+' · '+esc(fmts(ult(m))||'')+(cerr?' · <span style="color:var(--green);font-weight:700">✓ cerrada</span>':'')+'</div>'
+        +'<div class="txs mt-4" style="color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(quien)+': '+(u.texto?esc(u.texto):((u.fotos||[]).length?'📷 Foto':''))+'</div>'
+        +'</div>'+(nl?'<span style="background:#0d9488;color:#fff;border-radius:10px;padding:1px 8px;font-size:10px;font-weight:700;flex-shrink:0">'+nl+'</span>':'<span class="tc3" style="flex-shrink:0">›</span>')+'</div></div>';
+    }).join('')
+    +'<div class="txs fw7 mb-8 mt-12" style="color:var(--text2)">📋 Informes procesados</div>';
 }
 function _chatNoLeidos(){return (D.mensajesColab||[]).filter(function(m){return m.proyectoId===S.proj&&m.chatNoLeidoArq>0;});}
 function rComentarios(mc){
@@ -13867,7 +13901,7 @@ function _bandejaBodyHtml(){
       ?_renderAlertasBandeja()
       :tab==='papelera'
       ?(papelera.length?papelera.map(renderPapeleraCard).join(''):'<div class="empty">'+I.checkc+'<div class="ts mt-8">'+(q?'Sin resultados para "'+esc(q)+'"':'Papelera vacía')+'</div></div>')
-      :(procesados.length?procesados.map(renderCard).join(''):'<div class="empty"><div class="ts mt-8">'+(q?'Sin resultados para "'+esc(q)+'"':'Sin informes procesados aún')+'</div></div>'));
+      :_chatHistorialHtml()+(procesados.length?procesados.map(renderCard).join(''):'<div class="empty"><div class="ts mt-8">'+(q?'Sin resultados para "'+esc(q)+'"':'Sin informes procesados aún')+'</div></div>'));
 }
 // A qué obra pertenece un informe recibido. La bandeja no filtraba por obra: en
 // "casa PICKELNY GARCIA" aparecían informes de "ampliación FEMENIA RUIZ".
@@ -15099,6 +15133,11 @@ function _ingestarDelServidor(payload){
       m.chat.push({id:r.id||uid(),de:'col',autor:payload.ayudante||'Colaborador',texto:r.texto||'',fotos:(r.fotos||[]).filter(function(u){return typeof u==='string'&&u;}),ts:r.ts||nw()});
       m.chat.sort(function(a,b){return String(a.ts).localeCompare(String(b.ts));});
       m.chatNoLeidoArq=(m.chatNoLeidoArq||0)+1;m.updatedAt=nw();_alguno=true;_colabs[m.colabId]=m.proyectoId;
+    });
+    (payload.reacciones||[]).forEach(function(r){
+      var m=(D.mensajesColab||[]).find(function(x){return x.id===r.msgId;});if(!m)return;
+      var c=(m.chat||[]).find(function(x){return x.id===r.id;});if(!c)return;
+      c.likeCol=r.on?(r.ts||nw()):null;m.updatedAt=nw();_alguno=true;_colabs[m.colabId]=m.proyectoId;
     });
     (payload.borrar||[]).forEach(function(r){
       var m=(D.mensajesColab||[]).find(function(x){return x.id===r.msgId;});if(!m)return;

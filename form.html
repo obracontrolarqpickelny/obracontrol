@@ -1135,21 +1135,29 @@ function _chatMarcarVisto(m){
 function _chatHtml(m){
   if(!_chatAplica(m))return '';
   var cerrado=_chatCerradoF(m),lista=_chatLista(m),nuevos=_chatNuevos(m);
-  var likeYo=CHAT.like[m.id]!==undefined?CHAT.like[m.id]:!!m.likeCol;
+  var min=!!(CHAT.min&&CHAT.min[m.id]);
   var h='<div style="margin:8px 0 10px;border:1px solid #99f6e4;border-radius:10px;background:#f0fdfa;padding:8px">';
-  h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'
-    +'<span style="font-size:11px;font-weight:800;color:#0f766e">💬 Conversación con el estudio'+(nuevos?' <span style="background:#dc2626;color:#fff;border-radius:9px;padding:0 6px;font-size:10px">'+nuevos+' nuevo'+(nuevos>1?'s':'')+'</span>':'')+'</span>'
-    +'<span style="font-size:11px;color:#0f766e">'+(m.likeArq?'👍 Estudio':'')+'</span></div>';
+  h+='<div onclick="chatMin(\''+m.id+'\')" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none">'
+    +'<span style="font-size:11px;font-weight:800;color:#0f766e">💬 Conversación con el estudio'+(lista.length?' ('+lista.length+')':'')+(nuevos?' <span style="background:#dc2626;color:#fff;border-radius:9px;padding:0 6px;font-size:10px">'+nuevos+' nuevo'+(nuevos>1?'s':'')+'</span>':'')+'</span>'
+    +'<span style="font-size:12px;color:#0f766e">'+(min?'▶':'▼')+'</span></div>';
+  if(min){h+='</div>';return h;}
+  h+='<div style="margin-top:4px">';
   if(lista.length){
     lista.forEach(function(c){
       var mio=c.de==='col';
       var d=new Date(c.ts),cuando=isNaN(d)?'':d.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit'})+' '+d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
-      h+='<div style="display:flex;justify-content:'+(mio?'flex-end':'flex-start')+';margin:5px 0"><div style="max-width:85%;background:'+(mio?'#ede9fe':'#fff')+';border:1px solid '+(mio?'#ddd6fe':'#e2e8f0')+';border-radius:12px;padding:6px 9px">'
+      var likeYo=!mio&&(CHAT.reac&&CHAT.reac[c.id]!==undefined?CHAT.reac[c.id]:!!c.likeCol);
+      var likeEst=mio&&!!c.likeArq;
+      h+='<div style="display:flex;flex-direction:column;align-items:'+(mio?'flex-end':'flex-start')+';margin:5px 0">'
+        +'<div '+(!mio&&!c._pend?'onclick="chatTap(event,\''+m.id+'\',\''+c.id+'\')" ondblclick="event.preventDefault()" ':'')+'style="max-width:85%;background:'+(mio?'#ede9fe':'#fff')+';border:1px solid '+(mio?'#ddd6fe':'#e2e8f0')+';border-radius:12px;padding:6px 9px;user-select:none;-webkit-user-select:none;touch-action:manipulation">'
         +'<div style="font-size:10px;font-weight:700;color:'+(mio?'#7c3aed':'#0f766e')+'">'+(mio?'Vos':esc(c.autor||'Estudio'))+'</div>'
         +(c.texto?'<div style="font-size:13px;white-space:pre-wrap;line-height:1.4">'+esc(c.texto)+'</div>':'')
-        +((c.fotos||[]).length?'<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">'+c.fotos.map(function(u){return '<img src="'+esc(u)+'" onclick="window.open(this.src,\'_blank\')" style="width:84px;height:84px;object-fit:cover;border-radius:8px">';}).join('')+'</div>':'')
-        +'<div style="font-size:9px;color:#94a3b8;text-align:right;margin-top:2px">'+cuando+(c._pend?(c._enviado?' · enviado':' · ⏳ sin enviar'):'')+(mio&&!cerrado?' <button onclick="chatBorrar(\''+m.id+'\',\''+c.id+'\')" title="Borrar mensaje" style="border:none;background:none;font-size:11px;cursor:pointer;padding:0 0 0 4px">🗑</button>':'')+'</div></div></div>';
+        +((c.fotos||[]).length?'<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">'+c.fotos.map(function(u){return '<img src="'+esc(u)+'" onclick="event.stopPropagation();window.open(this.src,\'_blank\')" style="width:84px;height:84px;object-fit:cover;border-radius:8px">';}).join('')+'</div>':'')
+        +'<div style="font-size:9px;color:#94a3b8;text-align:right;margin-top:2px">'+cuando+(c._pend?(c._enviado?' · enviado':' · ⏳ sin enviar'):'')+(mio&&!cerrado?' <button onclick="event.stopPropagation();chatBorrar(\''+m.id+'\',\''+c.id+'\')" title="Borrar mensaje" style="border:none;background:none;font-size:11px;cursor:pointer;padding:0 0 0 4px">🗑</button>':'')+'</div></div>'
+        +((likeYo||likeEst)?'<div title="'+(likeYo?'Te gustó':'Le gustó al estudio')+'" style="font-size:12px;margin-top:-6px;'+(mio?'margin-right:8px':'margin-left:8px')+';background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:0 5px;line-height:18px">👍</div>':'')
+        +'</div>';
     });
+    if(!cerrado)h+='<div style="font-size:9px;color:#94a3b8;text-align:center;margin:2px 0">Tocá dos veces un mensaje del estudio para darle 👍</div>';
   } else if(!cerrado){
     h+='<div style="font-size:11px;color:#64748b;padding:4px 0">Podés escribirle al estudio sobre esto, mandar fotos o un dibujo.</div>';
   }
@@ -1162,12 +1170,39 @@ function _chatHtml(m){
     h+='<div style="display:flex;gap:5px">'
       +'<label style="flex:1;padding:9px 0;text-align:center;background:#fff;border:1px solid #cbd5e1;border-radius:8px;font-size:15px;cursor:pointer">📷<input type="file" accept="image/*" multiple style="display:none" onchange="chatFotos(\''+m.id+'\',this)"></label>'
       +'<button onclick="chatDibujo(\''+m.id+'\')" style="flex:1;padding:9px 0;background:#fff;border:1px solid #cbd5e1;border-radius:8px;font-size:15px;cursor:pointer">✏️</button>'
-      +'<button onclick="chatLike(\''+m.id+'\')" title="Responder con un pulgar arriba" style="flex:1;padding:9px 0;background:'+(likeYo?'#0d9488':'#fff')+';color:'+(likeYo?'#fff':'#0f172a')+';border:1px solid '+(likeYo?'#0d9488':'#cbd5e1')+';border-radius:8px;font-size:15px;cursor:pointer">👍</button>'
       +'<button onclick="chatEnviar(\''+m.id+'\')" style="flex:2;padding:9px 0;background:#0d9488;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">Enviar ➤</button>'
       +'</div>';
   }
-  h+='</div>';
+  h+='</div></div>';
   return h;
+}
+// Minimizar / desplegar una conversación, o todas
+function chatMin(msgId){
+  if(!CHAT.min)CHAT.min={};
+  _guardarBorradorChat(msgId);
+  CHAT.min[msgId]=!CHAT.min[msgId];_guardarChat();renderBandeja();_restaurarBorradorChat(msgId);
+}
+function chatMinTodos(minimizar){
+  if(!CHAT.min)CHAT.min={};
+  INBOX_MSGS.filter(_chatAplica).forEach(function(m){CHAT.min[m.id]=!!minimizar;});
+  _guardarChat();renderBandeja();
+}
+// Doble toque sobre un mensaje del estudio: 👍 (otro doble toque lo quita)
+var _chatUltTap={};
+function chatTap(ev,msgId,cid){
+  var ahora=Date.now();
+  if(_chatUltTap.id===cid&&ahora-_chatUltTap.t<380){_chatUltTap={};chatReaccion(msgId,cid);return;}
+  _chatUltTap={id:cid,t:ahora};
+}
+function chatReaccion(msgId,cid){
+  var m=INBOX_MSGS.find(function(x){return x.id===msgId;})||{};
+  if(_chatCerradoF(m))return;
+  var c=(m.chat||[]).find(function(x){return x.id===cid;})||{};
+  if(!CHAT.reac)CHAT.reac={};
+  var act=CHAT.reac[cid]!==undefined?CHAT.reac[cid]:!!c.likeCol;
+  CHAT.reac[cid]=!act;
+  (CHAT.reacPend=CHAT.reacPend||{})[cid]={msgId:msgId,on:!act};
+  _guardarChat();renderBandeja();_chatMandar();
 }
 async function chatFotos(msgId,input){
   var files=Array.from((input&&input.files)||[]);
@@ -1205,15 +1240,17 @@ function _chatMandar(){
   Object.keys(CHAT.pend).forEach(function(mid){(CHAT.pend[mid]||[]).forEach(function(c){if(!c._enviado)chat.push({msgId:mid,id:c.id,texto:c.texto,fotos:c.fotos,ts:c.ts});});});
   Object.keys(CHAT.likePend||{}).forEach(function(mid){likes.push({msgId:mid,on:!!CHAT.likePend[mid],ts:new Date().toISOString()});});
   var borrar=(CHAT.borrarPend||[]).slice();
-  if(!chat.length&&!likes.length&&!borrar.length)return Promise.resolve(true);
+  var reacciones=Object.keys(CHAT.reacPend||{}).map(function(cid){return {msgId:CHAT.reacPend[cid].msgId,id:cid,on:!!CHAT.reacPend[cid].on,ts:new Date().toISOString()};});
+  if(!chat.length&&!likes.length&&!borrar.length&&!reacciones.length)return Promise.resolve(true);
   _chatEnviando=true;
-  var payload={id:'chat_'+TOKEN+'_'+Date.now().toString(36),mode:'chat',token:TOKEN,obraId:OBRA_ID,obraName:OBRA_NAME,ayudante:colabName||'Colaborador',chat:chat,likes:likes,borrar:borrar,fecha:new Date().toISOString()};
+  var payload={id:'chat_'+TOKEN+'_'+Date.now().toString(36),mode:'chat',token:TOKEN,obraId:OBRA_ID,obraName:OBRA_NAME,ayudante:colabName||'Colaborador',chat:chat,likes:likes,borrar:borrar,reacciones:reacciones,fecha:new Date().toISOString()};
   return _postServidor(payload).then(function(r){
     _chatEnviando=false;
     if(r&&r.ok){
       chat.forEach(function(x){(CHAT.pend[x.msgId]||[]).forEach(function(c){if(c.id===x.id){c._enviado=true;c.fotos=[];}});});
       likes.forEach(function(x){if(CHAT.likePend)delete CHAT.likePend[x.msgId];});
       CHAT.borrarPend=(CHAT.borrarPend||[]).filter(function(b){return !borrar.some(function(x){return x.id===b.id;});});
+      reacciones.forEach(function(x){if(CHAT.reacPend)delete CHAT.reacPend[x.id];});
       _guardarChat();_avisoCorto('✓ Enviado al estudio');
     } else _avisoCorto('No se pudo enviar: queda para reintentar');
     if(currentTab==='bdj')renderBandeja();
@@ -1313,6 +1350,11 @@ function renderBandeja(){
     return (uOrd[a.urgencia]||1)-(uOrd[b.urgencia]||1)||(b.fechaEnvio||'').localeCompare(a.fechaEnvio||'');
   });
   var h=_bibHtml();
+  var _conChat=sorted.filter(_chatAplica);
+  if(_conChat.length){
+    var _todosMin=_conChat.every(function(m){return CHAT.min&&CHAT.min[m.id];});
+    h+='<div style="display:flex;justify-content:flex-end;margin:0 0 6px"><button onclick="chatMinTodos('+(!_todosMin)+')" style="border:1px solid #99f6e4;background:#f0fdfa;color:#0f766e;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer">'+(_todosMin?'▼ Desplegar los chats':'▶ Minimizar los chats')+'</button></div>';
+  }
   var _bibImgs=_bibLista().filter(_bibEsImg);
   sorted.forEach(function(msg){
     var isDone=INBOX_RESP[msg.id]&&INBOX_RESP[msg.id].done;
@@ -1439,7 +1481,7 @@ function renderBandeja(){
   var _borr={};document.querySelectorAll('textarea[id^="chtx_"]').forEach(function(t){if(t.value)_borr[t.id]=t.value;});
   el.innerHTML=h;
   Object.keys(_borr).forEach(function(k){var t=$(k);if(t&&!t.value)t.value=_borr[k];});
-  sorted.forEach(_chatMarcarVisto);
+  sorted.forEach(function(m){if(!(CHAT.min&&CHAT.min[m.id]))_chatMarcarVisto(m);});
   // Update badge
   _actualizarBadgeBandeja();
 }
