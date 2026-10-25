@@ -442,7 +442,7 @@ function _fusionarInbox(lista){
 }
 function _actualizarBadgeBandeja(){
   var _msgs=_sinDuplicados(INBOX_MSGS.filter(function(m){return m&&m.tipo!=='biblioteca';}));
-  var pend=_msgs.filter(function(m){return !_resuelto(m);}).length;
+  var pend=_msgs.filter(function(m){return !_resuelto(m)||_chatNuevos(m)>0;}).length;
   var cnt=$('count-bdj'),bdg=$('badge-bdj');
   if(cnt){
     cnt.textContent=pend;
@@ -462,7 +462,8 @@ function _traerBandejaServidor(){
     // (antes sólo se sumaba y quedaban avisos viejos o duplicados para siempre)
     INBOX_MSGS=j.mensajes.slice();_guardarInboxLocal();
     _actualizarBadgeBandeja();
-    if(currentTab==='bdj')renderBandeja();
+    var _ae=document.activeElement;
+    if(currentTab==='bdj'&&!(_ae&&_ae.id&&(_ae.id.indexOf('chtx_')===0||_ae.id.indexOf('resp_')===0))&&!$('chDib'))renderBandeja();
   }).catch(function(){});
 }
 
@@ -761,6 +762,8 @@ function showFormScreen(){
   if(INBOX_MSGS.length)_guardarInboxLocal();
   _actualizarBadgeBandeja();
   _traerBandejaServidor();
+  setTimeout(function(){_chatMandar();},2500);
+  setInterval(function(){if(!document.hidden){_traerBandejaServidor();_chatMandar();}},60000);
 }
 // "Fotos y archivos" es una opción más de Cargar: abre la carpeta en la misma
 // pantalla (antes era una barra aparte que abría otra pestaña).
@@ -845,6 +848,7 @@ function renderHistorialTab(){
         +'<div style="font-size:13px;font-weight:700;margin-top:4px">'+({checklist:'✅',tarea:'📋',nota:'📝',materiales:'📦'}[tipo]||'📤')+' '+esc(tit)+'</div>'
         +'<div style="font-size:11px;color:var(--text3);margin-top:2px">'+fFecha(r.fecha)+'</div>'
         +(r.respuesta?'<div style="font-size:12px;color:var(--text2);margin-top:6px">💬 '+esc(r.respuesta)+'</div>':'')
+        +(m.id&&_chatLista(m).length?_chatHtml(Object.assign({},m,{chatCerrado:true})):'')
         +'</div>';
       return;
     }
@@ -1100,6 +1104,151 @@ var urgColors={alta:'#dc2626',media:'#f59e0b',baja:'#16a34a'};
 var urgLabels={alta:'🔴 Alta',media:'🟡 Media',baja:'🟢 Baja'};
 var tipoLabels={checklist:'✅ Checklist',tarea:'📋 Tarea',nota:'📝 Nota',materiales:'📦 Materiales'};
 
+// ═══════ CHAT con el estudio (tareas y comentarios) ═══════
+// Conversación de ida y vuelta sobre cada tarea o comentario: texto, fotos y
+// dibujos, y un 👍 para responder sin escribir. Se cierra al completarse.
+// Lo que todavía no confirmó el servidor queda guardado en el teléfono.
+var _CHAT_KEY='oc_chat_'+(P.get('token')||'anon');
+var CHAT={pend:{},seen:{},like:{}};
+try{CHAT=Object.assign(CHAT,JSON.parse(localStorage.getItem(_CHAT_KEY)||'{}')||{});}catch(_){}
+var CHAT_ADJ={};
+function _guardarChat(){try{localStorage.setItem(_CHAT_KEY,JSON.stringify(CHAT));}catch(_){}}
+function _chatAplica(m){return m&&(m.tipo==='tarea'||!!m.comentarioId||(m.chat||[]).length>0);}
+function _chatCerradoF(m){return !!(m&&(m.chatCerrado||_resuelto(m)));}
+// Lo del servidor + lo propio que todavía no aparece ahí
+function _chatLista(m){
+  var srv=(m.chat||[]).slice(),ids={};srv.forEach(function(c){ids[c.id]=1;});
+  var pend=(CHAT.pend[m.id]||[]).filter(function(c){return !ids[c.id];});
+  if(CHAT.pend[m.id]&&pend.length!==CHAT.pend[m.id].length){CHAT.pend[m.id]=pend;_guardarChat();}
+  return srv.concat(pend.map(function(c){return Object.assign({},c,{de:'col',_pend:true});})).sort(function(a,b){return String(a.ts).localeCompare(String(b.ts));});
+}
+function _chatNuevos(m){
+  var vis=CHAT.seen[m.id]||'';
+  return (m.chat||[]).filter(function(c){return c.de==='arq'&&String(c.ts)>vis;}).length;
+}
+function _chatMarcarVisto(m){
+  var ult=(m.chat||[]).filter(function(c){return c.de==='arq';}).map(function(c){return String(c.ts);}).sort().pop();
+  if(ult&&CHAT.seen[m.id]!==ult){CHAT.seen[m.id]=ult;_guardarChat();}
+}
+function _chatHtml(m){
+  if(!_chatAplica(m))return '';
+  var cerrado=_chatCerradoF(m),lista=_chatLista(m),nuevos=_chatNuevos(m);
+  var likeYo=CHAT.like[m.id]!==undefined?CHAT.like[m.id]:!!m.likeCol;
+  var h='<div style="margin:8px 0 10px;border:1px solid #99f6e4;border-radius:10px;background:#f0fdfa;padding:8px">';
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'
+    +'<span style="font-size:11px;font-weight:800;color:#0f766e">💬 Conversación con el estudio'+(nuevos?' <span style="background:#dc2626;color:#fff;border-radius:9px;padding:0 6px;font-size:10px">'+nuevos+' nuevo'+(nuevos>1?'s':'')+'</span>':'')+'</span>'
+    +'<span style="font-size:11px;color:#0f766e">'+(m.likeArq?'👍 Estudio':'')+'</span></div>';
+  if(lista.length){
+    lista.forEach(function(c){
+      var mio=c.de==='col';
+      var d=new Date(c.ts),cuando=isNaN(d)?'':d.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit'})+' '+d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+      h+='<div style="display:flex;justify-content:'+(mio?'flex-end':'flex-start')+';margin:5px 0"><div style="max-width:85%;background:'+(mio?'#ede9fe':'#fff')+';border:1px solid '+(mio?'#ddd6fe':'#e2e8f0')+';border-radius:12px;padding:6px 9px">'
+        +'<div style="font-size:10px;font-weight:700;color:'+(mio?'#7c3aed':'#0f766e')+'">'+(mio?'Vos':esc(c.autor||'Estudio'))+'</div>'
+        +(c.texto?'<div style="font-size:13px;white-space:pre-wrap;line-height:1.4">'+esc(c.texto)+'</div>':'')
+        +((c.fotos||[]).length?'<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">'+c.fotos.map(function(u){return '<img src="'+esc(u)+'" onclick="window.open(this.src,\'_blank\')" style="width:84px;height:84px;object-fit:cover;border-radius:8px">';}).join('')+'</div>':'')
+        +'<div style="font-size:9px;color:#94a3b8;text-align:right;margin-top:2px">'+cuando+(c._pend?(c._enviado?' · enviado':' · ⏳ sin enviar'):'')+'</div></div></div>';
+    });
+  } else if(!cerrado){
+    h+='<div style="font-size:11px;color:#64748b;padding:4px 0">Podés escribirle al estudio sobre esto, mandar fotos o un dibujo.</div>';
+  }
+  if(cerrado){
+    h+='<div style="font-size:11px;color:#16a34a;font-weight:700;text-align:center;padding:4px">✓ Completado — conversación cerrada</div>';
+  } else {
+    var adj=CHAT_ADJ[m.id]||[];
+    if(adj.length)h+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin:6px 0">'+adj.map(function(u,i){return '<div style="position:relative"><img src="'+esc(u)+'" style="width:52px;height:52px;object-fit:cover;border-radius:8px"><button onclick="CHAT_ADJ[\''+m.id+'\'].splice('+i+',1);renderBandeja()" style="position:absolute;top:-6px;right:-6px;border:none;background:#dc2626;color:#fff;border-radius:50%;width:18px;height:18px;font-size:10px">✕</button></div>';}).join('')+'</div>';
+    h+='<textarea id="chtx_'+m.id+'" class="ft" rows="2" placeholder="Escribí tu mensaje…" style="margin:6px 0;font-size:13px;min-height:44px"></textarea>';
+    h+='<div style="display:flex;gap:5px">'
+      +'<label style="flex:1;padding:9px 0;text-align:center;background:#fff;border:1px solid #cbd5e1;border-radius:8px;font-size:15px;cursor:pointer">📷<input type="file" accept="image/*" multiple style="display:none" onchange="chatFotos(\''+m.id+'\',this)"></label>'
+      +'<button onclick="chatDibujo(\''+m.id+'\')" style="flex:1;padding:9px 0;background:#fff;border:1px solid #cbd5e1;border-radius:8px;font-size:15px;cursor:pointer">✏️</button>'
+      +'<button onclick="chatLike(\''+m.id+'\')" title="Responder con un pulgar arriba" style="flex:1;padding:9px 0;background:'+(likeYo?'#0d9488':'#fff')+';color:'+(likeYo?'#fff':'#0f172a')+';border:1px solid '+(likeYo?'#0d9488':'#cbd5e1')+';border-radius:8px;font-size:15px;cursor:pointer">👍</button>'
+      +'<button onclick="chatEnviar(\''+m.id+'\')" style="flex:2;padding:9px 0;background:#0d9488;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">Enviar ➤</button>'
+      +'</div>';
+  }
+  h+='</div>';
+  return h;
+}
+async function chatFotos(msgId,input){
+  var files=Array.from((input&&input.files)||[]);
+  _guardarBorradorChat(msgId);
+  for(var i=0;i<files.length;i++){
+    var du=await new Promise(function(res){var r=new FileReader();r.onload=function(e){res(e.target.result);};r.onerror=function(){res(null);};r.readAsDataURL(files[i]);});
+    if(!du)continue;try{du=await compressImg(du,1280,0.72);}catch(_){}
+    (CHAT_ADJ[msgId]=CHAT_ADJ[msgId]||[]).push(du);
+  }
+  renderBandeja();_restaurarBorradorChat(msgId);
+}
+var _chatBorr={};
+function _guardarBorradorChat(id){var t=$('chtx_'+id);if(t)_chatBorr[id]=t.value;}
+function _restaurarBorradorChat(id){var t=$('chtx_'+id);if(t&&_chatBorr[id])t.value=_chatBorr[id];}
+function chatEnviar(msgId){
+  var t=$('chtx_'+msgId),tx=((t&&t.value)||'').trim(),adj=(CHAT_ADJ[msgId]||[]).slice();
+  if(!tx&&!adj.length){_avisoCorto('Escribí algo o agregá una foto');return;}
+  var c={id:'c'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),texto:tx,fotos:adj,ts:new Date().toISOString()};
+  (CHAT.pend[msgId]=CHAT.pend[msgId]||[]).push(c);_guardarChat();
+  CHAT_ADJ[msgId]=[];_chatBorr[msgId]='';if(t)t.value='';
+  renderBandeja();
+  _chatMandar();
+}
+function chatLike(msgId){
+  var m=INBOX_MSGS.find(function(x){return x.id===msgId;})||{};
+  var act=CHAT.like[msgId]!==undefined?CHAT.like[msgId]:!!m.likeCol;
+  CHAT.like[msgId]=!act;(CHAT.likePend=CHAT.likePend||{})[msgId]=!act;_guardarChat();
+  renderBandeja();_chatMandar();
+}
+var _chatEnviando=false;
+function _chatMandar(){
+  if(!API_URL){_avisoCorto('Sin servidor: el mensaje queda guardado');return Promise.resolve(false);}
+  if(_chatEnviando)return Promise.resolve(false);
+  var chat=[],likes=[];
+  Object.keys(CHAT.pend).forEach(function(mid){(CHAT.pend[mid]||[]).forEach(function(c){if(!c._enviado)chat.push({msgId:mid,id:c.id,texto:c.texto,fotos:c.fotos,ts:c.ts});});});
+  Object.keys(CHAT.likePend||{}).forEach(function(mid){likes.push({msgId:mid,on:!!CHAT.likePend[mid],ts:new Date().toISOString()});});
+  if(!chat.length&&!likes.length)return Promise.resolve(true);
+  _chatEnviando=true;
+  var payload={id:'chat_'+TOKEN+'_'+Date.now().toString(36),mode:'chat',token:TOKEN,obraId:OBRA_ID,obraName:OBRA_NAME,ayudante:colabName||'Colaborador',chat:chat,likes:likes,fecha:new Date().toISOString()};
+  return _postServidor(payload).then(function(r){
+    _chatEnviando=false;
+    if(r&&r.ok){
+      chat.forEach(function(x){(CHAT.pend[x.msgId]||[]).forEach(function(c){if(c.id===x.id){c._enviado=true;c.fotos=[];}});});
+      likes.forEach(function(x){if(CHAT.likePend)delete CHAT.likePend[x.msgId];});
+      _guardarChat();_avisoCorto('✓ Enviado al estudio');
+    } else _avisoCorto('No se pudo enviar: queda para reintentar');
+    if(currentTab==='bdj')renderBandeja();
+    return !!(r&&r.ok);
+  }).catch(function(){_chatEnviando=false;_avisoCorto('Sin conexión: el mensaje queda para enviar');if(currentTab==='bdj')renderBandeja();return false;});
+}
+// Dibujo a mano alzada para el chat
+function chatDibujo(msgId){
+  _guardarBorradorChat(msgId);
+  var cols=['#111827','#dc2626','#2563eb','#16a34a','#ea580c'];
+  var d=document.createElement('div');d.id='chDib';
+  d.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:5000;display:flex;align-items:center;justify-content:center;padding:10px';
+  d.innerHTML='<div style="background:#fff;border-radius:14px;padding:10px;width:100%;max-width:700px">'
+    +'<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px">'
+    +cols.map(function(c,i){return '<button class="chd-c" onclick="_chd.c=\''+c+'\';_chd.g=false;document.querySelectorAll(\'.chd-c\').forEach(function(b){b.style.outline=\'none\'});this.style.outline=\'3px solid #fbbf24\'" style="width:28px;height:28px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #cbd5e1;background:'+c+(i===0?';outline:3px solid #fbbf24':'')+'"></button>';}).join('')
+    +'<button onclick="_chd.g=!_chd.g;this.style.background=_chd.g?\'#fde68a\':\'#f1f5f9\'" style="padding:6px 10px;border:none;border-radius:8px;background:#f1f5f9">🧽</button>'
+    +'<button onclick="var x=_chd.h.pop();if(x)_chd.x.putImageData(x,0,0)" style="padding:6px 10px;border:none;border-radius:8px;background:#f1f5f9">↶</button>'
+    +'<div style="flex:1"></div>'
+    +'<button onclick="document.getElementById(\'chDib\').remove()" style="padding:7px 12px;border:none;border-radius:8px;background:#f1f5f9">Cancelar</button>'
+    +'<button onclick="_chdUsar(\''+msgId+'\')" style="padding:7px 12px;border:none;border-radius:8px;background:#0d9488;color:#fff;font-weight:700">Usar</button>'
+    +'</div><canvas id="chd_cv" style="width:100%;height:60vh;touch-action:none;border:1px solid #e2e8f0;border-radius:8px;display:block;background:#fff"></canvas></div>';
+  document.body.appendChild(d);
+  setTimeout(function(){
+    var cv=$('chd_cv'),dpr=Math.min(window.devicePixelRatio||1,2),w=cv.clientWidth||window.innerWidth*0.9,h=cv.clientHeight||window.innerHeight*0.6;
+    cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr);
+    var x=cv.getContext('2d');x.setTransform(dpr,0,0,dpr,0,0);x.lineCap='round';x.lineJoin='round';x.fillStyle='#fff';x.fillRect(0,0,w,h);
+    window._chd={cv:cv,x:x,c:cols[0],g:false,h:[]};
+    var on=false,u=null,pos=function(e){var b=cv.getBoundingClientRect();return {x:e.clientX-b.left,y:e.clientY-b.top};};
+    cv.onpointerdown=function(e){e.preventDefault();try{cv.setPointerCapture(e.pointerId);}catch(_){}_chd.h.push(x.getImageData(0,0,cv.width,cv.height));if(_chd.h.length>20)_chd.h.shift();on=true;u=pos(e);};
+    cv.onpointermove=function(e){if(!on)return;var q=pos(e);x.strokeStyle=_chd.g?'#fff':_chd.c;x.lineWidth=_chd.g?18:4;x.beginPath();x.moveTo(u.x,u.y);x.lineTo(q.x,q.y);x.stroke();u=q;};
+    cv.onpointerup=cv.onpointercancel=function(){on=false;};
+  },60);
+}
+function _chdUsar(msgId){
+  var du=_chd.cv.toDataURL('image/jpeg',0.82);
+  document.getElementById('chDib').remove();
+  (CHAT_ADJ[msgId]=CHAT_ADJ[msgId]||[]).push(du);
+  renderBandeja();_restaurarBorradorChat(msgId);
+}
 function renderBandeja(){
   var el=$('bdj-content');if(!el)return;
   var _msgsB=_sinDuplicados(INBOX_MSGS.filter(function(m){return m&&m.tipo!=='biblioteca';}));
@@ -1215,6 +1364,7 @@ function renderBandeja(){
         if(extras.length)h+='<div style="font-size:11px;color:#64748b;margin-bottom:8px;line-height:1.8">'+extras.join(' · ')+'</div>';
       }
     }
+    h+=_chatHtml(msg);
     if(!isDone){
       h+='<textarea id="resp_'+msg.id+'" class="ft" rows="2" placeholder="Comentario (opcional)..." style="margin-bottom:8px;font-size:12px;min-height:48px"></textarea>';
       h+='<div style="display:flex;gap:6px">';
@@ -1236,7 +1386,11 @@ function renderBandeja(){
   if(sinEnviar>0){
     h+='<button onclick="enviarRespuestasBandeja()" style="width:100%;padding:13px;background:var(--orange);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;margin-top:8px">📤 Enviar '+sinEnviar+' respuesta'+(sinEnviar>1?'s':'')+' pendiente'+(sinEnviar>1?'s':'')+' al estudio</button>';
   }
+  // Lo que se escribía en el chat no se pierde al redibujar
+  var _borr={};document.querySelectorAll('textarea[id^="chtx_"]').forEach(function(t){if(t.value)_borr[t.id]=t.value;});
   el.innerHTML=h;
+  Object.keys(_borr).forEach(function(k){var t=$(k);if(t&&!t.value)t.value=_borr[k];});
+  sorted.forEach(_chatMarcarVisto);
   // Update badge
   _actualizarBadgeBandeja();
 }
