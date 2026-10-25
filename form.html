@@ -1430,30 +1430,28 @@ function _bdjYaVi(ids){
 // ── Tarjeta resumida: tipo, fecha, título y contadores (fotos, mensajes…) ──
 function _cardResumen(msg){
   var isDone=INBOX_RESP[msg.id]&&INBOX_RESP[msg.id].done;
-  var uColor=urgColors[msg.urgencia]||'#f59e0b';
   var tLabel=msg.comentarioId?'🗨️ Comentario':msg.movimientoId?'💰 Movimiento':(tipoLabels[msg.tipo]||msg.tipo);
   var d=msg.fechaEnvio?new Date(msg.fechaEnvio):null;
-  var fecha=d&&!isNaN(d)?d.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'})+' '+d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}):'';
+  var fecha=d&&!isNaN(d)?d.toLocaleDateString('es-AR',{day:'2-digit',month:'short'}):'';
   var e=msg._entidad||{};
-  var tit=msg.comentarioId?(msg.nota||String(msg.titulo||'').replace(/^💬\s*Comentario:\s*/,'')):String(msg.titulo||'').replace(/^💰\s*Movimiento:\s*/,'');
+  var tit=msg.comentarioId?(msg.nota||String(msg.titulo||'').replace(/^(💬|🗨️)\s*Comentario:\s*/,'')):String(msg.titulo||'').replace(/^💰\s*Movimiento:\s*/,'');
   var lista=_chatAplica(msg)?_chatLista(msg):[];
   var nuevos=_chatAplica(msg)?_chatNuevos(msg):0;
   var nFotos=(e.photos||[]).filter(function(p){return p&&p.url&&String(p.url).indexOf('data:')!==0;}).length+(msg._archivos||[]).filter(_bibEsImg).length;
   lista.forEach(function(c){nFotos+=(c.fotos||[]).length;});
-  var chip=function(t,col,bg){return '<span style="font-size:11px;font-weight:700;color:'+(col||'#475569')+';background:'+(bg||'#f1f5f9')+';border-radius:9px;padding:2px 8px;white-space:nowrap">'+t+'</span>';};
+  var chip=function(t,col,bg,bd){return '<span style="display:inline-flex;align-items:center;font-size:11px;font-weight:700;color:'+col+';background:'+bg+';'+(bd?'border:1px solid #e2e8f0;':'')+'border-radius:10px;padding:1px 8px;white-space:nowrap">'+t+'</span>';};
   var ch=[];
-  if(e.description||e.descripcion)ch.push(chip('📝 Descripción'));
-  if(nFotos)ch.push(chip('📷 '+nFotos));
-  if(lista.length)ch.push(chip('💬 '+lista.length+' mensaje'+(lista.length>1?'s':''),'#0f766e','#ccfbf1'));
-  if(nuevos)ch.push(chip('🆕 '+nuevos+' nuevo'+(nuevos>1?'s':''),'#fff','#dc2626'));
-  if(msg.tipo==='checklist'&&(e.items||[]).length){var _st=(INBOX_RESP[msg.id]&&INBOX_RESP[msg.id].itemStates)||{};var _ok=e.items.filter(function(it,ii){return _st.hasOwnProperty(ii)?_st[ii]:it.done;}).length;ch.push(chip('✅ '+_ok+'/'+e.items.length));}
-  if(msg.tipo==='materiales'&&(msg.materiales||[]).length)ch.push(chip('📦 '+msg.materiales.length+' material'+(msg.materiales.length>1?'es':'')));
-  if(isDone)ch.push(chip('✓ Completada','#16a34a','#dcfce7'));
-  return '<div class="card" onclick="cardExp(\''+msg.id+'\')" style="cursor:pointer;padding:10px 12px;border-left:3px solid '+uColor+';'+(nuevos?'background:#ecfdf5;box-shadow:0 0 0 2px #6ee7b7;':'')+'">'
-    +'<div style="display:flex;justify-content:space-between;align-items:center;gap:6px"><span style="font-size:11px;font-weight:700;color:var(--text2)">'+tLabel+'</span>'
-    +'<span style="font-size:10px;color:var(--text3);white-space:nowrap">📅 '+fecha+' <span style="color:var(--text3)">▼</span></span></div>'
-    +'<div style="font-size:14px;font-weight:700;margin:3px 0 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(tit||'Sin título')+'</div>'
-    +(ch.length?'<div style="display:flex;gap:5px;flex-wrap:wrap">'+ch.join('')+'</div>':'')
+  if(msg.tipo==='checklist'&&(e.items||[]).length){var _st=(INBOX_RESP[msg.id]&&INBOX_RESP[msg.id].itemStates)||{};var _ok=e.items.filter(function(it,ii){return _st.hasOwnProperty(ii)?_st[ii]:it.done;}).length;ch.push(chip('✅ '+_ok+'/'+e.items.length,'#475569','#f1f5f9',1));}
+  if(msg.tipo==='materiales'&&(msg.materiales||[]).length)ch.push(chip('📦 '+msg.materiales.length,'#475569','#f1f5f9',1));
+  if(nFotos)ch.push(chip('📷 '+nFotos,'#475569','#f1f5f9',1));
+  if(lista.length)ch.push(chip('💬 '+lista.length,'#1d4ed8','#dbeafe'));
+  if(nuevos)ch.push(chip('🆕 '+nuevos,'#fff','#0d9488'));
+  var estado=isDone?['✓ Completada','#16a34a']:msg.estadoColab==='aceptado'?['✓ Aceptada','#16a34a']:['Pendiente','#ea580c'];
+  return '<div class="card" onclick="cardExp(\''+msg.id+'\')" style="cursor:pointer;padding:10px 12px;border-left:4px solid #0d9488;background:#f0fdfa;'+(nuevos?'box-shadow:0 0 0 2px #6ee7b7;':'')+'">'
+    +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px"><span style="font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+tLabel+': '+esc(tit||'Sin título')+'</span>'
+    +'<span style="font-size:11px;font-weight:700;color:'+estado[1]+';white-space:nowrap">'+estado[0]+' ▼</span></div>'
+    +'<div style="display:flex;gap:6px;align-items:center;margin-top:3px"><span style="font-size:9px;font-weight:800;letter-spacing:.4px;border-radius:9px;padding:1px 7px;background:#ccfbf1;color:#0f766e">⬅ RECIBIDO</span><span style="font-size:11px;color:#64748b">📅 '+fecha+'</span></div>'
+    +(ch.length?'<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">'+ch.join('')+'</div>':'')
     +'</div>';
 }
 function cardExp(id){
