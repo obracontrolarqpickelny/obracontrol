@@ -210,7 +210,7 @@ details.mas>div{padding-top:8px}
     <!-- Comentarios — misma forma que "Nuevo comentario" de la app, para
          que al aceptarlos entren tal cual a la pestaña Comentarios de la obra. -->
     <div class="tab-pane" id="pane-msg">
-      <div class="sub-hdr"><button class="sub-back" onclick="showTab('cargar')">← Volver</button><span class="sub-tit" style="flex:1">🗨️ Comentario</span><button class="done-toggle" id="done-msg" onclick="toggleListo('msg')">✓ Marcar lista</button></div>
+      <div class="sub-hdr"><button class="sub-back" onclick="showTab('cargar')">← Volver</button><span class="sub-tit" style="flex:1">💬 Comentario</span><button class="done-toggle" id="done-msg" onclick="toggleListo('msg')">✓ Marcar lista</button></div>
       <div id="list-cmt"></div>
       <button class="btn-add" onclick="addItem('cmt')">+ Otro comentario</button>
     </div>
@@ -1149,7 +1149,7 @@ function _chatHtml(m){
   var min=!!(CHAT.min&&CHAT.min[m.id]);
   var h='<div onclick="_chatLeido(\''+m.id+'\')" onfocusin="_chatLeido(\''+m.id+'\')" style="margin:8px 0 10px;border:1px solid '+(nuevos?'#34d399':'#99f6e4')+';border-radius:10px;background:'+(nuevos?'#ecfdf5':'#f0fdfa')+';padding:8px">';
   h+='<div onclick="chatMin(\''+m.id+'\')" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none">'
-    +'<span style="font-size:11px;font-weight:800;color:#0f766e">💬 Conversación con el estudio'+(lista.length?' ('+lista.length+')':'')+(nuevos?' <span style="background:#dc2626;color:#fff;border-radius:9px;padding:0 6px;font-size:10px">'+nuevos+' nuevo'+(nuevos>1?'s':'')+'</span>':'')+'</span>'
+    +'<span style="font-size:11px;font-weight:800;color:#0f766e">🗨️ Conversación con el estudio'+(lista.length?' ('+lista.length+')':'')+(nuevos?' <span style="background:#dc2626;color:#fff;border-radius:9px;padding:0 6px;font-size:10px">'+nuevos+' nuevo'+(nuevos>1?'s':'')+'</span>':'')+'</span>'
     +'<span style="font-size:12px;color:#0f766e">'+(min?'▶':'▼')+'</span></div>';
   if(min){h+='</div>';return h;}
   h+='<div style="margin-top:4px">';
@@ -1430,11 +1430,11 @@ function _bdjYaVi(ids){
 // ── Tarjeta resumida: tipo, fecha, título y contadores (fotos, mensajes…) ──
 function _cardResumen(msg){
   var isDone=INBOX_RESP[msg.id]&&INBOX_RESP[msg.id].done;
-  var tLabel=msg.comentarioId?'🗨️ Comentario':msg.movimientoId?'💰 Movimiento':(tipoLabels[msg.tipo]||msg.tipo);
+  var tLabel=msg.comentarioId?'💬 Comentario':msg.movimientoId?'💰 Movimiento':(tipoLabels[msg.tipo]||msg.tipo);
   var d=msg.fechaEnvio?new Date(msg.fechaEnvio):null;
   var fecha=d&&!isNaN(d)?d.toLocaleDateString('es-AR',{day:'2-digit',month:'short'}):'';
   var e=msg._entidad||{};
-  var tit=msg.comentarioId?(msg.nota||String(msg.titulo||'').replace(/^(💬|🗨️)\s*Comentario:\s*/,'')):String(msg.titulo||'').replace(/^💰\s*Movimiento:\s*/,'');
+  var tit=msg.comentarioId?(msg.nota||String(msg.titulo||'').replace(/^(💬|💬)\s*Comentario:\s*/,'')):String(msg.titulo||'').replace(/^💰\s*Movimiento:\s*/,'');
   var lista=_chatAplica(msg)?_chatLista(msg):[];
   var nuevos=_chatAplica(msg)?_chatNuevos(msg):0;
   var nFotos=(e.photos||[]).filter(function(p){return p&&p.url&&String(p.url).indexOf('data:')!==0;}).length+(msg._archivos||[]).filter(_bibEsImg).length;
@@ -1444,7 +1444,7 @@ function _cardResumen(msg){
   if(msg.tipo==='checklist'&&(e.items||[]).length){var _st=(INBOX_RESP[msg.id]&&INBOX_RESP[msg.id].itemStates)||{};var _ok=e.items.filter(function(it,ii){return _st.hasOwnProperty(ii)?_st[ii]:it.done;}).length;ch.push(chip('✅ '+_ok+'/'+e.items.length,'#475569','#f1f5f9',1));}
   if(msg.tipo==='materiales'&&(msg.materiales||[]).length)ch.push(chip('📦 '+msg.materiales.length,'#475569','#f1f5f9',1));
   if(nFotos)ch.push(chip('📷 '+nFotos,'#475569','#f1f5f9',1));
-  if(lista.length)ch.push(chip('💬 '+lista.length,'#1d4ed8','#dbeafe'));
+  if(lista.length)ch.push(chip('🗨️ '+lista.length,'#1d4ed8','#dbeafe'));
   if(nuevos)ch.push(chip('🆕 '+nuevos,'#fff','#0d9488'));
   var estado=isDone?['✓ Completada','#16a34a']:msg.estadoColab==='aceptado'?['✓ Aceptada','#16a34a']:['Pendiente','#ea580c'];
   return '<div class="card" onclick="cardExp(\''+msg.id+'\')" style="cursor:pointer;padding:10px 12px;border-left:4px solid #0d9488;background:#f0fdfa;'+(nuevos?'box-shadow:0 0 0 2px #6ee7b7;':'')+'">'
@@ -1496,7 +1496,7 @@ function renderBandeja(){
     var isDone=INBOX_RESP[msg.id]&&INBOX_RESP[msg.id].done;
     var uColor=urgColors[msg.urgencia]||'#f59e0b';
     var uLabel=urgLabels[msg.urgencia]||msg.urgencia;
-    var tLabel=msg.comentarioId?'🗨️ Comentario':(tipoLabels[msg.tipo]||msg.tipo);
+    var tLabel=msg.comentarioId?'💬 Comentario':(tipoLabels[msg.tipo]||msg.tipo);
     var _fd=msg.fechaEnvio?new Date(msg.fechaEnvio):null;
     var fecha=_fd&&!isNaN(_fd)?_fd.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'})+' '+_fd.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}):'';
     var _nuevosChat=_chatAplica(msg)?_chatNuevos(msg):0;
@@ -1627,7 +1627,7 @@ function renderBandeja(){
   h+=_bdjBarra(F,'bdj');
   var esAvisoArch=function(m){return (m._archivos||[]).length>0;};
   var bloques=[
-    ['🗨️ Comentarios',vis.filter(function(m){return m.comentarioId;})],
+    ['💬 Comentarios',vis.filter(function(m){return m.comentarioId;})],
     ['__fotos__',vis.filter(esAvisoArch)],
     ['📋 Tareas',vis.filter(function(m){return m.tipo==='tarea';})],
     ['💰 Movimientos',vis.filter(function(m){return m.movimientoId;})],
@@ -2202,7 +2202,7 @@ function _saveFormHist(data,deepLink,enviadoServidor){
     ['movimientos','tareas','comentarios','materialesExistentes','materialesIngresados'].forEach(function(k){(noP[k]||[]).forEach(_sinF);});
     _sinF(noP.checklist);
     var pts=[];
-    if(data.mensajeGeneral)pts.push('💬 '+data.mensajeGeneral.slice(0,40));
+    if(data.mensajeGeneral)pts.push('✉️ '+data.mensajeGeneral.slice(0,40));
     if((data.comentarios||[]).length)pts.push('💬 '+data.comentarios.length+' comentario'+(data.comentarios.length>1?'s':''));
     if((data.movimientos||[]).length)pts.push('💰 '+data.movimientos.length+' mov.');
     if((data.tareas||[]).length)pts.push('📋 '+data.tareas.length+' tarea'+(data.tareas.length>1?'s':''));
@@ -2228,7 +2228,7 @@ function _verHistorialItem(idx){
   if(!d){h+='<div style="font-size:12px;color:var(--text3)">Sin datos guardados (informe antiguo). Podés reenviarlo para ver el contenido.</div>';}
   else{
     if(d.mensajeGeneral)h+='<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px;margin-bottom:8px"><div style="font-size:11px;font-weight:700;color:#16a34a;margin-bottom:4px">💬 Mensaje general</div><div style="font-size:12px">'+esc(d.mensajeGeneral)+'</div></div>';
-    if((d.comentarios||[]).length){h+='<div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:4px">🗨️ Comentarios ('+d.comentarios.length+')</div>';d.comentarios.forEach(function(c){h+='<div style="background:var(--gray-ll);border-radius:7px;padding:8px;margin-bottom:4px;font-size:12px"><div style="font-size:10px;color:var(--text3);margin-bottom:2px">'+(c.tipo==='propietario'?'👤 Propietario':'💬 General')+' · '+esc(c.rubro||'')+(c.etapa?' · '+esc(c.etapa):'')+'</div>'+esc(c.texto||'')+'</div>';});}
+    if((d.comentarios||[]).length){h+='<div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:4px">💬 Comentarios ('+d.comentarios.length+')</div>';d.comentarios.forEach(function(c){h+='<div style="background:var(--gray-ll);border-radius:7px;padding:8px;margin-bottom:4px;font-size:12px"><div style="font-size:10px;color:var(--text3);margin-bottom:2px">'+(c.tipo==='propietario'?'👤 Propietario':'💬 General')+' · '+esc(c.rubro||'')+(c.etapa?' · '+esc(c.etapa):'')+'</div>'+esc(c.texto||'')+'</div>';});}
     if((d.movimientos||[]).length){h+='<div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:4px">💰 Movimientos ('+d.movimientos.length+')</div>';d.movimientos.forEach(function(m){h+='<div style="background:var(--gray-ll);border-radius:7px;padding:8px;margin-bottom:4px;font-size:12px">'+(m.tipo==='ingreso'?'💵 +$':'💸 -$')+esc(String(m.monto||0))+' — '+esc(m.concepto||'')+(m.proveedor?' ('+esc(m.proveedor)+')':'')+'</div>';});}
     if((d.tareas||[]).length){h+='<div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:4px;margin-top:8px">📋 Tareas ('+d.tareas.length+')</div>';d.tareas.forEach(function(t){h+='<div style="background:var(--gray-ll);border-radius:7px;padding:8px;margin-bottom:4px;font-size:12px"><div style="font-weight:700">'+esc(t.titulo||'')+'</div>'+(t.descripcion?'<div style="color:var(--text3);margin-top:2px;font-size:11px">'+esc(t.descripcion)+'</div>':'')+'</div>';});}
     if((d.materialesExistentes||[]).length){h+='<div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:4px;margin-top:8px">📦 Material existente ('+d.materialesExistentes.length+')</div>';d.materialesExistentes.forEach(function(m){h+='<div style="background:var(--gray-ll);border-radius:7px;padding:8px;margin-bottom:4px;font-size:12px">'+esc(m.nombre||'')+' · '+esc(String(m.cantidad||0))+' '+esc(m.unidad||'u')+'</div>';});}
