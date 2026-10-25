@@ -307,7 +307,7 @@ details.mas>div{padding-top:8px}
     <div class="version-badge" id="versionBadge">Versión 1</div>
     <div id="linkShareSection" style="width:100%;max-width:380px;margin-bottom:12px;text-align:left"></div>
     <div class="photos-to-share" id="photosSection" style="display:none">
-      <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:4px">📸 Fotos del informe — enviá también estas por WhatsApp</div>
+      <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:4px">📷 Fotos del informe — enviá también estas por WhatsApp</div>
       <div class="photos-grid" id="photosGrid"></div>
     </div>
     <div class="success-btns">
@@ -676,7 +676,7 @@ async function sendCarpeta(){
   try{
     var _hist=JSON.parse(localStorage.getItem('oc_cp_hist_'+TOKEN)||'[]');
     _hist.unshift({fecha:new Date().toISOString(),count:archivos.length,imgs:archivos.filter(function(f){return f.tipo&&f.tipo.startsWith('image/');}).length,desc:($('carpetaDesc')||{}).value||'',
-      nombres:archivos.map(function(f){return (f.tipo&&f.tipo.startsWith('image/')?'📸 ':'📄 ')+f.nombre+(f.descripcion?' — '+f.descripcion:'');})});
+      nombres:archivos.map(function(f){return (f.tipo&&f.tipo.startsWith('image/')?'📷 ':'📄 ')+f.nombre+(f.descripcion?' — '+f.descripcion:'');})});
     if(_hist.length>20)_hist=_hist.slice(0,20);
     localStorage.setItem('oc_cp_hist_'+TOKEN,JSON.stringify(_hist));
   }catch(_){}
@@ -698,7 +698,7 @@ async function sendCarpeta(){
     var _hist2=JSON.parse(localStorage.getItem('oc_cp_hist_'+TOKEN)||'[]');
     if(_hist2.length>1){
       var _hHTML='<div style="background:var(--white);border-radius:12px;padding:12px;box-shadow:0 1px 3px #0001"><div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:8px">📋 Envíos anteriores</div>';
-      _hist2.slice(1,6).forEach(function(e){var d=new Date(e.fecha);var dl=d.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit'})+' '+d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});_hHTML+='<div style="display:flex;justify-content:space-between;padding:5px 0;border-top:1px solid var(--brd);font-size:12px"><span style="color:var(--text2)">'+dl+'</span><span style="color:var(--text3)">'+e.count+' archivo'+(e.count>1?'s':'')+(e.imgs?' · '+e.imgs+' 📸':'')+'</span></div>';});
+      _hist2.slice(1,6).forEach(function(e){var d=new Date(e.fecha);var dl=d.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit'})+' '+d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});_hHTML+='<div style="display:flex;justify-content:space-between;padding:5px 0;border-top:1px solid var(--brd);font-size:12px"><span style="color:var(--text2)">'+dl+'</span><span style="color:var(--text3)">'+e.count+' archivo'+(e.count>1?'s':'')+(e.imgs?' · '+e.imgs+' 📷':'')+'</span></div>';});
       _hHTML+='</div>';
       $('carpetaHistSection').innerHTML=_hHTML;
     }else{$('carpetaHistSection').innerHTML='';}
@@ -843,7 +843,7 @@ function renderHistorialTab(){
     if(x.k==='cp'){
       var c=x.c;
       h+='<div style="background:var(--white);border:1px solid var(--brd);border-left:3px solid var(--green);border-radius:10px;padding:12px;margin-bottom:10px">'
-        +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px"><div style="font-size:13px;font-weight:700">📁 Subiste '+c.count+' archivo'+(c.count>1?'s':'')+(c.imgs?' · 📸 '+c.imgs:'')+'</div>'
+        +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px"><div style="font-size:13px;font-weight:700">📁 Subiste '+c.count+' archivo'+(c.count>1?'s':'')+(c.imgs?' · 📷 '+c.imgs:'')+'</div>'
         +'<span style="font-size:10px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;border-radius:9px;padding:1px 8px;font-weight:700;white-space:nowrap">Enviado</span></div>'
         +'<div style="font-size:11px;color:var(--text3);margin-top:2px">'+fFecha(c.fecha)+'</div>'
         +((c.nombres||[]).length?'<div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">'+c.nombres.slice(0,6).map(esc).join('<br>')+(c.nombres.length>6?'<br>y '+(c.nombres.length-6)+' más':'')+'</div>':(c.desc?'<div style="font-size:11px;color:var(--text2);margin-top:6px">📝 '+esc(c.desc)+'</div>':''))
@@ -931,7 +931,7 @@ function actualizarCarrito(){
   if(mcc){var bc=mcc.querySelector('.m-cnt'),tot=nFotos+nCarp;
     if(bc){bc.textContent=tot?tot+(tot>1?' fotos':' foto')+(nCarp?' ('+nCarp+' en carpeta)':''):'';bc.style.display=tot?'inline-block':'none';}
     mcc.classList.toggle('lleno',tot>0);}
-  if(nFotos)partes.push('📸 '+nFotos+' foto'+(nFotos>1?'s':''));
+  if(nFotos)partes.push('📷 '+nFotos+' foto'+(nFotos>1?'s':''));
   var n=$('cartN'),dd=$('cartD'),cc=$('count-cargar');
   if(n)n.textContent=total?total+' cosa'+(total>1?'s':'')+' lista'+(total>1?'s':'')+' para enviar':'Nada cargado todavía';
   if(dd)dd.textContent=total?partes.join(' · '):'Elegí qué querés cargar';
