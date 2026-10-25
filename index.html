@@ -8512,7 +8512,7 @@ function _chatBurbujas(m,paraPdf){
   var l=(m&&m.chat)||[];
   return l.map(function(c){
     var mio=c.de==='arq';
-    var fotos=(c.fotos||[]).map(function(u){var r=_resolveImg(u)||_chatMini[u]||'';return r&&r.indexOf('[')!==0?r:'';}).filter(Boolean);
+    var fotos=(c.fotos||[]).map(function(u){var r=(String(u).indexOf('data:')===0?u:'')||_resolveImg(u)||_chatMini[u]||'';return r&&r.indexOf('[')!==0?r:'';}).filter(Boolean);
     var fh=new Date(c.ts);var cuando=isNaN(fh)?'':fh.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit'})+' '+fh.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
     if(paraPdf)return '<div style="margin:3px 0;font-size:8pt"><span style="color:#64748b">'+esc(cuando)+'</span> <b style="color:'+(mio?'#0f766e':'#7c3aed')+'">'+esc(c.autor||(mio?'Estudio':'Colaborador'))+':</b> '+esc(c.texto||'')
       +(fotos.length?'<div style="margin-top:2px">'+fotos.map(function(u){return '<img src="'+esc(u)+'" style="width:70px;height:70px;object-fit:cover;border-radius:3px;border:1px solid #ddd;margin-right:3px">';}).join('')+'</div>':'')+'</div>';
@@ -8521,7 +8521,7 @@ function _chatBurbujas(m,paraPdf){
       +'<div class="txxs fw7" style="color:'+(mio?'#0f766e':'#7c3aed')+'">'+esc(c.autor||(mio?'Estudio':'Colaborador'))+'</div>'
       +(c.texto?'<div class="ts" style="white-space:pre-wrap;line-height:1.45">'+esc(c.texto)+'</div>':'')
       +(fotos.length?'<div class="flex gap-4 mt-4" style="flex-wrap:wrap">'+fotos.map(function(u){return '<img src="'+esc(u)+'" onclick="window.open(this.src,\'_blank\')" style="width:96px;height:96px;object-fit:cover;border-radius:8px;cursor:zoom-in">';}).join('')+'</div>':'')
-      +'<div style="font-size:9px;color:var(--text3);text-align:right;margin-top:2px">'+esc(cuando)+'</div></div></div>';
+      +'<div style="font-size:9px;color:var(--text3);text-align:right;margin-top:2px">'+esc(cuando)+(mio&&!_chatCerrado(m)?' <button onclick="borrarMsgChat(\''+c.id+'\')" title="Borrar mensaje" style="border:none;background:none;cursor:pointer;font-size:10px;padding:0 0 0 4px">🗑</button>':'')+'</div></div></div>';
   }).join('');
 }
 function _chatPintar(){
@@ -8540,8 +8540,13 @@ function _chatPintar(){
     +'<div id="chat_lista" style="flex:1;overflow-y:auto;min-height:120px;background:#fafafa;border:1px solid var(--brd);border-radius:10px;padding:6px 10px;margin-bottom:8px">'
     +((m&&(m.chat||[]).length)?_chatBurbujas(m):'<div class="txxs tc3" style="text-align:center;padding:24px 0">Todavía no hay mensajes. Escribí el primero.</div>')
     +'</div>'
-    +(cerrado
-      ?'<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px;text-align:center" class="ts fw7"><span style="color:#16a34a">✓ Completado — la conversación quedó cerrada</span></div>'
+    +((m&&m.estadoColab==='completado')
+      ?'<div style="background:#ecfdf5;border:1px solid #6ee7b7;border-radius:8px;padding:10px">'
+        +'<div class="ts fw7 mb-8" style="color:#047857">✓ '+esc(co.name||'El colaborador')+' la marcó como completada</div>'
+        +'<div class="flex gap-6"><button class="btn btn-s" style="flex:1;justify-content:center;background:var(--green);color:#fff" onclick="chatAceptar()">✓ Aceptar</button>'
+        +'<button class="btn btn-sec btn-s" style="flex:1;justify-content:center" onclick="chatSiguePendiente()">↩ Sigue pendiente</button></div></div>'
+      :cerrado
+      ?'<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px;text-align:center" class="ts fw7"><span style="color:#16a34a">✓ Completada — la conversación quedó cerrada</span></div>'
       :(!(SYNC.apiUrl&&SYNC.apiSecret)?'<div class="txxs mb-6" style="color:var(--orange)">⚠ Sin servidor configurado los mensajes no le llegan al colaborador.</div>':'')
       +(adj.length?'<div class="flex gap-6 mb-6" style="flex-wrap:wrap">'+adj.map(function(u,i){return '<div style="position:relative"><img src="'+esc(u)+'" style="width:56px;height:56px;object-fit:cover;border-radius:8px"><button onclick="window._chatAdj.splice('+i+',1);_chatPintar()" style="position:absolute;top:-6px;right:-6px;border:none;background:var(--red);color:#fff;border-radius:50%;width:18px;height:18px;font-size:10px;cursor:pointer">✕</button></div>';}).join('')+'</div>':'')
       +'<textarea class="ft" id="chat_tx" rows="2" style="margin:0 0 6px" placeholder="Escribí tu mensaje…">'+esc(txPrev)+'</textarea>'
@@ -8551,7 +8556,8 @@ function _chatPintar(){
       +'<button class="btn btn-sec btn-s" style="flex:1;justify-content:center;padding-left:4px;padding-right:4px" onclick="abrirDibujoNota(\'chat\')">✏️</button>'
       +'<button class="btn btn-s" title="Responder con un pulgar arriba" style="flex:1;justify-content:center;padding-left:4px;padding-right:4px;'+(m&&m.likeArq?'background:#0d9488;color:#fff':'background:var(--gray-ll);color:var(--text2)')+'" onclick="toggleLikeChat()">👍</button>'
       +'<button class="btn btn-s" style="flex:2;justify-content:center;background:#0d9488;color:#fff;white-space:nowrap" onclick="enviarChat()">Enviar ➤</button>'
-      +'</div>')
+      +'</div>'
+      +'<button class="btn btn-sec btn-s btn-w mt-8" style="justify-content:center;color:var(--green)" onclick="chatCompletar()">✓ Dar por completada</button>')
     +'</div>';
   var l=document.getElementById('chat_lista');if(l)l.scrollTop=l.scrollHeight;
 }
@@ -8575,32 +8581,72 @@ function _chatAsegurarMsg(){
   c.msgId=m.id;
   return m;
 }
-async function enviarChat(){
-  var c=window._chatCtx;if(!c)return;
+var _chatEnviandoArq=false;
+function enviarChat(){
+  var c=window._chatCtx;if(!c||_chatEnviandoArq)return;
   var ta=document.getElementById('chat_tx');var tx=((ta&&ta.value)||'').trim();
   var adj=(window._chatAdj||[]).slice();
   if(!tx&&!adj.length){toast('Escribí algo o agregá una foto','var(--orange)');return;}
+  _chatEnviandoArq=true;
   var m=_chatAsegurarMsg();
   var pid=m.proyectoId||S.proj;
-  var fotos=[];
-  for(var i=0;i<adj.length;i++){
-    var du=adj[i],url=null;
-    try{if(GD.online&&GD.accessToken){var up=await uploadImageToDrive(du,'chat_'+uid()+'.jpg',GD.moduleFolders[pid+'_colaboradores']||null,pid);if(up&&up.url)url=up.url;}}catch(_){}
-    if(!url){
-      url=await _guardarImgNota(du);
-      try{_chatMini[url]=await compressImage(du,640,0.5);}catch(_){_chatMini[url]=du;}
-    }
-    fotos.push(url);
-  }
   if(!m.chat)m.chat=[];
-  m.chat.push({id:uid(),de:'arq',autor:(D.user&&D.user.name)||'Estudio',texto:tx,fotos:fotos,ts:nw()});
-  m.updatedAt=nw();
+  var entrada={id:uid(),de:'arq',autor:(D.user&&D.user.name)||'Estudio',texto:tx,fotos:adj.slice(),ts:nw()};
+  m.chat.push(entrada);m.updatedAt=nw();
   if(ta)ta.value='';window._chatAdj=[];
-  sv();_publicarBandejaColab(m.colabId,pid);
-  if(fotos.some(function(u){return u.indexOf('[foto:')===0;}))setTimeout(function(){_publicarBandejaColab(m.colabId,pid);},30000);
   _chatPintar();
-  var co=(D.colaboradores||[]).find(function(x){return x.id===m.colabId;});
-  toast('Enviado a '+((co&&co.name)||'colaborador')+' ✓','var(--teal)',2000);
+  _chatEnviandoArq=false;
+  // Lo pesado (guardar, subir fotos, publicar) va después de mostrar el mensaje
+  setTimeout(async function(){
+    if(!adj.length){sv();_publicarBandejaColab(m.colabId,pid);return;}
+    sv();_publicarBandejaColab(m.colabId,pid); // el texto sale ya (las fotos viajan livianas)
+    for(var i=0;i<adj.length;i++){
+      var du=adj[i],url=null;
+      if(entrada.fotos.indexOf(du)<0)continue; // ya la tomó el respaldo automático
+      try{if(GD.online&&GD.accessToken){var up=await uploadImageToDrive(du,'chat_'+uid()+'.jpg',GD.moduleFolders[pid+'_colaboradores']||null,pid);if(up&&up.url)url=up.url;}}catch(_){}
+      if(!url){url=await _guardarImgNota(du);try{_chatMini[url]=await compressImage(du,640,0.5);}catch(_){_chatMini[url]=du;}}
+      var k=entrada.fotos.indexOf(du);if(k>=0)entrada.fotos[k]=url;
+    }
+    m.updatedAt=nw();sv();_publicarBandejaColab(m.colabId,pid);
+    if(entrada.fotos.some(function(u){return String(u).indexOf('[foto:')===0;}))setTimeout(function(){_publicarBandejaColab(m.colabId,pid);},30000);
+  },30);
+}
+// Borrar un mensaje propio (mientras la conversación sigue abierta)
+function borrarMsgChat(id){
+  var m=_chatMsgActual();if(!m||_chatCerrado(m))return;
+  if(!confirm('¿Borrar este mensaje?'))return;
+  m.chat=(m.chat||[]).filter(function(c){return c.id!==id;});
+  m.chatBorrados=(m.chatBorrados||[]).concat([id]).slice(-300);
+  m.updatedAt=nw();sv();_publicarBandejaColab(m.colabId,m.proyectoId||S.proj);_chatPintar();
+}
+// Completar: lo da por terminado cualquiera; si lo marcó el colaborador, se acepta
+function _chatCompletarEntidad(m){
+  var e=_chatEntidad(m);if(!e||!e.it)return;
+  if(e.tbl==='tareas')e.it.status='completada';else e.it.cumplido=true;
+  e.it.updatedAt=nw();
+}
+function chatCompletar(){
+  var m=_chatAsegurarMsg();
+  _chatCompletarEntidad(m);
+  m.estadoColab='aceptado';m.updatedAt=nw();
+  sv();_publicarBandejaColab(m.colabId,m.proyectoId||S.proj);_chatPintar();
+  toast('✓ Completada','var(--green)',2000);
+}
+function chatSiguePendiente(msgId){
+  var m=msgId?(D.mensajesColab||[]).find(function(x){return x.id===msgId;}):_chatMsgActual();if(!m)return;
+  m.estadoColab='nuevo';m.reabiertoAt=nw();m.respuesta=null;m.fechaRespuesta=null;m.updatedAt=nw();
+  var e=_chatEntidad(m);if(e&&e.it){if(e.tbl==='tareas'&&e.it.status==='completada')e.it.status='pendiente';if(e.tbl==='comentarios')e.it.cumplido=false;e.it.updatedAt=nw();}
+  sv();_publicarBandejaColab(m.colabId,m.proyectoId||S.proj);
+  if(document.getElementById('chatM'))_chatPintar();else render();
+  toast('Sigue pendiente: la conversación vuelve a estar abierta','var(--teal)',2500);
+}
+function chatAceptar(msgId){
+  var m=msgId?(D.mensajesColab||[]).find(function(x){return x.id===msgId;}):_chatMsgActual();if(!m)return;
+  _chatCompletarEntidad(m);
+  m.estadoColab='aceptado';m.updatedAt=nw();
+  sv();_publicarBandejaColab(m.colabId,m.proyectoId||S.proj);
+  if(document.getElementById('chatM'))_chatPintar();else render();
+  toast('✓ Aceptada como completada','var(--green)',2000);
 }
 function toggleLikeChat(){
   var m=_chatAsegurarMsg();
@@ -12405,6 +12451,8 @@ function aceptarMsgColab(msgId,colabId){
     var t=(D.tareas||[]).find(function(x){return x.id===m.entidadId;});
     if(t){t.status='completada';t.updatedAt=nw();}
   }
+  if(m.comentarioId){var _cmA=(D.comentarios||[]).find(function(x){return x.id===m.comentarioId;});if(_cmA){_cmA.cumplido=true;_cmA.updatedAt=nw();}}
+  _publicarBandejaColab(m.colabId,m.proyectoId);
   if(m.tipo==='checklist'&&m.entidadId){
     var chk=(D.checklists||[]).find(function(x){return x.id===m.entidadId;});
     if(chk){
@@ -13779,6 +13827,17 @@ function _bandejaBodyHtml(){
   var uCMsg={alta:'#dc2626',media:'#f59e0b',baja:'#16a34a'};
   var completedMsgsHtml=completedMsgs.map(function(m){
     var _co=(D.colaboradores||[]).find(function(c){return c.id===m.colabId;});
+    if(m.tipo==='tarea'||m.comentarioId){
+      return '<div class="card" style="border-left:3px solid var(--green);padding:12px;margin-bottom:8px">'
+        +'<div class="ts fw7">✓ '+esc(_co?_co.name:'Colaborador')+' la marcó como completada</div>'
+        +'<div class="txxs tc3 mt-2">'+(m.tipo==='tarea'?'📋 ':'💬 ')+esc(String(m.titulo||'').replace(/^💬\s*(Comentario:\s*)?/,''))+'</div>'
+        +(m.respuesta?'<div class="txs mt-4" style="color:var(--text2)">“'+esc(m.respuesta)+'”</div>':'')
+        +'<div class="flex gap-6 mt-8" style="flex-wrap:wrap">'
+        +'<button class="btn btn-s" style="background:var(--green);color:#fff" onclick="chatAceptar(\''+m.id+'\')">✓ Aceptar</button>'
+        +'<button class="btn btn-sec btn-s" onclick="chatSiguePendiente(\''+m.id+'\')">↩ Sigue pendiente</button>'
+        +'<button class="btn btn-sec btn-s" onclick="abrirChatMsg(\''+m.id+'\')">💬 Chat'+((m.chat||[]).length?' ('+m.chat.length+')':'')+'</button>'
+        +'</div></div>';
+    }
     var _coName=_co?_co.name:'Colaborador';
     var uc=uCMsg[m.urgencia]||'#f59e0b';
     return '<div class="card" style="border-left:3px solid var(--green);padding:12px;margin-bottom:8px">'
@@ -14861,7 +14920,7 @@ function _msgsColabEnriquecidos(colabId,pid){
     if(_esAvisoCarpeta(m))return Object.assign({},m,{_archivos:(m.archivoIds||[]).map(function(id){return porId[id];}).filter(Boolean)});
     if((m.chat||[]).length||m.tipo==='tarea'||m.comentarioId){
       m=Object.assign({},m,{chatCerrado:_chatCerrado(m),chat:(m.chat||[]).map(function(c){
-        return Object.assign({},c,{fotos:(c.fotos||[]).map(function(u){return (typeof u==='string'&&u.indexOf('[foto:')===0)?(_chatMini[u]||null):u;}).filter(function(u){return u&&u.indexOf('[')!==0;})});
+        return Object.assign({},c,{fotos:(c.fotos||[]).map(function(u){return (typeof u==='string'&&u.indexOf('[foto:')===0)?(_chatMini[u]||null):(typeof u==='string'&&u.indexOf('data:')===0?null:u);}).filter(function(u){return u&&u.indexOf('[')!==0;})});
       })});
     }
     var ent=null;
@@ -15036,10 +15095,18 @@ function _ingestarDelServidor(payload){
     (payload.chat||[]).forEach(function(r){
       var m=(D.mensajesColab||[]).find(function(x){return x.id===r.msgId;});if(!m)return;
       if(!m.chat)m.chat=[];
-      if(m.chat.some(function(x){return x.id===r.id;}))return;
+      if(m.chat.some(function(x){return x.id===r.id;})||(m.chatBorrados||[]).indexOf(r.id)>=0)return;
       m.chat.push({id:r.id||uid(),de:'col',autor:payload.ayudante||'Colaborador',texto:r.texto||'',fotos:(r.fotos||[]).filter(function(u){return typeof u==='string'&&u;}),ts:r.ts||nw()});
       m.chat.sort(function(a,b){return String(a.ts).localeCompare(String(b.ts));});
       m.chatNoLeidoArq=(m.chatNoLeidoArq||0)+1;m.updatedAt=nw();_alguno=true;_colabs[m.colabId]=m.proyectoId;
+    });
+    (payload.borrar||[]).forEach(function(r){
+      var m=(D.mensajesColab||[]).find(function(x){return x.id===r.msgId;});if(!m)return;
+      var n0=(m.chat||[]).length;
+      m.chat=(m.chat||[]).filter(function(c){return !(c.id===r.id&&c.de==='col');});
+      m.chatBorrados=(m.chatBorrados||[]).concat([r.id]).slice(-300);
+      if(m.chat.length!==n0){m.chatNoLeidoArq=Math.max(0,(m.chatNoLeidoArq||0)-1);}
+      m.updatedAt=nw();_alguno=true;_colabs[m.colabId]=m.proyectoId;
     });
     (payload.likes||[]).forEach(function(r){
       var m=(D.mensajesColab||[]).find(function(x){return x.id===r.msgId;});if(!m)return;
