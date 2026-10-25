@@ -1427,6 +1427,47 @@ function _bdjYaVi(ids){
   ids.forEach(function(id){var m=INBOX_MSGS.find(function(x){return x.id===id;})||{};INBOX_RESP[id]={done:true,respuesta:'',itemStates:{},fecha:new Date().toISOString(),enviado:false,titulo:m.titulo||'',tipo:m.tipo||''};});
   _guardarResp();renderBandeja();_enviarRespuestas(ids);
 }
+// ── Tarjeta resumida: tipo, fecha, título y contadores (fotos, mensajes…) ──
+function _cardResumen(msg){
+  var isDone=INBOX_RESP[msg.id]&&INBOX_RESP[msg.id].done;
+  var uColor=urgColors[msg.urgencia]||'#f59e0b';
+  var tLabel=msg.comentarioId?'💬 Comentario':msg.movimientoId?'💰 Movimiento':(tipoLabels[msg.tipo]||msg.tipo);
+  var d=msg.fechaEnvio?new Date(msg.fechaEnvio):null;
+  var fecha=d&&!isNaN(d)?d.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'})+' '+d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}):'';
+  var e=msg._entidad||{};
+  var tit=msg.comentarioId?(msg.nota||String(msg.titulo||'').replace(/^💬\s*Comentario:\s*/,'')):String(msg.titulo||'').replace(/^💰\s*Movimiento:\s*/,'');
+  var lista=_chatAplica(msg)?_chatLista(msg):[];
+  var nuevos=_chatAplica(msg)?_chatNuevos(msg):0;
+  var nFotos=(e.photos||[]).filter(function(p){return p&&p.url&&String(p.url).indexOf('data:')!==0;}).length+(msg._archivos||[]).filter(_bibEsImg).length;
+  lista.forEach(function(c){nFotos+=(c.fotos||[]).length;});
+  var chip=function(t,col,bg){return '<span style="font-size:11px;font-weight:700;color:'+(col||'#475569')+';background:'+(bg||'#f1f5f9')+';border-radius:9px;padding:2px 8px;white-space:nowrap">'+t+'</span>';};
+  var ch=[];
+  if(e.description||e.descripcion)ch.push(chip('📝 Descripción'));
+  if(nFotos)ch.push(chip('📷 '+nFotos));
+  if(lista.length)ch.push(chip('💬 '+lista.length+' mensaje'+(lista.length>1?'s':''),'#0f766e','#ccfbf1'));
+  if(nuevos)ch.push(chip('🆕 '+nuevos+' nuevo'+(nuevos>1?'s':''),'#fff','#dc2626'));
+  if(msg.tipo==='checklist'&&(e.items||[]).length){var _st=(INBOX_RESP[msg.id]&&INBOX_RESP[msg.id].itemStates)||{};var _ok=e.items.filter(function(it,ii){return _st.hasOwnProperty(ii)?_st[ii]:it.done;}).length;ch.push(chip('✅ '+_ok+'/'+e.items.length));}
+  if(msg.tipo==='materiales'&&(msg.materiales||[]).length)ch.push(chip('📦 '+msg.materiales.length+' material'+(msg.materiales.length>1?'es':'')));
+  if(isDone)ch.push(chip('✓ Completada','#16a34a','#dcfce7'));
+  return '<div class="card" onclick="cardExp(\''+msg.id+'\')" style="cursor:pointer;padding:10px 12px;border-left:3px solid '+uColor+';'+(nuevos?'background:#ecfdf5;box-shadow:0 0 0 2px #6ee7b7;':'')+'">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;gap:6px"><span style="font-size:11px;font-weight:700;color:var(--text2)">'+tLabel+'</span>'
+    +'<span style="font-size:10px;color:var(--text3);white-space:nowrap">📅 '+fecha+' <span style="color:var(--text3)">▼</span></span></div>'
+    +'<div style="font-size:14px;font-weight:700;margin:3px 0 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(tit||'Sin título')+'</div>'
+    +(ch.length?'<div style="display:flex;gap:5px;flex-wrap:wrap">'+ch.join('')+'</div>':'')
+    +'</div>';
+}
+function cardExp(id){
+  if(!CHAT.exp)CHAT.exp={};
+  CHAT.exp[id]=!CHAT.exp[id];
+  var m=INBOX_MSGS.find(function(x){return x.id===id;});
+  if(m&&CHAT.exp[id]&&_chatAplica(m))_chatMarcarVisto(m);
+  _guardarChat();renderBandeja();
+}
+function cardExpTodos(abrir){
+  if(!CHAT.exp)CHAT.exp={};
+  INBOX_MSGS.forEach(function(m){if(m&&m.id)CHAT.exp[m.id]=!!abrir;});
+  _guardarChat();renderBandeja();
+}
 function renderBandeja(){
   var el=$('bdj-content');if(!el)return;
   var _msgsB=_sinDuplicados(INBOX_MSGS.filter(function(m){return m&&m.tipo!=='biblioteca';}));
@@ -1443,13 +1484,16 @@ function renderBandeja(){
     return (uOrd[a.urgencia]||1)-(uOrd[b.urgencia]||1)||(b.fechaEnvio||'').localeCompare(a.fechaEnvio||'');
   });
   var h=_bibHtml();
-  var _conChat=sorted.filter(_chatAplica);
-  if(_conChat.length){
-    var _todosMin=_conChat.every(function(m){return CHAT.min&&CHAT.min[m.id];});
-    h+='<div style="display:flex;justify-content:flex-end;margin:0 0 6px"><button onclick="chatMinTodos('+(!_todosMin)+')" style="border:1px solid #99f6e4;background:#f0fdfa;color:#0f766e;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer">'+(_todosMin?'▼ Desplegar los chats':'▶ Minimizar los chats')+'</button></div>';
+  if(sorted.length){
+    var _algunoAbierto=sorted.some(function(m){return CHAT.exp&&CHAT.exp[m.id];});
+    h+='<div style="display:flex;justify-content:flex-end;margin:0 0 6px"><button onclick="cardExpTodos('+(!_algunoAbierto)+')" style="border:1px solid #99f6e4;background:#f0fdfa;color:#0f766e;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer">'+(_algunoAbierto?'▶ Resumir todo':'▼ Desplegar todo')+'</button></div>';
   }
   var _bibImgs=_bibLista().filter(_bibEsImg);
   var _cardMsg=function(msg){
+    if(!(CHAT.exp&&CHAT.exp[msg.id]))return _cardResumen(msg);
+    return _cardFull(msg);
+  };
+  var _cardFull=function(msg){
     var h='';
     var isDone=INBOX_RESP[msg.id]&&INBOX_RESP[msg.id].done;
     var uColor=urgColors[msg.urgencia]||'#f59e0b';
@@ -1460,8 +1504,8 @@ function renderBandeja(){
     var _nuevosChat=_chatAplica(msg)?_chatNuevos(msg):0;
     if(msg.movimientoId)tLabel='💰 Movimiento';
     h+='<div class="card" style="border-left:3px solid '+uColor+';'+(isDone?'opacity:.7;':'')+(_nuevosChat?'background:#ecfdf5;box-shadow:0 0 0 2px #6ee7b7;':'')+'">';
-    h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
-    h+='<span style="font-size:11px;font-weight:700;color:var(--text2)">'+tLabel+'</span>';
+    h+='<div onclick="cardExp(\''+msg.id+'\')" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;cursor:pointer">';
+    h+='<span style="font-size:11px;font-weight:700;color:var(--text2)">'+tLabel+' <span style="color:var(--text3)">▲</span></span>';
     h+='<div style="display:flex;gap:6px;align-items:center">';
     h+='<span style="background:'+uColor+'22;color:'+uColor+';border-radius:8px;padding:2px 8px;font-size:10px;font-weight:700">'+uLabel+'</span>';
     h+='<span style="font-size:11px;color:var(--text2);font-weight:600;white-space:nowrap">📅 '+fecha+'</span>';

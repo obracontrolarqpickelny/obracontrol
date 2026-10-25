@@ -8641,8 +8641,11 @@ function abrirChat(tbl,entId,colabId){
 }
 function abrirChatMsg(msgId){
   var m=(D.mensajesColab||[]).find(function(x){return x.id===msgId;});if(!m)return;
-  var e=_chatEntidad(m);if(!e||!e.it){toast('Esa tarea o comentario ya no está','var(--orange)');return;}
-  abrirChat(e.tbl,e.it.id,m.colabId);
+  // La conversación vive en el aviso: se abre aunque la tarea o el comentario se
+  // haya quitado de la obra (antes decía "ya no está" y no dejaba entrar).
+  var tbl=m.tipo==='tarea'?'tareas':m.movimientoId?'economia':'comentarios';
+  var eid=m.tipo==='tarea'?m.entidadId:(m.movimientoId||m.comentarioId);
+  abrirChat(tbl,eid,m.colabId);
 }
 function _chatMsgActual(){
   var c=window._chatCtx;if(!c)return null;
@@ -8673,12 +8676,13 @@ function _chatPintar(){
   var ent=(D[c.tbl]||[]).find(function(x){return x.id===c.entId;})||{};
   var co=(D.colaboradores||[]).find(function(x){return x.id===c.colabId;})||{};
   var cerrado=m?_chatCerrado(m):_itemCompleto(c.tbl,ent);
+  if(!ent.id&&m)ent={title:String(m.titulo||''),concepto:String(m.titulo||'').replace(/^💰\s*Movimiento:\s*/,''),text:m.nota||String(m.titulo||'').replace(/^💬\s*Comentario:\s*/,'')};
   var tit=c.tbl==='tareas'?(ent.title||'Tarea'):c.tbl==='economia'?(ent.concepto||'Movimiento')+' · '+(ent.tipo==='ingreso'?'+':'-')+'$'+(parseFloat(ent.monto)||0).toLocaleString('es-AR'):String(ent.text||'Comentario').slice(0,80);
   var adj=window._chatAdj||[];
   var txPrev=(document.getElementById('chat_tx')||{}).value||'';
   d.innerHTML='<div class="mo-c" style="max-width:560px;display:flex;flex-direction:column;max-height:92vh">'
     +'<div class="mo-h"><h3 style="color:#0f766e">💬 '+esc(co.name||'Colaborador')+'</h3><button class="tbtn" onclick="document.getElementById(\'chatM\').remove();render()">'+I.x+'</button></div>'
-    +'<div class="txxs tc3 mb-6">'+(c.tbl==='tareas'?'📋 Tarea':c.tbl==='economia'?'💰 Movimiento':'💬 Comentario')+': <b>'+esc(tit)+'</b></div>'
+    +'<div class="txxs tc3 mb-6">'+(c.tbl==='tareas'?'📋 Tarea':c.tbl==='economia'?'💰 Movimiento':'💬 Comentario')+': <b>'+esc(tit)+'</b>'+(m&&!(_chatEntidad(m)||{}).it?' <span style="color:var(--orange)">(ya no está en la obra)</span>':'')+'</div>'
     +'<div id="chat_lista" style="flex:1;overflow-y:auto;min-height:120px;background:#fafafa;border:1px solid var(--brd);border-radius:10px;padding:6px 10px;margin-bottom:8px">'
     +((m&&(m.chat||[]).length)?_chatBurbujas(m)+(!cerrado&&m.chat.some(function(x){return x.de==='col';})?'<div style="font-size:9px;color:var(--text3);text-align:center;margin-top:2px">Tocá dos veces un mensaje del colaborador para darle 👍</div>':''):'<div class="txxs tc3" style="text-align:center;padding:24px 0">Todavía no hay mensajes. Escribí el primero.</div>')
     +'</div>'
@@ -8778,7 +8782,7 @@ function chatCompletar(){
 function chatSiguePendiente(msgId){
   var m=msgId?(D.mensajesColab||[]).find(function(x){return x.id===msgId;}):_chatMsgActual();if(!m)return;
   m.estadoColab='nuevo';m.reabiertoAt=nw();m.respuesta=null;m.fechaRespuesta=null;m.updatedAt=nw();
-  var e=_chatEntidad(m);if(e&&e.it){if(e.tbl==='tareas'&&e.it.status==='completada')e.it.status='pendiente';if(e.tbl==='comentarios')e.it.cumplido=false;e.it.updatedAt=nw();}
+  var e=_chatEntidad(m)||{};if(e&&e.it){if(e.tbl==='tareas'&&e.it.status==='completada')e.it.status='pendiente';if(e.tbl==='comentarios')e.it.cumplido=false;e.it.updatedAt=nw();}
   sv();_publicarBandejaColab(m.colabId,m.proyectoId||S.proj);
   if(document.getElementById('chatM'))_chatPintar();else render();
   toast('Sigue pendiente: la conversación vuelve a estar abierta','var(--teal)',2500);
@@ -12323,10 +12327,18 @@ function openPerfilColab(colabId,tab){
       if(_hadUnseen){_cp2.archivos.forEach(function(f){if(f.subidoPor==='col')f.visto=true;});sv();}
     }
   }
-  document.getElementById('carpetaM')?.remove();
-  var d=document.createElement('div');d.className='mo open';d.id='carpetaM';
+  // Si ya está abierta para este colaborador se redibuja en el lugar: antes se
+  // cerraba y se volvía a abrir con su animación, y cada tilde hacía pestañear.
+  var _dPrev=document.getElementById('carpetaM');
+  var _reuso=!!(_dPrev&&_dPrev.dataset.colab===colabId);
+  var _scrPrev=_reuso?((_dPrev.querySelector('[data-scroll-perfil]')||{}).scrollTop||0):0;
+  var _scrMo=_reuso?((_dPrev.querySelector('.mo-c')||{}).scrollTop||0):0;
+  if(_dPrev&&!_reuso)_dPrev.remove();
+  var d=_reuso?_dPrev:document.createElement('div');d.className='mo open';d.id='carpetaM';d.dataset.colab=colabId;
+  if(_reuso&&d.dataset.tab!==tab){_scrPrev=0;_scrMo=0;}
+  d.dataset.tab=tab;
   var tabDefs=[{id:'resumen',label:'🕒 Resumen'},{id:'historial',label:'📋 Historial'},{id:'carpeta',label:'📁 Carpeta'},{id:'bandeja',label:'📥 Bandeja'},{id:'mensajes',label:'💬 Mensajes'}];
-  var h='<div class="mo-c" style="display:flex;flex-direction:column;max-height:90vh">';
+  var h='<div class="mo-c" style="display:flex;flex-direction:column;max-height:90vh;'+(_reuso?'animation:none':'')+'">';
   h+='<div class="mo-h"><h3>'+esc(co.name||co.email||'?')+'</h3><button class="tbtn" onclick="document.getElementById(\'carpetaM\').remove()">'+I.x+'</button></div>';
   // Pestañas en varias líneas si no entran (antes se cortaban con una barra de desplazamiento)
   h+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">';
@@ -12341,7 +12353,7 @@ function openPerfilColab(colabId,tab){
     h+='<button onclick="openPerfilColab(\''+colabId+'\',\''+t.id+'\')" style="flex-shrink:0;white-space:nowrap;border:none;'+actBg+'border-radius:20px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer">'+t.label+badge+'</button>';
   });
   h+='</div>';
-  h+='<div style="flex:1;overflow-y:auto">';
+  h+='<div data-scroll-perfil style="flex:1;overflow-y:auto">';
 
   if(tab==='resumen'){
     h+=_resumenColabHtml(colabId,co);
@@ -12590,7 +12602,9 @@ function openPerfilColab(colabId,tab){
   }
 
   h+='</div></div>';
-  d.innerHTML=h;document.body.appendChild(d);
+  d.innerHTML=h;if(!_reuso)document.body.appendChild(d);
+  if(_scrPrev){var _sc=d.querySelector('[data-scroll-perfil]');if(_sc)_sc.scrollTop=_scrPrev;}
+  if(_scrMo){var _mc=d.querySelector('.mo-c');if(_mc)_mc.scrollTop=_scrMo;}
   if(tab==='mensajes'){var cb=document.getElementById('colabChatBox');if(cb)cb.scrollTop=cb.scrollHeight;}
 }
 function colabSendFromPerfil(colabId,sendWA){
