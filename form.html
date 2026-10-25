@@ -2172,5 +2172,82 @@ function showErr(msg){
 
 init();
 </script>
+<script>
+// ═══════ FECHAS: se pueden tipear (dd/mm/aaaa) o elegir en el calendario ═══════
+// Cada <input type="date"> queda acompañado por un cuadro de texto donde se
+// escribe la fecha; el campo original sigue existiendo (con su id, su valor
+// AAAA-MM-DD y sus eventos), achicado al ícono del calendario. Así todo el código
+// que lee o escribe esas fechas sigue funcionando igual.
+(function(){
+  if(window.__fechasTipeables)return;window.__fechasTipeables=true;
+  var st=document.createElement('style');
+  st.textContent='.fecha-wrap{display:flex;align-items:stretch;gap:4px;width:100%;min-width:112px;box-sizing:border-box}'
+    +'.fecha-wrap>.fecha-txt{flex:1;min-width:0;margin:0!important;padding-left:6px!important;padding-right:4px!important}'
+    +'.fecha-wrap>input[type=date].fecha-pick{flex:0 0 32px!important;width:32px!important;min-width:32px!important;max-width:32px!important;padding:0 4px!important;margin:0!important;color:transparent!important;cursor:pointer}'
+    +'.fecha-pick::-webkit-datetime-edit{display:none}'
+    +'.fecha-pick::-webkit-calendar-picker-indicator{margin:0;cursor:pointer;opacity:.75}';
+  (document.head||document.documentElement).appendChild(st);
+  var desc=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value');
+  var aTexto=function(iso){var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(iso||'');return m?m[3]+'/'+m[2]+'/'+m[1]:'';};
+  var aIso=function(t){
+    var m=/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2}|\d{4})$/.exec((t||'').trim());if(!m)return null;
+    var d=+m[1],mo=+m[2],y=+m[3];if(y<100)y+=2000;
+    var f=new Date(y,mo-1,d);if(f.getFullYear()!==y||f.getMonth()!==mo-1||f.getDate()!==d)return null;
+    return y+'-'+String(mo).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+  };
+  var mascara=function(v){
+    var dg=v.replace(/\D/g,'').slice(0,8),o=dg.slice(0,2);
+    if(dg.length>2)o+='/'+dg.slice(2,4);
+    if(dg.length>4)o+='/'+dg.slice(4);
+    return o;
+  };
+  function preparar(inp){
+    if(!inp||inp.type!=='date')return;
+    if(inp.__fechaTxt&&inp.parentNode&&inp.parentNode.classList&&inp.parentNode.classList.contains('fecha-wrap'))return;
+    var txt=document.createElement('input');
+    txt.type='text';txt.className=(inp.className||'')+' fecha-txt';txt.inputMode='numeric';txt.autocomplete='off';
+    txt.placeholder='dd/mm/aaaa';txt.maxLength=10;
+    var w=document.createElement('span');w.className='fecha-wrap';
+    // El ancho y los márgenes que tenía el campo los toma el conjunto
+    var s=inp.style;['width','maxWidth','minWidth','margin','marginTop','marginBottom','flex'].forEach(function(k){if(s[k]){w.style[k]=s[k];}});
+    if(s.fontSize)txt.style.fontSize=s.fontSize;if(s.padding)txt.style.padding=s.padding;
+    inp.parentNode.insertBefore(w,inp);w.appendChild(txt);w.appendChild(inp);
+    inp.classList.add('fecha-pick');inp.title=inp.title||'Elegir en el calendario';
+    inp.__fechaTxt=txt;
+    txt.value=aTexto(desc.get.call(inp));
+    if(!inp.__valOv){
+      inp.__valOv=true;
+      Object.defineProperty(inp,'value',{configurable:true,
+        get:function(){return desc.get.call(this);},
+        set:function(v){desc.set.call(this,v);if(this.__fechaTxt&&document.activeElement!==this.__fechaTxt)this.__fechaTxt.value=aTexto(v);}});
+      inp.addEventListener('change',function(){if(inp.__fechaTxt)inp.__fechaTxt.value=aTexto(desc.get.call(inp));});
+      inp.addEventListener('click',function(){try{if(inp.showPicker)inp.showPicker();}catch(_){}});
+    }
+    txt.addEventListener('input',function(){
+      var p=txt.selectionStart,antes=txt.value.length;
+      txt.value=mascara(txt.value);
+      try{var n=p+(txt.value.length-antes);txt.setSelectionRange(n,n);}catch(_){}
+      var iso=aIso(txt.value);
+      if(iso&&txt.value.length===10&&iso!==desc.get.call(inp)){
+        if(inp.min&&iso<inp.min||inp.max&&iso>inp.max)return;
+        desc.set.call(inp,iso);inp.dispatchEvent(new Event('input',{bubbles:true}));inp.dispatchEvent(new Event('change',{bubbles:true}));
+      }
+    });
+    txt.addEventListener('blur',function(){
+      var t=txt.value.trim();
+      if(!t){if(desc.get.call(inp)){desc.set.call(inp,'');inp.dispatchEvent(new Event('input',{bubbles:true}));inp.dispatchEvent(new Event('change',{bubbles:true}));}return;}
+      var iso=aIso(t);
+      if(iso&&iso!==desc.get.call(inp)){desc.set.call(inp,iso);inp.dispatchEvent(new Event('input',{bubbles:true}));inp.dispatchEvent(new Event('change',{bubbles:true}));}
+      txt.value=aTexto(desc.get.call(inp));
+    });
+    txt.addEventListener('keydown',function(e){if(e.key==='Enter'){txt.blur();}});
+  }
+  function barrer(raiz){(raiz||document).querySelectorAll('input[type=date]').forEach(preparar);}
+  var pend=false;
+  var obs=new MutationObserver(function(){if(pend)return;pend=true;setTimeout(function(){pend=false;barrer();},0);});
+  function iniciar(){barrer();obs.observe(document.body,{childList:true,subtree:true});}
+  if(document.body)iniciar();else document.addEventListener('DOMContentLoaded',iniciar);
+})();
+</script>
 </body>
 </html>

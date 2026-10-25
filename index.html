@@ -3390,7 +3390,7 @@ function _envioColabBadge(id){
   var n=_enviosColabMat(id).length;
   if(!n)return '';
   return '<button onclick="event.stopPropagation();verEnviosColabMat(\''+id+'\')" title="Enviado a un colaborador — tocá para ver el detalle" '
-    +'style="border:none;background:#ccfbf1;color:#0f766e;border-radius:9px;padding:1px 7px;font-size:10px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:2px;margin-left:4px;vertical-align:middle">&#x1F4E4;'+(n>1?' '+n:'')+'</button>';
+    +'style="border:none;background:#ccfbf1;color:#0f766e;border-radius:9px;padding:1px 7px;font-size:10px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:2px;margin-left:4px;vertical-align:middle">'+_nodos(11)+(n>1?' '+n:'')+'</button>';
 }
 function verEnviosColabMat(id){
   var it=(D.matIngresos||[]).find(function(x){return x.id===id;});
@@ -3399,7 +3399,7 @@ function verEnviosColabMat(id){
   var urgL={alta:'🔴 Alta',media:'🟡 Media',baja:'🟢 Baja'};
   document.getElementById('verEnvColM')?.remove();
   var d=document.createElement('div');d.className='mo open';d.id='verEnvColM';
-  d.innerHTML='<div class="mo-c" style="max-width:420px"><div class="mo-h"><h3 style="color:#0f766e">&#x1F4E4; Enviado a colaborador</h3>'
+  d.innerHTML='<div class="mo-c" style="max-width:420px"><div class="mo-h"><h3 style="color:#0f766e">'+_nodos(18)+' Enviado a colaborador</h3>'
     +'<button class="tbtn" onclick="document.getElementById(\'verEnvColM\').remove()">'+I.x+'</button></div>'
     +'<div class="ts fw7 mb-8">'+esc(it?(it.matNombre||'Sin nombre'):'Material')+(it&&it.qty?' <span class="txxs tc3">· '+esc(String(it.qty))+' '+esc(it.unit||'')+'</span>':'')+'</div>'
     +envs.map(function(en){
@@ -4057,7 +4057,7 @@ function _getEnvBadge(entId,tipo){
   var _nom=_co?esc(_co.name):'Col.';
   // Verde si ya respondió (hay algo para revisar), azul si sigue esperando
   var _bg=_resp?'#f0fdf4':'#eff6ff',_bd=_resp?'#bbf7d0':'#bfdbfe',_fg=_resp?'#16a34a':'#1d4ed8';
-  var _txt=_resp?'✅ '+_nom+' respondió':'📤 '+_nom;
+  var _txt=_resp?'✅ '+_nom+' respondió':_nodos(11)+' '+_nom;
   return '<span style="display:inline-flex;align-items:center;gap:3px;font-size:9px;background:'+_bg+';color:'+_fg+';border:1px solid '+_bd+';border-radius:9px;padding:1px 3px 1px 6px;font-weight:700;margin-left:3px;vertical-align:middle">'
     +(_resp?'<span style="cursor:pointer" onclick="event.stopPropagation();S.mod=\'bandeja\';render()" title="Ir a la Bandeja a revisarlo">'+_txt+'</span>':_txt)
     +'<button onclick="event.stopPropagation();dejarDeCompartir(\''+entId+'\',\''+(tipo||'')+'\')" title="Dejar de compartir" style="border:none;background:transparent;color:'+_fg+';cursor:pointer;font-size:10px;line-height:1;padding:0 2px;font-weight:700">✕</button>'
@@ -6207,7 +6207,7 @@ function renderMatItems(){
     _apedirH='<div class="card matsec" style="border-left:3px solid #8b5cf6">';
     _apedirH+='<div class="matsec-h">';
     _apedirH+='<button class="link-tag fw7" style="color:#8b5cf6;font-size:13px" onclick="S.matAPedirMin=!S.matAPedirMin;renderMatItems()">&#x1F4DD; A pedir ('+_apedir.length+')'+(S.matAPedirMin?' &#x25B6;':' &#x25BC;')+'</button>';
-    _apedirH+='<div class="flex gap-4"><button class="btn btn-s btn-sec" title="Compartir con un colaborador" onclick="compartirMatColab(\'a_pedir\')">&#x1F4E4;</button><button class="btn btn-s btn-sec" title="Agregar al calendario" onclick="exportMatItemsGCal(\'a_pedir\')">&#x1F4C5;</button><button class="btn btn-s btn-sec" title="Cargar varios de una vez" onclick="abrirIngresoMultiple(\'a_pedir\')">📝 Lista</button><button class="btn btn-s btn-sec" onclick="openM(\'newAPedirM\')">'+ I.plus +' Nuevo</button></div></div>';
+    _apedirH+='<div class="flex gap-4"><button class="btn btn-s btn-sec" title="Compartir con un colaborador" onclick="compartirMatColab(\'a_pedir\')">'+_nodos(16)+'</button><button class="btn btn-s btn-sec" title="Agregar al calendario" onclick="exportMatItemsGCal(\'a_pedir\')">&#x1F4C5;</button><button class="btn btn-s btn-sec" title="Cargar varios de una vez" onclick="abrirIngresoMultiple(\'a_pedir\')">📝 Lista</button><button class="btn btn-s btn-sec" onclick="openM(\'newAPedirM\')">'+ I.plus +' Nuevo</button></div></div>';
     if(!S.matAPedirMin){
       var _apGrp=_buildMatGroups(_apedir);
       var _apIni=_apedirH.length;
@@ -6243,7 +6243,7 @@ function renderMatItems(){
     _pedH='<div class="card matsec" style="border-left:3px solid var(--orange)">';
     _pedH+='<div class="matsec-h">';
     _pedH+='<button class="link-tag fw7" style="color:var(--orange);font-size:13px" onclick="S.matPedMin=!S.matPedMin;renderMatItems()">&#x1F4CB; Pedidos ('+_peds.length+')'+(S.matPedMin?' &#x25B6;':' &#x25BC;')+'</button>';
-    _pedH+='<div class="flex gap-4"><button class="btn btn-s btn-sec" title="Compartir con un colaborador" onclick="compartirMatColab(\'pedido\')">&#x1F4E4;</button><button class="btn btn-s btn-sec" title="Agregar al calendario" onclick="exportMatItemsGCal(\'pedido\')">&#x1F4C5;</button><button class="btn btn-s btn-sec" title="Cargar varios de una vez" onclick="abrirIngresoMultiple(\'pedido\')">📝 Lista</button><button class="btn btn-s btn-sec" onclick="openM(\'newPedidoM\')">' +I.plus+' Nuevo</button></div></div>';
+    _pedH+='<div class="flex gap-4"><button class="btn btn-s btn-sec" title="Compartir con un colaborador" onclick="compartirMatColab(\'pedido\')">'+_nodos(16)+'</button><button class="btn btn-s btn-sec" title="Agregar al calendario" onclick="exportMatItemsGCal(\'pedido\')">&#x1F4C5;</button><button class="btn btn-s btn-sec" title="Cargar varios de una vez" onclick="abrirIngresoMultiple(\'pedido\')">📝 Lista</button><button class="btn btn-s btn-sec" onclick="openM(\'newPedidoM\')">' +I.plus+' Nuevo</button></div></div>';
     if(!S.matPedMin){
       var _pedGrp=_buildMatGroups(_peds);
       var _pedIni=_pedH.length;
@@ -7292,13 +7292,13 @@ function compartirMatColab(tipo){
   var label=tipo==='a_pedir'?'A pedir':'Pedidos';
   document.getElementById('matCalM')?.remove();
   var d=document.createElement('div');d.className='mo open';d.id='matCalM';
-  d.innerHTML='<div class="mo-c" style="max-width:420px"><div class="mo-h"><h3 style="color:var(--teal)">&#x1F4E4; Compartir materiales</h3><button class="tbtn" onclick="this.closest(\'.mo\').remove()">'+I.x+'</button></div>'
+  d.innerHTML='<div class="mo-c" style="max-width:420px"><div class="mo-h"><h3 style="color:var(--teal)">'+_nodos(18)+' Compartir materiales</h3><button class="tbtn" onclick="this.closest(\'.mo\').remove()">'+I.x+'</button></div>'
     +'<div class="fg"><label class="fl">Colaborador</label><select class="fs" id="matsh_col">'+cols.map(function(c){return '<option value="'+c.id+'">'+esc(c.name||c.email||'Colaborador')+(c.role?' · '+esc(c.role):'')+'</option>';}).join('')+'</select></div>'
     +_matCalSelectorHtml(items)
     +'<div class="fr"><div class="fg"><label class="fl">Urgencia</label><select class="fs" id="matsh_urg"><option value="baja">🟢 Baja</option><option value="media" selected>🟡 Media</option><option value="alta">🔴 Alta</option></select></div></div>'
     +'<div class="fg"><label class="fl">Nota (opcional)</label><textarea class="ft" id="matsh_nota" rows="2" placeholder="Ej: pedir en el corralón de siempre, entregar el jueves..."></textarea></div>'
     +(function(){var x={};x['mat_'+tipo]=1;return _extrasEnvioHtml(x);})()
-    +'<button class="btn btn-w" style="background:var(--teal);color:#fff" onclick="confirmarCompartirMat(\''+tipo+'\')">&#x1F4E4; Enviar a su bandeja</button>'
+    +'<button class="btn btn-w" style="background:var(--teal);color:#fff" onclick="confirmarCompartirMat(\''+tipo+'\')">'+_nodos(15)+' Enviar a su bandeja</button>'
     +'<div class="txxs tc3 mt-6">Le llega como lista ('+label+') para tildar lo que va resolviendo.</div>'
     +'</div>';
   document.body.appendChild(d);
@@ -8060,6 +8060,8 @@ function _notaCard(n){
     +'<button class="btn btn-g btn-s" style="color:var(--red);margin-left:auto" title="Eliminar" onclick="borrarNota(\''+n.id+'\')">'+I.trash+'</button>'
     +'</div></div>';
 }
+// Ícono de compartir con colaborador (nodos), en el tamaño que haga falta
+function _nodos(px){return I.share.replace('width="20" height="20"','width="'+(px||14)+'" height="'+(px||14)+'" style="vertical-align:-2px"');}
 function nuevoCuadernoNota(){
   var n=(prompt('Nombre del cuaderno nuevo (ej: Instalación eléctrica, Reuniones con el cliente):')||'').trim();
   if(n){S.notaCuadernoNuevo=n;S.notasCuaderno=n;saveUIState();}
@@ -8109,7 +8111,7 @@ function abrirNota(id){
     +'<div class="fr"><div class="fg"><label class="fl">Fecha</label><input class="fi" type="date" id="nm_f" value="'+esc(n?n.fecha:td())+'"></div>'
     +'<div class="fg"><label class="fl">Hora</label><input class="fi" type="time" id="nm_h" value="'+esc(n?(n.hora||''):_notaHora())+'"></div></div>'
     +'<div class="fr"><div class="fg"><label class="fl">Tipo</label><select class="fs" id="nm_t">'+Object.keys(NOTA_TIPOS).map(function(k){return '<option value="'+k+'"'+(k===((n&&n.tipo)||S.notaTipoNueva||'registro')?' selected':'')+'>'+NOTA_TIPOS[k]+'</option>';}).join('')+'</select></div>'
-    +'<div class="fg"><label class="fl">Cuaderno</label><input class="fi" id="nm_c" list="nm_cl" value="'+esc(cu)+'"><datalist id="nm_cl">'+cuads.map(function(k){return '<option value="'+esc(k)+'">';}).join('')+'</datalist></div></div>'
+    +'<div class="fg"><label class="fl">Cuaderno</label><select class="fs" id="nm_c" onchange="if(this.value===\'__nuevo\'){var _n=(prompt(\'Nombre del cuaderno nuevo:\')||\'\').trim();if(_n){var _o=document.createElement(\'option\');_o.text=_n;_o.value=_n;this.insertBefore(_o,this.lastElementChild);this.value=_n;}else{this.selectedIndex=0;}}">'+(cuads.indexOf(cu)<0?cuads.concat([cu]):cuads).map(function(k){return '<option value="'+esc(k)+'"'+(k===cu?' selected':'')+'>'+esc(k)+'</option>';}).join('')+'<option value="__nuevo">➕ Nuevo cuaderno…</option></select></div></div>'
     +'<div class="fg"><label class="fl">Título (opcional)</label><input class="fi" id="nm_ti" value="'+esc(n?(n.titulo||''):'')+'" placeholder="Ej: Hormigonado losa sector A"></div>'
     +'<div class="fg"><label class="fl">Con quién (opcional)</label><input class="fi" id="nm_p" value="'+esc(n?(n.personas||''):'')+'" placeholder="Ej: Juan (plomero), propietario"></div>'
     +'<div class="fg"><label class="fl">Nota</label><textarea class="ft" id="nm_tx" rows="6">'+esc(n?(n.texto||''):'')+'</textarea></div>'
@@ -10500,7 +10502,7 @@ function rEconomia(mc,p){
       <button class="btn btn-sec btn-s" onclick="var p=$('eco_filtros_extra');S.ecoFiltrosOpen=!(p&&p.style.display!=='none');if(p)p.style.display=S.ecoFiltrosOpen?'flex':'none'" style="white-space:nowrap">⚙ Filtros${(S.ecoTipoFilter||S.ecoSort)?'<span style="background:var(--cyan);color:#fff;border-radius:8px;padding:0 5px;font-size:10px;margin-left:4px">!</span>':''}</button>
     </div>
     <!-- PERÍODO -->
-    <div class="flex gap-6 items-center flex-wrap" style="border-top:1px solid var(--gray-ll);padding-top:8px;margin-bottom:${(S.ecoTipoFilter||S.ecoSort)?'8px':'0'}">
+    <div class="flex gap-6 items-center flex-wrap" style="flex-wrap:wrap;border-top:1px solid var(--gray-ll);padding-top:8px;margin-bottom:${(S.ecoTipoFilter||S.ecoSort)?'8px':'0'}">
       <span class="txxs fw6 tc3" style="white-space:nowrap">📅 Período:</span>
       <input class="fi" id="eco_fecha_desde" type="date" value="${S.ecoFechaDesde||''}" onchange="S.ecoFechaDesde=this.value;renderEcoItems()" style="max-width:148px;margin:0;font-size:12px;padding:5px 8px">
       <span class="txxs tc3">—</span>
@@ -11814,7 +11816,7 @@ function rColaboradores(mc,p){
     var _isAcept=co.estado==='aceptado'||co.estado==='activo';
     var btnForm=_rev?'':(_isAcept
       ?('<button class="btn btn-sec btn-s" onclick="openAsignarModal(\''+ co.id +'\')" title="Asignar tareas / checklists">✅</button>')
-      :('<button class="btn btn-sec btn-s" onclick="shareFormColaborador(\''+ co.id +'\')" title="Invitar por WhatsApp">📤</button>'));
+      :('<button class="btn btn-sec btn-s" onclick="shareFormColaborador(\''+ co.id +'\')" title="Invitar por WhatsApp">'+_nodos(15)+'</button>'));
     var btnEdit='<button class="btn btn-sec btn-s" onclick="editColab(\''+ co.id +'\')">'+I.edit+'</button>';
     var btnBaja='<button class="btn btn-s" style="font-size:10px;'+ (_rev?'background:var(--green);color:#fff':'background:var(--gray-ll);color:var(--red)')+'" onclick="'+ (_rev?'reactivateColab(\''+ co.id +'\')':'revokeColab(\''+ co.id +'\')') +'">'+(_rev?'Reactivar':'Dar de baja')+'</button>';
     var btnDel='<button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delI(\'colaboradores\',\''+ co.id +'\')">'+I.trash+'</button>';
@@ -12211,7 +12213,7 @@ function openPerfilColab(colabId,tab){
     var _pendMsgs=_pendList.length;
     h+='<div class="flex gap-6 mb-10 flex-wrap">';
     h+='<label class="btn btn-sec btn-s" style="cursor:pointer;display:flex;align-items:center;gap:5px">'+I.plus+' Subir<input type="file" multiple style="display:none" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.dwg,.zip" onchange="uploadArqCarpeta(\''+colabId+'\',this)"></label>';
-    if(co.phone)h+='<button class="btn btn-sec btn-s" onclick="shareCarpetaUrl(\''+colabId+'\')">📤 Compartir</button>';
+    if(co.phone)h+='<button class="btn btn-sec btn-s" onclick="shareCarpetaUrl(\''+colabId+'\')">'+_nodos(14)+' Compartir</button>';
     h+='</div>';
     if(_pendMsgs>0&&co.phone){
       h+='<div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:8px;padding:10px 12px;margin-bottom:10px;display:flex;align-items:center;gap:10px">';
@@ -12314,7 +12316,7 @@ function openPerfilColab(colabId,tab){
     } else {
       var uC={alta:'#dc2626',media:'#f59e0b',baja:'#16a34a'};
       var eC={'nuevo':'var(--orange)','visto':'#0891b2','completado':'var(--green)','aceptado':'var(--green)','rechazado':'var(--red)'};
-      var eL={'nuevo':'📤 Enviado','visto':'👁 Visto','completado':'✅ Respondido','aceptado':'✅ Aceptado','rechazado':'❌ Rechazado'};
+      var eL={'nuevo':_nodos(11)+' Enviado','visto':'👁 Visto','completado':'✅ Respondido','aceptado':'✅ Aceptado','rechazado':'❌ Rechazado'};
       msgs.forEach(function(m){
         var uc=uC[m.urgencia]||'#f59e0b';var ec=eC[m.estadoColab]||'var(--orange)';
         h+='<div class="card" style="padding:12px;margin-bottom:10px;border-left:3px solid '+uc+'">';
@@ -12533,7 +12535,7 @@ function openCarpeta(colabId){
   h+='<div class="mo-h"><h3 style="flex:1;min-width:0">📁 '+esc(co.name||co.email||'?')+'</h3><button class="tbtn" onclick="document.getElementById(\'carpetaM\').remove()">'+I.x+'</button></div>';
   h+='<div class="flex gap-6 mb-10 flex-wrap">';
   h+='<label class="btn btn-sec btn-s" style="cursor:pointer;display:flex;align-items:center;gap:5px">'+I.plus+' Subir<input type="file" multiple style="display:none" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.dwg,.zip" onchange="uploadArqCarpeta(\''+colabId+'\',this)"></label>';
-  if(co.phone)h+='<button class="btn btn-sec btn-s" onclick="shareCarpetaUrl(\''+colabId+'\')">📤 Compartir</button>';
+  if(co.phone)h+='<button class="btn btn-sec btn-s" onclick="shareCarpetaUrl(\''+colabId+'\')">'+_nodos(14)+' Compartir</button>';
   if(archivos.length)h+='<button class="btn btn-sec btn-s" onclick="downloadCarpetaAll(\''+colabId+'\')">⬇ Descargar todo</button>';
   h+='</div>';
   if(archivos.length){
@@ -15662,7 +15664,7 @@ function shareToInbox(tipo,entidadId,titulo){
   var opts=colabs.map(function(c){return '<option value="'+c.id+'">'+esc(c.name||c.id)+'</option>';}).join('');
   document.getElementById('stiMod')?.remove();
   var d=document.createElement('div');d.className='mo open';d.id='stiMod';
-  d.innerHTML='<div class="mo-c"><div class="mo-h"><h3>📤 Enviar a colaborador</h3><button class="tbtn" onclick="document.getElementById(\'stiMod\').remove()">✕</button></div>'
+  d.innerHTML='<div class="mo-c"><div class="mo-h"><h3>'+_nodos(18)+' Enviar a colaborador</h3><button class="tbtn" onclick="document.getElementById(\'stiMod\').remove()">✕</button></div>'
     +'<div class="fg"><label class="fl">Colaborador</label><select class="fs" id="sti_col">'+opts+'</select></div>'
     +'<div class="fg"><label class="fl">Urgencia</label><select class="fs" id="sti_urg"><option value="baja">🟢 Baja</option><option value="media" selected>🟡 Media</option><option value="alta">🔴 Alta</option></select></div>'
     +'<div class="fg"><label class="fl">Nota (opcional)</label><textarea class="ft" id="sti_nota" rows="2" placeholder="Indicaciones adicionales..."></textarea></div>'
@@ -15867,6 +15869,83 @@ setTimeout(function(){
     bc.postMessage('hola');
   }catch(_){}
 },1500);
+</script>
+<script>
+// ═══════ FECHAS: se pueden tipear (dd/mm/aaaa) o elegir en el calendario ═══════
+// Cada <input type="date"> queda acompañado por un cuadro de texto donde se
+// escribe la fecha; el campo original sigue existiendo (con su id, su valor
+// AAAA-MM-DD y sus eventos), achicado al ícono del calendario. Así todo el código
+// que lee o escribe esas fechas sigue funcionando igual.
+(function(){
+  if(window.__fechasTipeables)return;window.__fechasTipeables=true;
+  var st=document.createElement('style');
+  st.textContent='.fecha-wrap{display:flex;align-items:stretch;gap:4px;width:100%;min-width:112px;box-sizing:border-box}'
+    +'.fecha-wrap>.fecha-txt{flex:1;min-width:0;margin:0!important;padding-left:6px!important;padding-right:4px!important}'
+    +'.fecha-wrap>input[type=date].fecha-pick{flex:0 0 32px!important;width:32px!important;min-width:32px!important;max-width:32px!important;padding:0 4px!important;margin:0!important;color:transparent!important;cursor:pointer}'
+    +'.fecha-pick::-webkit-datetime-edit{display:none}'
+    +'.fecha-pick::-webkit-calendar-picker-indicator{margin:0;cursor:pointer;opacity:.75}';
+  (document.head||document.documentElement).appendChild(st);
+  var desc=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value');
+  var aTexto=function(iso){var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(iso||'');return m?m[3]+'/'+m[2]+'/'+m[1]:'';};
+  var aIso=function(t){
+    var m=/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2}|\d{4})$/.exec((t||'').trim());if(!m)return null;
+    var d=+m[1],mo=+m[2],y=+m[3];if(y<100)y+=2000;
+    var f=new Date(y,mo-1,d);if(f.getFullYear()!==y||f.getMonth()!==mo-1||f.getDate()!==d)return null;
+    return y+'-'+String(mo).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+  };
+  var mascara=function(v){
+    var dg=v.replace(/\D/g,'').slice(0,8),o=dg.slice(0,2);
+    if(dg.length>2)o+='/'+dg.slice(2,4);
+    if(dg.length>4)o+='/'+dg.slice(4);
+    return o;
+  };
+  function preparar(inp){
+    if(!inp||inp.type!=='date')return;
+    if(inp.__fechaTxt&&inp.parentNode&&inp.parentNode.classList&&inp.parentNode.classList.contains('fecha-wrap'))return;
+    var txt=document.createElement('input');
+    txt.type='text';txt.className=(inp.className||'')+' fecha-txt';txt.inputMode='numeric';txt.autocomplete='off';
+    txt.placeholder='dd/mm/aaaa';txt.maxLength=10;
+    var w=document.createElement('span');w.className='fecha-wrap';
+    // El ancho y los márgenes que tenía el campo los toma el conjunto
+    var s=inp.style;['width','maxWidth','minWidth','margin','marginTop','marginBottom','flex'].forEach(function(k){if(s[k]){w.style[k]=s[k];}});
+    if(s.fontSize)txt.style.fontSize=s.fontSize;if(s.padding)txt.style.padding=s.padding;
+    inp.parentNode.insertBefore(w,inp);w.appendChild(txt);w.appendChild(inp);
+    inp.classList.add('fecha-pick');inp.title=inp.title||'Elegir en el calendario';
+    inp.__fechaTxt=txt;
+    txt.value=aTexto(desc.get.call(inp));
+    if(!inp.__valOv){
+      inp.__valOv=true;
+      Object.defineProperty(inp,'value',{configurable:true,
+        get:function(){return desc.get.call(this);},
+        set:function(v){desc.set.call(this,v);if(this.__fechaTxt&&document.activeElement!==this.__fechaTxt)this.__fechaTxt.value=aTexto(v);}});
+      inp.addEventListener('change',function(){if(inp.__fechaTxt)inp.__fechaTxt.value=aTexto(desc.get.call(inp));});
+      inp.addEventListener('click',function(){try{if(inp.showPicker)inp.showPicker();}catch(_){}});
+    }
+    txt.addEventListener('input',function(){
+      var p=txt.selectionStart,antes=txt.value.length;
+      txt.value=mascara(txt.value);
+      try{var n=p+(txt.value.length-antes);txt.setSelectionRange(n,n);}catch(_){}
+      var iso=aIso(txt.value);
+      if(iso&&txt.value.length===10&&iso!==desc.get.call(inp)){
+        if(inp.min&&iso<inp.min||inp.max&&iso>inp.max)return;
+        desc.set.call(inp,iso);inp.dispatchEvent(new Event('input',{bubbles:true}));inp.dispatchEvent(new Event('change',{bubbles:true}));
+      }
+    });
+    txt.addEventListener('blur',function(){
+      var t=txt.value.trim();
+      if(!t){if(desc.get.call(inp)){desc.set.call(inp,'');inp.dispatchEvent(new Event('input',{bubbles:true}));inp.dispatchEvent(new Event('change',{bubbles:true}));}return;}
+      var iso=aIso(t);
+      if(iso&&iso!==desc.get.call(inp)){desc.set.call(inp,iso);inp.dispatchEvent(new Event('input',{bubbles:true}));inp.dispatchEvent(new Event('change',{bubbles:true}));}
+      txt.value=aTexto(desc.get.call(inp));
+    });
+    txt.addEventListener('keydown',function(e){if(e.key==='Enter'){txt.blur();}});
+  }
+  function barrer(raiz){(raiz||document).querySelectorAll('input[type=date]').forEach(preparar);}
+  var pend=false;
+  var obs=new MutationObserver(function(){if(pend)return;pend=true;setTimeout(function(){pend=false;barrer();},0);});
+  function iniciar(){barrer();obs.observe(document.body,{childList:true,subtree:true});}
+  if(document.body)iniciar();else document.addEventListener('DOMContentLoaded',iniciar);
+})();
 </script>
 </body>
 </html>
