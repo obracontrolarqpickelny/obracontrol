@@ -3133,7 +3133,8 @@ function photoGrid(photos,tbl,itemId){if(!photos||!photos.length)return '';
         ?`<div style="width:100%;height:100%;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:18px;color:#94a3b8" title="Foto pendiente de sincronización con Drive">☁️</div>`
         :`<img src="${_disp}" style="cursor:pointer" onclick="event.stopPropagation();openLB(getLBP('${tbl}','${itemId}'),${i},'${tbl}','${itemId}')" onerror="_fotoError(this)"><div style="display:none;width:100%;height:100%;background:#fef2f2;border:1px solid #fecaca;align-items:center;justify-content:center;flex-direction:column;font-size:16px;color:#dc2626;cursor:pointer" title="La imagen no se pudo cargar — tocá para reparar" onclick="event.stopPropagation();repararFotosRotas()">&#x26A0;<div style="font-size:8px;margin-top:2px;font-weight:700">Reparar</div></div>` }
       ${hc?`<span class="photo-cdot">${p.comments.length}</span>`:''}
-      ${isVisita?`<div class="photo-actions" style="position:absolute;bottom:2px;right:2px;display:flex;gap:2px;opacity:0;transition:opacity .15s" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=0">
+      ${isVisita?`<div class="photo-actions" style="position:absolute;bottom:2px;right:2px;display:flex;gap:2px;opacity:${tbl==='notas'?1:0};transition:opacity .15s" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=${tbl==='notas'?1:0}">
+        ${tbl==='notas'&&!isBroken?`<button class="photo-btn" style="background:rgba(202,138,4,.92)" onclick="event.stopPropagation();editarFotoNota('${itemId}',${i})" title="Editar: dibujar o marcar sobre la foto">✏️</button>`:''}
         <button class="photo-btn" style="background:rgba(220,38,38,.85)" onclick="event.stopPropagation();delPhoto('${tbl}','${itemId}',${i})" title="Eliminar foto">✕</button>
       </div>`:''}
     </div>`;
@@ -7999,7 +8000,7 @@ function saveEditEnl(id){
 // Registro del día a día: texto, dictado, fotos y dibujos a mano alzada, en
 // cuadernos. Cada nota se puede pasar a tarea, checklist, movimiento o
 // comentario. DOT las lee y escribe en D.notas (ver DOT_NOTAS.md).
-var NOTA_TIPOS={registro:'📝 Registro',avance:'🏗 Avance de obra',reunion:'🤝 Reunión / acuerdo',cliente:'🏠 Comentarios del cliente',economico:'💰 Datos económicos',pendiente:'⏳ Pendiente',idea:'💡 Idea'};
+var NOTA_TIPOS={registro:'📝 Registro',avance:'🏗 Avance de obra',reunion:'🤝 Reunión / acuerdo',cliente:'🗣️ Comentarios del cliente',economico:'💰 Datos económicos',pendiente:'⏳ Pendiente',idea:'💡 Idea'};
 // Tipos que ya no se ofrecen (por si una nota vieja o de DOT lo trae)
 function _notaTipoLabel(t){return NOTA_TIPOS[t]||({llamada:'📞 Llamada'})[t]||t||NOTA_TIPOS.registro;}
 // Colaborador registrado como cliente o propietario: lo que manda entra como "Comentarios del cliente"
@@ -8136,7 +8137,7 @@ function rNotas(mc){
     +'<select class="fs" style="margin:0;flex:1;min-width:140px" onchange="if(this.value===\'__nuevo\'){nuevoCuadernoNota();}else{S.notaCuadernoNuevo=this.value;saveUIState();}" title="Cuaderno donde se asienta">'+cuads.map(function(k){return '<option value="'+esc(k)+'"'+(k===cuadNueva?' selected':'')+'>📒 '+esc(k)+'</option>';}).join('')+'<option value="__nuevo">➕ Nuevo cuaderno…</option></select>'
     +'</div>'
     +'<textarea class="ft" id="nota_q" rows="3" style="margin:0" placeholder="¿Qué pasó hoy en la obra? Ej: Se hormigonó la losa del sector A. Hablé con Juan (plomero): arranca el lunes." onblur="S.notaBorrador=this.value;saveUIState()">'+esc(S.notaBorrador||'')+'</textarea>'
-    +(adj.length?'<div id="nota_adj" class="flex gap-6 mt-6" style="flex-wrap:wrap">'+adj.map(function(u,i){return '<div style="position:relative"><img src="'+esc(_resolveImg(u))+'" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--brd)"><button onclick="S.notaAdj.splice('+i+',1);saveUIState();render()" style="position:absolute;top:-6px;right:-6px;border:none;background:var(--red);color:#fff;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer">✕</button></div>';}).join('')+'</div>':'')
+    +(adj.length?'<div id="nota_adj" class="flex gap-6 mt-6" style="flex-wrap:wrap">'+adj.map(function(u,i){return '<div style="position:relative"><img src="'+esc(_resolveImg(u))+'" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--brd)"><button title="Editar" onclick="editarFotoDe({k:\'adj\',i:'+i+'})" style="position:absolute;bottom:-6px;left:-6px;border:none;background:#ca8a04;color:#fff;border-radius:50%;width:22px;height:22px;font-size:11px;cursor:pointer">✏️</button><button onclick="S.notaAdj.splice('+i+',1);saveUIState();render()" style="position:absolute;top:-6px;right:-6px;border:none;background:var(--red);color:#fff;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer">✕</button></div>';}).join('')+'</div>':'')
     +'<div class="flex gap-4 mt-8 items-center" style="flex-wrap:nowrap">'
     +'<button class="btn btn-sec btn-s" id="nota_mic" style="flex:1;white-space:nowrap;padding-left:6px;padding-right:6px;justify-content:center" onclick="dictarNota(\'nota_q\',this)">🎤 Dictar</button>'
     +'<label class="btn btn-sec btn-s" style="flex:1;white-space:nowrap;padding-left:6px;padding-right:6px;justify-content:center;cursor:pointer">📷 Foto<input type="file" accept="image/*" multiple style="display:none" onchange="fotosNotaRapida(this)"></label>'
@@ -8335,7 +8336,7 @@ function _notaEditFotos(){
   var ph=window._notaEdit.photos.filter(function(p){return p&&!p.deletedAt;});
   el.innerHTML=ph.length?'<div class="flex gap-6 mb-10" style="flex-wrap:wrap">'+window._notaEdit.photos.map(function(p,i){
     if(!p||p.deletedAt)return '';
-    return '<div style="position:relative"><img src="'+esc(_resolveImg(p.url))+'" style="width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid var(--brd)"><button onclick="window._notaEdit.photos.splice('+i+',1);_notaEditFotos()" style="position:absolute;top:-6px;right:-6px;border:none;background:var(--red);color:#fff;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer">✕</button></div>';
+    return '<div style="position:relative"><img src="'+esc(_resolveImg(p.url))+'" style="width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid var(--brd)"><button title="Editar" onclick="editarFotoDe({k:\'edit\',i:'+i+'})" style="position:absolute;bottom:-6px;left:-6px;border:none;background:#ca8a04;color:#fff;border-radius:50%;width:22px;height:22px;font-size:11px;cursor:pointer">✏️</button><button onclick="window._notaEdit.photos.splice('+i+',1);_notaEditFotos()" style="position:absolute;top:-6px;right:-6px;border:none;background:var(--red);color:#fff;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer">✕</button></div>';
   }).join('')+'</div>':'';
 }
 async function fotosNotaEdit(input){
@@ -8453,19 +8454,62 @@ function _dibFondo(tipo,sinSnap){
 function _dibFoto(input){
   var f=input.files&&input.files[0];if(!f)return;
   var rd=new FileReader();
-  rd.onload=function(e){var img=new Image();img.onload=function(){
-    var D2=window._dib;_dibSnap();D2.ctx.fillStyle='#fff';D2.ctx.fillRect(0,0,D2.w,D2.h);
-    var k=Math.min(D2.w/img.width,D2.h/img.height),w=img.width*k,h=img.height*k;
-    D2.ctx.drawImage(img,(D2.w-w)/2,(D2.h-h)/2,w,h);
-  };img.src=e.target.result;};
+  rd.onload=function(e){_dibPintarFondo(e.target.result,true);};
   rd.readAsDataURL(f);
 }
+function _dibPintarFondo(src,conSnap){
+  var img=new Image();img.onload=function(){
+    var D2=window._dib;if(!D2)return;if(conSnap)_dibSnap();
+    D2.ctx.fillStyle='#fff';D2.ctx.fillRect(0,0,D2.w,D2.h);
+    var k=Math.min(D2.w/img.width,D2.h/img.height),w=img.width*k,h=img.height*k;
+    D2.ctx.drawImage(img,(D2.w-w)/2,(D2.h-h)/2,w,h);
+  };img.src=src;
+}
+// La foto como imagen editable (del dispositivo o bajada de Drive: la de la
+// miniatura de Drive no se puede leer desde el lienzo)
+async function _fotoComoDataUrl(p){
+  var u=typeof p==='string'?p:((p&&p.url)||'');
+  if(p&&typeof p==='object'&&typeof p.localUrl==='string'&&p.localUrl.indexOf('data:')===0)return p.localUrl;
+  if(u.indexOf('data:')===0)return u;
+  var m=/^\[foto:([^\]]+)\]$/.exec(u);
+  if(m&&GD.idbReady){var rec=await idbGet('images',m[1]).catch(function(){return null;});if(rec&&rec.data)return rec.data;}
+  var r=_resolveImg(u);if(r&&String(r).indexOf('data:')===0)return r;
+  var did=_driveIdDeFoto(p);
+  if(did&&GD.accessToken){var du=await _descargarBytesDrive(did);if(du)return du;}
+  return null;
+}
+// dest: {k:'nota',nid,i} foto de una nota guardada · {k:'adj',i} del asiento rápido · {k:'edit',i} de la ventana de edición
+async function editarFotoDe(dest){
+  var p=dest.k==='nota'?(((D.notas||[]).find(function(x){return x.id===dest.nid;})||{}).photos||[]).filter(function(x){return x&&!x.deletedAt;})[dest.i]
+    :dest.k==='adj'?(S.notaAdj||[])[dest.i]:((window._notaEdit||{}).photos||[])[dest.i];
+  if(!p)return;
+  toast('Abriendo la foto…','var(--pri)',1200);
+  var du=await _fotoComoDataUrl(p);
+  if(!du){toast('No se pudo abrir la foto para editarla. Conectá Drive y probá de nuevo.','var(--orange)',5000);return;}
+  if(dest.k==='nota'){var n=(D.notas||[]).find(function(x){return x.id===dest.nid;});dest.pid=p.id||null;dest.url=p.url||p;}
+  abrirDibujoNota(dest);
+  setTimeout(function(){_dibPintarFondo(du,false);},320);
+}
+function editarFotoNota(nid,i){return editarFotoDe({k:'nota',nid:nid,i:i});}
 async function _dibGuardar(){
   var D2=window._dib;if(!D2)return;
   var du=D2.cv.toDataURL('image/jpeg',0.85);
   document.getElementById('dibM')?.remove();
   if(window._dibDest==='chat'){window._chatAdj=(window._chatAdj||[]).concat([du]);_chatPintar();toast('Dibujo agregado ✓','var(--green)');return;}
   var ref=await _guardarImgNota(du);
+  // Foto editada: reemplaza a la original en su lugar (el archivo original queda en Drive)
+  var dd=window._dibDest;
+  if(dd&&typeof dd==='object'){
+    if(dd.k==='nota'){
+      var nn=(D.notas||[]).find(function(x){return x.id===dd.nid;});
+      if(nn){
+        var pos=(nn.photos||[]).findIndex(function(x){return (dd.pid&&x&&x.id===dd.pid)||(x&&x.url===dd.url)||x===dd.url;});
+        if(pos>=0){var ant=nn.photos[pos];nn.photos[pos]=Object.assign({},typeof ant==='object'?ant:{caption:''},{url:ref,localUrl:undefined,driveId:null,editadaDe:(typeof ant==='object'?ant.url:ant),date:td()});nn.updatedAt=nw();sv();render();}
+      }
+    } else if(dd.k==='adj'){if(S.notaAdj&&S.notaAdj[dd.i]!==undefined){S.notaAdj[dd.i]=ref;saveUIState();var _ta=$('nota_q');if(_ta)S.notaBorrador=_ta.value;render();}}
+    else if(dd.k==='edit'&&window._notaEdit){var ph=window._notaEdit.photos[dd.i];if(ph){if(typeof ph==='object')ph.url=ref;else window._notaEdit.photos[dd.i]=mkPhoto(ref,'');_notaEditFotos();}}
+    toast('Foto editada ✓','var(--green)');return;
+  }
   if(window._dibDest==='chat'){window._chatAdj=(window._chatAdj||[]).concat([du]);_chatPintar();toast('Dibujo agregado ✓','var(--green)');return;}
   if(window._dibDest==='edit'&&window._notaEdit){window._notaEdit.photos.push(mkPhoto(ref,'✏️ Dibujo'));_notaEditFotos();}
   else{var ta=$('nota_q');if(ta)S.notaBorrador=ta.value;S.notaAdj=(S.notaAdj||[]).concat([ref]);saveUIState();render();}
