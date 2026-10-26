@@ -2020,7 +2020,7 @@ const _SK_UI=SK+'_s';
 // guardaba, así que al cerrar la app se perdían.
 const _UI_KEYS=[
   // Notas (filtros, cuaderno y borrador del asiento rápido)
-  'notasCuaderno','notasTipo','notasBuscar','notasOrden','notaTipoNueva','notaCuadernoNuevo','notaBorrador','notaAdj',
+  'notasCuaderno','notasTipo','notasBuscar','notasOrden','notasEstado','notaTipoNueva','notaCuadernoNuevo','notaBorrador','notaAdj',
   // PDF de Economía: incluir fotos de comprobantes
   'pdfEcoFotos',
   // Tareas
@@ -2374,6 +2374,7 @@ function _silentMerge(driveData){
   _repairEcoMatLinks(); // Rebuild any broken eco↔matIngreso links after merge
   _repairProjectIds();  // Fix items with missing or mismatched projectId
   if(_recuperarEnviosMat()){changed=true;setTimeout(sv,0);} // que también suba a Drive
+  if(_migrarComentariosANotas()){changed=true;setTimeout(sv,0);}
   if(_aplicarFotosDrive(driveData.fotosDrive)){changed=true;setTimeout(sv,0);}
   return changed;
 }
@@ -8043,6 +8044,8 @@ function _notasFiltradas(){
   return pf('notas').filter(function(n){
     if(S.notasCuaderno&&(n.cuaderno||NOTA_CUADERNO_DEF)!==S.notasCuaderno)return false;
     if(S.notasTipo&&(n.tipo||'registro')!==S.notasTipo)return false;
+    if(S.notasEstado==='vig'&&_notaHecha(n))return false;
+    if(S.notasEstado==='hechas'&&!_notaHecha(n))return false;
     if(q){var t=_normTxt([n.titulo,n.texto,n.personas,n.cuaderno].join(' '));if(!q.split(/\s+/).every(function(w){return t.indexOf(w)>=0;}))return false;}
     return true;
   }).sort(function(a,b){
@@ -8076,6 +8079,7 @@ async function _guardarImgNota(dataUrl){
   return dataUrl;
 }
 function rNotas(mc){
+  if(_migrarComentariosANotas())setTimeout(sv,0);
   var c=MC.notas;
   var cuads=_notaCuadernos();
   if(S.notasCuaderno&&cuads.indexOf(S.notasCuaderno)<0)S.notasCuaderno='';
@@ -8111,11 +8115,12 @@ function rNotas(mc){
     +'</div>'
     +'<div class="flex gap-6 mb-10" style="flex-wrap:wrap">'
     +'<input class="fi" style="margin:0;flex:1;min-width:160px" placeholder="🔎 Buscar en las notas…" value="'+esc(S.notasBuscar||'')+'" onchange="S.notasBuscar=this.value;saveUIState();render()">'
+    +'<select class="fs" style="margin:0;width:auto" onchange="S.notasEstado=this.value;saveUIState();render()"><option value=""'+(!S.notasEstado?' selected':'')+'>Todas</option><option value="vig"'+(S.notasEstado==='vig'?' selected':'')+'>⏳ Vigentes</option><option value="hechas"'+(S.notasEstado==='hechas'?' selected':'')+'>✓ Realizadas</option></select>'
     +'<select class="fs" style="margin:0;width:auto" onchange="S.notasOrden=this.value;saveUIState();render()"><option value="desc"'+(S.notasOrden!=='asc'?' selected':'')+'>📅 Más recientes</option><option value="asc"'+(S.notasOrden==='asc'?' selected':'')+'>📅 Más antiguas</option></select>'
     +'<select class="fs" style="margin:0;width:auto" onchange="S.notasTipo=this.value;saveUIState();render()"><option value="">Todos los tipos</option>'+Object.keys(NOTA_TIPOS).map(function(k){return '<option value="'+k+'"'+(S.notasTipo===k?' selected':'')+'>'+NOTA_TIPOS[k]+'</option>';}).join('')+'</select>'
     +'</div>';
   if(!lista.length){
-    h+='<div class="empty"><span style="color:'+c+'">'+I.edit+'</span><div class="ts mt-8">'+((S.notasBuscar||S.notasTipo)?'Sin notas con ese filtro':S.notasCuaderno?'El cuaderno «'+esc(S.notasCuaderno)+'» todavía no tiene notas':'Todavía no hay notas')+'</div><div class="txxs tc3 mt-4">Asentá lo que pasa en la obra: avances, acuerdos, llamadas, ideas.</div></div>';
+    h+='<div class="empty"><span style="color:'+c+'">'+I.edit+'</span><div class="ts mt-8">'+((S.notasBuscar||S.notasTipo||S.notasEstado)?'Sin notas con ese filtro':S.notasCuaderno?'El cuaderno «'+esc(S.notasCuaderno)+'» todavía no tiene notas':'Todavía no hay notas')+'</div><div class="txxs tc3 mt-4">Asentá lo que pasa en la obra: avances, acuerdos, llamadas, ideas.</div></div>';
   } else {
     var fij=lista.filter(function(n){return n.fijada;});
     if(fij.length){h+='<div class="txs fw7 mb-6" style="color:'+c+'">📌 Fijadas</div>'+fij.map(function(n){return _notaCard(n,true);}).join('');}
@@ -8141,12 +8146,14 @@ function _notaCard(n,conFecha){
     return '<button class="link-tag" style="font-size:10px;'+(ok?'color:var(--green)':'')+'" onclick="_irAVinculado(\''+d.tbl+'\',\''+(d.id||'')+'\')">→ '+lb+(d.titulo?': '+esc(String(d.titulo).slice(0,40)):'')+(ok?' ✓':'')+(it?'':(d.id&&d.tbl!=='economia'?' (borrado)':''))+'</button>';
   }).join(' ');
   var hecha=_notaHecha(n);
-  return '<div class="card mb-8" id="nota_'+n.id+'" style="border-left:3px solid '+(n.alerta?'var(--red)':hecha?'var(--green)':n.fijada?c:'var(--brd)')+';padding:10px 12px;'+(S.notaFoco===n.id?'box-shadow:0 0 0 2px '+c+';':'')+(hecha?'background:#f0fdf4;':'')+'">'
+  return '<div class="card mb-8" id="nota_'+n.id+'" style="'+_chatTinte('notas',n.id)+'border-left:3px solid '+(n.alerta?'var(--red)':hecha?'var(--green)':n.fijada?c:'var(--brd)')+';padding:10px 12px;'+(S.notaFoco===n.id?'box-shadow:0 0 0 2px '+c+';':'')+(hecha?'background:#f0fdf4;':'')+'">'
     +'<div class="flex gap-4 items-center" style="flex-wrap:wrap">'
     +(conFecha?'<span class="txxs fw7" style="color:var(--text2);white-space:nowrap">📅 '+esc(_notaDiaCorto(n.fecha))+(n.hora?' · '+esc(n.hora):'')+'</span>':'<span class="txxs fw7 tc3">'+esc(n.hora||'')+'</span>')
     +pill(NOTA_TIPOS[n.tipo||'registro']||n.tipo,'#fef9c3','#a16207')
     +((n.cuaderno&&n.cuaderno!==NOTA_CUADERNO_DEF)?pill('📒 '+esc(n.cuaderno),'#f1f5f9','#475569'):'')
     +(n.personas?pill('👥 '+esc(n.personas),'#eff6ff','#2563eb'):'')
+    +(n.rubro?pill('🏗 '+esc(n.rubro),'#f1f5f9','#475569'):'')
+    +_chatBtns('notas',n)
     +(esDot?pill('💻 DOT','#f0fdf4','#16a34a'):'')
     +(n.fijada?'<span title="Fijada">📌</span>':'')
     +_alertTag(n)
@@ -8155,6 +8162,8 @@ function _notaCard(n,conFecha){
     +(n.titulo?'<div class="ts fw7 mt-4" style="'+(hecha?'text-decoration:line-through;color:var(--text3)':'')+'">'+esc(n.titulo)+'</div>':'')
     +(n.texto?'<div class="ts mt-4" style="white-space:pre-wrap;line-height:1.55;'+(hecha?'color:var(--text3)':'')+'">'+esc(n.texto)+'</div>':'')
     +(ph.length?photoGrid(ph,'notas',n.id):'')
+    +((n.archivos||[]).length?'<div class="mt-6">'+n.archivos.map(function(a){return '<button class="link-tag" style="font-size:11px" onclick="viewArchivo(\'notas\',\''+n.id+'\',\''+esc(a.id||a.name)+'\')">📄 '+esc(a.name||'archivo')+'</button>';}).join(' ')+'</div>':'')
+    +(n.tareaId&&(D.tareas||[]).some(function(t){return t.id===n.tareaId;})?'<div class="txxs mt-6" style="color:var(--cyan)">📋 Tarea vinculada: '+esc(((D.tareas||[]).find(function(t){return t.id===n.tareaId;})||{}).title||'')+'</div>':'')
     +(der?'<div class="mt-6 flex gap-6" style="flex-wrap:wrap">'+der+'</div>':'')
     +'<div class="flex gap-4 mt-8" style="flex-wrap:wrap">'
     +'<button class="btn btn-g btn-s" title="Editar" onclick="abrirNota(\''+n.id+'\')">'+I.edit+'</button>'
@@ -8429,7 +8438,6 @@ function derivarNotaMenu(id){
     +b('📋 Tarea',"derivarNota('"+id+"','tareas')",'Se crea una tarea pendiente con el texto y las fotos')
     +b('✅ Checklist',"derivarNota('"+id+"','checklists')",'Cada renglón de la nota pasa a ser un ítem')
     +b('💰 Movimiento',"derivarNota('"+id+"','economia')",'Se abre el formulario de Economía ya completado para que revises el monto')
-    +b('💬 Comentario',"derivarNota('"+id+"','comentarios')",'Se copia a Comentarios de la obra')
     +'<div class="txxs tc3 mt-4">La nota queda en el libro, con el vínculo a lo que se creó.</div></div>';
   document.body.appendChild(d);
 }
@@ -8606,7 +8614,7 @@ function exportNotasPDF(){
 // y viaja por el mismo servidor que la bandeja. El 👍 es una respuesta sutil.
 var _chatMini={};
 function _chatMsgsDe(tbl,id){
-  return (D.mensajesColab||[]).filter(function(m){return tbl==='tareas'?(m.tipo==='tarea'&&m.entidadId===id):tbl==='economia'?m.movimientoId===id:(tbl==='comentarios'&&m.comentarioId===id);});
+  return (D.mensajesColab||[]).filter(function(m){return tbl==='tareas'?(m.tipo==='tarea'&&m.entidadId===id):tbl==='economia'?m.movimientoId===id:tbl==='notas'?m.notaId===id:(tbl==='comentarios'&&!m.notaId&&m.comentarioId===id);});
 }
 // Mensajes sin leer de una tarea / comentario / movimiento (para pintarlo de verde)
 function _chatSinLeer(tbl,id){return _chatMsgsDe(tbl,id).reduce(function(a,m){return a+(m.chatNoLeidoArq||0);},0);}
@@ -8614,6 +8622,7 @@ function _chatTinte(tbl,id){return _chatSinLeer(tbl,id)?'background:#ecfdf5;box-
 function _chatEntidad(m){
   if(!m)return null;
   if(m.tipo==='tarea'&&m.entidadId)return {tbl:'tareas',it:(D.tareas||[]).find(function(t){return t.id===m.entidadId;})};
+  if(m.notaId)return {tbl:'notas',it:(D.notas||[]).find(function(n){return n.id===m.notaId;})};
   if(m.comentarioId)return {tbl:'comentarios',it:(D.comentarios||[]).find(function(c){return c.id===m.comentarioId;})};
   if(m.movimientoId)return {tbl:'economia',it:(D.economia||[]).find(function(e){return e.id===m.movimientoId;})};
   return null;
@@ -8662,8 +8671,8 @@ function abrirChatMsg(msgId){
   var m=(D.mensajesColab||[]).find(function(x){return x.id===msgId;});if(!m)return;
   // La conversación vive en el aviso: se abre aunque la tarea o el comentario se
   // haya quitado de la obra (antes decía "ya no está" y no dejaba entrar).
-  var tbl=m.tipo==='tarea'?'tareas':m.movimientoId?'economia':'comentarios';
-  var eid=m.tipo==='tarea'?m.entidadId:(m.movimientoId||m.comentarioId);
+  var tbl=m.tipo==='tarea'?'tareas':m.movimientoId?'economia':m.notaId?'notas':'comentarios';
+  var eid=m.tipo==='tarea'?m.entidadId:(m.movimientoId||m.notaId||m.comentarioId);
   abrirChat(tbl,eid,m.colabId);
 }
 function _chatMsgActual(){
@@ -8698,12 +8707,12 @@ function _chatPintar(){
   var co=(D.colaboradores||[]).find(function(x){return x.id===c.colabId;})||{};
   var cerrado=m?_chatCerrado(m):_itemCompleto(c.tbl,ent);
   if(!ent.id&&m)ent={title:String(m.titulo||''),concepto:String(m.titulo||'').replace(/^💰\s*Movimiento:\s*/,''),text:m.nota||String(m.titulo||'').replace(/^💬\s*Comentario:\s*/,'')};
-  var tit=c.tbl==='tareas'?(ent.title||'Tarea'):c.tbl==='economia'?(ent.concepto||'Movimiento')+' · '+(ent.tipo==='ingreso'?'+':'-')+'$'+(parseFloat(ent.monto)||0).toLocaleString('es-AR'):String(ent.text||'Comentario').slice(0,80);
+  var tit=c.tbl==='tareas'?(ent.title||'Tarea'):c.tbl==='notas'?String(ent.titulo||ent.texto||'Nota').slice(0,80):c.tbl==='economia'?(ent.concepto||'Movimiento')+' · '+(ent.tipo==='ingreso'?'+':'-')+'$'+(parseFloat(ent.monto)||0).toLocaleString('es-AR'):String(ent.text||'Comentario').slice(0,80);
   var adj=window._chatAdj||[];
   var txPrev=(document.getElementById('chat_tx')||{}).value||'';
   d.innerHTML='<div class="mo-c" style="max-width:560px;display:flex;flex-direction:column;max-height:92vh">'
     +'<div class="mo-h"><h3 style="color:#0f766e">🗨️ '+esc(co.name||'Colaborador')+'</h3><button class="tbtn" onclick="document.getElementById(\'chatM\').remove();render()">'+I.x+'</button></div>'
-    +'<div class="txxs tc3 mb-6">'+(c.tbl==='tareas'?'📋 Tarea':c.tbl==='economia'?'💰 Movimiento':'💬 Comentario')+': <b>'+esc(tit)+'</b>'+(m&&!(_chatEntidad(m)||{}).it?' <span style="color:var(--orange)">(ya no está en la obra)</span>':'')+'</div>'
+    +'<div class="txxs tc3 mb-6">'+(c.tbl==='tareas'?'📋 Tarea':c.tbl==='notas'?'📝 Nota':c.tbl==='economia'?'💰 Movimiento':'💬 Comentario')+': <b>'+esc(tit)+'</b>'+(m&&!(_chatEntidad(m)||{}).it?' <span style="color:var(--orange)">(ya no está en la obra)</span>':'')+'</div>'
     +'<div id="chat_lista" style="flex:1;overflow-y:auto;min-height:120px;background:#fafafa;border:1px solid var(--brd);border-radius:10px;padding:6px 10px;margin-bottom:8px">'
     +((m&&(m.chat||[]).length)?_chatBurbujas(m)+(!cerrado&&m.chat.some(function(x){return x.de==='col';})?'<div style="font-size:9px;color:var(--text3);text-align:center;margin-top:2px">Tocá dos veces un mensaje del colaborador para darle 👍</div>':''):'<div class="txxs tc3" style="text-align:center;padding:24px 0">Todavía no hay mensajes. Escribí el primero.</div>')
     +'</div>'
@@ -8743,6 +8752,7 @@ function _chatAsegurarMsg(){
   var ent=(D[c.tbl]||[]).find(function(x){return x.id===c.entId;})||{};
   var base={id:uid(),proyectoId:ent.projectId||S.proj,colabId:c.colabId,urgencia:'media',nota:'',fechaEnvio:nw(),updatedAt:nw(),estadoColab:'nuevo',respuesta:null,fechaRespuesta:null,chat:[]};
   if(c.tbl==='tareas')Object.assign(base,{tipo:'tarea',entidadId:ent.id,titulo:ent.title||'Tarea'});
+  else if(c.tbl==='notas')Object.assign(base,{tipo:'nota',entidadId:null,notaId:ent.id,comentarioId:ent.id,titulo:'📝 Nota: '+String(ent.titulo||ent.texto||'').slice(0,50),nota:ent.texto||ent.titulo||''});
   else if(c.tbl==='economia')Object.assign(base,{tipo:'nota',entidadId:null,movimientoId:ent.id,titulo:'💰 Movimiento: '+String(ent.concepto||'').slice(0,50),nota:(ent.tipo==='ingreso'?'+':'-')+'$'+(parseFloat(ent.monto)||0).toLocaleString('es-AR')+(ent.fecha?' · '+fmts(ent.fecha):'')+(ent.proveedor?' · '+ent.proveedor:'')+(ent.detalle?'\n'+ent.detalle:'')});
   else Object.assign(base,{tipo:'nota',entidadId:null,comentarioId:ent.id,titulo:'💬 Comentario: '+String(ent.text||'').slice(0,50),nota:ent.text||''});
   m=_guardarPedidoColab(base);
@@ -8790,7 +8800,7 @@ function borrarMsgChat(id){
 // Completar: lo da por terminado cualquiera; si lo marcó el colaborador, se acepta
 function _chatCompletarEntidad(m){
   var e=_chatEntidad(m);if(!e||!e.it)return;
-  if(e.tbl==='tareas')e.it.status='completada';else if(e.tbl==='comentarios')e.it.cumplido=true;else return;
+  if(e.tbl==='tareas')e.it.status='completada';else if(e.tbl==='comentarios')e.it.cumplido=true;else if(e.tbl==='notas')e.it.hecha=true;else return;
   e.it.updatedAt=nw();
 }
 function chatCompletar(){
@@ -8803,7 +8813,7 @@ function chatCompletar(){
 function chatSiguePendiente(msgId){
   var m=msgId?(D.mensajesColab||[]).find(function(x){return x.id===msgId;}):_chatMsgActual();if(!m)return;
   m.estadoColab='nuevo';m.reabiertoAt=nw();m.respuesta=null;m.fechaRespuesta=null;m.updatedAt=nw();
-  var e=_chatEntidad(m)||{};if(e&&e.it){if(e.tbl==='tareas'&&e.it.status==='completada')e.it.status='pendiente';if(e.tbl==='comentarios')e.it.cumplido=false;e.it.updatedAt=nw();}
+  var e=_chatEntidad(m)||{};if(e&&e.it){if(e.tbl==='tareas'&&e.it.status==='completada')e.it.status='pendiente';if(e.tbl==='comentarios')e.it.cumplido=false;if(e.tbl==='notas')e.it.hecha=false;e.it.updatedAt=nw();}
   sv();_publicarBandejaColab(m.colabId,m.proyectoId||S.proj);
   if(document.getElementById('chatM'))_chatPintar();else render();
   toast('Sigue pendiente: la conversación vuelve a estar abierta','var(--teal)',2500);
@@ -8880,7 +8890,7 @@ function _fotosChat(m){return (m&&m.chat||[]).reduce(function(a,c){return a+(c.f
 function _chatsDeForm(sub){
   var out=[];
   Object.keys(sub.incRefs||{}).forEach(function(k){(sub.incRefs[k]||[]).forEach(function(r){
-    if(['tareas','comentarios','economia'].indexOf(r.tbl)>=0)_chatMsgsDe(r.tbl,r.id).forEach(function(m){if(out.indexOf(m)<0)out.push(m);});
+    if(['tareas','notas','comentarios','economia'].indexOf(r.tbl)>=0)_chatMsgsDe(r.tbl,r.id).forEach(function(m){if(out.indexOf(m)<0)out.push(m);});
   });});
   return out;
 }
@@ -8908,8 +8918,8 @@ function _chatInlineHtml(m){
 }
 window._chatFindMsg=function(id){return (D.mensajesColab||[]).find(function(x){return x.id===id;});};
 function _chatCtxDe(m){
-  var tbl=m.tipo==='tarea'?'tareas':m.movimientoId?'economia':'comentarios';
-  window._chatCtx={tbl:tbl,entId:m.tipo==='tarea'?m.entidadId:(m.movimientoId||m.comentarioId),colabId:m.colabId,msgId:m.id};
+  var tbl=m.tipo==='tarea'?'tareas':m.movimientoId?'economia':m.notaId?'notas':'comentarios';
+  window._chatCtx={tbl:tbl,entId:m.tipo==='tarea'?m.entidadId:(m.movimientoId||m.notaId||m.comentarioId),colabId:m.colabId,msgId:m.id};
 }
 function enviarChatInline(msgId){
   var m=window._chatFindMsg(msgId);if(!m)return;
@@ -8923,7 +8933,54 @@ function enviarChatInline(msgId){
 }
 function _chatLeerArq(msgId){var m=window._chatFindMsg(msgId);if(m&&m.chatNoLeidoArq){m.chatNoLeidoArq=0;m.updatedAt=nw();sv();}}
 function _chatNoLeidos(){return (D.mensajesColab||[]).filter(function(m){return m.proyectoId===S.proj&&m.chatNoLeidoArq>0;});}
+// ═══════ Los comentarios pasan a ser notas ═══════
+// Del propietario → 🤝 Reunión / acuerdo; generales, decisiones, recordatorios →
+// 📝 Registro. Se conserva todo (fotos, archivos, alerta, realizado, tarea
+// vinculada, de quién vino) y el original queda en D.comentariosArchivo.
+// El id de la nota sale del comentario: si dos dispositivos migran a la vez,
+// generan la misma nota y no se duplica.
+function _cmANota(cm,id){
+  var f=String(cm.date||cm.fecha||''),fecha=f.slice(0,10)||td(),hora='';
+  var dt=new Date(f);if(f.length>10&&!isNaN(dt))hora=String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0');
+  var prop=cm.tipo==='propietario';
+  return {id:id||uid(),projectId:cm.projectId,fecha:fecha,hora:hora,tipo:prop?'reunion':'registro',cuaderno:NOTA_CUADERNO_DEF,
+    titulo:'',texto:cm.text||'',personas:prop?'Propietario':'',photos:cm.photos||[],archivos:cm.archivos||[],
+    fijada:false,derivados:[],hecha:!!cm.cumplido,alerta:!!cm.alerta,alertaAt:cm.alertaAt||null,tareaId:cm.tareaId||'',
+    rubro:(cm.rubro&&cm.rubro!=='Otro'&&cm.rubro!=='General')?cm.rubro:'',etapa:cm.etapa||'',
+    cargadoPor:cm.cargadoPor||'',sourceType:cm.sourceType||'',sourceName:cm.sourceName||'',sourceId:cm.sourceId||'',colabId:cm.colabId||'',
+    origenComentario:cm.id||'',date:cm.date||nw(),updatedAt:nw()};
+}
+function _migrarComentariosANotas(){
+  var cms=(D.comentarios||[]).slice();if(!cms.length)return 0;
+  if(!D.notas)D.notas=[];if(!D.comentariosArchivo)D.comentariosArchivo=[];
+  cms.forEach(function(cm){
+    var dest=null;
+    if(cm.origenNota){
+      dest=D.notas.find(function(n){return n.id===cm.origenNota;});
+      if(dest){dest.derivados=(dest.derivados||[]).filter(function(x){return !(x.tbl==='comentarios'&&x.id===cm.id);});if(cm.cumplido)dest.hecha=true;dest.updatedAt=nw();}
+    }
+    if(!dest){
+      var nid='cmn_'+cm.id;
+      dest=D.notas.find(function(n){return n.id===nid;});
+      if(!dest){dest=_cmANota(cm,nid);D.notas.push(dest);}
+    }
+    (D.mensajesColab||[]).forEach(function(m){if(m.comentarioId===cm.id&&m.notaId!==dest.id){m.notaId=dest.id;m.updatedAt=nw();}});
+    (D.colaboradores||[]).forEach(function(co){(co.notas||[]).forEach(function(x){if(x.comentarioId===cm.id)x.notaId=dest.id;});});
+    if(!D.comentariosArchivo.some(function(x){return x.id===cm.id;}))D.comentariosArchivo.push(JSON.parse(JSON.stringify(cm)));
+    addTombstone('comentarios',cm.id);
+  });
+  D.comentarios=[];
+  return cms.length;
+}
 function rComentarios(mc){
+  if(_migrarComentariosANotas()){sv();toast('Los comentarios pasaron a Notas ✓','var(--green)',3000);}
+  mc.innerHTML=modHeader('comentarios','Comentarios','')
+    +'<div class="card" style="border-left:4px solid #ca8a04;background:#fefce8">'
+    +'<div class="ts fw7 mb-6">📝 Los comentarios ahora están en Notas</div>'
+    +'<div class="txs" style="color:var(--text2);line-height:1.5">Los del propietario quedaron como <b>🤝 Reunión / acuerdo</b> y los generales, decisiones y recordatorios como <b>📝 Registro</b>, con sus fotos, fechas y conversaciones. Lo nuevo se asienta directamente en Notas.</div>'
+    +'<button class="btn btn-w mt-10" style="background:#ca8a04;color:#fff" onclick="S.mod=\'notas\';render()">Ir a Notas</button></div>';
+}
+function _rComentariosViejo(mc){
   const _dir=(S.cmtSort==='asc')?1:-1;
   const allItems=[...pf('comentarios')].sort((a,b)=>_dir*(a.date||'').localeCompare(b.date||''));
   const c=MC.comentarios;
@@ -12718,7 +12775,8 @@ function aceptarMsgColab(msgId,colabId){
     var t=(D.tareas||[]).find(function(x){return x.id===m.entidadId;});
     if(t){t.status='completada';t.updatedAt=nw();}
   }
-  if(m.comentarioId){var _cmA=(D.comentarios||[]).find(function(x){return x.id===m.comentarioId;});if(_cmA){_cmA.cumplido=true;_cmA.updatedAt=nw();}}
+  if(m.notaId){var _nA=(D.notas||[]).find(function(x){return x.id===m.notaId;});if(_nA){_nA.hecha=true;_nA.updatedAt=nw();}}
+  else if(m.comentarioId){var _cmA=(D.comentarios||[]).find(function(x){return x.id===m.comentarioId;});if(_cmA){_cmA.cumplido=true;_cmA.updatedAt=nw();}}
   _publicarBandejaColab(m.colabId,m.proyectoId);
   if(m.tipo==='checklist'&&m.entidadId){
     var chk=(D.checklists||[]).find(function(x){return x.id===m.entidadId;});
@@ -14265,7 +14323,7 @@ function _itemsForm(sub){
 }
 var _SEC_FORM={msg:['✉️ Mensaje general','#0d9488'],cmt:['💬 Comentarios','#0d9488'],mov:['💰 Movimientos','#0d9488'],tar:['📋 Tareas','var(--purple)'],
   mex:['📦 Materiales existentes','var(--green)'],mpe:['🔔 Pedidos de materiales','var(--orange)'],mrec:['📬 Recibidos','#0891b2'],chk:['✅ Checklist','var(--pink)']};
-var _DONDE_FORM={msg:'Comentarios',cmt:'Comentarios de la obra',mov:'Economía',tar:'Tareas',mex:'Materiales',mpe:'Materiales (a pedir)',mrec:'Materiales (ingresos)',chk:'Checklists'};
+var _DONDE_FORM={msg:'Notas',cmt:'Notas de la obra',mov:'Economía',tar:'Tareas',mex:'Materiales',mpe:'Materiales (a pedir)',mrec:'Materiales (ingresos)',chk:'Checklists'};
 function fmt$(n){var v=parseFloat(n)||0;return v.toLocaleString('es-AR',{maximumFractionDigits:2});}
 // Fotos grandes, cada una con su comentario debajo; tocando se ve en pantalla completa
 function _fotosGrandesForm(x,tam){
@@ -14294,7 +14352,7 @@ function _chatItemForm(id,sub,key,grande){
   var sec=String(key).split('_')[0];
   if(['cmt','tar','mov','msg'].indexOf(sec)<0||!sub.token)return '';
   if((sub.itemsRech||[]).indexOf(key)>=0)return '';
-  var ref=((sub.incRefs||{})[key]||[]).find(function(r){return ['tareas','comentarios','economia'].indexOf(r.tbl)>=0;});
+  var ref=((sub.incRefs||{})[key]||[]).find(function(r){return ['tareas','notas','comentarios','economia'].indexOf(r.tbl)>=0;});
   var nl=ref?_chatSinLeer(ref.tbl,ref.id):0;
   var n=ref?_chatMsgsDe(ref.tbl,ref.id).reduce(function(a,m){return a+(m.chat||[]).length;},0):0;
   var st='flex-shrink:0;border-radius:8px;padding:'+(grande?'10px 14px':'6px 9px')+';font-size:'+(grande?'14px':'12px')+';font-weight:700;cursor:pointer;';
@@ -14305,7 +14363,7 @@ async function _aceptarYConversar(id,key){
   var sub=(D.formulariosPendientes||[]).find(function(x){return x.id===id;});if(!sub)return;
   if((sub.itemsInc||[]).indexOf(key)<0){var r=incItem(id,key);if(r&&r.then)await r;}
   sub=(D.formulariosPendientes||[]).find(function(x){return x.id===id;});
-  var ref=((sub&&sub.incRefs||{})[key]||[]).find(function(x){return ['tareas','comentarios','economia'].indexOf(x.tbl)>=0;});
+  var ref=((sub&&sub.incRefs||{})[key]||[]).find(function(x){return ['tareas','notas','comentarios','economia'].indexOf(x.tbl)>=0;});
   if(!ref){toast('Primero cargalo en la obra','var(--orange)');return;}
   abrirChat(ref.tbl,ref.id,sub.token);
 }
@@ -14551,8 +14609,8 @@ function _tlCard(e,o){
   }
   if(e.k==='msg'){
     var m=e.m;
-    var tipoL=m.comentarioId?'💬 Comentario':m.movimientoId?'💰 Movimiento':({checklist:'✅ Checklist',tarea:'📋 Tarea',nota:'📝 Nota',materiales:'📦 Materiales'}[m.tipo]||'📤 Aviso');
-    var titM=String(m.titulo||'').replace(/^(💬|💰|💬)\s*(Comentario:|Movimiento:)?\s*/,'');
+    var tipoL=m.notaId?'📝 Nota':m.comentarioId?'💬 Comentario':m.movimientoId?'💰 Movimiento':({checklist:'✅ Checklist',tarea:'📋 Tarea',nota:'📝 Nota',materiales:'📦 Materiales'}[m.tipo]||'📤 Aviso');
+    var titM=String(m.titulo||'').replace(/^(💬|💰|🗨️|📝)\s*(Comentario:|Movimiento:|Nota:)?\s*/,'');
     var estM={nuevo:['Sin abrir','var(--text3)'],visto:['Visto','var(--text3)'],completado:['Lo marcó como hecho','var(--orange)'],aceptado:['✓ Completado','var(--green)'],rechazado:['Rechazado','var(--red)']}[m.estadoColab]||['',''];
     var acc2='';
     if(abierto){
@@ -14562,7 +14620,7 @@ function _tlCard(e,o){
       if(cerr||m.estadoColab==='completado')acc2+=_btn('↩ Sigue pendiente / reabrir',_rp('chatSiguePendiente(\''+m.id+'\')'),'#ea580c',false);
       acc2+='</div>';
       if(m.respuesta)acc2+='<div class="txxs mt-6">✉️ '+esc(m.respuesta)+'</div>';
-      if(m.tipo==='tarea'||m.comentarioId||m.movimientoId){_chatCtxDe(m);acc2+=_chatInlineHtml(m);}
+      if(m.tipo==='tarea'||m.comentarioId||m.movimientoId||m.notaId){_chatCtxDe(m);acc2+=_chatInlineHtml(m);}
     }
     var fotosM=_fotosChat(m)+(((_chatEntidad(m)||{}).it||{}).photos||[]).length;
     return _caja('#6366f1',window._selColab[m.id]?'#e0e7ff':'#eef2ff',false,m.chatNoLeidoArq,
@@ -14878,7 +14936,7 @@ function _doIncItem(sub,key){
   GD._auditPid=pid;
   // Se anota qué registros creó cada ítem: así "destildar" puede sacarlos de la
   // obra (antes sólo se quitaba la marca y al reincorporar quedaba duplicado).
-  var _tbls=['comentarios','economia','tareas','materiales','matIngresos','checklists','carpetas'];
+  var _tbls=['comentarios','notas','economia','tareas','materiales','matIngresos','checklists','carpetas'];
   var _antes={};_tbls.forEach(function(t){_antes[t]={};(D[t]||[]).forEach(function(r){_antes[t][r.id]=1;});});
   var _arch={};(D.carpetas||[]).forEach(function(c){(c.archivos||[]).forEach(function(a){_arch[a.id]=1;});});
   try{ _doIncItemObra(sub,key,pid); }
@@ -14923,9 +14981,10 @@ function _doIncItemObra(sub,key,pid){
   var by=sub.ayudante||'Colaborador';
   if(type==='msg'){
     if(!sub.mensajeGeneral)return;
-    D.comentarios=D.comentarios||[];
-    D.comentarios.push({id:uid(),projectId:pid,text:sub.mensajeGeneral,tipo:'propietario',rubro:'General',etapa:'',tareaId:'',photos:[],archivos:[],sourceType:'formulario',sourceName:by,sourceId:sub.id,date:nw(),updatedAt:nw()});
-    audit('comentarios','create','form msg: '+sub.mensajeGeneral.slice(0,30));
+    if(!D.notas)D.notas=[];
+    var _nMsg=_cmANota({projectId:pid,text:sub.mensajeGeneral,tipo:'general',date:sub.fecha||nw(),sourceType:'formulario',sourceName:by,sourceId:sub.id,colabId:sub.token||'',cargadoPor:by});
+    _nMsg.personas=by;D.notas.push(_nMsg);
+    audit('notas','create','form msg: '+sub.mensajeGeneral.slice(0,30));
     var _coMsg=(D.colaboradores||[]).find(function(c){return c.id===sub.token;});
     if(_coMsg){
       if(!_coMsg.notas)_coMsg.notas=[];
@@ -14936,19 +14995,19 @@ function _doIncItemObra(sub,key,pid){
     // campos que "Nuevo comentario". Queda asociado al informe (sourceId) y al
     // colaborador que lo mandó, y también se registra en sus Mensajes.
     var cm=(sub.comentarios||[])[idx];if(!cm||!cm.texto)return;
-    D.comentarios=D.comentarios||[];
+    if(!D.notas)D.notas=[];
     var _cmId=uid();
-    D.comentarios.push({id:_cmId,projectId:pid,text:cm.texto,
-      tipo:cm.tipo==='propietario'?'propietario':'general',
-      rubro:cm.rubro||'Otro',etapa:cm.etapa||'',tareaId:'',
-      photos:_fotosFormItem(cm),archivos:[],
+    var _nCm=_cmANota({projectId:pid,text:cm.texto,tipo:cm.tipo==='propietario'?'propietario':'general',
+      rubro:cm.rubro||'',etapa:cm.etapa||'',photos:_fotosFormItem(cm),
       cargadoPor:by,sourceType:'formulario',sourceName:by,sourceId:sub.id,colabId:sub.token||'',
-      date:cm.fecha||String(sub.fecha||nw()).slice(0,10),updatedAt:nw()});
-    audit('comentarios','create','form: '+String(cm.texto).slice(0,30));
+      date:cm.fecha||String(sub.fecha||nw()).slice(0,10)},_cmId);
+    if(cm.tipo!=='propietario')_nCm.personas=by;
+    D.notas.push(_nCm);
+    audit('notas','create','form: '+String(cm.texto).slice(0,30));
     var _coCm=(D.colaboradores||[]).find(function(c){return c.id===sub.token;});
     if(_coCm){
       if(!_coCm.notas)_coCm.notas=[];
-      _coCm.notas.unshift({texto:'💬 '+cm.texto,fecha:sub.receivedAt||sub.fecha||nw(),de:'colab',comentarioId:_cmId});
+      _coCm.notas.unshift({texto:'💬 '+cm.texto,fecha:sub.receivedAt||sub.fecha||nw(),de:'colab',notaId:_cmId});
     }
   } else if(type==='mov'){
     var m=(sub.movimientos||[])[idx];if(!m)return;

@@ -49,6 +49,14 @@ Están en la lista **`notas`** del nivel principal, al lado de `tareas`, `econom
 | `cargadoPor` | **Siempre `"dot"`**: así la nota se muestra con la pastilla 💻 DOT. |
 | `date`, `updatedAt` | Fecha y hora de ahora en ISO UTC. Al editar una nota, actualizá `updatedAt`. |
 
+## Ya no hay comentarios: todo es nota
+
+Desde el 26/10/2026 los **comentarios pasaron a ser notas**. No agregues nada a la lista `comentarios`: si aparece algo ahí, la app lo convierte sola en nota.
+
+- **Lo del propietario** (acuerdos, pedidos, reuniones): `tipo: "reunion"` y `personas: "Propietario"`.
+- **Decisiones, recordatorios y registros generales:** `tipo: "registro"`.
+- Una nota puede llevar también `rubro` (por ejemplo "Pisos"), `etapa` y `tareaId` (el id de una tarea vinculada).
+
 ## Cuadernos
 
 Los cuadernos de cada obra se guardan en la lista **`cuadernosNotas`**. Cada uno tiene esta forma: `{"id": "...", "projectId": "<obra>", "nombre": "Instalación eléctrica", "date": "<ISO>", "updatedAt": "<ISO>"}`.
