@@ -8039,6 +8039,20 @@ function _notaFiltrarCuad(nombre){
   if(nombre)S.notaCuadernoNuevo=nombre; // lo que se asienta mirando un cuaderno va a ese cuaderno
   saveUIState();render();
 }
+function _notaTextoBusqueda(n){
+  var co=n.colabId?(D.colaboradores||[]).find(function(c){return c.id===n.colabId;}):null;
+  var t=[n.titulo,n.texto,n.personas,n.cuaderno,NOTA_TIPOS[n.tipo||'registro'],n.rubro,n.etapa,n.cargadoPor,n.sourceName,co&&co.name,
+    n.fecha,fmts(n.fecha),_notaDiaLargo(n.fecha),n.hora,n.alerta?'alerta':'',_notaHecha(n)?'hecha realizada':'',n.fijada?'fijada':''];
+  (n.photos||[]).forEach(function(p){if(p&&p.caption)t.push(p.caption);});
+  (n.archivos||[]).forEach(function(a){t.push(a.name);});
+  (n.derivados||[]).forEach(function(d){t.push(d.titulo);});
+  if(n.tareaId){var tk=(D.tareas||[]).find(function(x){return x.id===n.tareaId;});if(tk)t.push(tk.title);}
+  _chatMsgsDe('notas',n.id).forEach(function(m){
+    var cm=(D.colaboradores||[]).find(function(c){return c.id===m.colabId;});if(cm)t.push(cm.name);
+    (m.chat||[]).forEach(function(c){t.push(c.texto,c.autor);});
+  });
+  return _normTxt(t.filter(Boolean).join(' '));
+}
 function _notasFiltradas(){
   var q=_normTxt(S.notasBuscar||'');
   return pf('notas').filter(function(n){
@@ -8050,7 +8064,7 @@ function _notasFiltradas(){
     }
     if(S.notasEstado==='vig'&&_notaHecha(n))return false;
     if(S.notasEstado==='hechas'&&!_notaHecha(n))return false;
-    if(q){var t=_normTxt([n.titulo,n.texto,n.personas,n.cuaderno].join(' '));if(!q.split(/\s+/).every(function(w){return t.indexOf(w)>=0;}))return false;}
+    if(q){var t=_notaTextoBusqueda(n);if(!q.split(/\s+/).every(function(w){return t.indexOf(w)>=0;}))return false;}
     return true;
   }).sort(function(a,b){
     var r=String(b.fecha||'').localeCompare(String(a.fecha||''))||String(b.hora||'').localeCompare(String(a.hora||''))||String(b.date||'').localeCompare(String(a.date||''));
@@ -8117,14 +8131,15 @@ function rNotas(mc){
     +cuads.map(function(k){return '<button class="btn btn-s" data-c="'+esc(k)+'" style="white-space:nowrap;'+(S.notasCuaderno===k?'background:'+c+';color:#fff':'background:var(--gray-ll);color:var(--text2)')+'" onclick="_notaFiltrarCuad(this.dataset.c)">📒 '+esc(k)+'</button>';}).join('')
     +'<button class="btn btn-sec btn-s" style="white-space:nowrap" title="Crear, renombrar o borrar cuadernos" onclick="abrirCuadernos()">⚙ Cuadernos</button>'
     +'</div>'
-    +'<div class="flex gap-6 mb-10" style="flex-wrap:wrap">'
-    +'<div style="position:relative;flex:1;min-width:160px"><input class="fi" style="margin:0;width:100%;padding-right:34px" placeholder="🔎 Buscar en las notas…" value="'+esc(S.notasBuscar||'')+'" oninput="this.nextElementSibling.style.display=this.value?\'flex\':\'none\'" onchange="S.notasBuscar=this.value;saveUIState();render()">'
+    +'<div class="flex gap-6 mb-6" style="flex-wrap:nowrap">'
+    +'<div style="position:relative;flex:1;min-width:0"><input class="fi" style="margin:0;width:100%;padding-right:34px" placeholder="🔎 Buscar en las notas…" value="'+esc(S.notasBuscar||'')+'" oninput="this.nextElementSibling.style.display=this.value?\'flex\':\'none\'" onchange="S.notasBuscar=this.value;saveUIState();render()">'
     +'<button title="Borrar la búsqueda" onmousedown="event.preventDefault()" onclick="var i=this.previousElementSibling;i.value=\'\';this.style.display=\'none\';S.notasBuscar=\'\';saveUIState();render()" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);display:'+(S.notasBuscar?'flex':'none')+';align-items:center;justify-content:center;width:24px;height:24px;border:none;border-radius:50%;background:var(--gray-ll);color:var(--text2);font-size:13px;font-weight:700;cursor:pointer">✕</button></div>'
-    +'<select class="fs" style="margin:0;width:auto" onchange="S.notasEstado=this.value;saveUIState();render()"><option value=""'+(!S.notasEstado?' selected':'')+'>Todas</option><option value="vig"'+(S.notasEstado==='vig'?' selected':'')+'>⏳ Vigentes</option><option value="hechas"'+(S.notasEstado==='hechas'?' selected':'')+'>✓ Realizadas</option></select>'
-    +'<select class="fs" style="margin:0;width:auto" onchange="S.notasOrden=this.value;saveUIState();render()"><option value="desc"'+(S.notasOrden!=='asc'?' selected':'')+'>📅 Más recientes</option><option value="asc"'+(S.notasOrden==='asc'?' selected':'')+'>📅 Más antiguas</option></select>'
-    +'<div style="display:flex;gap:6px;flex:1 1 220px;min-width:0"><select class="fs" style="margin:0;flex:1;min-width:0;max-width:170px" onchange="S.notasTipo=this.value;saveUIState();render()"><option value="">Todos los tipos</option>'+Object.keys(NOTA_TIPOS).map(function(k){return '<option value="'+k+'"'+(S.notasTipo===k?' selected':'')+'>'+NOTA_TIPOS[k]+'</option>';}).join('')+'</select>'
-    +'<button title="Sólo las que tienen alerta" onclick="S.notasAlerta=!S.notasAlerta;saveUIState();render()" style="flex-shrink:0;width:42px;border-radius:10px;font-size:17px;cursor:pointer;'+(S.notasAlerta?'background:#fef2f2;border:2px solid #dc2626':'background:var(--white);border:1px solid var(--brd)')+'">🚨</button>'
-    +'<button title="Sólo las que tienen conversación iniciada" onclick="S.notasChat=!S.notasChat;saveUIState();render()" style="flex-shrink:0;width:42px;border-radius:10px;font-size:17px;cursor:pointer;'+(S.notasChat?'background:#dbeafe;border:2px solid #1d4ed8':'background:var(--white);border:1px solid var(--brd)')+'">🗨️</button>'+'</div>'
+    +'<select class="fs" style="margin:0;flex:0 0 auto;width:auto" onchange="S.notasEstado=this.value;saveUIState();render()"><option value=""'+(!S.notasEstado?' selected':'')+'>Todas</option><option value="vig"'+(S.notasEstado==='vig'?' selected':'')+'>⏳ Vigentes</option><option value="hechas"'+(S.notasEstado==='hechas'?' selected':'')+'>✓ Realizadas</option></select>'
+    +'</div><div class="flex gap-6 mb-10" style="flex-wrap:nowrap;align-items:stretch">'
+    +'<select class="fs" style="margin:0;flex:0 1 128px;min-width:0" onchange="S.notasOrden=this.value;saveUIState();render()"><option value="desc"'+(S.notasOrden!=='asc'?' selected':'')+'>📅 Recientes</option><option value="asc"'+(S.notasOrden==='asc'?' selected':'')+'>📅 Antiguas</option></select>'
+    +'<div style="display:flex;gap:6px;flex:1;min-width:0"><select class="fs" style="margin:0;flex:1;min-width:0" onchange="S.notasTipo=this.value;saveUIState();render()"><option value="">Todos los tipos</option>'+Object.keys(NOTA_TIPOS).map(function(k){return '<option value="'+k+'"'+(S.notasTipo===k?' selected':'')+'>'+NOTA_TIPOS[k]+'</option>';}).join('')+'</select>'
+    +'<button title="Sólo las que tienen alerta" onclick="S.notasAlerta=!S.notasAlerta;saveUIState();render()" style="flex-shrink:0;width:38px;border-radius:10px;font-size:16px;cursor:pointer;'+(S.notasAlerta?'background:#fef2f2;border:2px solid #dc2626':'background:var(--white);border:1px solid var(--brd)')+'">🚨</button>'
+    +'<button title="Sólo las que tienen conversación iniciada" onclick="S.notasChat=!S.notasChat;saveUIState();render()" style="flex-shrink:0;width:38px;border-radius:10px;font-size:16px;cursor:pointer;'+(S.notasChat?'background:#dbeafe;border:2px solid #1d4ed8':'background:var(--white);border:1px solid var(--brd)')+'">🗨️</button>'+'</div>'
     +'</div>';
   if(!lista.length){
     h+='<div class="empty"><span style="color:'+c+'">'+I.edit+'</span><div class="ts mt-8">'+((S.notasBuscar||S.notasTipo||S.notasEstado||S.notasAlerta||S.notasChat)?'Sin notas con ese filtro':S.notasCuaderno?'El cuaderno «'+esc(S.notasCuaderno)+'» todavía no tiene notas':'Todavía no hay notas')+'</div><div class="txxs tc3 mt-4">Asentá lo que pasa en la obra: avances, acuerdos, llamadas, ideas.</div></div>';
@@ -8581,6 +8596,11 @@ function exportNotasPDF(){
   if(S.notasCuaderno)filtros.push('Cuaderno: '+S.notasCuaderno);
   if(S.notasTipo)filtros.push(NOTA_TIPOS[S.notasTipo]);
   if(S.notasBuscar)filtros.push('"'+S.notasBuscar+'"');
+  if(S.notasEstado)filtros.push(S.notasEstado==='vig'?'Vigentes':'Realizadas');
+  if(S.notasAlerta&&S.notasChat)filtros.push('Con alerta o conversación');
+  else if(S.notasAlerta)filtros.push('Con alerta');
+  else if(S.notasChat)filtros.push('Con conversación');
+  filtros.push(S.notasOrden==='asc'?'Más antiguas primero':'Más recientes primero');
   var dia='',body='';
   lista.forEach(function(n){
     if(n.fecha!==dia){dia=n.fecha;body+='<h2>'+esc(_notaDiaLargo(dia))+'</h2>';}
