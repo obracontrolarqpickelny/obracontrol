@@ -38,7 +38,7 @@ Están en la lista **`notas`** del nivel principal, al lado de `tareas`, `econom
 | `projectId` | El id de la obra (ver arriba). |
 | `fecha` | Día al que corresponde lo asentado, en formato `AAAA-MM-DD`. |
 | `hora` | `HH:MM`, en 24 horas. Puede quedar vacío. |
-| `tipo` | Uno de: `registro`, `avance` (avance de obra), `reunion` (reunión o acuerdo), `llamada`, `pendiente`, `idea`. |
+| `tipo` | Uno de: `registro`, `avance` (avance de obra), `reunion` (reunión o acuerdo), `cliente` (comentarios del cliente o propietario), `economico` (datos económicos), `pendiente`, `idea`. |
 | `cuaderno` | Por defecto `"Libro de obra"`. Puede ser otro, por ejemplo `"Instalación eléctrica"`. Si el nombre es nuevo, el cuaderno se crea solo. |
 | `titulo` | Opcional y corto. |
 | `personas` | Opcional: con quién se habló o quién participó. |

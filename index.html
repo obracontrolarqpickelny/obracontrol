@@ -7999,7 +7999,13 @@ function saveEditEnl(id){
 // Registro del día a día: texto, dictado, fotos y dibujos a mano alzada, en
 // cuadernos. Cada nota se puede pasar a tarea, checklist, movimiento o
 // comentario. DOT las lee y escribe en D.notas (ver DOT_NOTAS.md).
-var NOTA_TIPOS={registro:'📝 Registro',avance:'🏗 Avance de obra',reunion:'🤝 Reunión / acuerdo',llamada:'📞 Llamada',pendiente:'⏳ Pendiente',idea:'💡 Idea'};
+var NOTA_TIPOS={registro:'📝 Registro',avance:'🏗 Avance de obra',reunion:'🤝 Reunión / acuerdo',cliente:'🏠 Comentarios del cliente',economico:'💰 Datos económicos',pendiente:'⏳ Pendiente',idea:'💡 Idea'};
+// Tipos que ya no se ofrecen (por si una nota vieja o de DOT lo trae)
+function _notaTipoLabel(t){return NOTA_TIPOS[t]||({llamada:'📞 Llamada'})[t]||t||NOTA_TIPOS.registro;}
+// Colaborador registrado como cliente o propietario: lo que manda entra como "Comentarios del cliente"
+function _colabEsCliente(id){var co=(D.colaboradores||[]).find(function(c){return c.id===id;});return !!(co&&/^(cliente|propietario)$/i.test(String(co.role||'').trim()));}
+// "Llamada" se quitó: las notas que lo tenían pasan a Reunión / acuerdo
+function _notasSinLlamada(){var n=0;(D.notas||[]).forEach(function(x){if(x.tipo==='llamada'){x.tipo='reunion';x.updatedAt=nw();n++;}});if(S.notasTipo==='llamada')S.notasTipo='';if(S.notaTipoNueva==='llamada')S.notaTipoNueva='registro';return n;}
 var NOTA_CUADERNO_DEF='Libro de obra';
 function _notaHora(){var d=new Date();return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
 // Los cuadernos se guardan como registros (D.cuadernosNotas), así un cuaderno
@@ -8039,9 +8045,22 @@ function _notaFiltrarCuad(nombre){
   if(nombre)S.notaCuadernoNuevo=nombre; // lo que se asienta mirando un cuaderno va a ese cuaderno
   saveUIState();render();
 }
+// Mientras se escribe, la lista de abajo se va filtrando (sin perder el foco ni el teclado)
+var _notasBuscT=null;
+function _notasBuscarVivo(el){
+  S.notasBuscar=el.value;
+  clearTimeout(_notasBuscT);
+  _notasBuscT=setTimeout(function(){
+    var pos=el.selectionStart;
+    render();
+    var n=document.getElementById('notas_q');
+    if(n){if(document.activeElement!==n)n.focus();try{n.setSelectionRange(pos,pos);}catch(_){}}
+    saveUIState();
+  },180);
+}
 function _notaTextoBusqueda(n){
   var co=n.colabId?(D.colaboradores||[]).find(function(c){return c.id===n.colabId;}):null;
-  var t=[n.titulo,n.texto,n.personas,n.cuaderno,NOTA_TIPOS[n.tipo||'registro'],n.rubro,n.etapa,n.cargadoPor,n.sourceName,co&&co.name,
+  var t=[n.titulo,n.texto,n.personas,n.cuaderno,_notaTipoLabel(n.tipo||'registro'),n.rubro,n.etapa,n.cargadoPor,n.sourceName,co&&co.name,
     n.fecha,fmts(n.fecha),_notaDiaLargo(n.fecha),n.hora,n.alerta?'alerta':'',_notaHecha(n)?'hecha realizada':'',n.fijada?'fijada':''];
   (n.photos||[]).forEach(function(p){if(p&&p.caption)t.push(p.caption);});
   (n.archivos||[]).forEach(function(a){t.push(a.name);});
@@ -8098,6 +8117,7 @@ async function _guardarImgNota(dataUrl){
 }
 function rNotas(mc){
   if(_migrarComentariosANotas())setTimeout(sv,0);
+  if(_notasSinLlamada())setTimeout(sv,0);
   var c=MC.notas;
   var cuads=_notaCuadernos();
   if(S.notasCuaderno&&cuads.indexOf(S.notasCuaderno)<0)S.notasCuaderno='';
@@ -8132,7 +8152,7 @@ function rNotas(mc){
     +'<button class="btn btn-sec btn-s" style="white-space:nowrap" title="Crear, renombrar o borrar cuadernos" onclick="abrirCuadernos()">⚙ Cuadernos</button>'
     +'</div>'
     +'<div class="flex gap-6 mb-6" style="flex-wrap:nowrap">'
-    +'<div style="position:relative;flex:1;min-width:0"><input class="fi" style="margin:0;width:100%;padding-right:34px" placeholder="🔎 Buscar en las notas…" value="'+esc(S.notasBuscar||'')+'" oninput="this.nextElementSibling.style.display=this.value?\'flex\':\'none\'" onchange="S.notasBuscar=this.value;saveUIState();render()">'
+    +'<div style="position:relative;flex:1;min-width:0"><input class="fi" style="margin:0;width:100%;padding-right:34px" placeholder="🔎 Buscar en las notas…" value="'+esc(S.notasBuscar||'')+'" id="notas_q" enterkeyhint="search" oninput="this.nextElementSibling.style.display=this.value?\'flex\':\'none\';_notasBuscarVivo(this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}" onchange="S.notasBuscar=this.value;saveUIState()">'
     +'<button title="Borrar la búsqueda" onmousedown="event.preventDefault()" onclick="var i=this.previousElementSibling;i.value=\'\';this.style.display=\'none\';S.notasBuscar=\'\';saveUIState();render()" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);display:'+(S.notasBuscar?'flex':'none')+';align-items:center;justify-content:center;width:24px;height:24px;border:none;border-radius:50%;background:var(--gray-ll);color:var(--text2);font-size:13px;font-weight:700;cursor:pointer">✕</button></div>'
     +'<select class="fs" style="margin:0;flex:0 0 auto;width:auto" onchange="S.notasEstado=this.value;saveUIState();render()"><option value=""'+(!S.notasEstado?' selected':'')+'>Todas</option><option value="vig"'+(S.notasEstado==='vig'?' selected':'')+'>⏳ Vigentes</option><option value="hechas"'+(S.notasEstado==='hechas'?' selected':'')+'>✓ Realizadas</option></select>'
     +'</div><div class="flex gap-6 mb-10" style="flex-wrap:nowrap;align-items:stretch">'
@@ -8171,7 +8191,7 @@ function _notaCard(n,conFecha){
   return '<div class="card mb-8" id="nota_'+n.id+'" style="'+_chatTinte('notas',n.id)+'border-left:3px solid '+(n.alerta?'var(--red)':hecha?'var(--green)':n.fijada?c:'var(--brd)')+';padding:10px 12px;'+(S.notaFoco===n.id?'box-shadow:0 0 0 2px '+c+';':'')+(hecha?'background:#f0fdf4;':'')+'">'
     +'<div class="flex gap-4 items-center" style="flex-wrap:wrap">'
     +(conFecha?'<span class="txxs fw7" style="color:var(--text2);white-space:nowrap">📅 '+esc(_notaDiaCorto(n.fecha))+(n.hora?' · '+esc(n.hora):'')+'</span>':'<span class="txxs fw7 tc3">'+esc(n.hora||'')+'</span>')
-    +pill(NOTA_TIPOS[n.tipo||'registro']||n.tipo,'#fef9c3','#a16207')
+    +pill(_notaTipoLabel(n.tipo||'registro'),'#fef9c3','#a16207')
     +((n.cuaderno&&n.cuaderno!==NOTA_CUADERNO_DEF)?pill('📒 '+esc(n.cuaderno),'#f1f5f9','#475569'):'')
     +(n.personas?pill('👥 '+esc(n.personas),'#eff6ff','#2563eb'):'')
     +(n.rubro?pill('🏗 '+esc(n.rubro),'#f1f5f9','#475569'):'')
@@ -8605,7 +8625,7 @@ function exportNotasPDF(){
   lista.forEach(function(n){
     if(n.fecha!==dia){dia=n.fecha;body+='<h2>'+esc(_notaDiaLargo(dia))+'</h2>';}
     var fotos=(n.photos||[]).filter(function(ph){return ph&&!ph.deletedAt;}).map(function(ph){return _resolveImg(ph.url);}).filter(function(u){return u&&u.indexOf('[')!==0;});
-    body+='<div class="nota"><div class="cab"><b>'+esc(n.hora||'')+'</b> · '+esc(NOTA_TIPOS[n.tipo||'registro']||'')
+    body+='<div class="nota"><div class="cab"><b>'+esc(n.hora||'')+'</b> · '+esc(_notaTipoLabel(n.tipo||'registro'))
       +((n.cuaderno&&n.cuaderno!==NOTA_CUADERNO_DEF)?' · 📒 '+esc(n.cuaderno):'')+(n.personas?' · 👥 '+esc(n.personas):'')
       +(/^dot$/i.test(String(n.cargadoPor||''))?' · 💻 DOT':'')+'</div>'
       +(n.titulo?'<div class="tit">'+esc(n.titulo)+'</div>':'')
@@ -15010,7 +15030,7 @@ function _doIncItemObra(sub,key,pid){
     if(!sub.mensajeGeneral)return;
     if(!D.notas)D.notas=[];
     var _nMsg=_cmANota({projectId:pid,text:sub.mensajeGeneral,tipo:'general',date:sub.fecha||nw(),sourceType:'formulario',sourceName:by,sourceId:sub.id,colabId:sub.token||'',cargadoPor:by});
-    _nMsg.personas=by;D.notas.push(_nMsg);
+    _nMsg.personas=by;if(_colabEsCliente(sub.token))_nMsg.tipo='cliente';D.notas.push(_nMsg);
     audit('notas','create','form msg: '+sub.mensajeGeneral.slice(0,30));
     var _coMsg=(D.colaboradores||[]).find(function(c){return c.id===sub.token;});
     if(_coMsg){
@@ -15029,6 +15049,7 @@ function _doIncItemObra(sub,key,pid){
       cargadoPor:by,sourceType:'formulario',sourceName:by,sourceId:sub.id,colabId:sub.token||'',
       date:cm.fecha||String(sub.fecha||nw()).slice(0,10)},_cmId);
     if(cm.tipo!=='propietario')_nCm.personas=by;
+    if(_colabEsCliente(sub.token))_nCm.tipo='cliente';
     D.notas.push(_nCm);
     audit('notas','create','form: '+String(cm.texto).slice(0,30));
     var _coCm=(D.colaboradores||[]).find(function(c){return c.id===sub.token;});
