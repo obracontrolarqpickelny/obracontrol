@@ -4158,6 +4158,9 @@ function render(){
   if(!D.user){renderAuth();return;}
   if(!S.proj){renderProjects();return;}
   if((D.tareas||[]).length&&_migrarTareasANotas())setTimeout(sv,0);
+  // Tareas y Comentarios ya no son pestañas: todo vive en Notas
+  if(S.mod==='tareas'){S.mod='notas';S.notasTipo='pendiente';}
+  else if(S.mod==='comentarios')S.mod='notas';
   saveUIState();
   _keepScroll(renderShell);
 }
@@ -4201,18 +4204,16 @@ function renderShell(){
   if(!window._vencAvisado[S.proj]){window._vencAvisado[S.proj]=1;var _vv=_notasVenc();if(_vv.length){var _vN=_vv.filter(function(x){return x.d<0;}).length;setTimeout(function(){toast('⏰ '+(_vN?_vN+' tarea'+(_vN>1?'s':'')+' vencida'+(_vN>1?'s':''):'')+(_vN&&_vv.length>_vN?' y ':'')+(_vv.length>_vN?(_vv.length-_vN)+' por vencer':'')+' — mirá Notas','var(--orange)',5000);},900);}}
   const drv=D.driveConfig?.[S.proj];const cloudCol=drv?'var(--green)':'var(--pri)';
   const _pendAlerts=pA.filter(a=>!a.resolved).length; // mantener badge en tareas si hay alertas legacy
-  const mods=[{id:'dashboard',label:'Panel',ic:'dash'},{id:'visitas',label:'Visitas',ic:'clip'},{id:'notas',label:'Notas',ic:'nota',badge:_nNotasMsg+_nNotasVen},{id:'tareas',label:'Tareas',ic:'list',badge:pendT+_pendAlerts},{id:'materiales',label:'Materiales',ic:'pkg'},{id:'checklist',label:'Checklist',ic:'chklist'},{id:'documentos',label:'Documentos',ic:'file'},{id:'comentarios',label:'Comentarios',ic:'msg'},{id:'colaboradores',label:'Colaboradores',ic:'share'},{id:'bandeja',label:'Bandeja',ic:'inbox',badge:pendForms+pendCarpeta+pendMsgsColab+_nAlert},{id:'economia',label:'Economía',ic:'eco'},{id:'informes',label:'Informes',ic:'dl'},{id:'config',label:'Config',ic:'gear'}];
+  const mods=[{id:'dashboard',label:'Panel',ic:'dash'},{id:'visitas',label:'Visitas',ic:'clip'},{id:'notas',label:'Notas',ic:'nota',badge:_nNotasMsg+_nNotasVen},{id:'materiales',label:'Materiales',ic:'pkg'},{id:'checklist',label:'Checklist',ic:'chklist'},{id:'documentos',label:'Documentos',ic:'file'},{id:'colaboradores',label:'Colaboradores',ic:'share'},{id:'bandeja',label:'Bandeja',ic:'inbox',badge:pendForms+pendCarpeta+pendMsgsColab+_nAlert},{id:'economia',label:'Economía',ic:'eco'},{id:'informes',label:'Informes',ic:'dl'},{id:'config',label:'Config',ic:'gear'}];
   const mi=mods.map(m=>{const c=MC[m.id];const act=S.mod===m.id;return `<button class="smi${act?' act':''}" style="${act?'background:'+c+'08;color:'+c+';border-left-color:'+c:''}" onclick="S.mod='${m.id}';S.menu=false;S.visitaDetail=null;S.matDetail=null;S.matSinCompDetail=null;render();"><span style="color:${act?c:'var(--text3)'}">${I[m.ic]||''}</span><span style="flex:1;text-align:left">${m.label}</span>${m.badge>0?`<span class="sbadge">${m.badge}</span>`:''}</button>`;}).join('');
   const allBnav=[
     {id:'dashboard',ic:'dash',l:'Panel'},
     {id:'visitas',ic:'clip',l:'Visitas'},
     {id:'notas',ic:'nota',l:'Notas'},
-    {id:'tareas',ic:'list',l:'Tareas'},
     {id:'materiales',ic:'pkg',l:'Material'},
     {id:'economia',ic:'eco',l:'Economía'},
     {id:'documentos',ic:'file',l:'Docs'},
     {id:'checklist',ic:'chklist',l:'Checks'},
-    {id:'comentarios',ic:'msg',l:'Coment.'},
     {id:'bandeja',ic:'inbox',l:'Bandeja'},
     {id:'colaboradores',ic:'share',l:'Colabs'},
     {id:'informes',ic:'dl',l:'Informes'}
@@ -4636,17 +4637,15 @@ function rDash(mc,p){
   <div class="card hero mb-12"><div class="flex justify-between items-start"><div><div class="hero-sm">Obra activa</div><div class="hero-lg">${p.name}</div></div>${colBadge(p.status,SC[p.status]||'#94a3b8')}</div><div class="flex gap-10 mt-8 ts tc3 wrap">${p.client?`<span>${I.user} ${p.client}</span>`:''}${p.location?`<span>${I.pin} ${p.location}</span>`:''}${p.startDate?`<span>${I.cal} ${fmts(p.startDate)}</span>`:''}</div></div>
   <div class="g2 dash-stats mb-12">
     <div class="card stat card-click" onclick="S.mod='visitas';render()"><div class="stico" style="background:var(--blue-bg);color:var(--blue)">${I.clip}</div><div><div class="stval" style="color:var(--blue)">${pV.length}</div><div class="stlbl">Visitas</div></div></div>
-    <div class="card stat card-click" onclick="S.mod='tareas';render()"><div class="stico" style="background:var(--cyan-bg);color:var(--cyan)">${I.list}</div><div><div class="stval" style="color:var(--cyan)">${pend}</div><div class="stlbl">Tareas pend.</div></div></div>
+    <div class="card stat card-click" onclick="S.mod='notas';render()"><div class="stico" style="background:#FEFCE8;color:#ca8a04">${I.nota}</div><div><div class="stval" style="color:#ca8a04">${pf('notas').length}</div><div class="stlbl">Notas</div></div>${(function(){var nl=_nNotasChat(),_vl=_notasVenc(),nv=_vl.length,_vr=_vl.some(function(x){return x.d<0;});return (nl?'<span title="Mensajes nuevos" style="margin-left:auto;align-self:flex-start;min-width:22px;height:22px;padding:0 6px;border-radius:11px;background:#0d9488;color:#fff;font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center">'+nl+'</span>':'')+(nv?'<span title="Ver las tareas vencidas y por vencer" onclick="event.stopPropagation();verVencidasNotas()" style="cursor:pointer;'+(nl?'margin-left:4px':'margin-left:auto')+';align-self:flex-start;min-width:22px;height:22px;padding:0 6px;border-radius:11px;background:'+(_vr?'#dc2626':'#ea580c')+';color:#fff;font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center">⏰'+nv+'</span>':'');})()}</div>
     <div class="card stat card-click" onclick="S.mod='materiales';render()"><div class="stico" style="background:var(--purple-bg);color:var(--purple)">${I.pkg}</div><div><div class="stval" style="color:var(--purple)">${pM.length}</div><div class="stlbl">Materiales</div></div></div>
     <div class="card stat card-click" onclick="S.mod='economia';render()"><div class="stico" style="background:var(--cyan-bg);color:var(--cyan)">${I.eco}</div><div><div class="stval" style="color:var(--cyan)">${pf('economia').length}</div><div class="stlbl">Movimientos</div></div></div>
-    <div class="card stat card-click" onclick="S.mod='notas';render()"><div class="stico" style="background:#FEFCE8;color:#ca8a04">${I.nota}</div><div><div class="stval" style="color:#ca8a04">${pf('notas').length}</div><div class="stlbl">Notas</div></div>${(function(){var nl=_nNotasChat(),_vl=_notasVenc(),nv=_vl.length,_vr=_vl.some(function(x){return x.d<0;});return (nl?'<span title="Mensajes nuevos" style="margin-left:auto;align-self:flex-start;min-width:22px;height:22px;padding:0 6px;border-radius:11px;background:#0d9488;color:#fff;font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center">'+nl+'</span>':'')+(nv?'<span title="Ver las tareas vencidas y por vencer" onclick="event.stopPropagation();verVencidasNotas()" style="cursor:pointer;'+(nl?'margin-left:4px':'margin-left:auto')+';align-self:flex-start;min-width:22px;height:22px;padding:0 6px;border-radius:11px;background:'+(_vr?'#dc2626':'#ea580c')+';color:#fff;font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center">⏰'+nv+'</span>':'');})()}</div>
     <div class="card stat card-click" onclick="S.mod='checklist';render()"><div class="stico" style="background:var(--pink-bg);color:var(--pink)">${I.chklist}</div><div><div class="stval" style="color:var(--pink)">${pf('checklists').filter(c=>!c.visitaId).length}</div><div class="stlbl">Checklists</div></div></div>
     <div class="card stat card-click" onclick="S.mod='documentos';render()"><div class="stico" style="background:var(--gray-ll);color:var(--slate)">${I.file}</div><div><div class="stval" style="color:var(--slate)">${pf('documentos').length+pf('enlaces').length}</div><div class="stlbl">Docs+Links</div></div></div>
-    <div class="card stat card-click" onclick="S.mod='comentarios';render()"><div class="stico" style="background:var(--orange-bg);color:var(--orange)">${I.msg}</div><div><div class="stval" style="color:var(--orange)">${pf('comentarios').length}</div><div class="stlbl">Comentarios</div></div></div>
     <div class="card stat card-click" onclick="S.mod='informes';render()"><div class="stico" style="background:var(--pri-bg);color:var(--pri)">${I.dl}</div><div><div class="stval" style="color:var(--pri)">${pf('auditLog').length}</div><div class="stlbl">Acciones</div></div></div>
     <div class="card stat card-click" onclick="S.mod='colaboradores';render()"><div class="stico" style="background:#f0fdf4;color:var(--green)">${I.share}</div><div><div class="stval" style="color:var(--green)">${pf('colaboradores').length}</div><div class="stlbl">Colaboradores</div></div></div>
   </div>
-  <div class="g2 mb-12" style="gap:8px"><button class="btn btn-p btn-s btn-w" onclick="openM('newVisitaM')">${I.clip} + Visita</button><button class="btn btn-sec btn-s btn-w" onclick="S.mod='tareas';render();setTimeout(()=>openM('newTareaM'),100)">${I.list} + Tarea</button></div>
+  <div class="g2 mb-12" style="gap:8px"><button class="btn btn-p btn-s btn-w" onclick="openM('newVisitaM')">${I.clip} + Visita</button><button class="btn btn-s btn-w" style="background:#ca8a04;color:#fff" onclick="S.mod='notas';render();setTimeout(()=>abrirNota(),100)">${I.nota} + Nota</button></div>
   ${over>0?`<div class="alrt alrt-r mb-12 pointer" onclick="abrirTareaVencida()">${I.warn}<div class="flex-1"><div class="fw7 ts">${over} tarea${over>1?'s':''} vencida${over>1?'s':''}</div></div>${I.chev}</div>`:''}
   ${lastV?`<div class="card mb-12 card-click" onclick="_escudoToque();S.visitaDetail='${lastV.id}';S.mod='visitas';render();" style="border-left:3px solid var(--blue)"><div class="txxs tc3 mb-4">Ultima visita</div><div class="ts fw7">${lastV.title||'Sin titulo'}</div><div class="txxs tc3">${fmts(lastV.date)}</div></div>`:''}
   ${renderNewVisitaModal()}
@@ -8436,7 +8435,7 @@ function _notaCard(n,conFecha){
     +(n.tareaId&&_tareaPorId(n.tareaId)?'<div class="txxs mt-6" style="color:var(--cyan);cursor:pointer" onclick="'+((D.notas||[]).some(function(x){return x.id===n.tareaId;})?'irANota(\''+n.tareaId+'\')':'')+'">☑️ Tarea vinculada: '+esc(_tareaPorId(n.tareaId).title||'')+'</div>':'')
     +(der?'<div class="mt-6 flex gap-6" style="flex-wrap:wrap">'+der+'</div>':'')
     +(function(){var vi=n.visitaId?(D.visitas||[]).find(function(x){return x.id===n.visitaId;}):null;var ck=n.checklistId?(D.checklists||[]).find(function(x){return x.id===n.checklistId;}):null;
-      return (vi||ck)?'<div class="mt-6 flex gap-6" style="flex-wrap:wrap">'+(vi?'<button class="link-tag" style="font-size:10px" onclick="S.visitaDetail=\''+vi.id+'\';S.mod=\'visitas\';render()">'+I.link+' '+esc(vi.title||'Visita')+'</button>':'')+(ck?'<button class="link-tag" style="font-size:10px" onclick="S.mod=\'checklist\';render()">✅ '+esc(ck.title||'Checklist')+'</button>':'')+'</div>':'';})()
+      return (vi||ck)?'<div class="mt-6 flex gap-6" style="flex-wrap:wrap">'+(vi?'<button class="link-tag" style="font-size:10px" onclick="S.visitaDetail=\''+vi.id+'\';S.mod=\'visitas\';render()">'+I.link+' '+esc(vi.title||'Visita')+'</button>':'')+(ck?'<button class="link-tag" style="font-size:10px" onclick="_irAVinculado(\'checklists\',\''+ck.id+'\')">✅ '+esc(ck.title||'Checklist')+' ('+(ck.items||[]).filter(function(i){return i.done;}).length+'/'+(ck.items||[]).length+')</button>':'')+'</div>':'';})()
     +'<div class="flex gap-4 mt-8" style="flex-wrap:wrap">'
     +'<button class="btn btn-g btn-s" title="Editar" onclick="abrirNota(\''+n.id+'\')">'+I.edit+'</button>'
     +'<button class="btn btn-g btn-s" title="'+(n.fijada?'Desfijar':'Fijar arriba')+'" onclick="fijarNota(\''+n.id+'\')">📌</button>'
@@ -8556,6 +8555,10 @@ function abrirNota(id){
     +'<div id="nm_tarea" style="display:'+((((n&&n.tipo)||S.notaTipoNueva)==='pendiente')?'':'none')+'"><label class="fl">Prioridad · vencimiento · responsable</label>'+_notaCamposTarea('nm',n||{prioridad:S.notaPriNueva},false)+'</div>'
     +'<div class="fg"><label class="fl">Título (opcional)</label><input class="fi" id="nm_ti" value="'+esc(n?(n.titulo||''):'')+'" placeholder="Ej: Hormigonado losa sector A"></div>'
     +'<div class="fg"><label class="fl">Con quién (opcional)</label><input class="fi" id="nm_p" value="'+esc(n?(n.personas||''):'')+'" placeholder="Ej: Juan (plomero), propietario"></div>'
+    +(function(){var cks=pf('checklists');var act=n?(n.checklistId||''):'';
+      return '<div class="fg"><label class="fl">Checklist vinculado (opcional)</label><select class="fs" id="nm_chk"><option value="">Sin checklist</option>'
+        +cks.map(function(ch){var dn=(ch.items||[]).filter(function(i){return i.done;}).length;return '<option value="'+esc(ch.id)+'"'+(ch.id===act?' selected':'')+'>✅ '+esc(ch.title||'Checklist')+' ('+dn+'/'+(ch.items||[]).length+')</option>';}).join('')
+        +'</select>'+(cks.length?'':'<div class="txxs tc3 mt-4">Esta obra todavía no tiene checklists.</div>')+'</div>';})()
     +'<div class="fg"><label class="fl">Nota</label><textarea class="ft" id="nm_tx" rows="6">'+esc(n?(n.texto||''):'')+'</textarea></div>'
     +'<div id="nm_ph"></div>'
     +'<div class="flex gap-6 mb-10" style="flex-wrap:wrap">'
@@ -8590,6 +8593,7 @@ function guardarNota(){
   if(!D.notas)D.notas=[];
   var n=e.id?D.notas.find(function(x){return x.id===e.id;}):null;
   var datos={fecha:v('nm_f')||td(),hora:v('nm_h'),tipo:v('nm_t')||'registro',cuaderno:v('nm_c')||NOTA_CUADERNO_DEF,titulo:ti,personas:v('nm_p'),texto:tx,photos:e.photos||[],updatedAt:nw()};
+  if(document.getElementById('nm_chk'))datos.checklistId=v('nm_chk');
   if(datos.tipo==='pendiente'){datos.prioridad=v('nm_pri')||'media';datos.vence=v('nm_ven');datos.responsable=v('nm_resp');}
   if(n)Object.assign(n,datos);
   else D.notas.push(Object.assign({id:uid(),projectId:S.proj,fijada:false,derivados:[],cargadoPor:(D.user&&D.user.name)||'',date:nw()},datos));
