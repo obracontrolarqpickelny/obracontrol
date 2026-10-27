@@ -4740,7 +4740,7 @@ function rVisitaDetail(mc,vid){
   </div>
   ${v.archivos&&v.archivos.length?`<div class="card mb-12"><div class="ts fw7 mb-8">${I.file} Archivos adjuntos (${v.archivos.length})</div>${v.archivos.map((f,fi)=>`<div class="flex items-center gap-6" style="padding:6px 0;border-bottom:1px solid var(--gray-ll)"><span style="color:var(--slate);flex-shrink:0">${I.file}</span><div class="flex-1 ts fw6 trun" style="min-width:0">${f.name}</div><button class="btn btn-sec btn-s" onclick="event.stopPropagation();viewArchivo('visitas','${vid}','${f.id||''}')" style="flex-shrink:0">👁</button><button class="btn btn-sec btn-s" onclick="event.stopPropagation();delVisitaArchivo('${vid}',${fi})" style="color:var(--red);flex-shrink:0" title="Eliminar archivo">${I.trash}</button></div>`).join('')}</div>`:''}
   <!-- Linked entities -->
-  <div class="card mb-12"><div class="flex justify-between items-center mb-8"><div class="ts fw7" style="color:var(--cyan)">${I.list} Tareas (${lT.length})</div><div class="flex gap-4"><button class="btn btn-s btn-sec" title="Vincular tareas ya cargadas" onclick="vincularItemsAVisita('${vid}','tareas')">&#x1F517;</button><button class="btn btn-s btn-sec" title="Crear una tarea en esta visita" onclick="openM('lkTM');setTimeout(function(){_renderEncChips('lt_enc','lt_enc_chips');},80)">${I.plus}</button></div></div>${lT.length?lT.map(t=>`<div style="padding:8px 0;border-bottom:1px solid var(--gray-ll)"><div class="ts fw6" style="${t.status==='completada'?'text-decoration:line-through;color:var(--gray-l)':''}">${t.title}</div>${t.description?`<div class="txxs tc3 mt-2" style="white-space:pre-wrap">${t.description}</div>`:''}<div class="flex items-center justify-between wrap mt-4" style="gap:6px"><div class="txxs tc3" style="min-width:0">${priBadge(t.priority,true)} ${stBadge(t.status,true)}${t.dueDate?' | '+fmts(t.dueDate):''}${t.encargado?` | <span style="color:var(--cyan)">👤 ${t.encargado}</span>`:''}</div><div class="flex gap-4" style="flex-shrink:0;margin-left:auto"><button class="btn btn-g btn-s" title="Calendario" onclick="exportTareaGCal('${t.id}')">&#128197;</button><button class="btn btn-g btn-s" onclick="editTarea('${t.id}')">${I.edit}</button><button class="btn btn-g btn-s" style="color:${t.status==='completada'?'var(--gray-l)':'var(--green)'}" onclick="updT('${t.id}','${t.status==='completada'?'pendiente':'completada'}')" title="${t.status==='completada'?'Reabrir':'Completar'}">${t.status==='completada'?'&#x21A9;':I.check}</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delI('${t._tbl||'tareas'}','${t.id}')">${I.trash}</button></div></div>${(t.photos&&t.photos.filter(function(p){var u=typeof p==='string'?p:p.url;return u&&!u.startsWith('[');}).length)?'<div style="margin-top:6px">'+photoGrid(t.photos,'tareas',t.id)+'</div>':''}</div>`).join(''):'<div class="txxs tc3">Sin tareas</div>'}</div>
+  <div class="card mb-12"><div class="flex justify-between items-center mb-8"><div class="ts fw7" style="color:var(--cyan)">${I.list} Tareas (${lT.length})</div><div class="flex gap-4"><button class="btn btn-s btn-sec" title="Vincular tareas ya cargadas" onclick="vincularItemsAVisita('${vid}','tareas')">&#x1F517;</button><button class="btn btn-s btn-sec" title="Crear una tarea en esta visita" onclick="openM('lkTM');setTimeout(function(){_renderEncChips('lt_enc','lt_enc_chips');},80)">${I.plus}</button></div></div>${lT.length?lT.map(t=>`<div style="padding:8px 0;border-bottom:1px solid var(--gray-ll)"><div class="ts fw6" style="${t.status==='completada'?'text-decoration:line-through;color:var(--gray-l)':''}">${t.title}</div>${t.description?`<div class="txxs tc3 mt-2" style="white-space:pre-wrap">${t.description}</div>`:''}<div class="flex items-center justify-between wrap mt-4" style="gap:6px"><div class="txxs tc3" style="min-width:0">${priBadge(t.priority,true)} ${stBadge(t.status,true)}${t.dueDate?' | '+fmts(t.dueDate):''}${t.encargado?` | <span style="color:var(--cyan);${t._nota?'cursor:pointer;text-decoration:underline':''}" ${t._nota?`onclick="asignarResponsableNota('${t.id}')"`:''}>👤 ${esc(t.encargado)}</span>`:''}</div><div class="flex gap-4" style="flex-shrink:0;margin-left:auto"><button class="btn btn-g btn-s" title="Calendario" onclick="exportTareaGCal('${t.id}')">&#128197;</button><button class="btn btn-g btn-s" onclick="editTarea('${t.id}')">${I.edit}</button><button class="btn btn-g btn-s" style="color:${t.status==='completada'?'var(--gray-l)':'var(--green)'}" onclick="updT('${t.id}','${t.status==='completada'?'pendiente':'completada'}')" title="${t.status==='completada'?'Reabrir':'Completar'}">${t.status==='completada'?'&#x21A9;':I.check}</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delI('${t._tbl||'tareas'}','${t.id}')">${I.trash}</button></div></div>${(t.photos&&t.photos.filter(function(p){var u=typeof p==='string'?p:p.url;return u&&!u.startsWith('[');}).length)?'<div style="margin-top:6px">'+photoGrid(t.photos,'tareas',t.id)+'</div>':''}</div>`).join(''):'<div class="txxs tc3">Sin tareas</div>'}</div>
   <div class="card mb-12"><div class="flex justify-between items-center mb-8"><div class="ts fw7" style="color:var(--purple)">${I.pkg} Materiales (${lM.length+lMI.length})</div><div class="flex gap-4"><button class="btn btn-s btn-sec" title="Vincular materiales a pedir o existentes ya cargados" onclick="vincularMatAVisita('${vid}')">&#x1F517;</button><button class="btn btn-s btn-sec" title="Cargar un material nuevo en esta visita" onclick="openLkMM('${vid}')">${I.plus}</button></div></div>${lM.length?_ordenMatVisita(lM).map(m=>`<div style="padding:6px 0;border-bottom:1px solid var(--gray-ll)"><div class="flex items-center gap-4"><div class="flex-1"><div class="ts fw6">${m.name}</div><div class="txxs tc3 mt-2">${m.qty||0} ${m.unit||''} ${m.visitaTipo?colBadge(m.visitaTipo==='a_pedir'?'A pedir':'Existente',m.visitaTipo==='a_pedir'?'var(--orange)':'var(--green)',true):''}${m.notes?` | ${m.notes}`:''}</div></div><button class="btn btn-g btn-s" onclick="editMatVisita('${m.id}')">${I.edit}</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel('¿Quitar?')){D.materiales=D.materiales.filter(x=>x.id!=='${m.id}');addTombstone('materiales','${m.id}');sv();render();}">${I.trash}</button></div>${m.photos&&m.photos.length?photoGrid(m.photos,'materiales',m.id):''}</div>`).join(''):''}${!lM.length&&!lMI.length?'<div class="txxs tc3">Sin materiales</div>':''}${lMI.length?`<div style="margin-top:8px;border-top:1px solid var(--gray-ll);padding-top:8px"><div class="txxs fw7 mb-4" style="color:var(--green)">&#x2713; Ingresos/Existentes cargados</div>`+_ordenMatVisita(lMI).map(i=>`<div style="padding:4px 0;border-bottom:1px solid var(--gray-ll)"><div class="flex items-center gap-4"><div class="flex-1"><div class="ts fw6">${i.matNombre}</div><div class="txxs tc3 mt-2">${i.qty||0} ${i.unit||''} ${i.estado==='ingresado'?'<span style="color:var(--green)">&#x2713; Ingresado</span>':i.estado==='pedido'?'<span style="color:var(--orange)">&#x1F4CB; Pedido</span>':i.estado==='a_pedir'?'<span style="color:var(--orange)">A pedir</span>':'<span style="color:var(--green)">Existente</span>'}${i.fechaNecesaria?` | <span style="color:var(--orange)">&#128197; ${fmts(i.fechaNecesaria)}</span>`:''}${i.observations?' | '+i.observations:''}</div></div><button class="btn btn-g btn-s" onclick="editLMI('${i.id}')">${I.edit}</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel('¿Quitar material?')){D.matIngresos=D.matIngresos.filter(x=>x.id!=='${i.id}');addTombstone('matIngresos','${i.id}');sv();render();}">${I.trash}</button></div></div>`).join('')+`</div>`:''}</div>
   <div class="card mb-12"><div class="flex justify-between items-center mb-8"><div class="ts fw7" style="color:var(--slate)">${I.file} Adjuntos (${lD.length})</div><button class="btn btn-s btn-sec" onclick="openM('lkDM')">${I.plus}</button></div>${lD.length?lD.map(d=>`<div class="flex items-center gap-8" style="padding:6px 0;border-bottom:1px solid var(--gray-ll)"><span style="color:var(--slate);flex-shrink:0">${I.file}</span><div class="flex-1 ts fw6 trun">${d.name}</div>${d.url?`<a href="${d.url}" target="_blank" onclick="event.stopPropagation()" class="btn btn-sec btn-s" style="flex-shrink:0">${I.eye} Ver</a>`:''}<button class="btn btn-g btn-s" style="color:var(--red);flex-shrink:0" onclick="if(confirmDel('¿Quitar?')){D.documentos=D.documentos.filter(x=>x.id!=='${d.id}');addTombstone('documentos','${d.id}');sv();render();}">${I.trash}</button></div>`).join(''):'<div class="txxs tc3">Sin adjuntos</div>'}</div>
   <!-- Checklist de visita -->
@@ -8189,7 +8189,7 @@ function _notasFiltradas(){
   return pf('notas').filter(function(n){
     if(S.notasCuaderno&&(n.cuaderno||NOTA_CUADERNO_DEF)!==S.notasCuaderno)return false;
     if(S.notasTipo&&(n.tipo||'registro')!==S.notasTipo)return false;
-    if(S.notasResp&&String(n.responsable||'').trim()!==S.notasResp)return false;
+    if(S.notasTipo==='pendiente'&&S.notasResp&&(S.notasResp==='__sin'?!!String(n.responsable||'').trim():!_mismoResp(n.responsable,S.notasResp)))return false;
     if(S.notasAlerta||S.notasChat){
       var _okA=S.notasAlerta&&!!n.alerta,_okC=S.notasChat&&_chatMsgsDe('notas',n.id).some(function(m){return (m.chat||[]).length>0;});
       if(!_okA&&!_okC)return false;
@@ -8237,12 +8237,16 @@ async function _guardarImgNota(dataUrl){
   return dataUrl;
 }
 // Prioridad, vencimiento y responsable (asiento rápido y ventana de la nota)
+function _respNorm(r){return _normTxt(String(r||'').trim().replace(/\s+/g,' '));}
+function _mismoResp(a,b){return !!_respNorm(a)&&_respNorm(a)===_respNorm(b);}
+// Un nombre por persona (sin repetir "Juan" y "juan "): primero los colaboradores
 function _responsablesObra(){
-  var set={};
-  (D.colaboradores||[]).forEach(function(c){if(c.projectId===S.proj&&c.estado!=='revocado'&&c.name)set[String(c.name).trim()]=1;});
-  pf('notas').forEach(function(n){if(n.responsable)set[String(n.responsable).trim()]=1;});
-  pf('tareas').forEach(function(t){if(t.encargado)set[String(t.encargado).trim()]=1;});
-  return Object.keys(set).filter(Boolean).sort(function(a,b){return a.localeCompare(b);});
+  var set={},out=[];
+  var add=function(r){r=String(r||'').trim().replace(/\s+/g,' ');var k=_respNorm(r);if(!k||set[k])return;set[k]=1;out.push(r);};
+  (D.colaboradores||[]).forEach(function(c){if(c.projectId===S.proj&&c.estado!=='revocado')add(c.name);});
+  pf('notas').forEach(function(n){add(n.responsable);});
+  pf('tareas').forEach(function(t){add(t.encargado);});
+  return out.sort(function(a,b){return a.localeCompare(b);});
 }
 function _notaCamposTarea(px,v,rapido){
   v=v||{};var pri=v.prioridad||'media';
@@ -8261,10 +8265,12 @@ function asignarResponsableNota(id){
   document.getElementById('respM')?.remove();
   var d=document.createElement('div');d.className='mo open';d.id='respM';
   var lst=_responsablesObra();
+  var asig=lst.find(function(r){return _mismoResp(r,n.responsable);})||'';
   d.innerHTML='<div class="mo-c" style="max-width:420px"><div class="mo-h"><h3 style="color:'+MC.notas+'">👤 Responsable</h3><button class="tbtn" onclick="document.getElementById(\'respM\').remove()">'+I.x+'</button></div>'
-    +'<div class="ts fw7 mb-8">'+esc(_notaTituloCorto(n))+'</div>'
-    +(lst.length?'<div class="flex gap-6 mb-10" style="flex-wrap:wrap">'+lst.map(function(r){var on=r===n.responsable;return '<button class="btn btn-s" data-r="'+esc(r)+'" style="'+(on?'background:var(--cyan);color:#fff':'background:var(--gray-ll);color:var(--text2)')+'" onclick="_setResponsableNota(\''+id+'\',this.dataset.r)">👤 '+esc(r)+(on?' ✓':'')+'</button>';}).join('')+'</div>':'')
-    +'<div class="flex gap-6"><input class="fi" id="resp_in" style="margin:0;flex:1" placeholder="Otro: nombre o rol" value="'+esc(lst.indexOf(n.responsable||'')<0?(n.responsable||''):'')+'" onkeydown="if(event.key===\'Enter\'){event.preventDefault();_setResponsableNota(\''+id+'\',this.value);}">'
+    +'<div class="ts fw7 mb-4">'+esc(_notaTituloCorto(n))+'</div>'
+    +'<div class="txxs mb-10" style="color:'+(asig?'var(--cyan)':'var(--text3)')+'">'+(asig?'Asignada a <b>'+esc(asig)+'</b> · tocá otro para cambiarlo':'Sin responsable · tocá uno para asignarlo')+'</div>'
+    +(lst.length?'<div class="flex gap-6 mb-10" style="flex-wrap:wrap">'+lst.map(function(r){var on=r===asig;return '<button class="btn btn-s" data-r="'+esc(r)+'" style="'+(on?'background:var(--cyan);color:#fff':'background:var(--gray-ll);color:var(--text2)')+'" onclick="_setResponsableNota(\''+id+'\',this.dataset.r)">👤 '+esc(r)+(on?' ✓':'')+'</button>';}).join('')+'</div>':'')
+    +'<div class="flex gap-6"><input class="fi" id="resp_in" style="margin:0;flex:1" placeholder="Otro: nombre o rol" value="" onkeydown="if(event.key===\'Enter\'){event.preventDefault();_setResponsableNota(\''+id+'\',this.value);}">'
     +'<button class="btn btn-s" style="background:'+MC.notas+';color:#fff" onclick="_setResponsableNota(\''+id+'\',document.getElementById(\'resp_in\').value)">Asignar</button></div>'
     +(n.responsable?'<button class="btn btn-w btn-sec mt-10" style="color:var(--red)" onclick="_setResponsableNota(\''+id+'\',\'\')">Quitar responsable</button>':'')
     +'</div>';
@@ -8272,7 +8278,8 @@ function asignarResponsableNota(id){
 }
 function _setResponsableNota(id,nombre){
   var n=(D.notas||[]).find(function(x){return x.id===id;});if(!n)return;
-  n.responsable=String(nombre||'').trim().replace(/\s+/g,' ');n.updatedAt=nw();
+  var lim=String(nombre||'').trim().replace(/\s+/g,' ');
+  n.responsable=lim?(_responsablesObra().find(function(r){return _mismoResp(r,lim);})||lim):'';n.updatedAt=nw();
   document.getElementById('respM')?.remove();
   sv();render();toast(n.responsable?'👤 '+n.responsable+' ✓':'Sin responsable','var(--green)',1800);
 }
@@ -8327,25 +8334,16 @@ function rNotas(mc){
     +'<div style="display:flex;gap:6px;flex:1;min-width:0"><select class="fs" style="margin:0;flex:1;min-width:0" onchange="S.notasTipo=this.value;saveUIState();render()"><option value="">Todos los tipos</option>'+Object.keys(NOTA_TIPOS).map(function(k){return '<option value="'+k+'"'+(S.notasTipo===k?' selected':'')+'>'+NOTA_TIPOS[k]+'</option>';}).join('')+'</select>'
     +'<button title="Sólo las que tienen alerta" onclick="S.notasAlerta=!S.notasAlerta;saveUIState();render()" style="flex-shrink:0;width:38px;border-radius:10px;font-size:16px;cursor:pointer;'+(S.notasAlerta?'background:#fef2f2;border:2px solid #dc2626':'background:var(--white);border:1px solid var(--brd)')+'">🚨</button>'
     +'<button title="Sólo las que tienen conversación iniciada" onclick="S.notasChat=!S.notasChat;saveUIState();render()" style="flex-shrink:0;width:38px;border-radius:10px;font-size:16px;cursor:pointer;'+(S.notasChat?'background:#dbeafe;border:2px solid #1d4ed8':'background:var(--white);border:1px solid var(--brd)')+'">🗨️</button>'+'</div>'
-    +'</div>';
-  var resps={};pf('notas').forEach(function(n){var r=String(n.responsable||'').trim();if(r&&!_notaHecha(n))resps[r]=(resps[r]||0)+1;});
-  if(S.notasResp&&!resps[S.notasResp])resps[S.notasResp]=0;
-  var rk=Object.keys(resps).sort(function(a,b){return a.localeCompare(b);});
-  if(rk.length)h+='<div class="flex gap-6 mb-10 items-center" style="overflow-x:auto;flex-wrap:nowrap;padding-bottom:2px"><span class="txxs fw7 tc3" style="white-space:nowrap">👤</span>'
-    +chip(!S.notasResp,'Todos',"S.notasResp='';saveUIState();render()",'var(--cyan)')
-    +rk.map(function(r){return '<button class="btn btn-s" data-r="'+esc(r)+'" style="white-space:nowrap;'+(S.notasResp===r?'background:var(--cyan);color:#fff':'background:var(--gray-ll);color:var(--text2)')+'" onclick="S.notasResp=S.notasResp===this.dataset.r?\'\':this.dataset.r;saveUIState();render()">'+esc(r)+(resps[r]?' <span style="opacity:.75">('+resps[r]+')</span>':'')+'</button>';}).join('')
-    +'</div>';
-  var venc=_notasVenc();
-  if(venc.length){
-    var nV=venc.filter(function(x){return x.d<0;}).length;
-    h+='<div class="card mb-10" style="padding:8px 10px;border-left:4px solid '+(nV?'#dc2626':'#ea580c')+';background:'+(nV?'#fef2f2':'#fff7ed')+'">'
-      +'<div class="txs fw7 mb-4" style="color:'+(nV?'#dc2626':'#c2410c')+'">⏰ '+(nV?nV+' vencida'+(nV>1?'s':''):'')+(nV&&venc.length>nV?' · ':'')+(venc.length>nV?(venc.length-nV)+' por vencer':'')+'</div>'
-      +venc.slice(0,5).map(function(x){return '<div onclick="irANota(\''+x.n.id+'\')" class="txxs" style="cursor:pointer;padding:3px 0;display:flex;gap:6px;align-items:center"><span class="fw7" style="white-space:nowrap;color:'+(x.d<0?'#dc2626':'#c2410c')+'">'+_txtVence(x.d)+'</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(_notaTituloCorto(x.n))+'</span>'+(x.n.responsable?'<span style="color:var(--cyan);white-space:nowrap">👤 '+esc(x.n.responsable)+'</span>':'')+'</div>';}).join('')
-      +(venc.length>5?'<div class="txxs tc3 mt-2">y '+(venc.length-5)+' más · ordená por ⏰ Vencimiento</div>':'')
-      +'</div>';
-  }
+    +'</div>'
+    +(S.notasTipo==='pendiente'?(function(){
+      var rs=_responsablesObra();if(S.notasResp&&rs.indexOf(S.notasResp)<0)rs.push(S.notasResp);
+      return '<div class="flex gap-6 mb-10 items-center"><span class="txs fw7" style="white-space:nowrap;color:var(--cyan)">👤 Responsable</span>'
+        +'<select class="fs" style="margin:0;flex:1;min-width:0" onchange="S.notasResp=this.value;saveUIState();render()"><option value="">Todos</option>'
+        +rs.map(function(r){var k=pf('notas').filter(function(n){return n.tipo==='pendiente'&&!_notaHecha(n)&&_mismoResp(n.responsable,r);}).length;return '<option value="'+esc(r)+'"'+(_mismoResp(S.notasResp,r)?' selected':'')+'>'+esc(r)+(k?' ('+k+')':'')+'</option>';}).join('')
+        +'<option value="__sin"'+(S.notasResp==='__sin'?' selected':'')+'>Sin responsable</option></select></div>';
+    })():'');
   if(!lista.length){
-    h+='<div class="empty"><span style="color:'+c+'">'+I.edit+'</span><div class="ts mt-8">'+((S.notasBuscar||S.notasTipo||S.notasEstado||S.notasAlerta||S.notasChat||S.notasResp)?'Sin notas con ese filtro':S.notasCuaderno?'El cuaderno «'+esc(S.notasCuaderno)+'» todavía no tiene notas':'Todavía no hay notas')+'</div><div class="txxs tc3 mt-4">Asentá lo que pasa en la obra: avances, acuerdos, llamadas, ideas.</div></div>';
+    h+='<div class="empty"><span style="color:'+c+'">'+I.edit+'</span><div class="ts mt-8">'+((S.notasBuscar||S.notasTipo||S.notasEstado||S.notasAlerta||S.notasChat)?'Sin notas con ese filtro':S.notasCuaderno?'El cuaderno «'+esc(S.notasCuaderno)+'» todavía no tiene notas':'Todavía no hay notas')+'</div><div class="txxs tc3 mt-4">Asentá lo que pasa en la obra: avances, acuerdos, llamadas, ideas.</div></div>';
   } else {
     var fij=lista.filter(function(n){return n.fijada;});
     if(fij.length){h+='<div class="txs fw7 mb-6" style="color:'+c+'">📌 Fijadas</div>'+fij.map(function(n){return _notaCard(n,true);}).join('');}
