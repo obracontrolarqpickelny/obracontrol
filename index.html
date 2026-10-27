@@ -2716,6 +2716,7 @@ async function delPhoto(tbl, itemId, idx){
   if(!requireDelete())return;
   var item=(D[tbl]||[]).find(function(x){return x.id===itemId;});
   if(!item||!item.photos)return;
+  idx=_idxFotoReal(tbl,item,idx);
   var photo=item.photos[idx];
   if(!photo)return;
   var claves=_clavesFoto(photo),driveId=_driveIdDeFoto(photo);
@@ -2741,6 +2742,7 @@ async function delPhoto(tbl, itemId, idx){
 
 function openPhotoEditor(tbl, itemId, idx){
   var item=(D[tbl]||[]).find(function(x){return x.id===itemId;});
+  idx=_idxFotoReal(tbl,item,idx);
   if(!item||!item.photos||!item.photos[idx])return;
   var photo=item.photos[idx];
   var url=typeof photo==='string'?photo:photo.url;
@@ -3149,7 +3151,16 @@ function getLBP(tbl,id){
     if(typeof p==='string'){var o=mkPhoto(p,'');return o;}
     return p;
   });
+  // En las notas la grilla no muestra las fotos marcadas como borradas: el
+  // visor tiene que contar igual, si no abre otra foto
+  if(tbl==='notas')return item.photos.filter(function(p){return p&&!p.deletedAt;});
   return item.photos;
+}
+// Posición real de la foto que se ve en el lugar i de la grilla de una nota
+function _idxFotoReal(tbl,item,i){
+  if(tbl!=='notas'||!item||!item.photos)return i;
+  var vis=item.photos.filter(function(p){return p&&!p.deletedAt;});
+  var r=item.photos.indexOf(vis[i]);return r<0?i:r;
 }
 // Data initialization safety
 if(!D.matIngresos)D.matIngresos=[];
@@ -8253,30 +8264,57 @@ function _responsablesObra(){
 function _notaCamposTarea(px,v,rapido){
   v=v||{};var pri=v.prioridad||'media';
   var onc=rapido?function(k){return ' onchange="S.'+k+'=this.value;saveUIState()"';}:function(){return '';};
+  var r=String(v.responsable||'').trim();
+  // El responsable se elige con el mismo listado del botón 👤 (el desplegable
+  // del navegador no se abre en el celular)
   return '<div class="flex gap-6 mb-8" style="flex-wrap:wrap">'
     +'<select class="fs" id="'+px+'_pri" style="margin:0;flex:1 1 110px;min-width:0" title="Prioridad"'+onc('notaPriNueva')+'>'+Object.keys(NOTA_PRI).map(function(k){return '<option value="'+k+'"'+(k===pri?' selected':'')+'>'+NOTA_PRI[k][0]+'</option>';}).join('')+'</select>'
-    +'<div style="flex:1 1 130px;min-width:0" title="Vencimiento"><input class="fi" type="date" id="'+px+'_ven" style="margin:0;width:100%" value="'+esc(v.vence||'')+'"'+onc('notaVenNueva')+'></div>'
-    +'<input class="fi" id="'+px+'_resp" list="'+px+'_resp_l" style="margin:0;flex:1 1 140px;min-width:0" placeholder="👤 Responsable" value="'+esc(v.responsable||'')+'"'+onc('notaRespNueva')+'>'
-    +'<datalist id="'+px+'_resp_l">'+_responsablesObra().map(function(r){return '<option value="'+esc(r)+'">';}).join('')+'</datalist>'
+    +'<div style="flex:1 1 130px;min-width:0" title="Vencimiento"><input class="fi" type="date" id="'+px+'_ven" style="margin:0" value="'+esc(v.vence||'')+'"'+onc('notaVenNueva')+'></div>'
+    +'<input type="hidden" id="'+px+'_resp" value="'+esc(r)+'">'
+    +'<button type="button" class="fs" id="'+px+'_resp_b" data-rapido="'+(rapido?1:0)+'" onclick="_elegirRespCampo(\''+px+'\')" style="margin:0;flex:1 1 140px;min-width:0;text-align:left;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'+(r?'color:#0369a1;font-weight:700':'color:var(--text3)')+'">👤 '+esc(r||'Responsable')+'</button>'
     +'</div>';
 }
 function _valCampo(id){var x=document.getElementById(id);return x?String(x.value||'').trim():'';}
-// 👤 Responsable: se elige con un toque (colaboradores de la obra y los ya usados) o se escribe
+// Listado de responsables (colaboradores de la obra y los ya usados): se elige
+// con un toque, el asignado aparece tildado, o se escribe otro.
+function _elegirResponsable(actual,titulo,onPick){
+  document.getElementById('respM')?.remove();
+  window._respPick=onPick;
+  var d=document.createElement('div');d.className='mo open';d.id='respM';d.style.zIndex='2700';
+  var lst=_responsablesObra();
+  var asig=lst.find(function(r){return _mismoResp(r,actual);})||'';
+  if(!asig&&String(actual||'').trim()){asig=String(actual).trim();lst.push(asig);}
+  d.innerHTML='<div class="mo-c" style="max-width:420px"><div class="mo-h"><h3 style="color:'+MC.notas+'">👤 Responsable</h3><button class="tbtn" onclick="document.getElementById(\'respM\').remove()">'+I.x+'</button></div>'
+    +(titulo?'<div class="ts fw7 mb-4">'+esc(titulo)+'</div>':'')
+    +'<div class="txxs mb-10" style="color:'+(asig?'var(--cyan)':'var(--text3)')+'">'+(asig?'Asignada a <b>'+esc(asig)+'</b> · tocá otro para cambiarlo':'Sin responsable · tocá uno para asignarlo')+'</div>'
+    +(lst.length?'<div class="flex gap-6 mb-10" style="flex-wrap:wrap">'+lst.map(function(r){var on=r===asig;return '<button class="btn btn-s" data-r="'+esc(r)+'" style="'+(on?'background:var(--cyan);color:#fff':'background:var(--gray-ll);color:var(--text2)')+'" onclick="_respElegido(this.dataset.r)">👤 '+esc(r)+(on?' ✓':'')+'</button>';}).join('')+'</div>':'<div class="txxs tc3 mb-10">Todavía no hay colaboradores ni responsables cargados: escribí uno.</div>')
+    +'<div class="flex gap-6"><input class="fi" id="resp_in" style="margin:0;flex:1" placeholder="Otro: nombre o rol" enterkeyhint="done" onkeydown="if(event.key===\'Enter\'){event.preventDefault();_respElegido(this.value);}">'
+    +'<button class="btn btn-s" style="background:'+MC.notas+';color:#fff" onclick="_respElegido(document.getElementById(\'resp_in\').value)">Asignar</button></div>'
+    +(asig?'<button class="btn btn-w btn-sec mt-10" style="color:var(--red)" onclick="_respElegido(\'\')">Quitar responsable</button>':'')
+    +'</div>';
+  d.onclick=function(e){if(e.target===d)d.remove();};
+  document.body.appendChild(d);
+}
+function _respElegido(nombre){
+  var lim=String(nombre||'').trim().replace(/\s+/g,' ');
+  var fin=lim?(_responsablesObra().find(function(r){return _mismoResp(r,lim);})||lim):'';
+  document.getElementById('respM')?.remove();
+  var f=window._respPick;window._respPick=null;
+  if(typeof f==='function')f(fin);
+}
+// Campo de responsable del asiento rápido y de la ventana de la nota
+function _elegirRespCampo(px){
+  var h=document.getElementById(px+'_resp'),b=document.getElementById(px+'_resp_b');if(!h)return;
+  _elegirResponsable(h.value,'',function(r){
+    h.value=r;
+    if(b){b.textContent='👤 '+(r||'Responsable');b.style.color=r?'#0369a1':'var(--text3)';b.style.fontWeight=r?'700':'';}
+    if(b&&b.dataset.rapido==='1'){S.notaRespNueva=r;saveUIState();}
+  });
+}
+// 👤 de la tarjeta: asigna directo en la nota
 function asignarResponsableNota(id){
   var n=(D.notas||[]).find(function(x){return x.id===id;});if(!n)return;
-  document.getElementById('respM')?.remove();
-  var d=document.createElement('div');d.className='mo open';d.id='respM';
-  var lst=_responsablesObra();
-  var asig=lst.find(function(r){return _mismoResp(r,n.responsable);})||'';
-  d.innerHTML='<div class="mo-c" style="max-width:420px"><div class="mo-h"><h3 style="color:'+MC.notas+'">👤 Responsable</h3><button class="tbtn" onclick="document.getElementById(\'respM\').remove()">'+I.x+'</button></div>'
-    +'<div class="ts fw7 mb-4">'+esc(_notaTituloCorto(n))+'</div>'
-    +'<div class="txxs mb-10" style="color:'+(asig?'var(--cyan)':'var(--text3)')+'">'+(asig?'Asignada a <b>'+esc(asig)+'</b> · tocá otro para cambiarlo':'Sin responsable · tocá uno para asignarlo')+'</div>'
-    +(lst.length?'<div class="flex gap-6 mb-10" style="flex-wrap:wrap">'+lst.map(function(r){var on=r===asig;return '<button class="btn btn-s" data-r="'+esc(r)+'" style="'+(on?'background:var(--cyan);color:#fff':'background:var(--gray-ll);color:var(--text2)')+'" onclick="_setResponsableNota(\''+id+'\',this.dataset.r)">👤 '+esc(r)+(on?' ✓':'')+'</button>';}).join('')+'</div>':'')
-    +'<div class="flex gap-6"><input class="fi" id="resp_in" style="margin:0;flex:1" placeholder="Otro: nombre o rol" value="" onkeydown="if(event.key===\'Enter\'){event.preventDefault();_setResponsableNota(\''+id+'\',this.value);}">'
-    +'<button class="btn btn-s" style="background:'+MC.notas+';color:#fff" onclick="_setResponsableNota(\''+id+'\',document.getElementById(\'resp_in\').value)">Asignar</button></div>'
-    +(n.responsable?'<button class="btn btn-w btn-sec mt-10" style="color:var(--red)" onclick="_setResponsableNota(\''+id+'\',\'\')">Quitar responsable</button>':'')
-    +'</div>';
-  document.body.appendChild(d);
+  _elegirResponsable(n.responsable,_notaTituloCorto(n),function(r){_setResponsableNota(id,r);});
 }
 function _setResponsableNota(id,nombre){
   var n=(D.notas||[]).find(function(x){return x.id===id;});if(!n)return;
@@ -8864,13 +8902,16 @@ function exportNotasPDF(){
   if(S.notasAlerta&&S.notasChat)filtros.push('Con alerta o conversación');
   else if(S.notasAlerta)filtros.push('Con alerta');
   else if(S.notasChat)filtros.push('Con conversación');
-  filtros.push(S.notasOrden==='asc'?'Más antiguas primero':'Más recientes primero');
-  var dia='',body='';
+  if(S.notasTipo==='pendiente'&&S.notasResp)filtros.push(S.notasResp==='__sin'?'Sin responsable':'Responsable: '+S.notasResp);
+  if(S.notasVencF)filtros.push('Vencidas y por vencer');
+  filtros.push({asc:'Más antiguas primero',pri:'Por prioridad',venc:'Por vencimiento'}[S.notasOrden]||'Más recientes primero');
+  var dia='',body='',sinDias=S.notasOrden==='pri'||S.notasOrden==='venc';
   lista.forEach(function(n){
-    if(n.fecha!==dia){dia=n.fecha;body+='<h2>'+esc(_notaDiaLargo(dia))+'</h2>';}
+    if(sinDias){if(!dia){dia='x';body+='<h2>'+(S.notasOrden==='pri'?'Por prioridad':'Por vencimiento')+'</h2>';}}
+    else if(n.fecha!==dia){dia=n.fecha;body+='<h2>'+esc(_notaDiaLargo(dia))+'</h2>';}
     var fotos=(n.photos||[]).filter(function(ph){return ph&&!ph.deletedAt;}).map(function(ph){return _resolveImg(ph.url);}).filter(function(u){return u&&u.indexOf('[')!==0;});
-    body+='<div class="nota"><div class="cab"><b>'+esc(n.hora||'')+'</b> · '+esc(_notaTipoLabel(n.tipo||'registro'))
-      +((n.cuaderno&&n.cuaderno!==NOTA_CUADERNO_DEF)?' · 📒 '+esc(n.cuaderno):'')+(n.personas?' · 👥 '+esc(n.personas):'')
+    body+='<div class="nota"><div class="cab"><b>'+esc(sinDias?((fmts(n.fecha)||'')+' '+(n.hora||'')):(n.hora||''))+'</b> · '+esc(_notaTipoLabel(n.tipo||'registro'))
+      +((n.cuaderno&&n.cuaderno!==NOTA_CUADERNO_DEF)?' · 📒 '+esc(n.cuaderno):'')+(n.personas&&!(n.tipo==='pendiente'&&_mismoResp(n.personas,n.responsable))?' · 👥 '+esc(n.personas):'')
       +(/^dot$/i.test(String(n.cargadoPor||''))?' · 💻 DOT':'')
       +((n.tipo==='pendiente'||n.prioridad)?' · '+esc((NOTA_PRI[n.prioridad||'media']||[''])[0]):'')
       +(n.vence?' · ⏰ Vence '+esc(fmts(n.vence)||n.vence)+(_notaDiasVence(n)!==null&&_notaDiasVence(n)<0?' (VENCIDA)':''):'')
