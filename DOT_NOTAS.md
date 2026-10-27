@@ -38,13 +38,17 @@ Están en la lista **`notas`** del nivel principal, al lado de `tareas`, `econom
 | `projectId` | El id de la obra (ver arriba). |
 | `fecha` | Día al que corresponde lo asentado, en formato `AAAA-MM-DD`. |
 | `hora` | `HH:MM`, en 24 horas. Puede quedar vacío. |
-| `tipo` | Uno de: `registro`, `avance` (avance de obra), `reunion` (reunión o acuerdo), `cliente` (comentarios del cliente o propietario), `economico` (datos económicos), `pendiente`, `idea`. |
+| `tipo` | Uno de: `registro`, `avance` (avance de obra), `reunion` (reunión o acuerdo), `cliente` (comentarios del cliente o propietario), `economico` (datos económicos), `pendiente` (☑️ tareas / pendientes), `idea`. |
 | `cuaderno` | Por defecto `"Libro de obra"`. Puede ser otro, por ejemplo `"Instalación eléctrica"`. Si el nombre es nuevo, el cuaderno se crea solo. |
 | `titulo` | Opcional y corto. |
 | `personas` | Opcional: con quién se habló o quién participó. |
 | `texto` | El contenido. Los saltos de línea (`\n`) se respetan. |
 | `photos` | Opcional. Cada foto lleva el link de Drive con la forma `https://drive.google.com/thumbnail?id=ID&sz=w800`. Nunca va la imagen en base64. |
 | `fijada` | `true` para que aparezca arriba de todo. |
+| `prioridad` | Sólo para `pendiente`: `baja`, `media`, `alta` o `urgente`. |
+| `vence` | Sólo para `pendiente`, opcional: vencimiento en formato `AAAA-MM-DD`. La app avisa cuando está cerca o se pasó. |
+| `responsable` | Sólo para `pendiente`, opcional: quién la tiene que hacer (nombre o rol). |
+| `hecha` | `true` cuando ya está hecha. |
 | `derivados` | Lo completa la app cuando la nota se pasa a tarea, checklist, movimiento o comentario. Dejarlo `[]`. |
 | `cargadoPor` | **Siempre `"dot"`**: así la nota se muestra con la pastilla 💻 DOT. |
 | `date`, `updatedAt` | Fecha y hora de ahora en ISO UTC. Al editar una nota, actualizá `updatedAt`. |
@@ -56,6 +60,12 @@ Desde el 26/10/2026 los **comentarios pasaron a ser notas**. No agregues nada a 
 - **Lo del propietario** (acuerdos, pedidos, reuniones): `tipo: "reunion"` y `personas: "Propietario"`.
 - **Decisiones, recordatorios y registros generales:** `tipo: "registro"`.
 - Una nota puede llevar también `rubro` (por ejemplo "Pisos"), `etapa` y `tareaId` (el id de una tarea vinculada).
+
+## Ya no hay tareas: son notas "Tareas / pendientes"
+
+Desde el 26/10/2026 las **tareas pasaron a ser notas** con `tipo: "pendiente"`, y sus datos quedaron en `prioridad`, `vence`, `responsable` y `hecha`. No agregues nada a la lista `tareas`: si aparece algo ahí, la app lo convierte sola en nota.
+
+Para "¿qué tareas tiene Juan?" filtrá `notas` por `tipo: "pendiente"`, `responsable` y `hecha` distinto de `true`.
 
 ## Cuadernos
 

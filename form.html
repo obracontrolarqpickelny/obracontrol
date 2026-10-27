@@ -1430,7 +1430,7 @@ function _bdjYaVi(ids){
 // ── Tarjeta resumida: tipo, fecha, título y contadores (fotos, mensajes…) ──
 function _cardResumen(msg){
   var isDone=INBOX_RESP[msg.id]&&INBOX_RESP[msg.id].done;
-  var tLabel=msg.notaId?'📝 Nota':msg.comentarioId?'💬 Comentario':msg.movimientoId?'💰 Movimiento':(tipoLabels[msg.tipo]||msg.tipo);
+  var tLabel=(msg.notaId&&msg.tipo!=='tarea')?'📝 Nota':msg.comentarioId?'💬 Comentario':msg.movimientoId?'💰 Movimiento':(tipoLabels[msg.tipo]||msg.tipo);
   var d=msg.fechaEnvio?new Date(msg.fechaEnvio):null;
   var fecha=d&&!isNaN(d)?d.toLocaleDateString('es-AR',{day:'2-digit',month:'short'}):'';
   var e=msg._entidad||{};
@@ -1496,7 +1496,7 @@ function renderBandeja(){
     var isDone=INBOX_RESP[msg.id]&&INBOX_RESP[msg.id].done;
     var uColor=urgColors[msg.urgencia]||'#f59e0b';
     var uLabel=urgLabels[msg.urgencia]||msg.urgencia;
-    var tLabel=msg.notaId?'📝 Nota':msg.comentarioId?'💬 Comentario':(tipoLabels[msg.tipo]||msg.tipo);
+    var tLabel=(msg.notaId&&msg.tipo!=='tarea')?'📝 Nota':msg.comentarioId?'💬 Comentario':(tipoLabels[msg.tipo]||msg.tipo);
     var _fd=msg.fechaEnvio?new Date(msg.fechaEnvio):null;
     var fecha=_fd&&!isNaN(_fd)?_fd.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'})+' '+_fd.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}):'';
     var _nuevosChat=_chatAplica(msg)?_chatNuevos(msg):0;
@@ -1627,7 +1627,7 @@ function renderBandeja(){
   h+=_bdjBarra(F,'bdj');
   var esAvisoArch=function(m){return (m._archivos||[]).length>0;};
   var bloques=[
-    ['💬 Comentarios y notas',vis.filter(function(m){return m.comentarioId||m.notaId;})],
+    ['💬 Comentarios y notas',vis.filter(function(m){return (m.comentarioId||m.notaId)&&m.tipo!=='tarea';})],
     ['__fotos__',vis.filter(esAvisoArch)],
     ['📋 Tareas',vis.filter(function(m){return m.tipo==='tarea';})],
     ['💰 Movimientos',vis.filter(function(m){return m.movimientoId;})],
