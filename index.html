@@ -2020,7 +2020,7 @@ const _SK_UI=SK+'_s';
 // guardaba, así que al cerrar la app se perdían.
 const _UI_KEYS=[
   // Notas (filtros, cuaderno y borrador del asiento rápido)
-  'notasCuaderno','notasTipo','notasBuscar','notasOrden','notasEstado','notasAlerta','notasChat','notaTipoNueva','notaCuadernoNuevo','notaBorrador','notaAdj','notasResp','notaPriNueva','notaVenNueva','notaRespNueva',
+  'notasCuaderno','notasTipo','notasBuscar','notasOrden','notasEstado','notasAlerta','notasChat','notaTipoNueva','notaCuadernoNuevo','notaBorrador','notaAdj','notasResp','notasVencF','notaPriNueva','notaVenNueva','notaRespNueva',
   // PDF de Economía: incluir fotos de comprobantes
   'pdfEcoFotos',
   // Tareas
@@ -4628,7 +4628,7 @@ function rDash(mc,p){
     <div class="card stat card-click" onclick="S.mod='tareas';render()"><div class="stico" style="background:var(--cyan-bg);color:var(--cyan)">${I.list}</div><div><div class="stval" style="color:var(--cyan)">${pend}</div><div class="stlbl">Tareas pend.</div></div></div>
     <div class="card stat card-click" onclick="S.mod='materiales';render()"><div class="stico" style="background:var(--purple-bg);color:var(--purple)">${I.pkg}</div><div><div class="stval" style="color:var(--purple)">${pM.length}</div><div class="stlbl">Materiales</div></div></div>
     <div class="card stat card-click" onclick="S.mod='economia';render()"><div class="stico" style="background:var(--cyan-bg);color:var(--cyan)">${I.eco}</div><div><div class="stval" style="color:var(--cyan)">${pf('economia').length}</div><div class="stlbl">Movimientos</div></div></div>
-    <div class="card stat card-click" onclick="S.mod='notas';render()"><div class="stico" style="background:#FEFCE8;color:#ca8a04">${I.nota}</div><div><div class="stval" style="color:#ca8a04">${pf('notas').length}</div><div class="stlbl">Notas</div></div>${(function(){var nl=_nNotasChat(),nv=_notasVenc().filter(function(x){return x.d<0;}).length;return (nl?'<span title="Mensajes nuevos" style="margin-left:auto;align-self:flex-start;min-width:22px;height:22px;padding:0 6px;border-radius:11px;background:#0d9488;color:#fff;font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center">'+nl+'</span>':'')+(nv?'<span title="Tareas vencidas" style="'+(nl?'margin-left:4px':'margin-left:auto')+';align-self:flex-start;min-width:22px;height:22px;padding:0 6px;border-radius:11px;background:#dc2626;color:#fff;font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center">⏰'+nv+'</span>':'');})()}</div>
+    <div class="card stat card-click" onclick="S.mod='notas';render()"><div class="stico" style="background:#FEFCE8;color:#ca8a04">${I.nota}</div><div><div class="stval" style="color:#ca8a04">${pf('notas').length}</div><div class="stlbl">Notas</div></div>${(function(){var nl=_nNotasChat(),_vl=_notasVenc(),nv=_vl.length,_vr=_vl.some(function(x){return x.d<0;});return (nl?'<span title="Mensajes nuevos" style="margin-left:auto;align-self:flex-start;min-width:22px;height:22px;padding:0 6px;border-radius:11px;background:#0d9488;color:#fff;font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center">'+nl+'</span>':'')+(nv?'<span title="Ver las tareas vencidas y por vencer" onclick="event.stopPropagation();verVencidasNotas()" style="cursor:pointer;'+(nl?'margin-left:4px':'margin-left:auto')+';align-self:flex-start;min-width:22px;height:22px;padding:0 6px;border-radius:11px;background:'+(_vr?'#dc2626':'#ea580c')+';color:#fff;font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center">⏰'+nv+'</span>':'');})()}</div>
     <div class="card stat card-click" onclick="S.mod='checklist';render()"><div class="stico" style="background:var(--pink-bg);color:var(--pink)">${I.chklist}</div><div><div class="stval" style="color:var(--pink)">${pf('checklists').filter(c=>!c.visitaId).length}</div><div class="stlbl">Checklists</div></div></div>
     <div class="card stat card-click" onclick="S.mod='documentos';render()"><div class="stico" style="background:var(--gray-ll);color:var(--slate)">${I.file}</div><div><div class="stval" style="color:var(--slate)">${pf('documentos').length+pf('enlaces').length}</div><div class="stlbl">Docs+Links</div></div></div>
     <div class="card stat card-click" onclick="S.mod='comentarios';render()"><div class="stico" style="background:var(--orange-bg);color:var(--orange)">${I.msg}</div><div><div class="stval" style="color:var(--orange)">${pf('comentarios').length}</div><div class="stlbl">Comentarios</div></div></div>
@@ -5946,12 +5946,7 @@ function delI(tbl,id){
 // Desde el aviso "tarea vencida" del panel: va a Tareas y abre directamente la
 // tarea. Si hay varias vencidas, abre la más atrasada y avisa cuántas son.
 function abrirTareaVencida(){
-  var vn=_notasVenc().filter(function(x){return x.d<0;});
-  if(vn.length){
-    S.notasEstado='vig';S.notasOrden='venc';saveUIState();irANota(vn[0].n.id);
-    if(vn.length>1)toast('Tenés '+vn.length+' tareas vencidas — están arriba de todo','var(--orange)',4500);
-    return;
-  }
+  if(_notasVenc().length){verVencidasNotas();return;}
   var venc=pf('tareas').filter(function(t){
     return (t.status==='pendiente'||t.status==='en curso')&&t.dueDate&&dd(td(),t.dueDate)<0;
   }).sort(function(a,b){return String(a.dueDate).localeCompare(String(b.dueDate));});
@@ -8034,6 +8029,12 @@ function _notaTituloCorto(n){return String((n&&(n.titulo||String(n.texto||'').sp
 function _notaDiasVence(n){if(!n||!n.vence||_notaHecha(n))return null;var d=dd(td(),n.vence);return isNaN(d)?null:d;}
 // Vencidas y por vencer (hasta 2 días) de la obra, de la más atrasada a la más lejana
 function _notasVenc(){return pf('notas').map(function(n){return {n:n,d:_notaDiasVence(n)};}).filter(function(x){return x.d!==null&&x.d<=2;}).sort(function(a,b){return a.d-b.d;});}
+// Desde el Panel: Notas filtradas en las tareas vencidas y por vencer
+function verVencidasNotas(){
+  S.mod='notas';S.visitaDetail=null;S.matDetail=null;
+  S.notasVencF=true;S.notasTipo='';S.notasEstado='';S.notasBuscar='';S.notasResp='';S.notasCuaderno='';S.notasAlerta=false;S.notasChat=false;S.notasOrden='venc';
+  saveUIState();render();window.scrollTo(0,0);
+}
 function _txtVence(d){return d<0?'Vencida hace '+(-d)+' día'+(d===-1?'':'s'):d===0?'Vence hoy':d===1?'Vence mañana':'Vence en '+d+' días';}
 // Mensajes de colaboradores sin leer en las notas de la obra
 function _nNotasChat(){return pf('notas').reduce(function(a,n){return a+_chatSinLeer('notas',n.id);},0);}
@@ -8194,6 +8195,7 @@ function _notasFiltradas(){
       var _okA=S.notasAlerta&&!!n.alerta,_okC=S.notasChat&&_chatMsgsDe('notas',n.id).some(function(m){return (m.chat||[]).length>0;});
       if(!_okA&&!_okC)return false;
     }
+    if(S.notasVencF){var _dv=_notaDiasVence(n);if(_dv===null||_dv>2)return false;}
     if(S.notasEstado==='vig'&&_notaHecha(n))return false;
     if(S.notasEstado==='hechas'&&!_notaHecha(n))return false;
     if(q){var t=_notaTextoBusqueda(n);if(!q.split(/\s+/).every(function(w){return t.indexOf(w)>=0;}))return false;}
@@ -8342,8 +8344,10 @@ function rNotas(mc){
         +rs.map(function(r){var k=pf('notas').filter(function(n){return n.tipo==='pendiente'&&!_notaHecha(n)&&_mismoResp(n.responsable,r);}).length;return '<option value="'+esc(r)+'"'+(_mismoResp(S.notasResp,r)?' selected':'')+'>'+esc(r)+(k?' ('+k+')':'')+'</option>';}).join('')
         +'<option value="__sin"'+(S.notasResp==='__sin'?' selected':'')+'>Sin responsable</option></select></div>';
     })():'');
+  if(S.notasVencF){var _nv=_notasVenc(),_nvv=_nv.filter(function(x){return x.d<0;}).length;
+    h+='<div class="flex items-center gap-6 mb-10" style="padding:6px 10px;border-radius:10px;background:'+(_nvv?'#fef2f2':'#fff7ed')+';border:1px solid '+(_nvv?'#fecaca':'#fed7aa')+'"><span class="txs fw7" style="flex:1;color:'+(_nvv?'#dc2626':'#c2410c')+'">⏰ Vencidas y por vencer ('+_nv.length+')</span><button class="btn btn-sec btn-s" onclick="S.notasVencF=false;S.notasOrden=\'desc\';saveUIState();render()">✕ Ver todas</button></div>';}
   if(!lista.length){
-    h+='<div class="empty"><span style="color:'+c+'">'+I.edit+'</span><div class="ts mt-8">'+((S.notasBuscar||S.notasTipo||S.notasEstado||S.notasAlerta||S.notasChat)?'Sin notas con ese filtro':S.notasCuaderno?'El cuaderno «'+esc(S.notasCuaderno)+'» todavía no tiene notas':'Todavía no hay notas')+'</div><div class="txxs tc3 mt-4">Asentá lo que pasa en la obra: avances, acuerdos, llamadas, ideas.</div></div>';
+    h+='<div class="empty"><span style="color:'+c+'">'+I.edit+'</span><div class="ts mt-8">'+((S.notasBuscar||S.notasTipo||S.notasEstado||S.notasAlerta||S.notasChat||S.notasVencF)?'Sin notas con ese filtro':S.notasCuaderno?'El cuaderno «'+esc(S.notasCuaderno)+'» todavía no tiene notas':'Todavía no hay notas')+'</div><div class="txxs tc3 mt-4">Asentá lo que pasa en la obra: avances, acuerdos, llamadas, ideas.</div></div>';
   } else {
     var fij=lista.filter(function(n){return n.fijada;});
     if(fij.length){h+='<div class="txs fw7 mb-6" style="color:'+c+'">📌 Fijadas</div>'+fij.map(function(n){return _notaCard(n,true);}).join('');}
@@ -8379,7 +8383,7 @@ function _notaCard(n,conFecha){
     +(function(){var dv=_notaDiasVence(n);if(!n.vence)return '';if(dv===null)return pill('⏰ '+esc(fmts(n.vence)||n.vence),'#f1f5f9','#64748b');return pill('⏰ '+esc(fmts(n.vence)||n.vence)+(dv<=2?' · '+_txtVence(dv):''),dv<0?'#fee2e2':dv<=2?'#ffedd5':'#f1f5f9',dv<0?'#dc2626':dv<=2?'#c2410c':'#475569');})()
     +(n.responsable?'<button onclick="asignarResponsableNota(\''+n.id+'\')" title="Cambiar responsable" style="border:none;font-size:9px;background:#e0f2fe;color:#0369a1;border-radius:9px;padding:1px 7px;font-weight:700;white-space:nowrap;cursor:pointer">👤 '+esc(n.responsable)+'</button>':'')
     +((n.cuaderno&&n.cuaderno!==NOTA_CUADERNO_DEF)?pill('📒 '+esc(n.cuaderno),'#f1f5f9','#475569'):'')
-    +(n.personas?pill('👥 '+esc(n.personas),'#eff6ff','#2563eb'):'')
+    +(n.personas&&!(n.tipo==='pendiente'&&_mismoResp(n.personas,n.responsable))?pill('👥 '+esc(n.personas),'#eff6ff','#2563eb'):'')
     +(n.rubro?pill('🏗 '+esc(n.rubro),'#f1f5f9','#475569'):'')
     +_chatBtns('notas',n)
     +(esDot?pill('💻 DOT','#f0fdf4','#16a34a'):'')
