@@ -8061,7 +8061,7 @@ function _tareasDeVisita(vid){return (D.tareas||[]).filter(function(t){return t.
 function _entTareaDeNota(m){
   var id=m&&(m.notaId||m.entidadId);var n=id?(D.notas||[]).find(function(x){return x.id===id;}):null;if(!n)return null;
   return {id:n.id,title:_notaTituloCorto(n),description:n.titulo?(n.texto||''):String(n.texto||'').split('\n').slice(1).join('\n'),
-    priority:n.prioridad||'media',dueDate:n.vence||'',encargado:n.responsable||'',rubro:n.rubro||'',status:_notaHecha(n)?'completada':'pendiente',checklistId:n.checklistId||'',
+    priority:n.prioridad||'media',dueDate:n.vence||'',encargado:n.responsable||'',status:_notaHecha(n)?'completada':'pendiente',checklistId:n.checklistId||'',
     photos:(n.photos||[]).filter(function(p){return p&&!p.deletedAt;}).map(function(p){return {url:_resolveImg(p.url),caption:p.caption||''};}).filter(function(p){return /^https?:/.test(String(p.url||''));})};
 }
 // ── Las tareas pasan a ser notas de tipo "Tareas / pendientes" ──
@@ -8384,7 +8384,6 @@ function _notaCard(n,conFecha){
     +(n.responsable?'<button onclick="asignarResponsableNota(\''+n.id+'\')" title="Cambiar responsable" style="border:none;font-size:9px;background:#e0f2fe;color:#0369a1;border-radius:9px;padding:1px 7px;font-weight:700;white-space:nowrap;cursor:pointer">👤 '+esc(n.responsable)+'</button>':'')
     +((n.cuaderno&&n.cuaderno!==NOTA_CUADERNO_DEF)?pill('📒 '+esc(n.cuaderno),'#f1f5f9','#475569'):'')
     +(n.personas&&!(n.tipo==='pendiente'&&_mismoResp(n.personas,n.responsable))?pill('👥 '+esc(n.personas),'#eff6ff','#2563eb'):'')
-    +(n.rubro?pill('🏗 '+esc(n.rubro),'#f1f5f9','#475569'):'')
     +_chatBtns('notas',n)
     +(esDot?pill('💻 DOT','#f0fdf4','#16a34a'):'')
     +(n.fijada?'<span title="Fijada">📌</span>':'')
