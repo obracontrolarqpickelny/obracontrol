@@ -8351,10 +8351,11 @@ function rNotas(mc){
     +'<textarea class="ft" id="nota_q" rows="3" style="margin:0" placeholder="¿Qué pasó hoy en la obra? Ej: Se hormigonó la losa del sector A. Hablé con Juan (plomero): arranca el lunes." onblur="S.notaBorrador=this.value;saveUIState()">'+esc(S.notaBorrador||'')+'</textarea>'
     +(adj.length?'<div id="nota_adj" class="flex gap-6 mt-6" style="flex-wrap:wrap">'+adj.map(function(u,i){return '<div style="position:relative"><img src="'+esc(_resolveImg(u))+'" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--brd)"><button title="Editar" onclick="editarFotoDe({k:\'adj\',i:'+i+'})" style="position:absolute;bottom:-6px;left:-6px;border:none;background:#ca8a04;color:#fff;border-radius:50%;width:22px;height:22px;font-size:11px;cursor:pointer">✏️</button><button onclick="S.notaAdj.splice('+i+',1);saveUIState();render()" style="position:absolute;top:-6px;right:-6px;border:none;background:var(--red);color:#fff;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer">✕</button></div>';}).join('')+'</div>':'')
     +'<div class="flex gap-4 mt-8 items-center" style="flex-wrap:nowrap">'
-    +'<button class="btn btn-sec btn-s" id="nota_mic" style="flex:1;white-space:nowrap;padding-left:6px;padding-right:6px;justify-content:center" onclick="dictarNota(\'nota_q\',this)">🎤 Dictar</button>'
-    +'<label class="btn btn-sec btn-s" style="flex:1;white-space:nowrap;padding-left:6px;padding-right:6px;justify-content:center;cursor:pointer">📷 Foto<input type="file" accept="image/*" multiple style="display:none" onchange="fotosNotaRapida(this)"></label>'
-    +'<button class="btn btn-sec btn-s" style="flex:1;white-space:nowrap;padding-left:6px;padding-right:6px;justify-content:center" onclick="abrirDibujoNota(null)">✏️ Dibujar</button>'
-    +'<button class="btn btn-s" style="flex:1;white-space:nowrap;padding-left:6px;padding-right:6px;justify-content:center;background:'+c+';color:#fff" onclick="guardarNotaRapida()">'+I.save+' Asentar</button>'
+    +'<button class="btn btn-sec btn-s" id="nota_mic" title="Dictar" style="flex:1;font-size:17px;padding:6px 4px;justify-content:center" onclick="dictarNota(\'nota_q\',this)">🎤</button>'
+    +'<label class="btn btn-sec btn-s" title="Foto de la galería" style="flex:1;font-size:17px;padding:6px 4px;justify-content:center;cursor:pointer">🖼️<input type="file" accept="image/*" multiple style="display:none" onchange="fotosNotaRapida(this)"></label>'
+    +'<label class="btn btn-sec btn-s" title="Sacar una foto con la cámara" style="flex:1;font-size:17px;padding:6px 4px;justify-content:center;cursor:pointer">📷<input type="file" accept="image/*" capture="environment" style="display:none" onchange="fotosNotaRapida(this)"></label>'
+    +'<button class="btn btn-sec btn-s" title="Dibujar" style="flex:1;font-size:17px;padding:6px 4px;justify-content:center" onclick="abrirDibujoNota(null)">✏️</button>'
+    +'<button class="btn btn-s" title="Asentar la nota" style="flex:0 0 52px;padding:6px 4px;justify-content:center;background:'+c+';color:#fff" onclick="guardarNotaRapida()">'+I.save+'</button>'
     +'</div>'
     +'<div class="txxs tc3 mt-6">Se asienta con la fecha y hora de ahora. Para otra fecha o más datos usá <b>+ Nota</b>.</div>'
     +'</div>';
@@ -8563,7 +8564,8 @@ function abrirNota(id){
     +'<div id="nm_ph"></div>'
     +'<div class="flex gap-6 mb-10" style="flex-wrap:wrap">'
     +'<button class="btn btn-sec btn-s" onclick="dictarNota(\'nm_tx\',this)">🎤 Dictar</button>'
-    +'<label class="btn btn-sec btn-s" style="cursor:pointer">📷 Foto<input type="file" accept="image/*" multiple style="display:none" onchange="fotosNotaEdit(this)"></label>'
+    +'<label class="btn btn-sec btn-s" style="cursor:pointer">🖼️ Galería<input type="file" accept="image/*" multiple style="display:none" onchange="fotosNotaEdit(this)"></label>'
+    +'<label class="btn btn-sec btn-s" style="cursor:pointer">📷 Cámara<input type="file" accept="image/*" capture="environment" style="display:none" onchange="fotosNotaEdit(this)"></label>'
     +'<button class="btn btn-sec btn-s" onclick="abrirDibujoNota(\'edit\')">✏️ Dibujar</button>'
     +'</div>'
     +'<button class="btn btn-w" style="background:'+MC.notas+';color:#fff" onclick="guardarNota()">'+I.save+' Guardar</button>'
@@ -8639,73 +8641,93 @@ function abrirDibujoNota(destino){
   document.getElementById('dibM')?.remove();
   var d=document.createElement('div');d.className='mo open';d.id='dibM';d.style.zIndex='2600';
   d.innerHTML='<div class="mo-c" style="max-width:900px;width:96vw;padding:10px">'
+    +'<div class="flex items-center mb-6"><div class="ts fw7" style="flex:1;color:'+MC.notas+'">✏️ Dibujo</div><button class="tbtn" title="Cerrar sin guardar" onclick="document.getElementById(\'dibM\').remove()">'+I.x+'</button></div>'
     +'<div class="flex gap-6 items-center mb-6" style="flex-wrap:wrap">'
     +cols.map(function(cl,i){return '<button class="dib-col" data-c="'+cl+'" onclick="_dibSet({color:\''+cl+'\',goma:false},this)" style="width:26px;height:26px;border-radius:50%;background:'+cl+';border:3px solid '+(i===0?'#fbbf24':'#fff')+';box-shadow:0 0 0 1px #cbd5e1;cursor:pointer"></button>';}).join('')
     +'<select class="fs" style="margin:0;width:auto" onchange="_dibSet({ancho:+this.value})"><option value="2">Fino</option><option value="4" selected>Medio</option><option value="9">Grueso</option><option value="22">Marcador</option></select>'
-    +'<button class="btn btn-sec btn-s" id="dib_goma" onclick="_dibSet({goma:!window._dib.goma})">🧽 Goma</button>'
+    +'<button class="btn btn-sec btn-s" id="dib_goma" title="Borra sólo lo dibujado, no la foto" onclick="_dibSet({goma:!window._dib.goma})">🧽 Goma</button>'
     +'<button class="btn btn-sec btn-s" onclick="_dibDeshacer()">↶ Deshacer</button>'
     +'<button class="btn btn-sec btn-s" onclick="_dibFondo(\'cuad\')">▦ Cuadrícula</button>'
-    +'<label class="btn btn-sec btn-s" style="cursor:pointer">🖼 Sobre foto<input type="file" accept="image/*" style="display:none" onchange="_dibFoto(this)"></label>'
+    +'<label class="btn btn-sec btn-s" style="cursor:pointer" title="Sacar una foto y dibujar encima">📷 Cámara<input type="file" accept="image/*" capture="environment" style="display:none" onchange="_dibFoto(this)"></label>'
+    +'<label class="btn btn-sec btn-s" style="cursor:pointer" title="Elegir una foto de la galería y dibujar encima">🖼 Sobre foto<input type="file" accept="image/*" style="display:none" onchange="_dibFoto(this)"></label>'
     +'<button class="btn btn-sec btn-s" style="color:var(--red)" onclick="_dibFondo(\'blanco\')">🗑 Limpiar</button>'
     +'<div style="flex:1"></div>'
     +'<button class="btn btn-sec btn-s" onclick="document.getElementById(\'dibM\').remove()">Cancelar</button>'
     +'<button class="btn btn-s" style="background:'+MC.notas+';color:#fff" onclick="_dibGuardar()">'+I.save+' Usar dibujo</button>'
     +'</div>'
-    +'<canvas id="dib_cv" style="width:100%;height:62vh;touch-action:none;border:1px solid var(--brd);border-radius:8px;background:#fff;display:block"></canvas>'
-    +'</div>';
+    // Dos capas: abajo el fondo (blanco, cuadrícula o foto), arriba lo dibujado.
+    // La goma sólo borra la capa de arriba: la foto no se toca.
+    +'<div id="dib_box" style="position:relative;width:100%;height:62vh;border:1px solid var(--brd);border-radius:8px;overflow:hidden;background:#fff">'
+    +'<canvas id="dib_bg" style="position:absolute;inset:0;width:100%;height:100%;display:block"></canvas>'
+    +'<canvas id="dib_cv" style="position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block"></canvas>'
+    +'</div></div>';
   document.body.appendChild(d);
-  var cv=document.getElementById('dib_cv');
-  var ctx=cv.getContext('2d');
-  window._dib={cv:cv,ctx:ctx,w:0,h:0,color:cols[0],ancho:4,goma:false,hist:[],fondo:null};
+  var cv=document.getElementById('dib_cv'),bg=document.getElementById('dib_bg');
+  window._dib={cv:cv,ctx:cv.getContext('2d'),bg:bg,bx:bg.getContext('2d'),w:0,h:0,color:cols[0],ancho:4,goma:false,hist:[],fondo:null};
   _dibAjustar();
   // La ventana tarda un instante en aparecer: se vuelve a medir cuando ya se ve
   requestAnimationFrame(function(){_dibAjustar();});setTimeout(_dibAjustar,250);
   window.onresize=function(){if(document.getElementById('dib_cv'))_dibAjustar();};
   var dib=false,ult=null;
   var pos=function(ev){var b=cv.getBoundingClientRect();return {x:ev.clientX-b.left,y:ev.clientY-b.top};};
-  cv.onpointerdown=function(ev){ev.preventDefault();_dibAjustar();try{cv.setPointerCapture(ev.pointerId);}catch(_){}_dibSnap();dib=true;ult=pos(ev);var D2=window._dib,ctx=D2.ctx;ctx.beginPath();ctx.fillStyle=D2.goma?'#fff':D2.color;ctx.arc(ult.x,ult.y,(D2.goma?D2.ancho*3:D2.ancho)/2,0,Math.PI*2);ctx.fill();};
-  cv.onpointermove=function(ev){if(!dib)return;var p=pos(ev),D2=window._dib,ctx=D2.ctx;ctx.strokeStyle=D2.goma?'#fff':D2.color;ctx.lineWidth=D2.goma?D2.ancho*3:D2.ancho*(ev.pressure&&ev.pointerType==='pen'?(0.5+ev.pressure):1);ctx.beginPath();ctx.moveTo(ult.x,ult.y);ctx.lineTo(p.x,p.y);ctx.stroke();ult=p;};
-  cv.onpointerup=cv.onpointercancel=function(){dib=false;};
+  var modo=function(ctx){ctx.globalCompositeOperation=window._dib.goma?'destination-out':'source-over';};
+  cv.onpointerdown=function(ev){ev.preventDefault();_dibAjustar();try{cv.setPointerCapture(ev.pointerId);}catch(_){}_dibSnap();dib=true;ult=pos(ev);var D2=window._dib,ctx=D2.ctx;modo(ctx);ctx.beginPath();ctx.fillStyle=D2.goma?'#000':D2.color;ctx.arc(ult.x,ult.y,(D2.goma?D2.ancho*3:D2.ancho)/2,0,Math.PI*2);ctx.fill();};
+  cv.onpointermove=function(ev){if(!dib)return;var p=pos(ev),D2=window._dib,ctx=D2.ctx;modo(ctx);ctx.strokeStyle=D2.goma?'#000':D2.color;ctx.lineWidth=D2.goma?D2.ancho*3:D2.ancho*(ev.pressure&&ev.pointerType==='pen'?(0.5+ev.pressure):1);ctx.beginPath();ctx.moveTo(ult.x,ult.y);ctx.lineTo(p.x,p.y);ctx.stroke();ult=p;};
+  cv.onpointerup=cv.onpointercancel=function(){dib=false;var c=window._dib&&window._dib.ctx;if(c)c.globalCompositeOperation='source-over';};
 }
-// Ajusta el lienzo a su tamaño en pantalla conservando lo ya dibujado
+// Ajusta las dos capas a su tamaño en pantalla conservando lo que tenían
 function _dibAjustar(){
   var D2=window._dib;if(!D2)return;
   var cv=D2.cv,w=cv.clientWidth,h=cv.clientHeight;
   if(w<50||h<50){w=Math.min(window.innerWidth*0.92,880);h=window.innerHeight*0.62;}
   if(Math.abs(w-D2.w)<2&&Math.abs(h-D2.h)<2)return;
   var dpr=Math.min(window.devicePixelRatio||1,2);
-  var prev=null;if(D2.w>0){prev=document.createElement('canvas');prev.width=cv.width;prev.height=cv.height;prev.getContext('2d').drawImage(cv,0,0);}
-  cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr);
+  var copia=function(c){if(!D2.w)return null;var k=document.createElement('canvas');k.width=c.width;k.height=c.height;k.getContext('2d').drawImage(c,0,0);return k;};
+  var pInk=copia(cv),pBg=copia(D2.bg);
+  [cv,D2.bg].forEach(function(c){c.width=Math.round(w*dpr);c.height=Math.round(h*dpr);});
   var ctx=cv.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.lineCap='round';ctx.lineJoin='round';
-  D2.ctx=ctx;D2.w=w;D2.h=h;D2.hist=[];
-  ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);
-  if(prev)ctx.drawImage(prev,0,0,prev.width,prev.height,0,0,w,h);
+  var bx=D2.bg.getContext('2d');bx.setTransform(dpr,0,0,dpr,0,0);
+  D2.ctx=ctx;D2.bx=bx;D2.w=w;D2.h=h;D2.hist=[];
+  bx.fillStyle='#fff';bx.fillRect(0,0,w,h);
+  if(pBg)bx.drawImage(pBg,0,0,pBg.width,pBg.height,0,0,w,h);
+  if(pInk)ctx.drawImage(pInk,0,0,pInk.width,pInk.height,0,0,w,h);
 }
 function _dibSet(o,btn){
   Object.assign(window._dib,o);
   if(btn&&o.color)document.querySelectorAll('.dib-col').forEach(function(b){b.style.borderColor=b===btn?'#fbbf24':'#fff';});
   var g=document.getElementById('dib_goma');if(g)g.style.background=window._dib.goma?'#fde68a':'';
 }
-function _dibSnap(){var D2=window._dib;D2.hist.push(D2.ctx.getImageData(0,0,D2.cv.width,D2.cv.height));if(D2.hist.length>30)D2.hist.shift();}
-function _dibDeshacer(){var D2=window._dib;var im=D2.hist.pop();if(im)D2.ctx.putImageData(im,0,0);}
+// Deshacer guarda las dos capas (también deshace un cambio de fondo)
+function _dibSnap(){var D2=window._dib;D2.hist.push({ink:D2.ctx.getImageData(0,0,D2.cv.width,D2.cv.height),bg:D2.bx.getImageData(0,0,D2.bg.width,D2.bg.height)});if(D2.hist.length>25)D2.hist.shift();}
+function _dibDeshacer(){var D2=window._dib;var im=D2.hist.pop();if(im){D2.ctx.putImageData(im.ink,0,0);D2.bx.putImageData(im.bg,0,0);}}
+// Cuadrícula: cambia sólo el fondo · Limpiar: borra todo (fondo y dibujo)
 function _dibFondo(tipo,sinSnap){
   var D2=window._dib;if(!sinSnap)_dibSnap();
-  var ctx=D2.ctx;ctx.fillStyle='#fff';ctx.fillRect(0,0,D2.w,D2.h);
-  if(tipo==='cuad'){ctx.strokeStyle='#e2e8f0';ctx.lineWidth=1;for(var x=0;x<D2.w;x+=20){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,D2.h);ctx.stroke();}for(var y=0;y<D2.h;y+=20){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(D2.w,y);ctx.stroke();}}
+  var bx=D2.bx;bx.fillStyle='#fff';bx.fillRect(0,0,D2.w,D2.h);
+  if(tipo==='cuad'){bx.strokeStyle='#e2e8f0';bx.lineWidth=1;for(var x=0;x<D2.w;x+=20){bx.beginPath();bx.moveTo(x,0);bx.lineTo(x,D2.h);bx.stroke();}for(var y=0;y<D2.h;y+=20){bx.beginPath();bx.moveTo(0,y);bx.lineTo(D2.w,y);bx.stroke();}}
+  else D2.ctx.clearRect(0,0,D2.w,D2.h);
 }
 function _dibFoto(input){
   var f=input.files&&input.files[0];if(!f)return;
   var rd=new FileReader();
   rd.onload=function(e){_dibPintarFondo(e.target.result,true);};
   rd.readAsDataURL(f);
+  input.value='';
 }
+// La foto va al fondo: lo ya dibujado queda encima
 function _dibPintarFondo(src,conSnap){
   var img=new Image();img.onload=function(){
     var D2=window._dib;if(!D2)return;if(conSnap)_dibSnap();
-    D2.ctx.fillStyle='#fff';D2.ctx.fillRect(0,0,D2.w,D2.h);
+    D2.bx.fillStyle='#fff';D2.bx.fillRect(0,0,D2.w,D2.h);
     var k=Math.min(D2.w/img.width,D2.h/img.height),w=img.width*k,h=img.height*k;
-    D2.ctx.drawImage(img,(D2.w-w)/2,(D2.h-h)/2,w,h);
+    D2.bx.drawImage(img,(D2.w-w)/2,(D2.h-h)/2,w,h);
   };img.src=src;
+}
+// La imagen final: fondo + dibujo
+function _dibComponer(){
+  var D2=window._dib,k=document.createElement('canvas');k.width=D2.cv.width;k.height=D2.cv.height;
+  var x=k.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,k.width,k.height);x.drawImage(D2.bg,0,0);x.drawImage(D2.cv,0,0);
+  return k.toDataURL('image/jpeg',0.85);
 }
 // La foto como imagen editable (del dispositivo o bajada de Drive: la de la
 // miniatura de Drive no se puede leer desde el lienzo)
@@ -8735,7 +8757,7 @@ async function editarFotoDe(dest){
 function editarFotoNota(nid,i){return editarFotoDe({k:'nota',nid:nid,i:i});}
 async function _dibGuardar(){
   var D2=window._dib;if(!D2)return;
-  var du=D2.cv.toDataURL('image/jpeg',0.85);
+  var du=_dibComponer();
   document.getElementById('dibM')?.remove();
   if(window._dibDest==='chat'){window._chatAdj=(window._chatAdj||[]).concat([du]);_chatPintar();toast('Dibujo agregado ✓','var(--green)');return;}
   var ref=await _guardarImgNota(du);
