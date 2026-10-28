@@ -8363,7 +8363,7 @@ function rNotas(mc){
     +'</div>'
     +(tipoNueva==='pendiente'?_notaCamposTarea('nota',{prioridad:S.notaPriNueva,vence:S.notaVenNueva,responsable:S.notaRespNueva},true):'')
     +'<textarea class="ft" id="nota_q" rows="3" style="margin:0" placeholder="¿Qué pasó hoy en la obra? Ej: Se hormigonó la losa del sector A. Hablé con Juan (plomero): arranca el lunes." onblur="S.notaBorrador=this.value;saveUIState()">'+esc(S.notaBorrador||'')+'</textarea>'
-    +(adj.length?'<div id="nota_adj" class="flex gap-6 mt-6" style="flex-wrap:wrap">'+adj.map(function(u,i){var _cp=(u&&u.caption)||'';u=(u&&u.url)||u;return '<div style="position:relative"'+(_cp?' title="'+esc(_cp)+'"':'')+'>'+(_cp?_circuloCmts(1):'')+'<img src="'+esc(_resolveImg(u))+'" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--brd)"><button title="Editar" onclick="editarFotoDe({k:\'adj\',i:'+i+'})" style="position:absolute;bottom:-6px;left:-6px;border:none;background:#ca8a04;color:#fff;border-radius:50%;width:22px;height:22px;font-size:11px;cursor:pointer">✏️</button><button onclick="S.notaAdj.splice('+i+',1);saveUIState();render()" style="position:absolute;top:-6px;right:-6px;border:none;background:var(--red);color:#fff;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer">✕</button></div>';}).join('')+'</div>':'')
+    +(adj.length?'<div id="nota_adj" class="flex gap-6 mt-6" style="flex-wrap:wrap">'+adj.map(function(u,i){var _cp=(u&&u.caption)||'';u=(u&&u.url)||u;return '<div style="position:relative"'+(_cp?' title="'+esc(_cp)+'"':'')+'>'+(_cp?_circuloCmts(1):'')+'<img src="'+esc(_resolveImg(u))+'" onclick="_editarFotoBorrador(\'adj\','+i+')" title="Tocá para marcar o comentar" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--brd);cursor:pointer"><button title="Marcar o comentar" onclick="_editarFotoBorrador(\'adj\','+i+')" style="position:absolute;bottom:-6px;left:-6px;border:none;background:#ca8a04;color:#fff;border-radius:50%;width:22px;height:22px;font-size:11px;cursor:pointer">✏️</button><button onclick="S.notaAdj.splice('+i+',1);saveUIState();render()" style="position:absolute;top:-6px;right:-6px;border:none;background:var(--red);color:#fff;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer">✕</button></div>';}).join('')+'</div>':'')
     +'<div class="flex gap-4 mt-8 items-center" style="flex-wrap:nowrap">'
     +'<button class="btn btn-sec btn-s" id="nota_mic" title="Dictar" style="flex:1;height:38px;font-size:17px;padding:6px 4px;justify-content:center" onclick="dictarNota(\'nota_q\',this)">🎤</button>'
     +'<label class="btn btn-sec btn-s" title="Foto de la galería" style="flex:1;height:38px;font-size:17px;padding:6px 4px;justify-content:center;cursor:pointer">🖼️<input type="file" accept="image/*" multiple style="display:none" onchange="fotosNotaRapida(this)"></label>'
@@ -8604,7 +8604,7 @@ function _notaEditFotos(){
   el.innerHTML=ph.length?'<div class="flex gap-6 mb-10" style="flex-wrap:wrap">'+window._notaEdit.photos.map(function(p,i){
     if(!p||p.deletedAt)return '';
     var _nc=((p.comments||[]).length)+(String(p.caption||'').trim()&&p.caption!=='✏️ Dibujo'?1:0);
-    return '<div style="position:relative">'+_circuloCmts(_nc)+'<img src="'+esc(_resolveImg(p.url))+'" style="width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid var(--brd)"><button title="Editar" onclick="editarFotoDe({k:\'edit\',i:'+i+'})" style="position:absolute;bottom:-6px;left:-6px;border:none;background:#ca8a04;color:#fff;border-radius:50%;width:22px;height:22px;font-size:11px;cursor:pointer">✏️</button><button onclick="window._notaEdit.photos.splice('+i+',1);_notaEditFotos()" style="position:absolute;top:-6px;right:-6px;border:none;background:var(--red);color:#fff;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer">✕</button></div>';
+    return '<div style="position:relative">'+_circuloCmts(_nc)+'<img src="'+esc(_resolveImg(p.url))+'" onclick="_editarFotoBorrador(\'edit\','+i+')" title="Tocá para marcar o comentar" style="width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid var(--brd);cursor:pointer"><button title="Marcar o comentar" onclick="_editarFotoBorrador(\'edit\','+i+')" style="position:absolute;bottom:-6px;left:-6px;border:none;background:#ca8a04;color:#fff;border-radius:50%;width:22px;height:22px;font-size:11px;cursor:pointer">✏️</button><button onclick="window._notaEdit.photos.splice('+i+',1);_notaEditFotos()" style="position:absolute;top:-6px;right:-6px;border:none;background:var(--red);color:#fff;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer">✕</button></div>';
   }).join('')+'</div>':'';
 }
 async function fotosNotaEdit(input){
@@ -8667,7 +8667,7 @@ function abrirDibujoNota(destino){
   document.getElementById('dibM')?.remove();
   var d=document.createElement('div');d.className='mo open';d.id='dibM';d.style.zIndex='2600';
   d.innerHTML='<div class="mo-c" style="max-width:900px;width:96vw;padding:10px">'
-    +'<div class="flex items-center mb-6"><div class="ts fw7" style="flex:1;color:'+MC.notas+'">'+(nueva?'📷 Foto'+(destino.cola.length>1?' '+(destino.i+1)+' de '+destino.cola.length:'')+' · marcá con el lápiz y comentala':'✏️ Dibujo')+'</div><button class="tbtn" title="'+(nueva?'Descartar esta foto':'Cerrar sin guardar')+'" onclick="'+cerrar+'">'+I.x+'</button></div>'
+    +'<div class="flex items-center mb-6"><div class="ts fw7" style="flex:1;color:'+MC.notas+'">'+(nueva?(destino.reemplazo!=null?'📷 Editar foto · marcá con el lápiz o corregí el comentario':'📷 Foto'+(destino.cola.length>1?' '+(destino.i+1)+' de '+destino.cola.length:'')+' · marcá con el lápiz y comentala'):'✏️ Dibujo')+'</div><button class="tbtn" title="'+(nueva?'Descartar esta foto':'Cerrar sin guardar')+'" onclick="'+cerrar+'">'+I.x+'</button></div>'
     +'<div class="flex gap-6 items-center mb-6" style="flex-wrap:wrap">'
     +cols.map(function(cl,i){return '<button class="dib-col" data-c="'+cl+'" onclick="_dibSet({color:\''+cl+'\',goma:false},this)" style="width:26px;height:26px;border-radius:50%;background:'+cl+';border:3px solid '+(i===0?'#fbbf24':'#fff')+';box-shadow:0 0 0 1px #cbd5e1;cursor:pointer"></button>';}).join('')
     +'<select class="fs" style="margin:0;width:auto" onchange="_dibSet({ancho:+this.value})"><option value="2">Fino</option><option value="4" selected>Medio</option><option value="9">Grueso</option><option value="22">Marcador</option></select>'
@@ -8687,9 +8687,9 @@ function abrirDibujoNota(destino){
     +'<canvas id="dib_bg" style="position:absolute;inset:0;width:100%;height:100%;display:block"></canvas>'
     +'<canvas id="dib_cv" style="position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block"></canvas>'
     +'</div>'
-    +(nueva?'<div class="flex gap-6 mt-8" style="align-items:stretch"><textarea class="ft" id="dib_cap" rows="2" style="margin:0;flex:1" placeholder="Comentario de la foto (opcional)…"></textarea>'
+    +(nueva?'<div class="flex gap-6 mt-8" style="align-items:stretch"><textarea class="ft" id="dib_cap" rows="2" style="margin:0;flex:1" placeholder="Comentario de la foto (opcional)…">'+esc(destino.cap||'')+'</textarea>'
       +'<button class="btn btn-sec btn-s" title="Dictar el comentario" style="font-size:17px" onclick="dictarNota(\'dib_cap\',this)">🎤</button></div>'
-      +'<div class="flex gap-6 mt-8"><button class="btn btn-sec" style="flex:1" onclick="_dibDescartarNueva()">Descartar</button>'
+      +'<div class="flex gap-6 mt-8"><button class="btn btn-sec" style="flex:1" onclick="_dibDescartarNueva()">'+(destino.reemplazo!=null?'Cancelar':'Descartar')+'</button>'
       +'<button class="btn" style="flex:2;background:'+MC.notas+';color:#fff" onclick="_dibGuardar()">'+I.save+' Guardar'+(destino.i+1<destino.cola.length?' y seguir':'')+'</button></div>':'')
     +'</div>';
   document.body.appendChild(d);
@@ -8786,7 +8786,34 @@ function _dibDescartarNueva(){
   var dd=window._dibDest;document.getElementById('dibM')?.remove();
   if(dd&&dd.k==='nueva')_abrirFotoNueva(dd.cola,dd.target,dd.i+1);
 }
+// Foto ya cargada en la nota que se está armando: se abre con su comentario
+async function _editarFotoBorrador(target,i){
+  var ta=$('nota_q');if(ta){S.notaBorrador=ta.value;saveUIState();}
+  var p=target==='adj'?(S.notaAdj||[])[i]:((window._notaEdit||{}).photos||[])[i];if(!p)return;
+  var du=await _fotoComoDataUrl(p);
+  if(!du){toast('No se pudo abrir la foto. Conectá Drive y probá de nuevo.','var(--orange)',4000);return;}
+  var cap=typeof p==='object'?(String(p.caption||'').trim()&&p.caption!=='✏️ Dibujo'?p.caption:((p.comments||[])[0]||{}).text||''):'';
+  abrirDibujoNota({k:'nueva',cola:[du],target:target,i:0,reemplazo:i,cap:cap,orig:p});
+  setTimeout(function(){_dibPintarFondo(du,false);},320);
+}
 async function _guardarFotoNueva(dd,src,cap){
+  // Corrección de una foto ya cargada: se reemplaza en su lugar (si no se marcó, queda la misma imagen)
+  if(dd.reemplazo!=null){
+    var orig=dd.orig,url=(orig&&orig.url)||orig;
+    if(src!==dd.cola[0])url=await _guardarImgNota(src);
+    if(dd.target==='edit'&&window._notaEdit){
+      var ph=window._notaEdit.photos[dd.reemplazo];
+      if(ph&&typeof ph==='object'){
+        ph.url=url;if(src!==dd.cola[0]){delete ph.localUrl;ph.driveId=null;}
+        if((ph.comments||[]).length&&!String(ph.caption||'').trim()){if(cap)ph.comments[0].text=cap;else ph.comments.shift();}
+        else ph.caption=cap||'';
+      }
+      _notaEditFotos();
+    } else if(S.notaAdj&&S.notaAdj[dd.reemplazo]!==undefined){
+      S.notaAdj[dd.reemplazo]={url:url,caption:cap||''};saveUIState();render();
+    }
+    toast('Foto actualizada ✓','var(--green)',1500);return;
+  }
   var ref=await _guardarImgNota(src);
   if(dd.target==='edit'&&window._notaEdit){window._notaEdit.photos.push(mkPhoto(ref,cap||''));_notaEditFotos();}
   else{var ta=$('nota_q');if(ta)S.notaBorrador=ta.value;S.notaAdj=(S.notaAdj||[]).concat([{url:ref,caption:cap||''}]);saveUIState();render();}
