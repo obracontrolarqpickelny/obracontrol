@@ -1195,8 +1195,8 @@ function buildLogContent(){
     c+=(i+1)+'. '+fmt(v.date)+' ['+(v.estado||'borrador')+'] — '+v.title+NL;
     if(v.description)c+='   Desc: '+v.description+NL;
     if(v.observations)c+='   Obs: '+v.observations+NL;
-    const lT=_tareasDeVisita(v.id);
-    if(lT.length)c+='   Tareas: '+lT.map(function(t){return t.title+' ['+t.status+']';}).join(', ')+NL;
+    const lT=_notasVisitaOrdenadas(v.id);
+    if(lT.length)c+='   Notas: '+lT.map(function(t){return '['+_notaTipoLabel(_tipoVis(t)).replace(/^\S+\s/,'')+'] '+t.title+(_tipoVis(t)==='pendiente'?' ('+t.status+')':'');}).join(', ')+NL;
     const lMI=(D.matIngresos||[]).filter(function(m){return m.visitaId===v.id;});
     if(lMI.length)c+='   Materiales: '+lMI.map(function(m){return m.matNombre+' ('+(m.estado||'')+') '+(m.qty||0)+' '+(m.unit||'u');}).join(', ')+NL;
     const lA=(D.alertas||[]).filter(function(a){return a.visitaId===v.id;});
@@ -4722,7 +4722,7 @@ function rVisitas(mc){
   mc.innerHTML=`${modHeader('visitas','Visitas de Obra',`<button class="btn btn-s" style="background:${c};color:#fff" onclick="openM('newVisitaM')">${I.plus} Nueva</button>`)}
   ${!items.length?`<div class="empty"><span style="color:${c}">${I.clip}</span><div class="ts mt-8 mb-12">Sin visitas</div></div>`:items.map(v=>{
     const lT=_tareasDeVisita(v.id).length;const lM=D.materiales.filter(m=>m.visitaId===v.id).length+(D.matIngresos||[]).filter(i=>i.visitaId===v.id).length;const lA=D.alertas.filter(a=>a.visitaId===v.id).length;const pc=(v.photos||[]).length;
-    return `<div class="card card-click" style="border-left:3px solid ${c}" onclick="_escudoToque();S.visitaDetail='${v.id}';render();"><div class="flex justify-between mb-4"><span class="txxs tc3">${I.cal} ${fmts(v.date)}</span>${colBadge(v.estado||'borrador',v.estado==='finalizada'?'var(--green)':'var(--blue)',true)}</div><div class="fw7 mb-4">${v.title}</div>${v.description?`<div class="ts tc3 mb-6" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${v.description}</div>`:''}<div class="flex gap-4 wrap txxs">${pc?`<span class="link-tag">${I.cam} ${pc}</span>`:''}${lT?`<span class="link-tag">${I.list} ${lT}</span>`:''}${lM?`<span class="link-tag">${I.pkg} ${lM}</span>`:''}${lA?`<span class="link-tag">${I.bell} ${lA}</span>`:''}</div></div>`;
+    return `<div class="card card-click" style="border-left:3px solid ${c}" onclick="_escudoToque();S.visitaDetail='${v.id}';render();"><div class="flex justify-between mb-4"><span class="txxs tc3">${I.cal} ${fmts(v.date)}</span>${colBadge(v.estado||'borrador',v.estado==='finalizada'?'var(--green)':'var(--blue)',true)}</div><div class="fw7 mb-4">${v.title}</div>${v.description?`<div class="ts tc3 mb-6" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${v.description}</div>`:''}<div class="flex gap-4 wrap txxs">${pc?`<span class="link-tag">${I.cam} ${pc}</span>`:''}${lT?`<span class="link-tag" title="Notas vinculadas">${I.nota} ${lT}</span>`:''}${lM?`<span class="link-tag">${I.pkg} ${lM}</span>`:''}${lA?`<span class="link-tag">${I.bell} ${lA}</span>`:''}</div></div>`;
   }).join('')}${renderNewVisitaModal()}`;
 }
 // Materiales de una visita agrupados por estado (existentes juntos, después los
@@ -4737,7 +4737,7 @@ function _ordenMatVisita(lista){
 }
 function rVisitaDetail(mc,vid){
   const v=D.visitas.find(x=>x.id===vid);if(!v){S.visitaDetail=null;render();return;}
-  const lT=_tareasDeVisita(vid);const lM=D.materiales.filter(m=>m.visitaId===vid);const lD=D.documentos.filter(d=>d.visitaId===vid);const lMI=(D.matIngresos||[]).filter(i=>i.visitaId===vid);
+  const lT=_notasVisitaOrdenadas(vid);const lM=D.materiales.filter(m=>m.visitaId===vid);const lD=D.documentos.filter(d=>d.visitaId===vid);const lMI=(D.matIngresos||[]).filter(i=>i.visitaId===vid);
   mc.innerHTML=`
   <div class="flex items-center gap-8 mb-12"><button class="tbtn back-btn" aria-label="Volver al listado de visitas" onclick="volverAVisitas(event)">${I.chevL}</button><h2 class="fw8" style="font-size:16px;cursor:pointer;padding:10px 8px 10px 0" onclick="volverAVisitas(event)">Visita</h2><div style="flex:1"></div><button class="btn btn-s btn-sec" onclick="exportVisitaPDF('${vid}')">${I.pdf} PDF</button><button class="btn btn-sec btn-s" onclick="shareFormContextual('visita','${vid}','Visita')" title="Compartir formulario">💬</button><button class="btn btn-g btn-s" onclick="editVisita('${vid}')">${I.edit}</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel('Eliminar visita?')){delVisita('${vid}')}">${I.trash}</button></div>
   <div class="card mb-12">
@@ -4750,7 +4750,7 @@ function rVisitaDetail(mc,vid){
   </div>
   ${v.archivos&&v.archivos.length?`<div class="card mb-12"><div class="ts fw7 mb-8">${I.file} Archivos adjuntos (${v.archivos.length})</div>${v.archivos.map((f,fi)=>`<div class="flex items-center gap-6" style="padding:6px 0;border-bottom:1px solid var(--gray-ll)"><span style="color:var(--slate);flex-shrink:0">${I.file}</span><div class="flex-1 ts fw6 trun" style="min-width:0">${f.name}</div><button class="btn btn-sec btn-s" onclick="event.stopPropagation();viewArchivo('visitas','${vid}','${f.id||''}')" style="flex-shrink:0">👁</button><button class="btn btn-sec btn-s" onclick="event.stopPropagation();delVisitaArchivo('${vid}',${fi})" style="color:var(--red);flex-shrink:0" title="Eliminar archivo">${I.trash}</button></div>`).join('')}</div>`:''}
   <!-- Linked entities -->
-  <div class="card mb-12"><div class="flex justify-between items-center mb-8"><div class="ts fw7" style="color:var(--cyan)">${I.list} Tareas (${lT.length})</div><div class="flex gap-4"><button class="btn btn-s btn-sec" title="Vincular tareas ya cargadas" onclick="vincularItemsAVisita('${vid}','tareas')">&#x1F517;</button><button class="btn btn-s btn-sec" title="Crear una tarea en esta visita" onclick="openM('lkTM');setTimeout(function(){_renderEncChips('lt_enc','lt_enc_chips');},80)">${I.plus}</button></div></div>${lT.length?lT.map(t=>`<div style="padding:8px 0;border-bottom:1px solid var(--gray-ll)"><div class="ts fw6" style="${t.status==='completada'?'text-decoration:line-through;color:var(--gray-l)':''}">${t.title}</div>${t.description?`<div class="txxs tc3 mt-2" style="white-space:pre-wrap">${t.description}</div>`:''}<div class="flex items-center justify-between wrap mt-4" style="gap:6px"><div class="txxs tc3" style="min-width:0">${priBadge(t.priority,true)} ${stBadge(t.status,true)}${t.dueDate?' | '+fmts(t.dueDate):''}${t.encargado?` | <span style="color:var(--cyan);${t._nota?'cursor:pointer;text-decoration:underline':''}" ${t._nota?`onclick="asignarResponsableNota('${t.id}')"`:''}>👤 ${esc(t.encargado)}</span>`:''}</div><div class="flex gap-4" style="flex-shrink:0;margin-left:auto"><button class="btn btn-g btn-s" title="Calendario" onclick="exportTareaGCal('${t.id}')">&#128197;</button><button class="btn btn-g btn-s" onclick="editTarea('${t.id}')">${I.edit}</button><button class="btn btn-g btn-s" style="color:${t.status==='completada'?'var(--gray-l)':'var(--green)'}" onclick="updT('${t.id}','${t.status==='completada'?'pendiente':'completada'}')" title="${t.status==='completada'?'Reabrir':'Completar'}">${t.status==='completada'?'&#x21A9;':I.check}</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delI('${t._tbl||'tareas'}','${t.id}')">${I.trash}</button></div></div>${(t.photos&&t.photos.filter(function(p){var u=typeof p==='string'?p:p.url;return u&&!u.startsWith('[');}).length)?'<div style="margin-top:6px">'+photoGrid(t.photos,'tareas',t.id)+'</div>':''}</div>`).join(''):'<div class="txxs tc3">Sin tareas</div>'}</div>
+  <div class="card mb-12"><div class="flex justify-between items-center mb-8"><div class="ts fw7" style="color:#ca8a04">${I.nota} Notas (${lT.length})</div><div class="flex gap-4"><button class="btn btn-s btn-sec" title="Vincular notas ya cargadas" onclick="vincularItemsAVisita('${vid}','tareas')">&#x1F517;</button><button class="btn btn-s btn-sec" title="Nueva nota en esta visita" onclick="window._notaVisitaNueva='${vid}';abrirNota()">${I.plus}</button></div></div>${lT.length?lT.map((t,_i)=>((_i===0||_tipoVis(lT[_i-1])!==_tipoVis(t))?`<div class="txs fw7" style="color:#a16207;background:#fefce8;border-radius:6px;padding:3px 8px;margin-top:${_i?10:0}px">${esc(_notaTipoLabel(_tipoVis(t)))}</div>`:'')+`<div style="padding:8px 0;border-bottom:1px solid var(--gray-ll)"><div class="ts fw6" style="${t.status==='completada'?'text-decoration:line-through;color:var(--gray-l)':''}">${t.title}</div>${t.description?`<div class="txxs tc3 mt-2" style="white-space:pre-wrap">${t.description}</div>`:''}<div class="flex items-center justify-between wrap mt-4" style="gap:6px"><div class="txxs tc3" style="min-width:0">${_tipoVis(t)==='pendiente'?priBadge(t.priority,true)+' '+stBadge(t.status,true):(t.status==='completada'?'✓ Hecha':'')}${t._nota&&_tipoVis(t)!=='pendiente'&&t.date?' 📅 '+fmts(t.date):''}${t.dueDate?' | '+fmts(t.dueDate):''}${t.encargado?` | <span style="color:var(--cyan);${t._nota?'cursor:pointer;text-decoration:underline':''}" ${t._nota?`onclick="asignarResponsableNota('${t.id}')"`:''}>👤 ${esc(t.encargado)}</span>`:''}</div><div class="flex gap-4" style="flex-shrink:0;margin-left:auto"><button class="btn btn-g btn-s" title="Calendario" onclick="exportTareaGCal('${t.id}')">&#128197;</button><button class="btn btn-g btn-s" onclick="editTarea('${t.id}')">${I.edit}</button><button class="btn btn-g btn-s" style="color:${t.status==='completada'?'var(--gray-l)':'var(--green)'}" onclick="updT('${t.id}','${t.status==='completada'?'pendiente':'completada'}')" title="${t.status==='completada'?'Reabrir':'Completar'}">${t.status==='completada'?'&#x21A9;':I.check}</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delI('${t._tbl||'tareas'}','${t.id}')">${I.trash}</button></div></div>${(t.photos&&t.photos.filter(function(p){var u=typeof p==='string'?p:p.url;return u&&!u.startsWith('[');}).length)?'<div style="margin-top:6px">'+photoGrid(t.photos,'tareas',t.id)+'</div>':''}</div>`).join(''):'<div class="txxs tc3">Sin notas</div>'}</div>
   <div class="card mb-12"><div class="flex justify-between items-center mb-8"><div class="ts fw7" style="color:var(--purple)">${I.pkg} Materiales (${lM.length+lMI.length})</div><div class="flex gap-4"><button class="btn btn-s btn-sec" title="Vincular materiales a pedir o existentes ya cargados" onclick="vincularMatAVisita('${vid}')">&#x1F517;</button><button class="btn btn-s btn-sec" title="Cargar un material nuevo en esta visita" onclick="openLkMM('${vid}')">${I.plus}</button></div></div>${lM.length?_ordenMatVisita(lM).map(m=>`<div style="padding:6px 0;border-bottom:1px solid var(--gray-ll)"><div class="flex items-center gap-4"><div class="flex-1"><div class="ts fw6">${m.name}</div><div class="txxs tc3 mt-2">${m.qty||0} ${m.unit||''} ${m.visitaTipo?colBadge(m.visitaTipo==='a_pedir'?'A pedir':'Existente',m.visitaTipo==='a_pedir'?'var(--orange)':'var(--green)',true):''}${m.notes?` | ${m.notes}`:''}</div></div><button class="btn btn-g btn-s" onclick="editMatVisita('${m.id}')">${I.edit}</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel('¿Quitar?')){D.materiales=D.materiales.filter(x=>x.id!=='${m.id}');addTombstone('materiales','${m.id}');sv();render();}">${I.trash}</button></div>${m.photos&&m.photos.length?photoGrid(m.photos,'materiales',m.id):''}</div>`).join(''):''}${!lM.length&&!lMI.length?'<div class="txxs tc3">Sin materiales</div>':''}${lMI.length?`<div style="margin-top:8px;border-top:1px solid var(--gray-ll);padding-top:8px"><div class="txxs fw7 mb-4" style="color:var(--green)">&#x2713; Ingresos/Existentes cargados</div>`+_ordenMatVisita(lMI).map(i=>`<div style="padding:4px 0;border-bottom:1px solid var(--gray-ll)"><div class="flex items-center gap-4"><div class="flex-1"><div class="ts fw6">${i.matNombre}</div><div class="txxs tc3 mt-2">${i.qty||0} ${i.unit||''} ${i.estado==='ingresado'?'<span style="color:var(--green)">&#x2713; Ingresado</span>':i.estado==='pedido'?'<span style="color:var(--orange)">&#x1F4CB; Pedido</span>':i.estado==='a_pedir'?'<span style="color:var(--orange)">A pedir</span>':'<span style="color:var(--green)">Existente</span>'}${i.fechaNecesaria?` | <span style="color:var(--orange)">&#128197; ${fmts(i.fechaNecesaria)}</span>`:''}${i.observations?' | '+i.observations:''}</div></div><button class="btn btn-g btn-s" onclick="editLMI('${i.id}')">${I.edit}</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel('¿Quitar material?')){D.matIngresos=D.matIngresos.filter(x=>x.id!=='${i.id}');addTombstone('matIngresos','${i.id}');sv();render();}">${I.trash}</button></div></div>`).join('')+`</div>`:''}</div>
   <div class="card mb-12"><div class="flex justify-between items-center mb-8"><div class="ts fw7" style="color:var(--slate)">${I.file} Adjuntos (${lD.length})</div><button class="btn btn-s btn-sec" onclick="openM('lkDM')">${I.plus}</button></div>${lD.length?lD.map(d=>`<div class="flex items-center gap-8" style="padding:6px 0;border-bottom:1px solid var(--gray-ll)"><span style="color:var(--slate);flex-shrink:0">${I.file}</span><div class="flex-1 ts fw6 trun">${d.name}</div>${d.url?`<a href="${d.url}" target="_blank" onclick="event.stopPropagation()" class="btn btn-sec btn-s" style="flex-shrink:0">${I.eye} Ver</a>`:''}<button class="btn btn-g btn-s" style="color:var(--red);flex-shrink:0" onclick="if(confirmDel('¿Quitar?')){D.documentos=D.documentos.filter(x=>x.id!=='${d.id}');addTombstone('documentos','${d.id}');sv();render();}">${I.trash}</button></div>`).join(''):'<div class="txxs tc3">Sin adjuntos</div>'}</div>
   <!-- Checklist de visita -->
@@ -5026,10 +5026,10 @@ function vincularItemsAVisita(vid,tbl){
   if(tbl==='tareas')tbl='notas';
   var esTarea=tbl==='notas';
   var items=(esTarea?pf('notas').map(_notaComoTarea):pf(tbl)).slice().sort(function(a,b){return String(b.date||b.updatedAt||'').localeCompare(String(a.date||a.updatedAt||''));});
-  var h='<div class="mo-c"><div class="mo-h"><h3 style="color:'+(esTarea?'var(--cyan)':'var(--pink)')+'">'+(esTarea?'&#x1F4CB; Vincular tareas':'&#x2705; Vincular checklists')+'</h3><button class="tbtn" onclick="document.getElementById(\'vincItemVisM\').remove()">'+I.x+'</button></div>';
+  var h='<div class="mo-c"><div class="mo-h"><h3 style="color:'+(esTarea?'var(--cyan)':'var(--pink)')+'">'+(esTarea?'📝 Vincular notas':'&#x2705; Vincular checklists')+'</h3><button class="tbtn" onclick="document.getElementById(\'vincItemVisM\').remove()">'+I.x+'</button></div>';
   h+='<div class="txxs tc3 mb-8">Marcá las que correspondan a <strong>'+esc(v.title||'esta visita')+'</strong>.</div>';
   if(!items.length){
-    h+='<div class="txxs tc3">No hay '+(esTarea?'tareas':'checklists')+' cargadas en esta obra.</div>';
+    h+='<div class="txxs tc3">No hay '+(esTarea?'notas':'checklists')+' cargadas en esta obra.</div>';
   } else {
     h+='<input class="fi mb-8" placeholder="Buscar..." oninput="var q=_normTxt(this.value);document.querySelectorAll(\'#vincItemVisM .vi-op\').forEach(function(l){l.style.display=(!q||l.getAttribute(\'data-n\').indexOf(q)>=0)?\'\':\'none\';})">';
     items.forEach(function(i){
@@ -5292,7 +5292,7 @@ function exportVisitaPDF(vid){
   try{
     const v=D.visitas.find(x=>x.id===vid);if(!v)return;
     const p=D.projects.find(x=>x.id===S.proj);
-    const lT=_tareasDeVisita(vid);
+    const lT=_notasVisitaOrdenadas(vid);
     const lM=D.materiales.filter(m=>m.visitaId===vid);
     const lMI=(D.matIngresos||[]).filter(i=>i.visitaId===vid);
     const lA=D.alertas.filter(a=>a.visitaId===vid);
@@ -5384,16 +5384,20 @@ function exportVisitaPDF(vid){
     var _tHtml='';
     if(lT.length){
       const stCol={pendiente:'#94a3b8','en curso':'#3b82f6',completada:'#16a34a',cancelada:'#ef4444'};
-      _tHtml='<h2>Tareas ('+lT.length+')</h2>';
-      lT.forEach(function(t){
+      _tHtml='<h2>Notas ('+lT.length+')</h2>';
+      lT.forEach(function(t,_i){
+        var _tp=_tipoVis(t),_esT=_tp==='pendiente';
+        if(_i===0||_tipoVis(lT[_i-1])!==_tp)_tHtml+='<div style="font-size:10px;font-weight:800;color:#a16207;background:#fefce8;border-radius:4px;padding:3px 8px;margin:'+(_i?'10px':'2px')+' 0 6px">'+esc(_notaTipoLabel(_tp))+'</div>';
         const col=priCol[t.priority]||'#D97706';
         const sc=stCol[t.status]||'#94a3b8';
         const over=t.dueDate&&(t.status==='pendiente'||t.status==='en curso')&&new Date(t.dueDate)<new Date(td());
-        _tHtml+='<div style="padding:9px 10px;margin-bottom:6px;border-radius:6px;border-left:3px solid '+col+';background:#fafafa;break-inside:avoid;page-break-inside:avoid">';
+        _tHtml+='<div style="padding:9px 10px;margin-bottom:6px;border-radius:6px;border-left:3px solid '+(_esT?col:'#fde68a')+';background:#fafafa;break-inside:avoid;page-break-inside:avoid">';
         // Línea 1: badges + título
         _tHtml+='<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">';
+        if(_esT){
         _tHtml+='<span style="background:'+col+';color:#fff;font-size:8px;font-weight:700;padding:2px 6px;border-radius:3px;white-space:nowrap">'+(t.priority||'media').toUpperCase()+'</span>';
         _tHtml+='<span style="background:'+sc+';color:#fff;font-size:8px;font-weight:600;padding:2px 6px;border-radius:3px;white-space:nowrap">'+(t.status||'pendiente')+'</span>';
+        } else if(t._nota&&t.date)_tHtml+='<span style="color:#64748b;font-size:8.5px;white-space:nowrap">📅 '+fmt(t.date)+'</span>';
         _tHtml+='<span style="font-weight:700;font-size:10.5px;'+(t.status==='completada'?'text-decoration:line-through;color:#94a3b8':'')+'">'+(t.title||'')+'</span>';
         _tHtml+='</div>';
         // Línea 2: metadatos (fecha vencimiento, encargado, rubro)
@@ -8061,7 +8065,18 @@ function _notaComoTarea(n){
   def('encargado',function(){return n.responsable||'';},function(v){n.responsable=v;});
   def('status',function(){return _notaHecha(n)?'completada':(n.estadoTarea&&n.estadoTarea!=='completada'&&n.estadoTarea!=='cancelada'?n.estadoTarea:'pendiente');},function(v){n.hecha=v==='completada';if(v!=='completada')n.estadoTarea=v;});
   def('date',function(){return n.fecha||n.date;});
+  def('tipo',function(){return n.tipo||'registro';});
   return o;
+}
+// Tipo de lo vinculado a una visita (lo que quede de la lista vieja de tareas cuenta como tarea)
+function _tipoVis(t){return t&&t._nota?(t.tipo||'registro'):'pendiente';}
+// Notas de una visita agrupadas por tipo (avances juntos, registros juntos, tareas juntas…)
+function _notasVisitaOrdenadas(vid){
+  var ord=Object.keys(NOTA_TIPOS);
+  return _tareasDeVisita(vid).sort(function(a,b){
+    var ia=ord.indexOf(_tipoVis(a)),ib=ord.indexOf(_tipoVis(b));ia=ia<0?99:ia;ib=ib<0?99:ib;
+    return ia-ib||String(a.date||'').localeCompare(String(b.date||''));
+  });
 }
 // Tareas de la obra: las que queden en la lista vieja más las notas de tareas / pendientes
 function pfT(){return pf('tareas').concat(pf('notas').filter(function(n){return n.tipo==='pendiente';}).map(_notaComoTarea));}
@@ -8621,6 +8636,8 @@ function guardarNota(){
   var n=e.id?D.notas.find(function(x){return x.id===e.id;}):null;
   var datos={fecha:v('nm_f')||td(),hora:v('nm_h'),tipo:v('nm_t')||'registro',cuaderno:v('nm_c')||NOTA_CUADERNO_DEF,titulo:ti,personas:v('nm_p'),texto:tx,photos:e.photos||[],updatedAt:nw()};
   if(document.getElementById('nm_chk'))datos.checklistId=v('nm_chk');
+  if(!n&&window._notaVisitaNueva){datos.visitaId=window._notaVisitaNueva;}
+  window._notaVisitaNueva=null;
   if(datos.tipo==='pendiente'){datos.prioridad=v('nm_pri')||'media';datos.vence=v('nm_ven');datos.responsable=v('nm_resp');}
   if(n)Object.assign(n,datos);
   else D.notas.push(Object.assign({id:uid(),projectId:S.proj,fijada:false,derivados:[],cargadoPor:(D.user&&D.user.name)||'',date:nw()},datos));
