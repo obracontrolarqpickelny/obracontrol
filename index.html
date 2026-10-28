@@ -8349,13 +8349,13 @@ function rNotas(mc){
     +'</div>'
     +(tipoNueva==='pendiente'?_notaCamposTarea('nota',{prioridad:S.notaPriNueva,vence:S.notaVenNueva,responsable:S.notaRespNueva},true):'')
     +'<textarea class="ft" id="nota_q" rows="3" style="margin:0" placeholder="¿Qué pasó hoy en la obra? Ej: Se hormigonó la losa del sector A. Hablé con Juan (plomero): arranca el lunes." onblur="S.notaBorrador=this.value;saveUIState()">'+esc(S.notaBorrador||'')+'</textarea>'
-    +(adj.length?'<div id="nota_adj" class="flex gap-6 mt-6" style="flex-wrap:wrap">'+adj.map(function(u,i){return '<div style="position:relative"><img src="'+esc(_resolveImg(u))+'" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--brd)"><button title="Editar" onclick="editarFotoDe({k:\'adj\',i:'+i+'})" style="position:absolute;bottom:-6px;left:-6px;border:none;background:#ca8a04;color:#fff;border-radius:50%;width:22px;height:22px;font-size:11px;cursor:pointer">✏️</button><button onclick="S.notaAdj.splice('+i+',1);saveUIState();render()" style="position:absolute;top:-6px;right:-6px;border:none;background:var(--red);color:#fff;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer">✕</button></div>';}).join('')+'</div>':'')
+    +(adj.length?'<div id="nota_adj" class="flex gap-6 mt-6" style="flex-wrap:wrap">'+adj.map(function(u,i){var _cp=(u&&u.caption)||'';u=(u&&u.url)||u;return '<div style="position:relative"'+(_cp?' title="'+esc(_cp)+'"':'')+'>'+(_cp?'<span style="position:absolute;top:2px;left:2px;background:rgba(0,0,0,.6);color:#fff;border-radius:6px;font-size:9px;padding:0 4px">💬</span>':'')+'<img src="'+esc(_resolveImg(u))+'" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--brd)"><button title="Editar" onclick="editarFotoDe({k:\'adj\',i:'+i+'})" style="position:absolute;bottom:-6px;left:-6px;border:none;background:#ca8a04;color:#fff;border-radius:50%;width:22px;height:22px;font-size:11px;cursor:pointer">✏️</button><button onclick="S.notaAdj.splice('+i+',1);saveUIState();render()" style="position:absolute;top:-6px;right:-6px;border:none;background:var(--red);color:#fff;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer">✕</button></div>';}).join('')+'</div>':'')
     +'<div class="flex gap-4 mt-8 items-center" style="flex-wrap:nowrap">'
-    +'<button class="btn btn-sec btn-s" id="nota_mic" title="Dictar" style="flex:1;font-size:17px;padding:6px 4px;justify-content:center" onclick="dictarNota(\'nota_q\',this)">🎤</button>'
-    +'<label class="btn btn-sec btn-s" title="Foto de la galería" style="flex:1;font-size:17px;padding:6px 4px;justify-content:center;cursor:pointer">🖼️<input type="file" accept="image/*" multiple style="display:none" onchange="fotosNotaRapida(this)"></label>'
-    +'<label class="btn btn-sec btn-s" title="Sacar una foto con la cámara" style="flex:1;font-size:17px;padding:6px 4px;justify-content:center;cursor:pointer">📷<input type="file" accept="image/*" capture="environment" style="display:none" onchange="fotosNotaRapida(this)"></label>'
-    +'<button class="btn btn-sec btn-s" title="Dibujar" style="flex:1;font-size:17px;padding:6px 4px;justify-content:center" onclick="abrirDibujoNota(null)">✏️</button>'
-    +'<button class="btn btn-s" title="Asentar la nota" style="flex:0 0 52px;padding:6px 4px;justify-content:center;background:'+c+';color:#fff" onclick="guardarNotaRapida()">'+I.save+'</button>'
+    +'<button class="btn btn-sec btn-s" id="nota_mic" title="Dictar" style="flex:1;height:38px;font-size:17px;padding:6px 4px;justify-content:center" onclick="dictarNota(\'nota_q\',this)">🎤</button>'
+    +'<label class="btn btn-sec btn-s" title="Foto de la galería" style="flex:1;height:38px;font-size:17px;padding:6px 4px;justify-content:center;cursor:pointer">🖼️<input type="file" accept="image/*" multiple style="display:none" onchange="fotosNotaRapida(this)"></label>'
+    +'<label class="btn btn-sec btn-s" title="Sacar una foto con la cámara" style="flex:1;height:38px;font-size:17px;padding:6px 4px;justify-content:center;cursor:pointer">📷<input type="file" accept="image/*" capture="environment" style="display:none" onchange="fotosNotaRapida(this)"></label>'
+    +'<button class="btn btn-sec btn-s" title="Dibujar" style="flex:1;height:38px;font-size:17px;padding:6px 4px;justify-content:center" onclick="abrirDibujoNota(null)">✏️</button>'
+    +'<button class="btn btn-s" title="Asentar la nota" style="flex:1;height:38px;font-size:17px;padding:6px 4px;justify-content:center;background:'+c+';color:#fff" onclick="guardarNotaRapida()">'+I.save+'</button>'
     +'</div>'
     +'<div class="txxs tc3 mt-6">Se asienta con la fecha y hora de ahora. Para otra fecha o más datos usá <b>+ Nota</b>.</div>'
     +'</div>';
@@ -8505,11 +8505,22 @@ function borrarCuaderno(nombre){
   saveUIState();sv();_pintarCuadernos();toast('Cuaderno borrado','var(--text3)',2000);
 }
 async function fotosNotaRapida(input){
-  var urls=await _leerFotosNota(input);
-  if(!urls.length)return;
-  S.notaAdj=(S.notaAdj||[]).concat(urls);saveUIState();
-  var ta=$('nota_q');if(ta)S.notaBorrador=ta.value;
-  render();
+  var dus=await _leerDataUrlsNota(input);
+  if(!dus.length)return;
+  var ta=$('nota_q');if(ta){S.notaBorrador=ta.value;saveUIState();}
+  _abrirFotoNueva(dus,'adj',0);
+}
+// Lee y achica las fotos elegidas (todavía no se guardan)
+async function _leerDataUrlsNota(input){
+  var files=Array.from((input&&input.files)||[]),out=[];
+  for(var i=0;i<files.length;i++){
+    var du=await new Promise(function(res){var r=new FileReader();r.onload=function(e){res(e.target.result);};r.onerror=function(){res(null);};r.readAsDataURL(files[i]);});
+    if(!du)continue;
+    try{du=await compressImage(du,1600,0.8);}catch(_){}
+    out.push(du);
+  }
+  try{input.value='';}catch(_){}
+  return out;
 }
 async function _leerFotosNota(input){
   var files=Array.from((input&&input.files)||[]),out=[];
@@ -8528,7 +8539,7 @@ function guardarNotaRapida(){
   if(!tx&&!adj.length){toast('Escribí, dictá o agregá una foto','var(--orange)');return;}
   var n={id:uid(),projectId:S.proj,fecha:td(),hora:_notaHora(),tipo:S.notaTipoNueva||'registro',
     cuaderno:_cuadSel(),titulo:'',texto:tx,personas:'',
-    photos:adj.map(function(u){return mkPhoto(u,'');}),fijada:false,derivados:[],
+    photos:adj.map(function(u){return mkPhoto((u&&u.url)||u,(u&&u.caption)||'');}),fijada:false,derivados:[],
     cargadoPor:(D.user&&D.user.name)||'',date:nw(),updatedAt:nw()};
   if(n.tipo==='pendiente'){
     n.prioridad=_valCampo('nota_pri')||S.notaPriNueva||'media';n.vence=_valCampo('nota_ven')||'';n.responsable=_valCampo('nota_resp')||'';
@@ -8582,9 +8593,8 @@ function _notaEditFotos(){
   }).join('')+'</div>':'';
 }
 async function fotosNotaEdit(input){
-  var urls=await _leerFotosNota(input);
-  urls.forEach(function(u){window._notaEdit.photos.push(mkPhoto(u,''));});
-  _notaEditFotos();
+  var dus=await _leerDataUrlsNota(input);
+  if(dus.length)_abrirFotoNueva(dus,'edit',0);
 }
 function guardarNota(){
   if(typeof requireWrite==='function'&&!requireWrite())return;
@@ -8637,30 +8647,36 @@ function dictarNota(taId,btn){
 // ── Dibujo a mano alzada ──
 function abrirDibujoNota(destino){
   window._dibDest=destino;
+  var nueva=!!(destino&&destino.k==='nueva'),cerrar=nueva?'_dibDescartarNueva()':'document.getElementById(\'dibM\').remove()';
   var cols=['#111827','#dc2626','#2563eb','#16a34a','#ea580c','#ca8a04'];
   document.getElementById('dibM')?.remove();
   var d=document.createElement('div');d.className='mo open';d.id='dibM';d.style.zIndex='2600';
   d.innerHTML='<div class="mo-c" style="max-width:900px;width:96vw;padding:10px">'
-    +'<div class="flex items-center mb-6"><div class="ts fw7" style="flex:1;color:'+MC.notas+'">✏️ Dibujo</div><button class="tbtn" title="Cerrar sin guardar" onclick="document.getElementById(\'dibM\').remove()">'+I.x+'</button></div>'
+    +'<div class="flex items-center mb-6"><div class="ts fw7" style="flex:1;color:'+MC.notas+'">'+(nueva?'📷 Foto'+(destino.cola.length>1?' '+(destino.i+1)+' de '+destino.cola.length:'')+' · marcá con el lápiz y comentala':'✏️ Dibujo')+'</div><button class="tbtn" title="'+(nueva?'Descartar esta foto':'Cerrar sin guardar')+'" onclick="'+cerrar+'">'+I.x+'</button></div>'
     +'<div class="flex gap-6 items-center mb-6" style="flex-wrap:wrap">'
     +cols.map(function(cl,i){return '<button class="dib-col" data-c="'+cl+'" onclick="_dibSet({color:\''+cl+'\',goma:false},this)" style="width:26px;height:26px;border-radius:50%;background:'+cl+';border:3px solid '+(i===0?'#fbbf24':'#fff')+';box-shadow:0 0 0 1px #cbd5e1;cursor:pointer"></button>';}).join('')
     +'<select class="fs" style="margin:0;width:auto" onchange="_dibSet({ancho:+this.value})"><option value="2">Fino</option><option value="4" selected>Medio</option><option value="9">Grueso</option><option value="22">Marcador</option></select>'
     +'<button class="btn btn-sec btn-s" id="dib_goma" title="Borra sólo lo dibujado, no la foto" onclick="_dibSet({goma:!window._dib.goma})">🧽 Goma</button>'
     +'<button class="btn btn-sec btn-s" onclick="_dibDeshacer()">↶ Deshacer</button>'
-    +'<button class="btn btn-sec btn-s" onclick="_dibFondo(\'cuad\')">▦ Cuadrícula</button>'
+    +(nueva?'':'<button class="btn btn-sec btn-s" onclick="_dibFondo(\'cuad\')">▦ Cuadrícula</button>'
     +'<label class="btn btn-sec btn-s" style="cursor:pointer" title="Sacar una foto y dibujar encima">📷 Cámara<input type="file" accept="image/*" capture="environment" style="display:none" onchange="_dibFoto(this)"></label>'
     +'<label class="btn btn-sec btn-s" style="cursor:pointer" title="Elegir una foto de la galería y dibujar encima">🖼 Sobre foto<input type="file" accept="image/*" style="display:none" onchange="_dibFoto(this)"></label>'
-    +'<button class="btn btn-sec btn-s" style="color:var(--red)" onclick="_dibFondo(\'blanco\')">🗑 Limpiar</button>'
+    +'<button class="btn btn-sec btn-s" style="color:var(--red)" onclick="_dibFondo(\'blanco\')">🗑 Limpiar</button>')
     +'<div style="flex:1"></div>'
-    +'<button class="btn btn-sec btn-s" onclick="document.getElementById(\'dibM\').remove()">Cancelar</button>'
-    +'<button class="btn btn-s" style="background:'+MC.notas+';color:#fff" onclick="_dibGuardar()">'+I.save+' Usar dibujo</button>'
+    +(nueva?'':'<button class="btn btn-sec btn-s" onclick="document.getElementById(\'dibM\').remove()">Cancelar</button>'
+    +'<button class="btn btn-s" style="background:'+MC.notas+';color:#fff" onclick="_dibGuardar()">'+I.save+' Usar dibujo</button>')
     +'</div>'
     // Dos capas: abajo el fondo (blanco, cuadrícula o foto), arriba lo dibujado.
     // La goma sólo borra la capa de arriba: la foto no se toca.
-    +'<div id="dib_box" style="position:relative;width:100%;height:62vh;border:1px solid var(--brd);border-radius:8px;overflow:hidden;background:#fff">'
+    +'<div id="dib_box" style="position:relative;width:100%;height:'+(nueva?'46vh':'62vh')+';border:1px solid var(--brd);border-radius:8px;overflow:hidden;background:#fff">'
     +'<canvas id="dib_bg" style="position:absolute;inset:0;width:100%;height:100%;display:block"></canvas>'
     +'<canvas id="dib_cv" style="position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block"></canvas>'
-    +'</div></div>';
+    +'</div>'
+    +(nueva?'<div class="flex gap-6 mt-8" style="align-items:stretch"><textarea class="ft" id="dib_cap" rows="2" style="margin:0;flex:1" placeholder="Comentario de la foto (opcional)…"></textarea>'
+      +'<button class="btn btn-sec btn-s" title="Dictar el comentario" style="font-size:17px" onclick="dictarNota(\'dib_cap\',this)">🎤</button></div>'
+      +'<div class="flex gap-6 mt-8"><button class="btn btn-sec" style="flex:1" onclick="_dibDescartarNueva()">Descartar</button>'
+      +'<button class="btn" style="flex:2;background:'+MC.notas+';color:#fff" onclick="_dibGuardar()">'+I.save+' Guardar'+(destino.i+1<destino.cola.length?' y seguir':'')+'</button></div>':'')
+    +'</div>';
   document.body.appendChild(d);
   var cv=document.getElementById('dib_cv'),bg=document.getElementById('dib_bg');
   window._dib={cv:cv,ctx:cv.getContext('2d'),bg:bg,bx:bg.getContext('2d'),w:0,h:0,color:cols[0],ancho:4,goma:false,hist:[],fondo:null};
@@ -8671,7 +8687,7 @@ function abrirDibujoNota(destino){
   var dib=false,ult=null;
   var pos=function(ev){var b=cv.getBoundingClientRect();return {x:ev.clientX-b.left,y:ev.clientY-b.top};};
   var modo=function(ctx){ctx.globalCompositeOperation=window._dib.goma?'destination-out':'source-over';};
-  cv.onpointerdown=function(ev){ev.preventDefault();_dibAjustar();try{cv.setPointerCapture(ev.pointerId);}catch(_){}_dibSnap();dib=true;ult=pos(ev);var D2=window._dib,ctx=D2.ctx;modo(ctx);ctx.beginPath();ctx.fillStyle=D2.goma?'#000':D2.color;ctx.arc(ult.x,ult.y,(D2.goma?D2.ancho*3:D2.ancho)/2,0,Math.PI*2);ctx.fill();};
+  cv.onpointerdown=function(ev){ev.preventDefault();_dibAjustar();try{cv.setPointerCapture(ev.pointerId);}catch(_){}_dibSnap();dib=true;window._dib.trazos=true;ult=pos(ev);var D2=window._dib,ctx=D2.ctx;modo(ctx);ctx.beginPath();ctx.fillStyle=D2.goma?'#000':D2.color;ctx.arc(ult.x,ult.y,(D2.goma?D2.ancho*3:D2.ancho)/2,0,Math.PI*2);ctx.fill();};
   cv.onpointermove=function(ev){if(!dib)return;var p=pos(ev),D2=window._dib,ctx=D2.ctx;modo(ctx);ctx.strokeStyle=D2.goma?'#000':D2.color;ctx.lineWidth=D2.goma?D2.ancho*3:D2.ancho*(ev.pressure&&ev.pointerType==='pen'?(0.5+ev.pressure):1);ctx.beginPath();ctx.moveTo(ult.x,ult.y);ctx.lineTo(p.x,p.y);ctx.stroke();ult=p;};
   cv.onpointerup=cv.onpointercancel=function(){dib=false;var c=window._dib&&window._dib.ctx;if(c)c.globalCompositeOperation='source-over';};
 }
@@ -8691,6 +8707,7 @@ function _dibAjustar(){
   bx.fillStyle='#fff';bx.fillRect(0,0,w,h);
   if(pBg)bx.drawImage(pBg,0,0,pBg.width,pBg.height,0,0,w,h);
   if(pInk)ctx.drawImage(pInk,0,0,pInk.width,pInk.height,0,0,w,h);
+  if(D2.fotoImg)_dibPintarFondo(D2.fotoImg.src,false,true);
 }
 function _dibSet(o,btn){
   Object.assign(window._dib,o);
@@ -8706,6 +8723,7 @@ function _dibFondo(tipo,sinSnap){
   var bx=D2.bx;bx.fillStyle='#fff';bx.fillRect(0,0,D2.w,D2.h);
   if(tipo==='cuad'){bx.strokeStyle='#e2e8f0';bx.lineWidth=1;for(var x=0;x<D2.w;x+=20){bx.beginPath();bx.moveTo(x,0);bx.lineTo(x,D2.h);bx.stroke();}for(var y=0;y<D2.h;y+=20){bx.beginPath();bx.moveTo(0,y);bx.lineTo(D2.w,y);bx.stroke();}}
   else D2.ctx.clearRect(0,0,D2.w,D2.h);
+  D2.foto=null;D2.fotoImg=null;
 }
 function _dibFoto(input){
   var f=input.files&&input.files[0];if(!f)return;
@@ -8715,19 +8733,50 @@ function _dibFoto(input){
   input.value='';
 }
 // La foto va al fondo: lo ya dibujado queda encima
-function _dibPintarFondo(src,conSnap){
-  var img=new Image();img.onload=function(){
+function _dibPintarFondo(src,conSnap,yaCargada){
+  var pinta=function(img){
     var D2=window._dib;if(!D2)return;if(conSnap)_dibSnap();
     D2.bx.fillStyle='#fff';D2.bx.fillRect(0,0,D2.w,D2.h);
     var k=Math.min(D2.w/img.width,D2.h/img.height),w=img.width*k,h=img.height*k;
-    D2.bx.drawImage(img,(D2.w-w)/2,(D2.h-h)/2,w,h);
-  };img.src=src;
+    D2.foto={x:(D2.w-w)/2,y:(D2.h-h)/2,w:w,h:h};D2.fotoImg=img;
+    D2.bx.drawImage(img,D2.foto.x,D2.foto.y,w,h);
+    // Foto nueva: el recuadro toma la forma de la foto (sin franjas blancas)
+    if(window._dibDest&&window._dibDest.k==='nueva'&&!D2.ajFoto){
+      D2.ajFoto=1;var bxx=document.getElementById('dib_box');
+      if(bxx&&bxx.clientWidth>50){bxx.style.height=Math.round(Math.min(window.innerHeight*0.55,bxx.clientWidth*img.height/img.width))+'px';_dibAjustar();}
+    }
+  };
+  if(yaCargada&&window._dib&&window._dib.fotoImg){pinta(window._dib.fotoImg);return;}
+  var img=new Image();img.onload=function(){pinta(img);};img.src=src;
 }
 // La imagen final: fondo + dibujo
 function _dibComponer(){
-  var D2=window._dib,k=document.createElement('canvas');k.width=D2.cv.width;k.height=D2.cv.height;
-  var x=k.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,k.width,k.height);x.drawImage(D2.bg,0,0);x.drawImage(D2.cv,0,0);
+  var D2=window._dib,dpr=D2.cv.width/(D2.w||1);
+  var r=D2.foto?{x:Math.round(D2.foto.x*dpr),y:Math.round(D2.foto.y*dpr),w:Math.round(D2.foto.w*dpr),h:Math.round(D2.foto.h*dpr)}:{x:0,y:0,w:D2.cv.width,h:D2.cv.height};
+  // Con foto: se arma en la resolución de la foto (hasta 1600 px) y el dibujo se escala encima
+  var fi=D2.foto&&D2.fotoImg,esc_=fi?Math.min(1,1600/Math.max(fi.width,fi.height)):1;
+  var k=document.createElement('canvas');k.width=fi?Math.round(fi.width*esc_):Math.max(1,r.w);k.height=fi?Math.round(fi.height*esc_):Math.max(1,r.h);
+  var x=k.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,k.width,k.height);
+  if(fi)x.drawImage(fi,0,0,k.width,k.height);else x.drawImage(D2.bg,r.x,r.y,r.w,r.h,0,0,r.w,r.h);
+  x.drawImage(D2.cv,r.x,r.y,r.w,r.h,0,0,k.width,k.height);
   return k.toDataURL('image/jpeg',0.85);
+}
+// Fotos nuevas (galería o cámara): una por una, grandes, con lápiz y comentario
+function _abrirFotoNueva(cola,target,i){
+  if(!cola||i>=cola.length)return;
+  abrirDibujoNota({k:'nueva',cola:cola,target:target,i:i});
+  setTimeout(function(){_dibPintarFondo(cola[i],false);},320);
+}
+function _dibDescartarNueva(){
+  var dd=window._dibDest;document.getElementById('dibM')?.remove();
+  if(dd&&dd.k==='nueva')_abrirFotoNueva(dd.cola,dd.target,dd.i+1);
+}
+async function _guardarFotoNueva(dd,src,cap){
+  var ref=await _guardarImgNota(src);
+  if(dd.target==='edit'&&window._notaEdit){window._notaEdit.photos.push(mkPhoto(ref,cap||''));_notaEditFotos();}
+  else{var ta=$('nota_q');if(ta)S.notaBorrador=ta.value;S.notaAdj=(S.notaAdj||[]).concat([{url:ref,caption:cap||''}]);saveUIState();render();}
+  toast('Foto agregada ✓','var(--green)',1500);
+  _abrirFotoNueva(dd.cola,dd.target,dd.i+1);
 }
 // La foto como imagen editable (del dispositivo o bajada de Drive: la de la
 // miniatura de Drive no se puede leer desde el lienzo)
@@ -8758,7 +8807,10 @@ function editarFotoNota(nid,i){return editarFotoDe({k:'nota',nid:nid,i:i});}
 async function _dibGuardar(){
   var D2=window._dib;if(!D2)return;
   var du=_dibComponer();
+  var _cap=_valCampo('dib_cap'),_traz=!!D2.trazos,_dd=window._dibDest;
   document.getElementById('dibM')?.remove();
+  // Foto nueva: si no se marcó nada se guarda la original (mejor calidad)
+  if(_dd&&_dd.k==='nueva'){await _guardarFotoNueva(_dd,_traz?du:_dd.cola[_dd.i],_cap);return;}
   if(window._dibDest==='chat'){window._chatAdj=(window._chatAdj||[]).concat([du]);_chatPintar();toast('Dibujo agregado ✓','var(--green)');return;}
   var ref=await _guardarImgNota(du);
   // Foto editada: reemplaza a la original en su lugar (el archivo original queda en Drive)
@@ -8770,7 +8822,7 @@ async function _dibGuardar(){
         var pos=(nn.photos||[]).findIndex(function(x){return (dd.pid&&x&&x.id===dd.pid)||(x&&x.url===dd.url)||x===dd.url;});
         if(pos>=0){var ant=nn.photos[pos];nn.photos[pos]=Object.assign({},typeof ant==='object'?ant:{caption:''},{url:ref,localUrl:undefined,driveId:null,editadaDe:(typeof ant==='object'?ant.url:ant),date:td()});nn.updatedAt=nw();sv();render();}
       }
-    } else if(dd.k==='adj'){if(S.notaAdj&&S.notaAdj[dd.i]!==undefined){S.notaAdj[dd.i]=ref;saveUIState();var _ta=$('nota_q');if(_ta)S.notaBorrador=_ta.value;render();}}
+    } else if(dd.k==='adj'){if(S.notaAdj&&S.notaAdj[dd.i]!==undefined){var _o=S.notaAdj[dd.i];S.notaAdj[dd.i]=(_o&&typeof _o==='object')?Object.assign({},_o,{url:ref}):ref;saveUIState();var _ta=$('nota_q');if(_ta)S.notaBorrador=_ta.value;render();}}
     else if(dd.k==='edit'&&window._notaEdit){var ph=window._notaEdit.photos[dd.i];if(ph){if(typeof ph==='object')ph.url=ref;else window._notaEdit.photos[dd.i]=mkPhoto(ref,'');_notaEditFotos();}}
     toast('Foto editada ✓','var(--green)');return;
   }
@@ -8930,12 +8982,11 @@ function exportNotasPDF(){
   else if(S.notasChat)filtros.push('Con conversación');
   if(S.notasTipo==='pendiente'&&S.notasResp)filtros.push(S.notasResp==='__sin'?'Sin responsable':'Responsable: '+S.notasResp);
   if(S.notasVencF)filtros.push('Vencidas y por vencer');
-  filtros.push({asc:'Más antiguas primero',pri:'Por prioridad',venc:'Por vencimiento'}[S.notasOrden]||'Más recientes primero');
   var dia='',body='',sinDias=S.notasOrden==='pri'||S.notasOrden==='venc';
   lista.forEach(function(n){
     if(sinDias){if(!dia){dia='x';body+='<h2>'+(S.notasOrden==='pri'?'Por prioridad':'Por vencimiento')+'</h2>';}}
     else if(n.fecha!==dia){dia=n.fecha;body+='<h2>'+esc(_notaDiaLargo(dia))+'</h2>';}
-    var fotos=(n.photos||[]).filter(function(ph){return ph&&!ph.deletedAt;}).map(function(ph){return _resolveImg(ph.url);}).filter(function(u){return u&&u.indexOf('[')!==0;});
+    var fotos=(n.photos||[]).filter(function(ph){return ph&&!ph.deletedAt;}).map(function(ph){return {u:_resolveImg(ph.url),c:ph.caption||''};}).filter(function(f){return f.u&&f.u.indexOf('[')!==0;});
     body+='<div class="nota"><div class="cab"><b>'+esc(sinDias?((fmts(n.fecha)||'')+' '+(n.hora||'')):(n.hora||''))+'</b> · '+esc(_notaTipoLabel(n.tipo||'registro'))
       +((n.cuaderno&&n.cuaderno!==NOTA_CUADERNO_DEF)?' · 📒 '+esc(n.cuaderno):'')+(n.personas&&!(n.tipo==='pendiente'&&_mismoResp(n.personas,n.responsable))?' · 👥 '+esc(n.personas):'')
       +(/^dot$/i.test(String(n.cargadoPor||''))?' · 💻 DOT':'')
@@ -8945,14 +8996,14 @@ function exportNotasPDF(){
       +(_notaHecha(n)?' · ✓ Hecha':'')+'</div>'
       +(n.titulo?'<div class="tit">'+esc(n.titulo)+'</div>':'')
       +(n.texto?'<div class="tx">'+esc(n.texto)+'</div>':'')
-      +(fotos.length?'<div class="fotos">'+fotos.map(function(u){return '<img src="'+esc(u)+'">';}).join('')+'</div>':'')
+      +(fotos.length?'<div class="fotos">'+fotos.map(function(f){return '<div class="foto"><img src="'+esc(f.u)+'">'+(f.c?'<div class="cap">'+esc(f.c)+'</div>':'')+'</div>';}).join('')+'</div>':'')
       +'</div>';
   });
   var h='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Libro de obra - '+esc(p.name||'')+'</title><style>@page{size:A4;margin:16mm}body{font-family:Arial,sans-serif;max-width:210mm;margin:0 auto;padding:16px;color:#1f2937}'
     +'h1{font-size:14pt;border-bottom:3px solid #ca8a04;padding-bottom:4px;margin:0 0 2px}.sub{font-size:8.5pt;color:#64748b;margin-bottom:12px}'
     +'h2{font-size:10pt;color:#a16207;border-bottom:1px solid #fde68a;padding-bottom:2px;margin:14px 0 6px;page-break-after:avoid}'
     +'.nota{border-left:3px solid #fde68a;padding:4px 10px;margin-bottom:8px;page-break-inside:avoid}.cab{font-size:8pt;color:#64748b}.tit{font-size:10pt;font-weight:700;margin-top:2px}.tx{font-size:9.5pt;white-space:pre-wrap;line-height:1.45;margin-top:2px}'
-    +'.fotos{margin-top:4px}.fotos img{width:31%;max-height:170px;object-fit:contain;margin:0 1% 4px 0;border:1px solid #e2e8f0;border-radius:3px;vertical-align:top}'
+    +'.fotos{margin-top:4px;display:flex;flex-wrap:wrap;gap:6px;align-items:flex-start}.foto{max-width:32%;page-break-inside:avoid}.foto img{display:block;max-width:100%;max-height:170px;width:auto;height:auto;border:1px solid #e2e8f0;border-radius:3px}.foto .cap{font-size:7.5pt;color:#475569;margin-top:2px;line-height:1.3}'
     +'@media print{.no-print{display:none}}</style></head><body>'
     +'<h1>Libro de obra</h1><div class="sub">Obra: '+esc(p.name||'')+' | '+lista.length+' nota'+(lista.length>1?'s':'')+(filtros.length?' — '+esc(filtros.join(' | ')):'')+'</div>'
     +body
