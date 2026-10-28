@@ -5307,7 +5307,7 @@ function exportVisitaPDF(vid){
       const _cmts=(typeof p==='object'&&p.comments&&p.comments.length)?p.comments:[];
       ph+='<div style="break-inside:avoid;page-break-inside:avoid;display:flex;flex-direction:column">';
       ph+='<div style="border-radius:6px;border:1px solid #e2e8f0;background:#f5f5f5;height:165px;display:flex;align-items:center;justify-content:center;overflow:hidden">';
-      ph+='<img src="'+_url+'" style="max-width:100%;max-height:165px;width:auto;height:auto;display:block;object-fit:contain"></div>';
+      ph+='<img src="'+_url+'" style="width:100%;height:100%;display:block;object-fit:contain"></div>';
       if(_cmts.length){
         ph+='<div style="font-size:9px;color:#374151;margin-top:4px;padding:0 2px;line-height:1.5">';
         _cmts.forEach(function(cm){ph+='<div style="background:#f0f4f8;border-radius:3px;padding:2px 5px;margin-bottom:2px">'+(cm.author?'<strong>'+cm.author+':</strong> ':'')+cm.text+'</div>';});
@@ -9046,7 +9046,7 @@ function exportNotasPDF(){
     +'h2{font-size:10pt;color:#a16207;border-bottom:1px solid #fde68a;padding-bottom:2px;margin:14px 0 6px;page-break-after:avoid}'
     +'.nota{border-left:3px solid #fde68a;padding:4px 10px;margin-bottom:8px;page-break-inside:avoid}.cab{font-size:8pt;color:#64748b}.tit{font-size:10pt;font-weight:700;margin-top:2px}.tx{font-size:9.5pt;white-space:pre-wrap;line-height:1.45;margin-top:2px}'
     +'.fotos{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:8px 0 6px}.foto{break-inside:avoid;page-break-inside:avoid;display:flex;flex-direction:column}'
-    +'.marco{border-radius:6px;border:1px solid #e2e8f0;background:#f5f5f5;height:165px;display:flex;align-items:center;justify-content:center;overflow:hidden}.marco img{max-width:100%;max-height:165px;width:auto;height:auto;display:block;object-fit:contain}'
+    +'.marco{border-radius:6px;border:1px solid #e2e8f0;background:#f5f5f5;height:165px;display:flex;align-items:center;justify-content:center;overflow:hidden}.marco img{width:100%;height:100%;display:block;object-fit:contain}'
     +'.cmts{font-size:9px;color:#374151;margin-top:4px;padding:0 2px;line-height:1.5}.cmt{background:#f0f4f8;border-radius:3px;padding:2px 5px;margin-bottom:2px}'
     +'@media print{.no-print{display:none}}</style></head><body>'
     +'<h1>Libro de obra</h1><div class="sub">Obra: '+esc(p.name||'')+' | '+lista.length+' nota'+(lista.length>1?'s':'')+(filtros.length?' — '+esc(filtros.join(' | ')):'')+'</div>'
