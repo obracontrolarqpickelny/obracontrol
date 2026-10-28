@@ -9028,7 +9028,7 @@ function exportNotasPDF(){
   lista.forEach(function(n){
     if(sinDias){if(!dia){dia='x';body+='<h2>'+(S.notasOrden==='pri'?'Por prioridad':'Por vencimiento')+'</h2>';}}
     else if(n.fecha!==dia){dia=n.fecha;body+='<h2>'+esc(_notaDiaLargo(dia))+'</h2>';}
-    var fotos=(n.photos||[]).filter(function(ph){return ph&&!ph.deletedAt;}).map(function(ph){var cs=(ph.comments||[]).map(function(c){return c.text;}).filter(Boolean);if(String(ph.caption||'').trim()&&ph.caption!=='✏️ Dibujo')cs.unshift(ph.caption);return {u:_resolveImg(ph.url),c:cs.length>1?cs.map(function(t,i){return (i+1)+'. '+t;}).join('\n'):(cs[0]||'')};}).filter(function(f){return f.u&&f.u.indexOf('[')!==0;});
+    var fotos=(n.photos||[]).filter(function(ph){return ph&&!ph.deletedAt;}).map(function(ph){var cs=(ph.comments||[]).filter(function(c){return c&&c.text;}).map(function(c){return {a:c.author||'',t:c.text};});if(String(ph.caption||'').trim()&&ph.caption!=='✏️ Dibujo')cs.unshift({a:'',t:ph.caption});return {u:_resolveImg(ph.url),c:cs};}).filter(function(f){return f.u&&f.u.indexOf('[')!==0;});
     body+='<div class="nota"><div class="cab"><b>'+esc(sinDias?((fmts(n.fecha)||'')+' '+(n.hora||'')):(n.hora||''))+'</b> · '+esc(_notaTipoLabel(n.tipo||'registro'))
       +((n.cuaderno&&n.cuaderno!==NOTA_CUADERNO_DEF)?' · 📒 '+esc(n.cuaderno):'')+(n.personas&&!(n.tipo==='pendiente'&&_mismoResp(n.personas,n.responsable))?' · 👥 '+esc(n.personas):'')
       +(/^dot$/i.test(String(n.cargadoPor||''))?' · 💻 DOT':'')
@@ -9038,14 +9038,16 @@ function exportNotasPDF(){
       +(_notaHecha(n)?' · ✓ Hecha':'')+'</div>'
       +(n.titulo?'<div class="tit">'+esc(n.titulo)+'</div>':'')
       +(n.texto?'<div class="tx">'+esc(n.texto)+'</div>':'')
-      +(fotos.length?'<div class="fotos">'+fotos.map(function(f){return '<div class="foto"><img src="'+esc(f.u)+'">'+(f.c?'<div class="cap" style="white-space:pre-wrap">'+esc(f.c)+'</div>':'')+'</div>';}).join('')+'</div>':'')
+      +(fotos.length?'<div class="fotos">'+fotos.map(function(f){return '<div class="foto"><div class="marco"><img src="'+esc(f.u)+'"></div>'+(f.c.length?'<div class="cmts">'+f.c.map(function(c){return '<div class="cmt">'+(c.a?'<strong>'+esc(c.a)+':</strong> ':'')+esc(c.t)+'</div>';}).join('')+'</div>':'')+'</div>';}).join('')+'</div>':'')
       +'</div>';
   });
   var h='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Libro de obra - '+esc(p.name||'')+'</title><style>@page{size:A4;margin:16mm}body{font-family:Arial,sans-serif;max-width:210mm;margin:0 auto;padding:16px;color:#1f2937}'
     +'h1{font-size:14pt;border-bottom:3px solid #ca8a04;padding-bottom:4px;margin:0 0 2px}.sub{font-size:8.5pt;color:#64748b;margin-bottom:12px}'
     +'h2{font-size:10pt;color:#a16207;border-bottom:1px solid #fde68a;padding-bottom:2px;margin:14px 0 6px;page-break-after:avoid}'
     +'.nota{border-left:3px solid #fde68a;padding:4px 10px;margin-bottom:8px;page-break-inside:avoid}.cab{font-size:8pt;color:#64748b}.tit{font-size:10pt;font-weight:700;margin-top:2px}.tx{font-size:9.5pt;white-space:pre-wrap;line-height:1.45;margin-top:2px}'
-    +'.fotos{margin-top:4px;display:flex;flex-wrap:wrap;gap:6px;align-items:flex-start}.foto{max-width:32%;page-break-inside:avoid}.foto img{display:block;max-width:100%;max-height:170px;width:auto;height:auto;border:1px solid #e2e8f0;border-radius:3px}.foto .cap{font-size:7.5pt;color:#475569;margin-top:2px;line-height:1.3}'
+    +'.fotos{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:8px 0 6px}.foto{break-inside:avoid;page-break-inside:avoid;display:flex;flex-direction:column}'
+    +'.marco{border-radius:6px;border:1px solid #e2e8f0;background:#f5f5f5;height:165px;display:flex;align-items:center;justify-content:center;overflow:hidden}.marco img{max-width:100%;max-height:165px;width:auto;height:auto;display:block;object-fit:contain}'
+    +'.cmts{font-size:9px;color:#374151;margin-top:4px;padding:0 2px;line-height:1.5}.cmt{background:#f0f4f8;border-radius:3px;padding:2px 5px;margin-bottom:2px}'
     +'@media print{.no-print{display:none}}</style></head><body>'
     +'<h1>Libro de obra</h1><div class="sub">Obra: '+esc(p.name||'')+' | '+lista.length+' nota'+(lista.length>1?'s':'')+(filtros.length?' — '+esc(filtros.join(' | ')):'')+'</div>'
     +body
