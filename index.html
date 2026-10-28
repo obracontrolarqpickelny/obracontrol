@@ -3088,7 +3088,7 @@ function _lbSwap(){
     }
   },110);
 }
-function closeLB(){const el=$('lbEl');if(el)el.innerHTML='';S._lbP=null;S._lbTbl=null;S._lbId=null;}
+function closeLB(){const el=$('lbEl');if(el)el.innerHTML='';const _t=S._lbTbl;S._lbP=null;S._lbTbl=null;S._lbId=null;if(_t==='notas'&&S.mod==='notas')render();}
 // ═══════ CACHÉ DE IMÁGENES LOCALES ═══════
 // Cuando una foto se encola para subir a Drive, su base64 se guarda en IndexedDB
 // y en los datos queda la marca '[foto:ID]'. Sin esta caché la pantalla no tenía
@@ -3135,7 +3135,7 @@ function photoGrid(photos,tbl,itemId){if(!photos||!photos.length)return '';
       ${isBroken
         ?`<div style="width:100%;height:100%;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:18px;color:#94a3b8" title="Foto pendiente de sincronización con Drive">☁️</div>`
         :`<img src="${_disp}" style="cursor:pointer" onclick="event.stopPropagation();openLB(getLBP('${tbl}','${itemId}'),${i},'${tbl}','${itemId}')" onerror="_fotoError(this)"><div style="display:none;width:100%;height:100%;background:#fef2f2;border:1px solid #fecaca;align-items:center;justify-content:center;flex-direction:column;font-size:16px;color:#dc2626;cursor:pointer" title="La imagen no se pudo cargar — tocá para reparar" onclick="event.stopPropagation();repararFotosRotas()">&#x26A0;<div style="font-size:8px;margin-top:2px;font-weight:700">Reparar</div></div>` }
-      ${hc?`<span class="photo-cdot">${p.comments.length}</span>`:''}
+      ${hc?(tbl==='notas'?_circuloCmts(p.comments.length):`<span class="photo-cdot">${p.comments.length}</span>`):''}
       ${isVisita?`<div class="photo-actions" style="position:absolute;bottom:2px;right:2px;display:flex;gap:2px;opacity:${tbl==='notas'?1:0};transition:opacity .15s" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=${tbl==='notas'?1:0}">
         ${tbl==='notas'&&!isBroken?`<button class="photo-btn" style="background:rgba(202,138,4,.92)" onclick="event.stopPropagation();editarFotoNota('${itemId}',${i})" title="Editar: dibujar o marcar sobre la foto">✏️</button>`:''}
         <button class="photo-btn" style="background:rgba(220,38,38,.85)" onclick="event.stopPropagation();delPhoto('${tbl}','${itemId}',${i})" title="Eliminar foto">✕</button>
@@ -8327,9 +8327,23 @@ function compartirNotaColab(id){
   var n=(D.notas||[]).find(function(x){return x.id===id;});if(!n)return;
   shareToInbox(n.tipo==='pendiente'?'tarea':'nota',id,'');
 }
+// Comentario cargado al sacar la foto → comentario de la foto (el mismo sistema
+// que Visitas: circulito con el número y se edita o borra con la foto abierta)
+function _capAComentario(ph){
+  if(!ph||typeof ph!=='object'||!String(ph.caption||'').trim()||String(ph.caption).trim()==='✏️ Dibujo')return false;
+  if(!ph.comments)ph.comments=[];
+  ph.comments.unshift({id:uid(),text:String(ph.caption).trim(),date:td(),author:(D.user&&D.user.name)||''});
+  ph.caption='';return true;
+}
+function _notasCapsAComentarios(){
+  var k=0;(D.notas||[]).forEach(function(n){var c=0;(n.photos||[]).forEach(function(ph){if(_capAComentario(ph))c++;});if(c){n.updatedAt=nw();k+=c;}});return k;
+}
+// Circulito con la cantidad de comentarios de una foto (arriba a la izquierda)
+function _circuloCmts(n){return n?'<span class="photo-cdot" style="min-width:20px;height:20px;font-size:11px;border-radius:10px;box-shadow:0 0 0 2px #fff;z-index:1">'+n+'</span>':'';}
 function rNotas(mc){
   if(_migrarComentariosANotas())setTimeout(sv,0);
   if(_notasSinLlamada())setTimeout(sv,0);
+  if(_notasCapsAComentarios())setTimeout(sv,0);
   var c=MC.notas;
   var cuads=_notaCuadernos();
   if(S.notasCuaderno&&cuads.indexOf(S.notasCuaderno)<0)S.notasCuaderno='';
@@ -8349,13 +8363,13 @@ function rNotas(mc){
     +'</div>'
     +(tipoNueva==='pendiente'?_notaCamposTarea('nota',{prioridad:S.notaPriNueva,vence:S.notaVenNueva,responsable:S.notaRespNueva},true):'')
     +'<textarea class="ft" id="nota_q" rows="3" style="margin:0" placeholder="¿Qué pasó hoy en la obra? Ej: Se hormigonó la losa del sector A. Hablé con Juan (plomero): arranca el lunes." onblur="S.notaBorrador=this.value;saveUIState()">'+esc(S.notaBorrador||'')+'</textarea>'
-    +(adj.length?'<div id="nota_adj" class="flex gap-6 mt-6" style="flex-wrap:wrap">'+adj.map(function(u,i){var _cp=(u&&u.caption)||'';u=(u&&u.url)||u;return '<div style="position:relative"'+(_cp?' title="'+esc(_cp)+'"':'')+'>'+(_cp?'<span style="position:absolute;top:2px;left:2px;background:rgba(0,0,0,.6);color:#fff;border-radius:6px;font-size:9px;padding:0 4px">💬</span>':'')+'<img src="'+esc(_resolveImg(u))+'" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--brd)"><button title="Editar" onclick="editarFotoDe({k:\'adj\',i:'+i+'})" style="position:absolute;bottom:-6px;left:-6px;border:none;background:#ca8a04;color:#fff;border-radius:50%;width:22px;height:22px;font-size:11px;cursor:pointer">✏️</button><button onclick="S.notaAdj.splice('+i+',1);saveUIState();render()" style="position:absolute;top:-6px;right:-6px;border:none;background:var(--red);color:#fff;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer">✕</button></div>';}).join('')+'</div>':'')
+    +(adj.length?'<div id="nota_adj" class="flex gap-6 mt-6" style="flex-wrap:wrap">'+adj.map(function(u,i){var _cp=(u&&u.caption)||'';u=(u&&u.url)||u;return '<div style="position:relative"'+(_cp?' title="'+esc(_cp)+'"':'')+'>'+(_cp?_circuloCmts(1):'')+'<img src="'+esc(_resolveImg(u))+'" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--brd)"><button title="Editar" onclick="editarFotoDe({k:\'adj\',i:'+i+'})" style="position:absolute;bottom:-6px;left:-6px;border:none;background:#ca8a04;color:#fff;border-radius:50%;width:22px;height:22px;font-size:11px;cursor:pointer">✏️</button><button onclick="S.notaAdj.splice('+i+',1);saveUIState();render()" style="position:absolute;top:-6px;right:-6px;border:none;background:var(--red);color:#fff;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer">✕</button></div>';}).join('')+'</div>':'')
     +'<div class="flex gap-4 mt-8 items-center" style="flex-wrap:nowrap">'
     +'<button class="btn btn-sec btn-s" id="nota_mic" title="Dictar" style="flex:1;height:38px;font-size:17px;padding:6px 4px;justify-content:center" onclick="dictarNota(\'nota_q\',this)">🎤</button>'
     +'<label class="btn btn-sec btn-s" title="Foto de la galería" style="flex:1;height:38px;font-size:17px;padding:6px 4px;justify-content:center;cursor:pointer">🖼️<input type="file" accept="image/*" multiple style="display:none" onchange="fotosNotaRapida(this)"></label>'
     +'<label class="btn btn-sec btn-s" title="Sacar una foto con la cámara" style="flex:1;height:38px;font-size:17px;padding:6px 4px;justify-content:center;cursor:pointer">📷<input type="file" accept="image/*" capture="environment" style="display:none" onchange="fotosNotaRapida(this)"></label>'
     +'<button class="btn btn-sec btn-s" title="Dibujar" style="flex:1;height:38px;font-size:17px;padding:6px 4px;justify-content:center" onclick="abrirDibujoNota(null)">✏️</button>'
-    +'<button class="btn btn-s" title="Asentar la nota" style="flex:1;height:38px;font-size:17px;padding:6px 4px;justify-content:center;background:'+c+';color:#fff" onclick="guardarNotaRapida()">'+I.save+'</button>'
+    +'<button class="btn btn-s" title="Asentar la nota" style="flex:1;height:38px;font-size:17px;padding:6px 4px;justify-content:center;background:'+c+';color:#fff" onclick="guardarNotaRapida()">'+I.save.replace('width="14" height="14"','width="22" height="22"')+'</button>'
     +'</div>'
     +'<div class="txxs tc3 mt-6">Se asienta con la fecha y hora de ahora. Para otra fecha o más datos usá <b>+ Nota</b>.</div>'
     +'</div>';
@@ -8589,7 +8603,8 @@ function _notaEditFotos(){
   var ph=window._notaEdit.photos.filter(function(p){return p&&!p.deletedAt;});
   el.innerHTML=ph.length?'<div class="flex gap-6 mb-10" style="flex-wrap:wrap">'+window._notaEdit.photos.map(function(p,i){
     if(!p||p.deletedAt)return '';
-    return '<div style="position:relative"><img src="'+esc(_resolveImg(p.url))+'" style="width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid var(--brd)"><button title="Editar" onclick="editarFotoDe({k:\'edit\',i:'+i+'})" style="position:absolute;bottom:-6px;left:-6px;border:none;background:#ca8a04;color:#fff;border-radius:50%;width:22px;height:22px;font-size:11px;cursor:pointer">✏️</button><button onclick="window._notaEdit.photos.splice('+i+',1);_notaEditFotos()" style="position:absolute;top:-6px;right:-6px;border:none;background:var(--red);color:#fff;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer">✕</button></div>';
+    var _nc=((p.comments||[]).length)+(String(p.caption||'').trim()&&p.caption!=='✏️ Dibujo'?1:0);
+    return '<div style="position:relative">'+_circuloCmts(_nc)+'<img src="'+esc(_resolveImg(p.url))+'" style="width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid var(--brd)"><button title="Editar" onclick="editarFotoDe({k:\'edit\',i:'+i+'})" style="position:absolute;bottom:-6px;left:-6px;border:none;background:#ca8a04;color:#fff;border-radius:50%;width:22px;height:22px;font-size:11px;cursor:pointer">✏️</button><button onclick="window._notaEdit.photos.splice('+i+',1);_notaEditFotos()" style="position:absolute;top:-6px;right:-6px;border:none;background:var(--red);color:#fff;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer">✕</button></div>';
   }).join('')+'</div>':'';
 }
 async function fotosNotaEdit(input){
@@ -8986,7 +9001,7 @@ function exportNotasPDF(){
   lista.forEach(function(n){
     if(sinDias){if(!dia){dia='x';body+='<h2>'+(S.notasOrden==='pri'?'Por prioridad':'Por vencimiento')+'</h2>';}}
     else if(n.fecha!==dia){dia=n.fecha;body+='<h2>'+esc(_notaDiaLargo(dia))+'</h2>';}
-    var fotos=(n.photos||[]).filter(function(ph){return ph&&!ph.deletedAt;}).map(function(ph){return {u:_resolveImg(ph.url),c:ph.caption||''};}).filter(function(f){return f.u&&f.u.indexOf('[')!==0;});
+    var fotos=(n.photos||[]).filter(function(ph){return ph&&!ph.deletedAt;}).map(function(ph){var cs=(ph.comments||[]).map(function(c){return c.text;}).filter(Boolean);if(String(ph.caption||'').trim()&&ph.caption!=='✏️ Dibujo')cs.unshift(ph.caption);return {u:_resolveImg(ph.url),c:cs.length>1?cs.map(function(t,i){return (i+1)+'. '+t;}).join('\n'):(cs[0]||'')};}).filter(function(f){return f.u&&f.u.indexOf('[')!==0;});
     body+='<div class="nota"><div class="cab"><b>'+esc(sinDias?((fmts(n.fecha)||'')+' '+(n.hora||'')):(n.hora||''))+'</b> · '+esc(_notaTipoLabel(n.tipo||'registro'))
       +((n.cuaderno&&n.cuaderno!==NOTA_CUADERNO_DEF)?' · 📒 '+esc(n.cuaderno):'')+(n.personas&&!(n.tipo==='pendiente'&&_mismoResp(n.personas,n.responsable))?' · 👥 '+esc(n.personas):'')
       +(/^dot$/i.test(String(n.cargadoPor||''))?' · 💻 DOT':'')
@@ -8996,7 +9011,7 @@ function exportNotasPDF(){
       +(_notaHecha(n)?' · ✓ Hecha':'')+'</div>'
       +(n.titulo?'<div class="tit">'+esc(n.titulo)+'</div>':'')
       +(n.texto?'<div class="tx">'+esc(n.texto)+'</div>':'')
-      +(fotos.length?'<div class="fotos">'+fotos.map(function(f){return '<div class="foto"><img src="'+esc(f.u)+'">'+(f.c?'<div class="cap">'+esc(f.c)+'</div>':'')+'</div>';}).join('')+'</div>':'')
+      +(fotos.length?'<div class="fotos">'+fotos.map(function(f){return '<div class="foto"><img src="'+esc(f.u)+'">'+(f.c?'<div class="cap" style="white-space:pre-wrap">'+esc(f.c)+'</div>':'')+'</div>';}).join('')+'</div>':'')
       +'</div>';
   });
   var h='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Libro de obra - '+esc(p.name||'')+'</title><style>@page{size:A4;margin:16mm}body{font-family:Arial,sans-serif;max-width:210mm;margin:0 auto;padding:16px;color:#1f2937}'
