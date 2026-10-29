@@ -2020,7 +2020,7 @@ const _SK_UI=SK+'_s';
 // guardaba, así que al cerrar la app se perdían.
 const _UI_KEYS=[
   // Notas (filtros, cuaderno y borrador del asiento rápido)
-  'notasCuaderno','notasTipo','notasBuscar','notasOrden','notasEstado','notasAlerta','notasChat','notaTipoNueva','notaCuadernoNuevo','notaBorrador','notaAdj','notasResp','notasVencF','notaPriNueva','notaVenNueva','notaRespNueva',
+  'notasCuaderno','notasTipo','notasBuscar','notasOrden','notasEstado','notasAlerta','notasChat','notaTipoNueva','notaCuadernoNuevo','notaBorrador','notaAdj','notasResp','notasVencF','notasSelMode','notasSel','notaPriNueva','notaVenNueva','notaRespNueva',
   // PDF de Economía: incluir fotos de comprobantes
   'pdfEcoFotos',
   // Tareas
@@ -4750,7 +4750,7 @@ function rVisitaDetail(mc,vid){
   </div>
   ${v.archivos&&v.archivos.length?`<div class="card mb-12"><div class="ts fw7 mb-8">${I.file} Archivos adjuntos (${v.archivos.length})</div>${v.archivos.map((f,fi)=>`<div class="flex items-center gap-6" style="padding:6px 0;border-bottom:1px solid var(--gray-ll)"><span style="color:var(--slate);flex-shrink:0">${I.file}</span><div class="flex-1 ts fw6 trun" style="min-width:0">${f.name}</div><button class="btn btn-sec btn-s" onclick="event.stopPropagation();viewArchivo('visitas','${vid}','${f.id||''}')" style="flex-shrink:0">👁</button><button class="btn btn-sec btn-s" onclick="event.stopPropagation();delVisitaArchivo('${vid}',${fi})" style="color:var(--red);flex-shrink:0" title="Eliminar archivo">${I.trash}</button></div>`).join('')}</div>`:''}
   <!-- Linked entities -->
-  <div class="card mb-12"><div class="flex justify-between items-center mb-8"><div class="ts fw7" style="color:#ca8a04">${I.nota} Notas (${lT.length})</div><div class="flex gap-4"><button class="btn btn-s btn-sec" title="Vincular notas ya cargadas" onclick="vincularItemsAVisita('${vid}','tareas')">&#x1F517;</button><button class="btn btn-s btn-sec" title="Nueva nota en esta visita" onclick="window._notaVisitaNueva='${vid}';abrirNota()">${I.plus}</button></div></div>${lT.length?lT.map((t,_i)=>((_i===0||_tipoVis(lT[_i-1])!==_tipoVis(t))?`<div class="txs fw7" style="color:#a16207;background:#fefce8;border-radius:6px;padding:3px 8px;margin-top:${_i?10:0}px">${esc(_notaTipoLabel(_tipoVis(t)))}</div>`:'')+`<div style="padding:8px 0;border-bottom:1px solid var(--gray-ll)"><div class="ts fw6" style="${t.status==='completada'?'text-decoration:line-through;color:var(--gray-l)':''}">${t.title}</div>${t.description?`<div class="txxs tc3 mt-2" style="white-space:pre-wrap">${t.description}</div>`:''}<div class="flex items-center justify-between wrap mt-4" style="gap:6px"><div class="txxs tc3" style="min-width:0">${_tipoVis(t)==='pendiente'?priBadge(t.priority,true)+' '+stBadge(t.status,true):(t.status==='completada'?'✓ Hecha':'')}${t._nota&&_tipoVis(t)!=='pendiente'&&t.date?' 📅 '+fmts(t.date):''}${t.dueDate?' | '+fmts(t.dueDate):''}${t.encargado?` | <span style="color:var(--cyan);${t._nota?'cursor:pointer;text-decoration:underline':''}" ${t._nota?`onclick="asignarResponsableNota('${t.id}')"`:''}>👤 ${esc(t.encargado)}</span>`:''}</div><div class="flex gap-4" style="flex-shrink:0;margin-left:auto"><button class="btn btn-g btn-s" title="Calendario" onclick="exportTareaGCal('${t.id}')">&#128197;</button><button class="btn btn-g btn-s" onclick="editTarea('${t.id}')">${I.edit}</button><button class="btn btn-g btn-s" style="color:${t.status==='completada'?'var(--gray-l)':'var(--green)'}" onclick="updT('${t.id}','${t.status==='completada'?'pendiente':'completada'}')" title="${t.status==='completada'?'Reabrir':'Completar'}">${t.status==='completada'?'&#x21A9;':I.check}</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delI('${t._tbl||'tareas'}','${t.id}')">${I.trash}</button></div></div>${(t.photos&&t.photos.filter(function(p){var u=typeof p==='string'?p:p.url;return u&&!u.startsWith('[');}).length)?'<div style="margin-top:6px">'+photoGrid(t.photos,'tareas',t.id)+'</div>':''}</div>`).join(''):'<div class="txxs tc3">Sin notas</div>'}</div>
+  <div class="card mb-12"><div class="flex justify-between items-center mb-8"><div class="ts fw7" style="color:#ca8a04">${I.nota} Notas (${lT.length})</div><div class="flex gap-4"><button class="btn btn-s btn-sec" title="Vincular notas ya cargadas" onclick="vincularItemsAVisita('${vid}','tareas')">&#x1F517;</button><button class="btn btn-s btn-sec" title="Nueva nota en esta visita" onclick="window._notaVisitaNueva='${vid}';abrirNota()">${I.plus}</button></div></div>${lT.length?lT.map((t,_i)=>((_i===0||_tipoVis(lT[_i-1])!==_tipoVis(t))?`<div class="txs fw7" style="color:#a16207;background:#fefce8;border-radius:6px;padding:3px 8px;margin-top:${_i?10:0}px">${esc(_notaTipoLabel(_tipoVis(t)))}</div>`:'')+`<div style="padding:8px 0;border-bottom:1px solid var(--gray-ll)"><div class="ts fw6" style="${t.status==='completada'?'text-decoration:line-through;color:var(--gray-l)':''}">${t.title}</div>${t.description?`<div class="txxs tc3 mt-2" style="white-space:pre-wrap">${t.description}</div>`:''}<div class="flex items-center justify-between wrap mt-4" style="gap:6px"><div class="txxs tc3" style="min-width:0">${_tipoVis(t)==='pendiente'?priBadge(t.priority,true)+' '+stBadge(t.status,true):(t.status==='completada'?'✓ Hecha':'')}${t._nota&&_tipoVis(t)!=='pendiente'&&t.date?' 📅 '+fmts(t.date):''}${t.dueDate?' | '+fmts(t.dueDate):''}${t.encargado?` | <span style="color:var(--cyan);${t._nota?'cursor:pointer;text-decoration:underline':''}" ${t._nota?`onclick="asignarResponsableNota('${t.id}')"`:''}>👤 ${esc(t.encargado)}</span>`:''}</div><div class="flex gap-4" style="flex-shrink:0;margin-left:auto"><button class="btn btn-g btn-s" title="Calendario" onclick="exportTareaGCal('${t.id}')">&#128197;</button><button class="btn btn-g btn-s" onclick="editTarea('${t.id}')">${I.edit}</button><button class="btn btn-g btn-s" style="color:${t.status==='completada'?'var(--gray-l)':'var(--green)'}" onclick="updT('${t.id}','${t.status==='completada'?'pendiente':'completada'}')" title="${t.status==='completada'?'Reabrir':'Completar'}">${t.status==='completada'?'&#x21A9;':I.check}</button>${t._nota?`<button class="btn btn-g btn-s" style="color:var(--orange)" title="Quitar de esta visita (la nota sigue en Notas)" onclick="_quitarNotaDeVisita('${t.id}')">✕</button>`:`<button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delI('tareas','${t.id}')">${I.trash}</button>`}</div></div>${(t.photos&&t.photos.filter(function(p){var u=typeof p==='string'?p:p.url;return u&&!u.startsWith('[');}).length)?'<div style="margin-top:6px">'+photoGrid(t.photos,'tareas',t.id)+'</div>':''}</div>`).join(''):'<div class="txxs tc3">Sin notas</div>'}</div>
   <div class="card mb-12"><div class="flex justify-between items-center mb-8"><div class="ts fw7" style="color:var(--purple)">${I.pkg} Materiales (${lM.length+lMI.length})</div><div class="flex gap-4"><button class="btn btn-s btn-sec" title="Vincular materiales a pedir o existentes ya cargados" onclick="vincularMatAVisita('${vid}')">&#x1F517;</button><button class="btn btn-s btn-sec" title="Cargar un material nuevo en esta visita" onclick="openLkMM('${vid}')">${I.plus}</button></div></div>${lM.length?_ordenMatVisita(lM).map(m=>`<div style="padding:6px 0;border-bottom:1px solid var(--gray-ll)"><div class="flex items-center gap-4"><div class="flex-1"><div class="ts fw6">${m.name}</div><div class="txxs tc3 mt-2">${m.qty||0} ${m.unit||''} ${m.visitaTipo?colBadge(m.visitaTipo==='a_pedir'?'A pedir':'Existente',m.visitaTipo==='a_pedir'?'var(--orange)':'var(--green)',true):''}${m.notes?` | ${m.notes}`:''}</div></div><button class="btn btn-g btn-s" onclick="editMatVisita('${m.id}')">${I.edit}</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel('¿Quitar?')){D.materiales=D.materiales.filter(x=>x.id!=='${m.id}');addTombstone('materiales','${m.id}');sv();render();}">${I.trash}</button></div>${m.photos&&m.photos.length?photoGrid(m.photos,'materiales',m.id):''}</div>`).join(''):''}${!lM.length&&!lMI.length?'<div class="txxs tc3">Sin materiales</div>':''}${lMI.length?`<div style="margin-top:8px;border-top:1px solid var(--gray-ll);padding-top:8px"><div class="txxs fw7 mb-4" style="color:var(--green)">&#x2713; Ingresos/Existentes cargados</div>`+_ordenMatVisita(lMI).map(i=>`<div style="padding:4px 0;border-bottom:1px solid var(--gray-ll)"><div class="flex items-center gap-4"><div class="flex-1"><div class="ts fw6">${i.matNombre}</div><div class="txxs tc3 mt-2">${i.qty||0} ${i.unit||''} ${i.estado==='ingresado'?'<span style="color:var(--green)">&#x2713; Ingresado</span>':i.estado==='pedido'?'<span style="color:var(--orange)">&#x1F4CB; Pedido</span>':i.estado==='a_pedir'?'<span style="color:var(--orange)">A pedir</span>':'<span style="color:var(--green)">Existente</span>'}${i.fechaNecesaria?` | <span style="color:var(--orange)">&#128197; ${fmts(i.fechaNecesaria)}</span>`:''}${i.observations?' | '+i.observations:''}</div></div><button class="btn btn-g btn-s" onclick="editLMI('${i.id}')">${I.edit}</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel('¿Quitar material?')){D.matIngresos=D.matIngresos.filter(x=>x.id!=='${i.id}');addTombstone('matIngresos','${i.id}');sv();render();}">${I.trash}</button></div></div>`).join('')+`</div>`:''}</div>
   <div class="card mb-12"><div class="flex justify-between items-center mb-8"><div class="ts fw7" style="color:var(--slate)">${I.file} Adjuntos (${lD.length})</div><button class="btn btn-s btn-sec" onclick="openM('lkDM')">${I.plus}</button></div>${lD.length?lD.map(d=>`<div class="flex items-center gap-8" style="padding:6px 0;border-bottom:1px solid var(--gray-ll)"><span style="color:var(--slate);flex-shrink:0">${I.file}</span><div class="flex-1 ts fw6 trun">${d.name}</div>${d.url?`<a href="${d.url}" target="_blank" onclick="event.stopPropagation()" class="btn btn-sec btn-s" style="flex-shrink:0">${I.eye} Ver</a>`:''}<button class="btn btn-g btn-s" style="color:var(--red);flex-shrink:0" onclick="if(confirmDel('¿Quitar?')){D.documentos=D.documentos.filter(x=>x.id!=='${d.id}');addTombstone('documentos','${d.id}');sv();render();}">${I.trash}</button></div>`).join(''):'<div class="txxs tc3">Sin adjuntos</div>'}</div>
   <!-- Checklist de visita -->
@@ -8071,6 +8071,13 @@ function _notaComoTarea(n){
 // Tipo de lo vinculado a una visita (lo que quede de la lista vieja de tareas cuenta como tarea)
 function _tipoVis(t){return t&&t._nota?(t.tipo||'registro'):'pendiente';}
 // Notas de una visita agrupadas por tipo (avances juntos, registros juntos, tareas juntas…)
+function _quitarNotaDeVisita(id){
+  var n=(D.notas||[]).find(function(x){return x.id===id;});if(!n)return;
+  if(!confirm('¿Quitar «'+_notaTituloCorto(n)+'» de esta visita?\n\nLa nota no se borra: sigue en Notas.'))return;
+  n.visitaId=null;n.updatedAt=nw();sv();
+  if(S.visitaDetail){var mc=$('mc');if(mc&&typeof rVisitaDetail==='function')rVisitaDetail(mc,S.visitaDetail);else render();}else render();
+  toast('Quitada de la visita','var(--green)',2000);
+}
 function _notasVisitaOrdenadas(vid){
   var ord=Object.keys(NOTA_TIPOS);
   return _tareasDeVisita(vid).sort(function(a,b){
@@ -8368,7 +8375,7 @@ function rNotas(mc){
   var lista=_notasFiltradas();
   var chip=function(act,txt,fn,col){return '<button class="btn btn-s" style="white-space:nowrap;'+(act?'background:'+(col||c)+';color:#fff':'background:var(--gray-ll);color:var(--text2)')+'" onclick="'+fn+'">'+txt+'</button>';};
   var h=modHeader('notas','Notas',
-    '<div class="flex gap-4"><button class="btn btn-sec btn-s" onclick="exportNotasPDF()">'+I.pdf+' PDF</button>'
+    '<div class="flex gap-4"><button class="btn btn-sec btn-s" onclick="_menuPdfNotas()">'+I.pdf+' PDF</button>'
     +'<button class="btn btn-s" style="background:'+c+';color:#fff" onclick="abrirNota()">'+I.plus+' Nota</button></div>');
   // Asiento rápido
   h+='<div class="card mb-12" style="border-left:3px solid '+c+'">'
@@ -8382,7 +8389,7 @@ function rNotas(mc){
     +'<div class="flex gap-4 mt-8 items-center" style="flex-wrap:nowrap">'
     +'<button class="btn btn-sec btn-s" id="nota_mic" title="Dictar" style="flex:1;height:38px;font-size:17px;padding:6px 4px;justify-content:center" onclick="dictarNota(\'nota_q\',this)">🎤</button>'
     +'<label class="btn btn-sec btn-s" title="Foto de la galería" style="flex:1;height:38px;font-size:17px;padding:6px 4px;justify-content:center;cursor:pointer">🖼️<input type="file" accept="image/*" multiple style="display:none" onchange="fotosNotaRapida(this)"></label>'
-    +'<label class="btn btn-sec btn-s" title="Sacar una foto con la cámara" style="flex:1;height:38px;font-size:17px;padding:6px 4px;justify-content:center;cursor:pointer">📷<input type="file" accept="image/*" capture="environment" style="display:none" onchange="fotosNotaRapida(this)"></label>'
+    +'<label class="btn btn-sec btn-s" title="Sacar una foto con la cámara" style="flex:1;height:38px;font-size:17px;padding:6px 4px;justify-content:center;cursor:pointer">📷<input type="file" accept="image/*" capture="environment" style="display:none" onchange="_aGaleria(this);fotosNotaRapida(this)"></label>'
     +'<button class="btn btn-sec btn-s" title="Dibujar" style="flex:1;height:38px;font-size:17px;padding:6px 4px;justify-content:center" onclick="abrirDibujoNota(null)">✏️</button>'
     +'<button class="btn btn-s" title="Asentar la nota" style="flex:1;height:38px;font-size:17px;padding:6px 4px;justify-content:center;background:'+c+';color:#fff" onclick="guardarNotaRapida()">'+I.save.replace('width="14" height="14"','width="22" height="22"')+'</button>'
     +'</div>'
@@ -8411,6 +8418,12 @@ function rNotas(mc){
         +rs.map(function(r){var k=pf('notas').filter(function(n){return n.tipo==='pendiente'&&!_notaHecha(n)&&_mismoResp(n.responsable,r);}).length;return '<option value="'+esc(r)+'"'+(_mismoResp(S.notasResp,r)?' selected':'')+'>'+esc(r)+(k?' ('+k+')':'')+'</option>';}).join('')
         +'<option value="__sin"'+(S.notasResp==='__sin'?' selected':'')+'>Sin responsable</option></select></div>';
     })():'');
+  if(S.notasSelMode){var _ns=Object.keys(S.notasSel||{}).filter(function(k){return lista.some(function(x){return x.id===k;});}).length;
+    h+='<div class="flex items-center gap-6 mb-10" style="position:sticky;top:0;z-index:5;padding:8px 10px;border-radius:10px;background:#fefce8;border:2px solid #ca8a04">'
+      +'<span class="txs fw7" style="flex:1;color:#a16207">☑️ '+_ns+' elegida'+(_ns===1?'':'s')+'</span>'
+      +'<button class="btn btn-sec btn-s" onclick="S.notasSel={};_notasFiltradas().forEach(function(x){S.notasSel[x.id]=1;});saveUIState();render()">Todas</button>'
+      +'<button class="btn btn-s" style="background:#ca8a04;color:#fff" onclick="exportNotasPDF(true)">'+I.pdf+' PDF</button>'
+      +'<button class="btn btn-sec btn-s" onclick="_notasSelSalir()">✕</button></div>';}
   if(S.notasVencF){var _nv=_notasVenc(),_nvv=_nv.filter(function(x){return x.d<0;}).length;
     h+='<div class="flex items-center gap-6 mb-10" style="padding:6px 10px;border-radius:10px;background:'+(_nvv?'#fef2f2':'#fff7ed')+';border:1px solid '+(_nvv?'#fecaca':'#fed7aa')+'"><span class="txs fw7" style="flex:1;color:'+(_nvv?'#dc2626':'#c2410c')+'">⏰ Vencidas y por vencer ('+_nv.length+')</span><button class="btn btn-sec btn-s" onclick="S.notasVencF=false;S.notasOrden=\'desc\';saveUIState();render()">✕ Ver todas</button></div>';}
   if(!lista.length){
@@ -8444,6 +8457,7 @@ function _notaCard(n,conFecha){
   var hecha=_notaHecha(n);
   return '<div class="card mb-8" id="nota_'+n.id+'" style="'+_chatTinte('notas',n.id)+'border-left:3px solid '+(n.alerta?'var(--red)':hecha?'var(--green)':n.fijada?c:'var(--brd)')+';padding:10px 12px;'+(S.notaFoco===n.id?'box-shadow:0 0 0 2px '+c+';':'')+(hecha?'background:#f0fdf4;':'')+'">'
     +'<div class="flex gap-4 items-center" style="flex-wrap:wrap">'
+    +(S.notasSelMode?'<input type="checkbox" '+((S.notasSel||{})[n.id]?'checked':'')+' onclick="_notaSelToggle(\''+n.id+'\')" title="Incluir en el PDF" style="width:22px;height:22px;accent-color:#ca8a04;flex-shrink:0;margin-right:2px">':'')
     +(conFecha?'<span class="txxs fw7" style="color:var(--text2);white-space:nowrap">📅 '+esc(_notaDiaCorto(n.fecha))+(n.hora?' · '+esc(n.hora):'')+'</span>':'<span class="txxs fw7 tc3">'+esc(n.hora||'')+'</span>')
     +pill(_notaTipoLabel(n.tipo||'registro'),'#fef9c3','#a16207')
     +((n.tipo==='pendiente'||n.prioridad)&&NOTA_PRI[n.prioridad||'media']?pill(NOTA_PRI[n.prioridad||'media'][0],NOTA_PRI[n.prioridad||'media'][2],NOTA_PRI[n.prioridad||'media'][1]):'')
@@ -8533,6 +8547,20 @@ function borrarCuaderno(nombre){
   if(S.notaCuadernoNuevo===nombre)S.notaCuadernoNuevo='';
   saveUIState();sv();_pintarCuadernos();toast('Cuaderno borrado','var(--text3)',2000);
 }
+// La foto sacada con la cámara de la app se guarda también en el celular (como
+// cualquier foto): se descarga con su resolución original y aparece en la
+// galería, en el álbum de Descargas.
+function _aGaleria(input){
+  try{
+    Array.from((input&&input.files)||[]).forEach(function(f,i){
+      var d=new Date(),z=function(n){return String(n).padStart(2,'0');};
+      var nom='ObraControl_'+d.getFullYear()+z(d.getMonth()+1)+z(d.getDate())+'_'+z(d.getHours())+z(d.getMinutes())+z(d.getSeconds())+(i?'_'+i:'')+'.jpg';
+      var u=URL.createObjectURL(f),a=document.createElement('a');a.href=u;a.download=nom;a.style.display='none';
+      document.body.appendChild(a);a.click();a.remove();
+      setTimeout(function(){URL.revokeObjectURL(u);},60000);
+    });
+  }catch(_){}
+}
 async function fotosNotaRapida(input){
   var dus=await _leerDataUrlsNota(input);
   if(!dus.length)return;
@@ -8605,7 +8633,7 @@ function abrirNota(id){
     +'<div class="flex gap-6 mb-10" style="flex-wrap:wrap">'
     +'<button class="btn btn-sec btn-s" onclick="dictarNota(\'nm_tx\',this)">🎤 Dictar</button>'
     +'<label class="btn btn-sec btn-s" style="cursor:pointer">🖼️ Galería<input type="file" accept="image/*" multiple style="display:none" onchange="fotosNotaEdit(this)"></label>'
-    +'<label class="btn btn-sec btn-s" style="cursor:pointer">📷 Cámara<input type="file" accept="image/*" capture="environment" style="display:none" onchange="fotosNotaEdit(this)"></label>'
+    +'<label class="btn btn-sec btn-s" style="cursor:pointer">📷 Cámara<input type="file" accept="image/*" capture="environment" style="display:none" onchange="_aGaleria(this);fotosNotaEdit(this)"></label>'
     +'<button class="btn btn-sec btn-s" onclick="abrirDibujoNota(\'edit\')">✏️ Dibujar</button>'
     +'</div>'
     +'<button class="btn btn-w" style="background:'+MC.notas+';color:#fff" onclick="guardarNota()">'+I.save+' Guardar</button>'
@@ -8691,7 +8719,7 @@ function abrirDibujoNota(destino){
     +'<button class="btn btn-sec btn-s" id="dib_goma" title="Borra sólo lo dibujado, no la foto" onclick="_dibSet({goma:!window._dib.goma})">🧽 Goma</button>'
     +'<button class="btn btn-sec btn-s" onclick="_dibDeshacer()">↶ Deshacer</button>'
     +(nueva?'':'<button class="btn btn-sec btn-s" onclick="_dibFondo(\'cuad\')">▦ Cuadrícula</button>'
-    +'<label class="btn btn-sec btn-s" style="cursor:pointer" title="Sacar una foto y dibujar encima">📷 Cámara<input type="file" accept="image/*" capture="environment" style="display:none" onchange="_dibFoto(this)"></label>'
+    +'<label class="btn btn-sec btn-s" style="cursor:pointer" title="Sacar una foto y dibujar encima">📷 Cámara<input type="file" accept="image/*" capture="environment" style="display:none" onchange="_aGaleria(this);_dibFoto(this)"></label>'
     +'<label class="btn btn-sec btn-s" style="cursor:pointer" title="Elegir una foto de la galería y dibujar encima">🖼 Sobre foto<input type="file" accept="image/*" style="display:none" onchange="_dibFoto(this)"></label>'
     +'<button class="btn btn-sec btn-s" style="color:var(--red)" onclick="_dibFondo(\'blanco\')">🗑 Limpiar</button>')
     +'<div style="flex:1"></div>'
@@ -9026,9 +9054,24 @@ function _notaVincularDerivado(tbl,id,titulo){
   var it=(D[tbl]||[]).find(function(x){return x.id===id;});if(it)it.origenNota=nd.id;
 }
 // ── PDF del libro de obra ──
-function exportNotasPDF(){
+// PDF: todas las notas que se ven (con los filtros puestos) o sólo las elegidas
+function _menuPdfNotas(){
+  var n=_notasFiltradas().length;
+  document.getElementById('pdfNotM')?.remove();
+  var d=document.createElement('div');d.className='mo open';d.id='pdfNotM';
+  var b=function(t,sub,fn){return '<button class="btn btn-sec btn-w mb-8" style="justify-content:flex-start;text-align:left" onclick="document.getElementById(\'pdfNotM\').remove();'+fn+'"><div><div class="ts fw7">'+t+'</div><div class="txxs tc3">'+sub+'</div></div></button>';};
+  d.innerHTML='<div class="mo-c" style="max-width:420px"><div class="mo-h"><h3>'+I.pdf+' PDF de notas</h3><button class="tbtn" onclick="document.getElementById(\'pdfNotM\').remove()">'+I.x+'</button></div>'
+    +b('📄 Todas las de la lista ('+n+')','Las que se ven ahora, con los filtros puestos','exportNotasPDF()')
+    +b('☑️ Elegir notas','Tildá las que querés y exportá sólo esas',"S.notasSelMode=true;S.notasSel={};saveUIState();render()")
+    +'</div>';
+  document.body.appendChild(d);
+}
+function _notaSelToggle(id){if(!S.notasSel)S.notasSel={};if(S.notasSel[id])delete S.notasSel[id];else S.notasSel[id]=1;saveUIState();render();}
+function _notasSelSalir(){S.notasSelMode=false;S.notasSel={};saveUIState();render();}
+function exportNotasPDF(soloElegidas){
   // Mismo orden que en pantalla (más recientes o más antiguas)
   var lista=_notasFiltradas();
+  if(soloElegidas){var sel=S.notasSel||{};lista=lista.filter(function(n){return sel[n.id];});if(!lista.length){toast('Tildá al menos una nota','var(--orange)');return;}}
   if(!lista.length){toast('No hay notas para exportar','var(--orange)');return;}
   var p=D.projects.find(function(x){return x.id===S.proj;})||{};
   var filtros=[];
