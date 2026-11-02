@@ -1957,6 +1957,7 @@ const _ib=function(d){return '<svg width="15" height="15" fill="none" stroke="cu
 const IB={
   aPedir:_ib('<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>'),
   pedido:_ib('<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4M12 16h4M8 11h.01M8 16h.01"/>'),
+  camion:_ib('<path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2M15 18h2M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.62l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>'),
   caja:_ib('<path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/>'),
   tilde:_ib('<path d="M20 6 9 17l-5-5"/>'),
   mic:_ib('<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3"/>'),
@@ -6263,7 +6264,7 @@ function renderMatItems(){
   if(_exist.length){
     _existH='<div class="card matsec" style="border-left:3px solid var(--green);background:var(--green-bg)">';
     _existH+='<div class="matsec-h">';
-    _existH+='<button class="link-tag fw7" style="color:var(--green);font-size:13px" onclick="S.matExistMin=!S.matExistMin;renderMatItems()">&#x2713; Existentes en obra ('+_exist.length+')'+(S.matExistMin?' &#x25B6;':' &#x25BC;')+'</button>';
+    _existH+='<button class="link-tag fw7" style="color:var(--green);font-size:13px" onclick="S.matExistMin=!S.matExistMin;renderMatItems()">'+IB.tilde+' Existentes en obra ('+_exist.length+')'+(S.matExistMin?' &#x25B6;':' &#x25BC;')+'</button>';
     _existH+='<button class="btn btn-s btn-sec" onclick="openM(\'newExistenteM\')">'+I.plus+' Nuevo</button>';
     _existH+='</div>';
     if(!S.matExistMin) _exist.forEach(function(e){
@@ -6290,7 +6291,7 @@ function renderMatItems(){
   if(_apedir.length){
     _apedirH='<div class="card matsec" style="border-left:3px solid #8b5cf6">';
     _apedirH+='<div class="matsec-h">';
-    _apedirH+='<button class="link-tag fw7" style="color:#8b5cf6;font-size:13px" onclick="S.matAPedirMin=!S.matAPedirMin;renderMatItems()">&#x1F4DD; A pedir ('+_apedir.length+')'+(S.matAPedirMin?' &#x25B6;':' &#x25BC;')+'</button>';
+    _apedirH+='<button class="link-tag fw7" style="color:#8b5cf6;font-size:13px" onclick="S.matAPedirMin=!S.matAPedirMin;renderMatItems()">'+IB.aPedir+' A pedir ('+_apedir.length+')'+(S.matAPedirMin?' &#x25B6;':' &#x25BC;')+'</button>';
     _apedirH+='<div class="flex gap-4"><button class="btn btn-s btn-sec" title="Compartir con un colaborador" onclick="compartirMatColab(\'a_pedir\')">'+_nodos(16)+'</button><button class="btn btn-s btn-sec" title="Agregar al calendario" onclick="exportMatItemsGCal(\'a_pedir\')">&#x1F4C5;</button><button class="btn btn-s btn-sec" title="Cargar varios de una vez" onclick="abrirIngresoMultiple(\'a_pedir\')">📝 Lista</button><button class="btn btn-s btn-sec" onclick="openM(\'newAPedirM\')">'+ I.plus +' Nuevo</button></div></div>';
     if(!S.matAPedirMin){
       var _apGrp=_buildMatGroups(_apedir);
@@ -6326,7 +6327,7 @@ function renderMatItems(){
   if(_peds.length){
     _pedH='<div class="card matsec" style="border-left:3px solid var(--orange)">';
     _pedH+='<div class="matsec-h">';
-    _pedH+='<button class="link-tag fw7" style="color:var(--orange);font-size:13px" onclick="S.matPedMin=!S.matPedMin;renderMatItems()">&#x1F4CB; Pedidos ('+_peds.length+')'+(S.matPedMin?' &#x25B6;':' &#x25BC;')+'</button>';
+    _pedH+='<button class="link-tag fw7" style="color:var(--orange);font-size:13px" onclick="S.matPedMin=!S.matPedMin;renderMatItems()">'+IB.pedido+' Pedidos ('+_peds.length+')'+(S.matPedMin?' &#x25B6;':' &#x25BC;')+'</button>';
     _pedH+='<div class="flex gap-4"><button class="btn btn-s btn-sec" title="Compartir con un colaborador" onclick="compartirMatColab(\'pedido\')">'+_nodos(16)+'</button><button class="btn btn-s btn-sec" title="Agregar al calendario" onclick="exportMatItemsGCal(\'pedido\')">&#x1F4C5;</button><button class="btn btn-s btn-sec" title="Cargar varios de una vez" onclick="abrirIngresoMultiple(\'pedido\')">📝 Lista</button><button class="btn btn-s btn-sec" onclick="openM(\'newPedidoM\')">' +I.plus+' Nuevo</button></div></div>';
     if(!S.matPedMin){
       var _pedGrp=_buildMatGroups(_peds);
@@ -6363,10 +6364,10 @@ function renderMatItems(){
   });
   var _sinCompH='';
   if(_sinComp.length>0){
-    _sinCompH='<div class="card matsec" style="border-left:3px solid var(--cyan)">'
+    _sinCompH='<div class="card matsec" style="border-left:3px solid #2563eb">'
       +'<div class="matsec-h">'
-      +'<button class="link-tag fw7" style="color:var(--cyan);font-size:13px" onclick="S.matSinCompMin=!S.matSinCompMin;renderMatItems()">'
-      +'&#x1F4E6; Ingresados sin c\u00f3mputo ('+_filasSinComp(_sinComp).length+')'
+      +'<button class="link-tag fw7" style="color:#2563eb;font-size:13px" onclick="S.matSinCompMin=!S.matSinCompMin;renderMatItems()">'
+      +IB.camion+' Ingresados sin c\u00f3mputo ('+_filasSinComp(_sinComp).length+')'
       +(S.matSinCompMin?' &#x25B6;':' &#x25BC;')
       +'</button>'
       +'</div>'
