@@ -2037,7 +2037,7 @@ const _UI_KEYS=[
   // Tareas
   'taskFilter','taskEncFilter','taskSort',
   // Materiales (filtros, orden y secciones plegadas)
-  'matFilter','matCatFilter','matSort','matIngSort',
+  'matFilter','matCatFilter','matSort','matIngSort','matMasaEstado',
   'matExistMin','matAPedirMin','matPedMin','matSinCompMin',
   // Checklists y documentos
   'chkSort','docSort',
@@ -3538,6 +3538,7 @@ function _renderMatGroupCard(key,group,estado){
     h+='</div><div class="flex gap-6 mt-8">';
     if(estado==='a_pedir')h+='<button class="btn btn-s" style="background:var(--orange);color:#fff;flex:1" onclick="pasarGrupoAPedido(\''+key+'\')">&rarr; Todos a Pedido</button>';
     else h+='<button class="btn btn-ok btn-s" style="flex:1" onclick="confirmarGrupoIngresado(\''+key+'\')">&#x2713; Todos Ingresados</button>';
+    h+='<button class="btn btn-sec btn-s" title="Cambiar datos de todo el grupo" onclick="abrirEdicionMasiva(\''+estado+'\',\''+group.items.map(function(x){return x.id;}).join(',')+'\')">'+I.edit+' Grupo</button>';
     h+='<button class="btn btn-sec btn-s" style="color:var(--red)" onclick="eliminarGrupoMat(\''+estado+'\',\''+key+'\')">'+I.trash+' Grupo</button>';
     h+='</div>';
   }
@@ -6071,6 +6072,7 @@ function rMat(mc){
       ${cats_all.map(cat=>`<button data-matcat="${cat.replace(/"/g,'&quot;')}" class="btn btn-s ${S.matCatFilter===cat?'btn-p':'btn-sec'}" style="font-size:11px;${S.matCatFilter===cat?'background:var(--orange);color:#fff;border-color:var(--orange)':''}" onclick="setMatCat(this.dataset.matcat)">${cat}</button>`).join('')}
     </div>`:''}
     <div style="border-top:1px solid var(--gray-ll);padding-top:8px;padding-bottom:4px"><div class="txxs tc3 mb-4">Ordenar:</div><div class="fila-igual"><button data-matsort="" class="btn btn-s ${!S.matSort?'btn-p':'btn-sec'}" style="${!S.matSort?'background:var(--orange);color:#fff':''}" onclick="setMatSort('')">Defecto</button><button data-matsort="az" class="btn btn-s ${S.matSort==='az'?'btn-p':'btn-sec'}" style="${S.matSort==='az'?'background:var(--orange);color:#fff':''}" onclick="setMatSort('az')">A → Z</button><button data-matsort="za" class="btn btn-s ${S.matSort==='za'?'btn-p':'btn-sec'}" style="${S.matSort==='za'?'background:var(--orange);color:#fff':''}" onclick="setMatSort('za')">Z → A</button><button data-matsort="pct_desc" class="btn btn-s ${S.matSort==='pct_desc'?'btn-p':'btn-sec'}" style="${S.matSort==='pct_desc'?'background:var(--orange);color:#fff':''}" title="Mayor porcentaje primero" onclick="setMatSort('pct_desc')">% mayor</button><button data-matsort="pct_asc" class="btn btn-s ${S.matSort==='pct_asc'?'btn-p':'btn-sec'}" style="${S.matSort==='pct_asc'?'background:var(--orange);color:#fff':''}" title="Menor porcentaje primero" onclick="setMatSort('pct_asc')">% menor</button></div></div>
+    <button class="btn btn-sec btn-s btn-w mt-8" style="justify-content:center" onclick="abrirEdicionMasiva()">${I.edit} Editar varios juntos</button>
   </div>
   <!-- RESUMEN -->
   <div id="mat_items_list"><div class="txxs tc3 tac" style="padding:16px">Cargando...</div></div>
@@ -6849,6 +6851,102 @@ function editAPedir(itemId){
   document.body.appendChild(d);
 }
 
+// ── Editar varios materiales juntos ──
+// Se elige la sección, se tildan (uno por uno, por día o todos) y lo que se
+// complete abajo se aplica a todos. Lo que queda vacío no se toca.
+var _MASA_EST={ingresado:'Ingresados',pedido:'Pedidos',a_pedir:'A pedir',existente:'Existentes'};
+function abrirEdicionMasiva(estado,ids){
+  S.matMasaEstado=estado||S.matMasaEstado||'ingresado';saveUIState();
+  window._masaSel={};window._masaQ='';
+  if(ids)String(ids).split(',').forEach(function(id){if(id)window._masaSel[id]=1;});
+  document.getElementById('masaM')?.remove();
+  var d=document.createElement('div');d.className='mo open';d.id='masaM';
+  d.innerHTML='<div class="mo-c" style="max-width:560px"><div class="mo-h"><h3 style="color:var(--purple)">'+I.edit+' Editar varios juntos</h3><button class="tbtn" onclick="document.getElementById(\'masaM\').remove()">'+I.x+'</button></div>'
+    +'<div id="masa_est" class="tabs-grid mb-8"></div>'
+    +'<input class="fi mb-8" placeholder="🔎 Buscar material, proveedor o remito…" oninput="window._masaQ=this.value;_masaLista()">'
+    +'<div id="masa_lista" style="max-height:34vh;overflow-y:auto;border:1px solid var(--brd);border-radius:8px;padding:0 8px"></div>'
+    +'<div class="txs fw7 mt-10 mb-6">Cambiar en los elegidos <span class="txxs tc3" style="font-weight:500">(lo que dejes vacío no se toca)</span></div>'
+    +'<div class="fr"><div class="fg"><label class="fl" id="masa_lfecha">Fecha</label><input class="fi" type="date" id="masa_fecha"></div>'
+    +'<div class="fg"><label class="fl">Proveedor</label><input class="fi" id="masa_prov"></div></div>'
+    +'<div class="fr"><div class="fg" id="masa_brem"><label class="fl">Remito / Nº</label><input class="fi" id="masa_rem"></div>'
+    +'<div class="fg" id="masa_bgru"><label class="fl">Grupo</label><input class="fi" id="masa_gru"></div></div>'
+    +'<div class="fg"><label class="fl">Agregar a las notas</label><input class="fi" id="masa_nota" placeholder="Se suma a lo que ya tenga cada uno"></div>'
+    +'<button class="btn btn-w" id="masa_ok" style="background:var(--purple);color:#fff" onclick="aplicarEdicionMasiva()"></button>'
+    +'</div>';
+  document.body.appendChild(d);
+  _masaPintar();
+}
+function _masaEstDe(i){return i.estado||'ingresado';}
+function _masaItems(){
+  var e=S.matMasaEstado||'ingresado',q=_normTxt(window._masaQ||'');
+  return (D.matIngresos||[]).filter(function(i){
+    if(i.projectId!==S.proj||_masaEstDe(i)!==e)return false;
+    if(!q)return true;
+    var t=_normTxt([_masaNombre(i),i.proveedor,i.remito,i.observations,i.grupo].filter(Boolean).join(' '));
+    return q.split(/\s+/).every(function(w){return t.indexOf(w)>=0;});
+  }).sort(function(a,b){return _masaFecha(b).localeCompare(_masaFecha(a));});
+}
+function _masaFecha(i){return String(i.fecha||i.fechaIngreso||i.date||'').slice(0,10);}
+function _masaNombre(i){var m=i.materialId?(D.materiales||[]).find(function(x){return x.id===i.materialId;}):null;return i.matNombre||(m&&m.name)||'Sin nombre';}
+function _masaPintar(){
+  var e=S.matMasaEstado||'ingresado',b=document.getElementById('masa_est');if(!b)return;
+  b.innerHTML=Object.keys(_MASA_EST).map(function(k){return '<button class="btn btn-s" style="'+(k===e?'background:var(--purple);color:#fff':'background:var(--gray-ll);color:var(--text2)')+'" onclick="_masaCambiarEst(\''+k+'\')">'+_MASA_EST[k]+'</button>';}).join('');
+  var l=document.getElementById('masa_lfecha');if(l)l.textContent=e==='ingresado'?'Fecha de ingreso':e==='pedido'?'Fecha de pedido':'Fecha';
+  var r=document.getElementById('masa_brem'),g=document.getElementById('masa_bgru');
+  if(r)r.style.display=e==='ingresado'||e==='pedido'?'':'none';
+  if(g)g.style.display=e==='pedido'||e==='a_pedir'?'':'none';
+  _masaLista();
+}
+function _masaCambiarEst(k){S.matMasaEstado=k;saveUIState();window._masaSel={};_masaPintar();}
+function _masaLista(){
+  var el=document.getElementById('masa_lista');if(!el)return;
+  var its=_masaItems(),sel=window._masaSel||{},h='',dia=null;
+  var todos=its.length&&its.every(function(i){return sel[i.id];});
+  if(!its.length)h='<div class="txxs tc3" style="padding:14px 0;text-align:center">No hay materiales en esta sección'+(window._masaQ?' con esa búsqueda':'')+'.</div>';
+  else h+='<label class="flex items-center gap-8" style="padding:8px 0;border-bottom:2px solid var(--gray-ll);cursor:pointer;position:sticky;top:0;background:var(--white);z-index:1"><input type="checkbox" '+(todos?'checked':'')+' onchange="_masaTodos(this.checked)" style="width:18px;height:18px;flex-shrink:0;accent-color:var(--purple)"><span class="ts fw7">Elegir todos ('+its.length+')</span></label>';
+  its.forEach(function(i){
+    var f=_masaFecha(i);
+    if(f!==dia){
+      dia=f;
+      var delDia=its.filter(function(x){return _masaFecha(x)===f;}),on=delDia.every(function(x){return sel[x.id];});
+      h+='<label class="flex items-center gap-8" style="padding:7px 0 3px;cursor:pointer"><input type="checkbox" '+(on?'checked':'')+' data-f="'+esc(f)+'" onchange="_masaDia(this.dataset.f,this.checked)" style="width:16px;height:16px;flex-shrink:0;accent-color:var(--purple)"><span class="txs fw7" style="color:var(--purple)">📅 '+esc(f?fmts(f):'Sin fecha')+' ('+delDia.length+')</span></label>';
+    }
+    h+='<label class="flex items-center gap-8" style="padding:6px 0 6px 12px;border-bottom:1px solid var(--gray-ll);cursor:pointer"><input type="checkbox" '+(sel[i.id]?'checked':'')+' onchange="_masaUno(\''+i.id+'\',this.checked)" style="width:18px;height:18px;flex-shrink:0;accent-color:var(--purple)"><span style="flex:1;min-width:0"><span class="ts fw6">'+esc(_masaNombre(i))+'</span><span class="txxs tc3" style="display:block">'+esc([(i.qty?i.qty+' '+(i.unit||''):''),i.proveedor,i.remito?'Remito '+i.remito:'',i.grupo].filter(Boolean).join(' · '))+'</span></span></label>';
+  });
+  var top=el.scrollTop;el.innerHTML=h;el.scrollTop=top;
+  var n=Object.keys(sel).filter(function(k){return sel[k];}).length,ok=document.getElementById('masa_ok');
+  if(ok){ok.textContent=n?'Aplicar a '+n+' material'+(n>1?'es':''):'Elegí al menos un material';ok.style.opacity=n?1:.55;}
+}
+function _masaUno(id,on){if(on)window._masaSel[id]=1;else delete window._masaSel[id];_masaLista();}
+function _masaDia(f,on){_masaItems().forEach(function(i){if(_masaFecha(i)===f){if(on)window._masaSel[i.id]=1;else delete window._masaSel[i.id];}});_masaLista();}
+function _masaTodos(on){_masaItems().forEach(function(i){if(on)window._masaSel[i.id]=1;else delete window._masaSel[i.id];});_masaLista();}
+function aplicarEdicionMasiva(){
+  var ids=Object.keys(window._masaSel||{}).filter(function(k){return window._masaSel[k];});
+  if(!ids.length){toast('Elegí al menos un material','var(--orange)');return;}
+  var v=function(id){var x=document.getElementById(id);return x&&x.offsetParent!==null||id==='masa_fecha'?String((x&&x.value)||'').trim():'';};
+  var f=v('masa_fecha'),prov=v('masa_prov'),rem=v('masa_rem'),gru=v('masa_gru'),nota=v('masa_nota');
+  if(!f&&!prov&&!rem&&!gru&&!nota){toast('Completá al menos un dato para cambiar','var(--orange)');return;}
+  var cambios=[f?'fecha '+fmts(f):'',prov?'proveedor «'+prov+'»':'',rem?'remito «'+rem+'»':'',gru?'grupo «'+gru+'»':'',nota?'una nota':''].filter(Boolean).join(', ');
+  if(!confirm('¿Cambiar '+cambios+' en '+ids.length+' material'+(ids.length>1?'es':'')+'?'))return;
+  var n=0;
+  ids.forEach(function(id){
+    var i=(D.matIngresos||[]).find(function(x){return x.id===id;});if(!i)return;
+    if(f){
+      i.fecha=f;
+      // En un ingreso la fecha vive en tres campos: se cambian juntos (como al editar uno solo).
+      // La fecha del pago en Economía no se toca: pueden ser distintas.
+      if(_masaEstDe(i)==='ingresado'){i.date=f;i.fechaIngreso=f;}
+    }
+    if(prov)i.proveedor=prov;
+    if(rem)i.remito=rem;
+    if(gru)i.grupo=gru;
+    if(nota)i.observations=(i.observations?String(i.observations).trim()+'\n':'')+nota;
+    i.updatedAt=nw();n++;
+  });
+  audit('matIngresos','update',n+' editados juntos');sv();
+  document.getElementById('masaM')?.remove();
+  render();toast(n+' material'+(n>1?'es':'')+' actualizado'+(n>1?'s':'')+' ✓','var(--green)',2500);
+}
 function saveEditAPedir(itemId){
   var item=(D.matIngresos||[]).find(function(i){return i.id===itemId;});if(!item)return;
   var n=((document.getElementById('eap_n')||{}).value||'').trim();if(!n){toast('Nombre obligatorio','var(--red)');return;}
@@ -11257,6 +11355,24 @@ async function _cierreRestaurar(obra,zip,reabrir){
 // ═══════ ECONOMIA ═══════
 
 /* ===== MÓDULO: ECONOMÍA / MOVIMIENTOS ===== */
+// Recuadro del saldo: fila 1 el título, fila 2 el valor (con los movimientos al
+// lado, chiquito), fila 3 ingresos y egresos
+function _ecoSaldoHtml(saldo,tIng,tEgr,nMov,hasFilter,totalObra,all){
+  var col=saldo>=0?'var(--green)':'var(--red)';
+  var np=all.filter(function(e){return e.interno;}).length,ver=S.ecoVerPrivados!==false;
+  return '<div class="flex justify-between items-center gap-6">'
+    +'<div class="txxs fw7 tc3" style="text-transform:uppercase;letter-spacing:.8px">'+(hasFilter?'Saldo filtrado':'Saldo total')+'</div>'
+    +(np?'<div class="txxs" style="color:#64748b;white-space:nowrap">&#x1F512; '+np+' privado'+(np>1?'s':'')+' <button class="link-tag" style="font-size:10px" onclick="S.ecoVerPrivados='+(ver?'false':'true')+';render()" title="'+(ver?'Ver el saldo sin los privados':'Volver a incluirlos')+'">'+(ver?'ocultar':'ver')+'</button></div>':'')
+    +'</div>'
+    +'<div class="flex gap-8" style="align-items:baseline;margin-top:4px;flex-wrap:wrap">'
+    +'<div class="fw8" style="font-size:28px;color:'+col+';line-height:1">$'+saldo.toLocaleString('es-AR')+'</div>'
+    +'<div class="txxs fw6" style="color:var(--text3);white-space:nowrap">'+nMov+' mov.'+(hasFilter?' · Total obra: $'+totalObra.toLocaleString('es-AR'):'')+'</div>'
+    +'</div>'
+    +'<div class="flex gap-12" style="margin-top:4px;flex-wrap:wrap">'
+    +'<div class="ts fw7" style="color:var(--green)">↑ $'+tIng.toLocaleString('es-AR')+'</div>'
+    +'<div class="ts fw7" style="color:var(--red)">↓ $'+tEgr.toLocaleString('es-AR')+'</div>'
+    +'</div>';
+}
 function rEconomia(mc,p){
   if(!D.economia)D.economia=[];
   const all=pf('economia');
@@ -11331,26 +11447,8 @@ function rEconomia(mc,p){
     </div>
   </div>
   <!-- SALDO (filtrado) -->
-  <div class="card mb-12" id="eco_saldo_card" style="border-left:5px solid ${saldo>=0?'var(--green)':'var(--red)'};background:${saldo>=0?'var(--green-bg)':'var(--red-bg)'}">
-    <div class="flex justify-between items-center">
-      <div>
-        <div class="txxs fw7 tc3" style="text-transform:uppercase;letter-spacing:.8px">${hasFilter?'Saldo filtrado':'Saldo total'}</div>
-        ${(function(){
-          var _np=all.filter(function(e){return e.interno;}).length;
-          if(!_np)return '';
-          var _ver=S.ecoVerPrivados!==false;
-          return '<div class="txxs" style="color:#64748b;margin-top:2px;white-space:nowrap">&#x1F512; '+_np+' privado'+(_np>1?'s':'')+' '
-            +'<button class="link-tag" style="font-size:10px" onclick="S.ecoVerPrivados='+(_ver?'false':'true')+';render()" title="'+(_ver?'Ver el saldo sin los privados':'Volver a incluirlos')+'">'+(_ver?'ocultar':'ver')+'</button></div>';
-        })()}
-        <div class="fw8" style="font-size:28px;color:${saldo>=0?'var(--green)':'var(--red)'};line-height:1.1">$${saldo.toLocaleString('es-AR')}</div>
-        ${hasFilter?`<div class="txxs fw6 mt-4" style="color:var(--gray)">Total obra: $${(allIng-allEgr).toLocaleString('es-AR')}</div>`:''}
-      </div>
-      <div>
-        <div class="ts fw7 mb-4" style="color:var(--green)">↑ $${totalIng.toLocaleString('es-AR')}</div>
-        <div class="ts fw7" style="color:var(--red)">↓ $${totalEgr.toLocaleString('es-AR')}</div>
-        <div class="txxs fw6 mt-4" style="color:var(--text3)">${items.length} mov.</div>
-      </div>
-    </div>
+  <div class="card mb-12" id="eco_saldo_card" style="padding:10px 16px;border-left:5px solid ${saldo>=0?'var(--green)':'var(--red)'};background:${saldo>=0?'var(--green-bg)':'var(--red-bg)'}">
+    ${_ecoSaldoHtml(saldo,totalIng,totalEgr,items.length,hasFilter,allIng-allEgr,all)}
   </div>
   <!-- DISTRIBUCIÓN DE EGRESOS POR RUBRO -->
   <div class="card eco-plegable" id="eco_distrib_card">
@@ -11594,25 +11692,7 @@ function renderEcoItems(){
     const ingCol='var(--green)';const egrCol='var(--red)';
     sc.style.borderLeftColor=saldo>=0?'var(--green)':'var(--red)';
     sc.style.background=saldo>=0?'var(--green-bg)':'var(--red-bg)';
-    sc.innerHTML=`<div class="flex justify-between items-center">
-      <div>
-        <div class="txxs fw7 tc3" style="text-transform:uppercase;letter-spacing:.8px">${hasFilter?'Saldo filtrado':'Saldo total'}</div>
-        ${(function(){
-          var _np=all.filter(function(e){return e.interno;}).length;
-          if(!_np)return '';
-          var _ver=S.ecoVerPrivados!==false;
-          return '<div class="txxs" style="color:#64748b;margin-top:2px;white-space:nowrap">&#x1F512; '+_np+' privado'+(_np>1?'s':'')+' '
-            +'<button class="link-tag" style="font-size:10px" onclick="S.ecoVerPrivados='+(_ver?'false':'true')+';render()" title="'+(_ver?'Ver el saldo sin los privados':'Volver a incluirlos')+'">'+(_ver?'ocultar':'ver')+'</button></div>';
-        })()}
-        <div class="fw8" style="font-size:28px;color:${saldoCol};line-height:1.1">$${saldo.toLocaleString('es-AR')}</div>
-        ${hasFilter?`<div class="txxs fw6 mt-4" style="color:var(--gray)">Total obra: $${(allIng-allEgr).toLocaleString('es-AR')}</div>`:''}
-      </div>
-      <div>
-        <div class="ts fw7 mb-4" style="color:${ingCol}">↑ $${tIng.toLocaleString('es-AR')}</div>
-        <div class="ts fw7" style="color:${egrCol}">↓ $${tEgr.toLocaleString('es-AR')}</div>
-        <div class="txxs fw6 mt-4" style="color:var(--text3)">${items.length} mov.</div>
-      </div>
-    </div>`;
+    sc.innerHTML=_ecoSaldoHtml(saldo,tIng,tEgr,items.length,hasFilter,allIng-allEgr,all);
   }
   // Update items list
   const il=$('eco_items_list');
