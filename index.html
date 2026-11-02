@@ -4768,7 +4768,7 @@ function rVisitaDetail(mc,vid){
   const v=D.visitas.find(x=>x.id===vid);if(!v){S.visitaDetail=null;render();return;}
   const lT=_notasVisitaOrdenadas(vid);const lM=D.materiales.filter(m=>m.visitaId===vid);const lD=D.documentos.filter(d=>d.visitaId===vid);const lMI=(D.matIngresos||[]).filter(i=>i.visitaId===vid);
   mc.innerHTML=`
-  <div class="flex items-center gap-8 mb-12"><button class="tbtn back-btn" aria-label="Volver al listado de visitas" onclick="volverAVisitas(event)">${I.chevL}</button><h2 class="fw8" style="font-size:16px;cursor:pointer;padding:10px 8px 10px 0" onclick="volverAVisitas(event)">Visita</h2><div style="flex:1"></div><button class="btn btn-s btn-sec" onclick="exportVisitaPDF('${vid}')">${I.pdf} PDF</button><button class="btn btn-sec btn-s" onclick="shareFormContextual('visita','${vid}','Visita')" title="Compartir formulario">💬</button><button class="btn btn-g btn-s" onclick="editVisita('${vid}')">${I.edit}</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel('Eliminar visita?')){delVisita('${vid}')}">${I.trash}</button></div>
+  <div class="flex items-center gap-8 mb-12"><button class="tbtn back-btn" aria-label="Volver al listado de visitas" onclick="volverAVisitas(event)">${I.chevL}</button><h2 class="fw8" style="font-size:16px;cursor:pointer;padding:10px 8px 10px 0" onclick="volverAVisitas(event)">Visita</h2><div style="flex:1"></div><button class="btn btn-s bt" style="--c:#dc2626" onclick="exportVisitaPDF('${vid}')">${I.pdf} PDF</button><button class="btn btn-sec btn-s" onclick="shareFormContextual('visita','${vid}','Visita')" title="Compartir formulario">💬</button><button class="btn btn-g btn-s" onclick="editVisita('${vid}')">${I.edit}</button><button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel('Eliminar visita?')){delVisita('${vid}')}">${I.trash}</button></div>
   <div class="card mb-12">
     <div class="flex justify-between mb-6"><span class="txxs tc3">${I.cal} ${fmt(v.date)}</span>${colBadge(v.estado||'borrador',v.estado==='finalizada'?'var(--green)':'var(--blue)',true)}</div>
     <div class="fw8 mb-8" style="font-size:17px">${v.title}</div>
@@ -5525,7 +5525,7 @@ function abrirPdfMateriales(){
     +(nSc?chk('pdfMat_sc',S.matPdfSinComp!==false,'Incluir materiales ingresados sin cómputo ('+nSc+'), con fecha de ingreso'):'')
     +(nHi?chk('pdfMat_hi',!!S.matPdfHist,'Incluir historial de ingresos ('+nHi+'): fechas, proveedor, remito y notas'):'')
     +'<div class="txxs tc3 mb-12">Van en tablas aparte, debajo de los computados.</div>'
-    +'<button class="btn btn-w" style="background:var(--purple);color:#fff" onclick="_generarPdfMateriales()">Generar PDF</button></div>';
+    +'<button class="btn btn-w" style="background:#dc2626;color:#fff" onclick="_generarPdfMateriales()">Generar PDF</button></div>';
   document.body.appendChild(d);
 }
 function _generarPdfMateriales(){
@@ -7546,7 +7546,7 @@ function rMatDetail(mc,mid){
   <div class="flex items-center gap-8 mb-12">
     <button class="tbtn" onclick="_escudoToque();S.matDetail=null;render();">${I.chevL}</button>
     <h2 class="fw7" style="font-size:20px;flex:1">${m.name}</h2>
-    <button class="btn btn-s btn-sec" onclick="exportMatDetailPDF('${mid}')">PDF</button><button class="btn btn-g btn-s" onclick="editMat('${mid}')">${I.edit}</button>
+    <button class="btn btn-s bt" style="--c:#dc2626" onclick="exportMatDetailPDF('${mid}')">${I.pdf} PDF</button><button class="btn btn-g btn-s" onclick="editMat('${mid}')">${I.edit}</button>
     <button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel('Eliminar material y todos sus ingresos?')){D.materiales=D.materiales.filter(x=>x.id!=='${mid}');addTombstone('materiales','${mid}');(D.matIngresos||[]).filter(x=>x.materialId==='${mid}').forEach(x=>addTombstone('matIngresos',x.id));D.matIngresos=(D.matIngresos||[]).filter(x=>x.materialId!=='${mid}');sv();S.matDetail=null;render();toast('Eliminado');}">${I.trash}</button>
   </div>
   <div class="card mb-12">
@@ -8548,7 +8548,7 @@ function rNotas(mc){
     h+='<div class="flex items-center gap-6 mb-10" style="position:sticky;top:0;z-index:5;padding:8px 10px;border-radius:10px;background:#fefce8;border:2px solid #ca8a04">'
       +'<span class="txs fw7" style="flex:1;color:#a16207">☑️ '+_ns+' elegida'+(_ns===1?'':'s')+'</span>'
       +'<button class="btn btn-sec btn-s" onclick="S.notasSel={};_notasFiltradas().forEach(function(x){S.notasSel[x.id]=1;});saveUIState();render()">Todas</button>'
-      +'<button class="btn btn-s" style="background:#ca8a04;color:#fff" onclick="exportNotasPDF(true)">'+I.pdf+' PDF</button>'
+      +'<button class="btn btn-s bt" style="--c:#dc2626" onclick="exportNotasPDF(true)">'+I.pdf+' PDF</button>'
       +'<button class="btn btn-sec btn-s" onclick="_notasSelSalir()">✕</button></div>';}
   if(S.notasVencF){var _nv=_notasVenc(),_nvv=_nv.filter(function(x){return x.d<0;}).length;
     h+='<div class="flex items-center gap-6 mb-10" style="padding:6px 10px;border-radius:10px;background:'+(_nvv?'#fef2f2':'#fff7ed')+';border:1px solid '+(_nvv?'#fecaca':'#fed7aa')+'"><span class="txs fw7" style="flex:1;color:'+(_nvv?'#dc2626':'#c2410c')+'">⏰ Vencidas y por vencer ('+_nv.length+')</span><button class="btn btn-sec btn-s" onclick="S.notasVencF=false;S.notasOrden=\'desc\';saveUIState();render()">✕ Ver todas</button></div>';}
@@ -10087,7 +10087,7 @@ function openInformeMixto(){
     +(hasEco?'<label style="display:flex;align-items:center;gap-8;padding:8px 0;border-bottom:1px solid var(--gray-ll);cursor:pointer;font-size:12px"><input type="checkbox" id="imx_eco" style="margin-right:8px"> Resumen económico (ingresos/egresos)</label>':'')
     +'</div>'
     +'<div class="fg mt-12"><label class="fl">Título del informe (opcional)</label><input class="fi" id="imx_titulo" placeholder="Ej: Avance semanal, Informe de obra..."></div>'
-    +'<button class="btn btn-p btn-w mt-8" style="background:#D97706;color:#fff" onclick="generarInformeMixto()">📄 Generar PDF</button></div>';
+    +'<button class="btn btn-p btn-w mt-8" style="background:#dc2626;color:#fff" onclick="generarInformeMixto()">📄 Generar PDF</button></div>';
   document.body.appendChild(d);
 }
 
@@ -11163,7 +11163,7 @@ function _cierrePintar(){
       c.innerHTML='<div class="ts mb-8" style="color:var(--green);font-weight:700">✓ Listo: '+_CIE.resp.fotos+' foto(s) incluidas'+(_CIE.bytes.faltan.length?' · <span style="color:var(--orange)">'+_CIE.bytes.faltan.length+' no se pudieron copiar</span>':'')+'</div>'
         +'<button class="btn btn-w mb-8" style="background:#7c3aed;color:#fff" onclick="cierreBajar(\'resp\')">⬇ Descargar respaldo (.obracontrol) — '+_cTam(_CIE.resp.blob.size)+'</button>'
         +'<button class="btn btn-w mb-8" style="background:#0891b2;color:#fff" onclick="cierreBajar(\'inf\')">⬇ Descargar informes (.zip) — '+_cTam(_CIE.inf.blob.size)+'</button>'
-        +'<div style="display:flex;gap:6px" class="mb-8"><button class="btn btn-sec btn-s" style="flex:1" onclick="cierreImprimir(true)">🖨 PDF completo</button><button class="btn btn-sec btn-s" style="flex:1" onclick="cierreImprimir(false)">🖨 PDF para el cliente</button></div>'
+        +'<div style="display:flex;gap:6px" class="mb-8"><button class="btn btn-s bt" style="--c:#dc2626;flex:1" onclick="cierreImprimir(true)">🖨 PDF completo</button><button class="btn btn-s bt" style="--c:#dc2626;flex:1" onclick="cierreImprimir(false)">🖨 PDF para el cliente</button></div>'
         +'<div class="txxs mb-10" style="padding:8px;border-radius:8px;background:'+(d&&d.ok?'#f0fdf4;color:#16a34a':'#fff7ed;color:#c2410c')+'">'+(!d||d.subiendo?'☁ Subiendo copia a Drive…':d.ok?'☁ Copia guardada en Drive, carpeta CIERRE_DE_OBRA de la obra':'☁ No se pudo subir a Drive ('+esc(d.motivo||'')+'). Guardá el respaldo en el teléfono o en la compu.'
           +'<button class="btn btn-sec btn-s btn-w mt-6" onclick="cierreSubirDriveManual()">☁ Subir copia a Drive</button>')+'</div>'
         +'<button class="btn btn-w" style="background:#D97706;color:#fff'+((_CIE.bajado||(d&&d.ok))?'':';opacity:.4;cursor:not-allowed')+'" onclick="_CIE.paso=3;_cierrePintar()"'+((_CIE.bajado||(d&&d.ok))?'':' disabled')+'>Siguiente →</button>'
@@ -13786,7 +13786,7 @@ function openEcoPDFDialog(){
     <option value="con">Incluirlos — uso interno</option>
     <option value="solo">S&#xF3;lo los privados</option>
   </select><div class="txxs tc3 mt-2">Si los incluye, el PDF sale marcado como uso interno.</div></div>
-  <button class="btn btn-w mt-8" style="background:var(--cyan);color:#fff" onclick="exportEcoPDF($('pdf_incl_distrib')?.checked,$('pdf_incl_rubro_col')?.checked,$('pdf_incl_metros')?.checked,$('pdf_priv')?.value,$('pdf_incl_meses')?.checked,$('pdf_incl_fotos')?.checked);this.closest('.mo').remove()">Generar PDF</button></div>`;
+  <button class="btn btn-w mt-8" style="background:#dc2626;color:#fff" onclick="exportEcoPDF($('pdf_incl_distrib')?.checked,$('pdf_incl_rubro_col')?.checked,$('pdf_incl_metros')?.checked,$('pdf_priv')?.value,$('pdf_incl_meses')?.checked,$('pdf_incl_fotos')?.checked);this.closest('.mo').remove()">Generar PDF</button></div>`;
   document.body.appendChild(d);
 }
 
@@ -15023,7 +15023,7 @@ function incorporarFormularioModal(id,detalleKey){
   h+='<div class="mo-h" style="padding:14px 16px">'
     +(detalleKey?'<button class="btn btn-sec btn-s" style="margin-right:8px" onclick="incorporarFormularioModal(\''+id+'\')">← Volver</button>':'')
     +'<h3 style="color:#0d9488;flex:1;min-width:0">📥 '+esc(sub.ayudante||'?')+'</h3>'
-    +'<button class="tbtn" title="PDF de este envío" onclick="exportPdfColabForms([\''+id+'\'])">📄</button>'
+    +'<button class="tbtn" style="color:#dc2626" title="PDF de este envío" onclick="exportPdfColabForms([\''+id+'\'])">'+I.pdf+'</button>'
     +'<button class="tbtn" onclick="document.getElementById(\'ifmM\').remove()">'+I.x+'</button></div>';
   h+='<div class="txxs tc3 mb-4" style="padding:0 16px">📅 '+fmts(sub.receivedAt||sub.fecha||'')+(sub.version>1?' · <strong>v'+sub.version+'</strong>':'')+'</div>';
   h+='<div style="flex:1;overflow-y:auto;padding:8px 16px 8px">';
@@ -15126,7 +15126,7 @@ function _modalCarpetaForm(sub){
   var im=arch.filter(_esImagenArch),dc=arch.filter(function(a){return !_esImagenArch(a);});
   var h='<div class="mo-c" style="max-height:92vh;display:flex;flex-direction:column;padding:0">';
   h+='<div class="mo-h" style="padding:14px 16px"><h3 style="color:#16a34a;flex:1;min-width:0">📁 '+esc(sub.ayudante||'?')+'</h3>'
-    +'<button class="tbtn" title="PDF de este envío" onclick="exportPdfColabForms([\''+sub.id+'\'])">📄</button>'
+    +'<button class="tbtn" style="color:#dc2626" title="PDF de este envío" onclick="exportPdfColabForms([\''+sub.id+'\'])">'+I.pdf+'</button>'
     +'<button class="tbtn" onclick="document.getElementById(\'ifmM\').remove()">'+I.x+'</button></div>';
   h+='<div class="txxs tc3 mb-4" style="padding:0 16px">📅 '+fmts(sub.receivedAt||sub.fecha||'')+' · '+_resumenEnvioCarpeta(sub)+'</div>';
   h+='<div style="flex:1;overflow-y:auto;padding:8px 16px">';
@@ -15270,7 +15270,7 @@ function _tlCard(e,o){
       if(f.estado==='pendiente')acc+=_btn(car?'✓ Marcar como visto':'✓ Incorporar todo',_rp(car?'marcarEnvioCarpetaVisto(\''+f.id+'\')':'incAll(\''+f.id+'\')'),'#16a34a',true);
       else if(f.estado==='incorporado'||f.estado==='descartado')acc+=_btn('↩ Volver a pendiente',_rp('_volverPendienteForm(\''+f.id+'\')'),'#ea580c',false);
       acc+=_btn('👁 Ver detalle',_cerrarFicha+'incorporarFormularioModal(\''+f.id+'\')','#0d9488',false);
-      acc+=_btn('📄 PDF','exportPdfColabForms([\''+f.id+'\'],{colabId:\''+colabId+'\'})','#0d9488',false);
+      acc+=_btn('📄 PDF','exportPdfColabForms([\''+f.id+'\'],{colabId:\''+colabId+'\'})','#dc2626',false);
       acc+='</div>';
       if(!car){
         var conv=_itemsForm(f).filter(function(it){return ['cmt','tar','mov','msg'].indexOf(it.sec)>=0&&(f.itemsRech||[]).indexOf(it.key)<0;});
@@ -15346,8 +15346,8 @@ function _resumenColabHtml(colabId,co){
   var nSel=Object.keys(window._selColab).filter(function(k){return window._selColab[k];}).length;
   var nParc=nSel||(hayF?window._evColabVis.length:0);
   h+='<div style="position:sticky;top:0;background:var(--surface,#fff);padding:6px 0 8px;z-index:2;display:flex;gap:6px;flex-wrap:wrap;align-items:center">'
-    +'<button class="btn btn-s" style="background:#0d9488;color:#fff" onclick="exportPdfColab(\''+colabId+'\',false)">📄 PDF de todo el historial</button>'
-    +'<button class="btn btn-s" style="'+(nParc?'background:#6366f1;color:#fff':'background:var(--gray-ll);color:var(--text3)')+'" onclick="'+(nParc?'exportPdfColab(\''+colabId+'\',true)':'toast(\'Tildá envíos de la lista o elegí un cuadrito de arriba\',\'var(--orange)\')')+'">📄 PDF parcial'+(nParc?' ('+nParc+')':'')+'</button>'
+    +'<button class="btn btn-s bt" style="--c:#dc2626" onclick="exportPdfColab(\''+colabId+'\',false)">'+I.pdf+' PDF de todo el historial</button>'
+    +'<button class="btn btn-s'+(nParc?' bt':'')+'" style="'+(nParc?'--c:#dc2626':'background:var(--gray-ll);color:var(--text3)')+'" onclick="'+(nParc?'exportPdfColab(\''+colabId+'\',true)':'toast(\'Tildá envíos de la lista o elegí un cuadrito de arriba\',\'var(--orange)\')')+'">'+I.pdf.replace('width="20" height="20"','width="15" height="15"')+' PDF parcial'+(nParc?' ('+nParc+')':'')+'</button>'
     +(nSel?'<button class="btn btn-sec btn-s" onclick="window._selColab={};openPerfilColab(\''+colabId+'\',\'resumen\')">Quitar tildes</button>':'')
     +'</div><div class="txxs tc3 mb-6">Tocá un envío para resolverlo ahí mismo · tildá para el PDF parcial</div>';
   if(!ev.length)h+='<div class="empty">🕒<div class="ts mt-8">Todavía no hay intercambio</div></div>';
