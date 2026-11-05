@@ -8847,7 +8847,9 @@ function abrirDibujoNota(destino){
   var cols=['#111827','#ffffff','#dc2626','#2563eb','#16a34a','#ea580c','#ca8a04'];
   document.getElementById('dibM')?.remove();
   var d=document.createElement('div');d.className='mo open';d.id='dibM';d.style.zIndex='2600';
-  d.innerHTML='<div class="mo-c" style="max-width:900px;width:96vw;padding:10px;height:92vh;max-height:92vh;display:flex;flex-direction:column;overflow:hidden">'
+  // Centrado y quieto: no se desplaza ni queda tapado por la barra del celular
+  d.style.alignItems='center';d.style.paddingTop='0';d.style.overflow='hidden';d.style.overscrollBehavior='none';d.style.touchAction='none';
+  d.innerHTML='<div class="mo-c" style="max-width:900px;width:96vw;padding:10px;height:85vh;height:85dvh;max-height:85dvh;display:flex;flex-direction:column;overflow:hidden">'
     +'<div class="flex items-center mb-6"><div class="ts fw7" style="flex:1;color:'+MC.notas+'">'+(nueva?(destino.reemplazo!=null?'📷 Editar foto · marcá con el lápiz o corregí el comentario':'📷 Foto'+(destino.cola.length>1?' '+(destino.i+1)+' de '+destino.cola.length:'')+' · marcá con el lápiz y comentala'):'✏️ Dibujo')+'</div><button class="tbtn" title="'+(nueva?'Descartar esta foto':'Cerrar sin guardar')+'" onclick="'+cerrar+'">'+I.x+'</button></div>'
     +'<div class="flex gap-6 items-center mb-6" style="flex-wrap:wrap">'
     +cols.map(function(cl,i){return '<button class="dib-col" data-c="'+cl+'" onclick="_dibSet({color:\''+cl+'\',goma:false},this)" style="width:26px;height:26px;border-radius:50%;background:'+cl+';border:3px solid '+(i===0?'#fbbf24':'#fff')+';box-shadow:0 0 0 1px #cbd5e1;cursor:pointer"></button>';}).join('')
