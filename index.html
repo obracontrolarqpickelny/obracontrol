@@ -400,7 +400,7 @@ const DRIVE_MODULE_FOLDERS = {
   alertas:'🔔 Alertas', checklist:'☑️ Checklist', documentos:'📁 Documentos',
   comentarios:'💬 Comentarios', colaboradores:'👥 Colaboradores', logs:'📝 Logs',
   economia:'💰 Economia', auditoria:'📊 Auditoria',
-  imagenes:'🖼️ Imagenes', backups:'💾 Backups'
+  imagenes:'🖼️ Imagenes', backups:'💾 Backups', notas:'📝 Notas'
 };
 
 // ─── STATE ──────────────────────────────────────────────────────────
@@ -719,7 +719,7 @@ function driveHeaders() {
 // ─── DRIVE FOLDER MANAGEMENT ────────────────────────────────────────
 async function findOrCreateFolder(name, parentId = null) {
   const q = `name='${name}' and mimeType='application/vnd.google-apps.folder' and trashed=false${parentId ? " and '"+parentId+"' in parents" : ''}`;
-  const res = await fetchWithTimeout(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name)`, {
+  const res = await fetchWithTimeout(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name)&orderBy=createdTime`, {
     headers: driveHeaders()
   });
   if (!res.ok) throw new Error('Drive API ' + res.status);
@@ -769,7 +769,26 @@ async function _ensureFoldersImpl(pid) {
   if (!GD.obraFolders[pid]) {
     const proj = D.projects.find(p => p.id === pid);
     const obraName = (proj ? proj.name.toUpperCase() : pid).replace(/[<>:"/\|?*]/g, '_');
-    GD.obraFolders[pid] = await findOrCreateFolder(obraName, GD.rootId);
+    let fid = (proj && proj.driveFolderId) || null;
+    if (fid) {
+      try {
+        const r = await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/' + fid + '?fields=id,name,trashed', { headers: driveHeaders() });
+        if (r.status === 404) fid = null;
+        else if (r.ok) {
+          const j = await r.json();
+          if (j.trashed) fid = null;
+          else if (j.name !== obraName) {
+            // La obra cambió de nombre: se renombra su carpeta, no se crea otra
+            await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/' + fid, { method: 'PATCH', headers: driveHeaders(), body: JSON.stringify({ name: obraName }) }).catch(function(){});
+          }
+        }
+      } catch (_) { /* sin conexión: se sigue usando la carpeta guardada */ }
+    }
+    if (!fid) {
+      fid = await findOrCreateFolder(obraName, GD.rootId);
+      if (proj && proj.driveFolderId !== fid) { proj.driveFolderId = fid; proj.updatedAt = nw(); setTimeout(function(){ try{ sv(); }catch(_){} }, 0); }
+    }
+    GD.obraFolders[pid] = fid;
   }
   const obraFolderId = GD.obraFolders[pid];
 
@@ -1176,6 +1195,11 @@ async function _saveToDriveImpl() {
         createVersionBackup('diario').then(function(ok){if(!ok)try{localStorage.removeItem(_kBk);}catch(_){}});
       }
     }catch(_){}
+    // Resumen de cada obra en su carpeta (una vez por hora como mucho)
+    if(!GD._lastResumen||(Date.now()-GD._lastResumen)>3600000){
+      GD._lastResumen=Date.now();
+      setTimeout(function(){_guardarResumenesObras().catch(function(e){console.warn('resumenes:',e);});},4000);
+    }
     // Guardar log .txt en Drive (máx una vez cada 2 min)
     var _now=Date.now();
     if(!GD._lastLogSave||(_now-GD._lastLogSave)>120000){
@@ -1220,8 +1244,28 @@ function buildLogContent(){
     if(nP||nF)c+='   Adjuntos: '+nP+' foto(s), '+nF+' archivo(s)'+NL;
     c+=NL;
   });
+  // Notas, agrupadas por tipo (las tareas ahora son notas "Tareas / pendientes")
+  const nts=pf('notas').slice().sort(function(a,b){return String(b.fecha||'').localeCompare(String(a.fecha||''));});
+  c+='NOTAS ('+nts.length+')'+NL+sep+NL;
+  Object.keys(NOTA_TIPOS).forEach(function(tp){
+    var g=nts.filter(function(n){return (n.tipo||'registro')===tp;});if(!g.length)return;
+    c+=_notaTipoLabel(tp).replace(/^\S+\s/,'').toUpperCase()+' ('+g.length+')'+NL;
+    g.forEach(function(n){
+      c+='  '+fmt(n.fecha)+(n.hora?' '+n.hora:'')+' — '+(n.titulo||'(Sin título)')+(_notaHecha(n)?' [HECHA]':'')+(n.tipo==='pendiente'?' ['+(n.prioridad||'media')+(n.vence?' · vence '+fmt(n.vence):'')+(n.responsable?' · '+n.responsable:'')+']':'')+NL;
+      if(n.texto)c+='    '+String(n.texto).replace(/\n/g,NL+'    ')+NL;
+      var nf=(n.photos||[]).filter(function(x){return x&&!x.deletedAt;}).length;if(nf)c+='    Fotos: '+nf+NL;
+    });
+    c+=NL;
+  });
+  // Respaldo: cuántas fotos y archivos ya están en Drive y cuántos esperan en algún dispositivo
+  (function(){
+    var enDrive=0,espera=0;
+    var mira=function(o){if(typeof o==='string'){if(/^\[foto:/.test(o))espera++;else if(/drive\.google|googleusercontent/.test(o))enDrive++;}else if(Array.isArray(o))o.forEach(mira);else if(o&&typeof o==='object')Object.keys(o).forEach(function(k){if(k!=='viewUrl'&&k!=='localUrl')mira(o[k]);});};
+    ['visitas','notas','materiales','matIngresos','economia','checklists','documentos','enlaces','carpetas'].forEach(function(t){mira(pf(t));});
+    c+='RESPALDO EN DRIVE'+NL+sep+NL+'Fotos y archivos en Drive: '+enDrive+NL+'Esperando subirse desde un dispositivo: '+espera+NL+NL;
+  })();
   const tar=pf('tareas').sort(function(a,b){const po={urgente:0,alta:1,media:2,baja:3};return(po[a.priority]||2)-(po[b.priority]||2);});
-  c+='TAREAS ('+tar.length+')'+NL+sep+NL;
+  if(tar.length)c+='TAREAS ('+tar.length+')'+NL+sep+NL;
   tar.forEach(function(t){
     c+='['+t.status.toUpperCase()+'] ['+t.priority+'] '+t.title+NL;
     if(t.description)c+='  '+t.description+NL;
@@ -1342,6 +1386,36 @@ function buildLogContent(){
 // La obra, el contenido y el nombre se fijan JUNTOS y antes de cualquier espera:
 // antes el archivo iba a GD.logsFolderId, la carpeta de la última obra preparada,
 // y terminaba en la carpeta de otra obra (25 informes así en el Drive real).
+// Crea o reescribe un archivo de texto en una carpeta de Drive
+async function _escribirTxtDrive(fid,nombre,contenido){
+  const q="name='"+nombre.replace(/'/g,"\\'")+"' and '"+fid+"' in parents and trashed=false";
+  const sr=await fetchWithTimeout('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(q)+'&fields=files(id)&orderBy=createdTime',{headers:{Authorization:'Bearer '+GD.accessToken}});
+  const sj=await sr.json();const id=sj.files&&sj.files[0]?sj.files[0].id:null;
+  const cuerpo='\ufeff'+contenido;
+  if(id){
+    await fetchWithTimeout('https://www.googleapis.com/upload/drive/v3/files/'+id+'?uploadType=media',{method:'PATCH',headers:{Authorization:'Bearer '+GD.accessToken,'Content-Type':'text/plain;charset=utf-8'},body:cuerpo});
+  } else {
+    const form=new FormData();
+    form.append('metadata',new Blob([JSON.stringify({name:nombre,parents:[fid],mimeType:'text/plain'})],{type:'application/json'}));
+    form.append('file',new Blob([cuerpo],{type:'text/plain;charset=utf-8'}));
+    await fetchWithTimeout('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{method:'POST',headers:{Authorization:'Bearer '+GD.accessToken},body:form});
+  }
+}
+// "RESUMEN DE OBRA" en la carpeta de cada obra: el informe completo al día,
+// con las notas, la economía y el estado del respaldo de fotos y archivos.
+async function _guardarResumenesObras(){
+  if(!GD.accessToken||!GD.online)return;
+  var prev=S.proj;
+  for(var i=0;i<(D.projects||[]).length;i++){
+    var p=D.projects[i];if(!p||!p.id)continue;
+    var txt;
+    try{S.proj=p.id;txt=buildLogContent();}catch(e){txt=null;}finally{S.proj=prev;}
+    if(!txt)continue;
+    try{var fid=await carpetaObra(p.id,'logs');var obra=GD.obraFolders[p.id];
+      await _escribirTxtDrive(obra||fid,'RESUMEN DE OBRA - '+String(p.name||'').toUpperCase().replace(/[<>:"/\\|?*]/g,'_')+'.txt',txt);
+    }catch(e){console.warn('resumen '+p.name+':',e);}
+  }
+}
 async function saveLogToDrive(){
   if(!GD.accessToken)return;
   const pid=S.proj||'';
@@ -1355,7 +1429,7 @@ async function saveLogToDrive(){
   try{
     // Informe de una obra → su carpeta Logs. Informe global → carpeta raíz del sistema.
     if(pid) logsFid=await carpetaObra(pid,'logs');
-    else { await ensureFolders(''); logsFid=GD.rootId; if(!logsFid)throw new Error('no pude confirmar la carpeta raíz'); }
+    else { await ensureFolders(''); if(!GD.rootId)throw new Error('no pude confirmar la carpeta raíz'); logsFid=await findOrCreateFolder('📊 Informes',GD.rootId); }
   }catch(e){
     console.warn('saveLogToDrive:',e);
     toast('No guardé el informe de "'+_nombreObra(pid)+'" en Drive: '+(e&&e.message||'carpeta sin confirmar'),'var(--orange)',6000);
@@ -1644,7 +1718,7 @@ async function _processPendingImagesImpl() {
         // Sin esto, si Drive y local tienen el mismo timestamp, Drive gana en _silentMerge
         // y revierte la URL real al placeholder [foto:imgId] — causando ícono de nube.
         var _newUrl=result.url;
-        var _photoTbls=['visitas','tareas','materiales','matIngresos','alertas','comentarios'];
+        var _photoTbls=['visitas','tareas','materiales','matIngresos','alertas','comentarios','notas','checklists'];
         _photoTbls.forEach(function(tbl){
           (D[tbl]||[]).forEach(function(x){
             if((x.photos||[]).some(function(ph){return (typeof ph==='string'?ph:(ph&&ph.url)||'')===_newUrl;})){
