@@ -400,7 +400,8 @@ const DRIVE_MODULE_FOLDERS = {
   alertas:'🔔 Alertas', checklist:'☑️ Checklist', documentos:'📁 Documentos',
   comentarios:'💬 Comentarios', colaboradores:'👥 Colaboradores', logs:'📝 Logs',
   economia:'💰 Economia', auditoria:'📊 Auditoria',
-  imagenes:'🖼️ Imagenes', backups:'💾 Backups', notas:'📝 Notas'
+  imagenes:'🖼️ Imagenes', backups:'💾 Backups', notas:'📝 Notas',
+  eliminados:'🗑️ Eliminado en la app'
 };
 
 // ─── STATE ──────────────────────────────────────────────────────────
@@ -1212,6 +1213,7 @@ async function _saveToDriveImpl() {
         createVersionBackup('diario').then(function(ok){if(!ok)try{localStorage.removeItem(_kBk);}catch(_){}});
       }
     }catch(_){}
+    if((D.eliminadosPend||[]).length)setTimeout(function(){_subirEliminados().catch(function(){});},1500);
     // Resumen de cada obra en su carpeta (una vez por hora como mucho)
     if(!GD._lastResumen||(Date.now()-GD._lastResumen)>3600000){
       GD._lastResumen=Date.now();
@@ -1598,8 +1600,15 @@ async function _borrarDeDriveSeguro(fileId,descripcion,excluir){
   try{
     var auth=await ensureAuth();
     if(!auth)return{ok:false,motivo:'sin sesión de Drive'};
-    var res=await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/'+fileId,{
-      method:'PATCH',headers:driveHeaders(),body:JSON.stringify({trashed:true}),
+    // Nada se borra de Drive: el archivo se MUEVE a la carpeta "🗑️ Eliminado en la
+    // app" de su obra (antes iba a la papelera y Google la vacía a los 30 días).
+    var pid=(excluir&&excluir.pid)||S.proj||'';
+    var dest=pid?await carpetaObra(pid,'eliminados'):await findOrCreateFolder('🗑️ Eliminado en la app',GD.rootId);
+    var cur=await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/'+fileId+'?fields=parents',{headers:driveHeaders()});
+    var pj=cur&&cur.ok?await cur.json():{};
+    var quitar=(pj.parents||[]).filter(function(x){return x!==dest;}).join(',');
+    var res=await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/'+fileId+'?addParents='+dest+(quitar?'&removeParents='+quitar:''),{
+      method:'PATCH',headers:driveHeaders(),body:JSON.stringify({}),
     });
     if(!res||!res.ok)return{ok:false,motivo:'Drive respondió '+(res&&res.status)};
     if(!Array.isArray(D.papeleraDrive))D.papeleraDrive=[];
@@ -1915,9 +1924,11 @@ async function createVersionBackup(reason = 'auto') {
         const viejos = data.files.slice(0, data.files.length - 40)
           // Sólo respaldos: nunca un archivo que no generó esta rutina.
           .filter(f => /^ObraControl.*\.json$/i.test(f.name || ''));
+        // Nada se tira: los más viejos se mueven a "Históricos", dentro de Backups
+        const histId = await findOrCreateFolder('Históricos', bkFolder);
         for (const f of viejos) {
-          await fetchWithTimeout(`https://www.googleapis.com/drive/v3/files/${f.id}`, {
-            method: 'PATCH', headers: driveHeaders(), body: JSON.stringify({ trashed: true })
+          await fetchWithTimeout(`https://www.googleapis.com/drive/v3/files/${f.id}?addParents=${histId}&removeParents=${bkFolder}`, {
+            method: 'PATCH', headers: driveHeaders(), body: JSON.stringify({})
           });
         }
       }
@@ -2704,7 +2715,7 @@ function _papeleraDriveDespues(driveId,desc){
   if(!driveId)return;
   _borrarDeDriveSeguro(driveId,desc).then(function(r){
     if(r&&r.ok)sv();
-    else if(r&&r.motivo==='sin sesión de Drive')toast('Reconectá Drive para mandar también el archivo a la papelera','var(--orange)',5000);
+    else if(r&&r.motivo==='sin sesión de Drive')toast('Reconectá Drive: el archivo queda en Drive, se va a guardar en "Eliminado en la app"','var(--orange)',5000);
   }).catch(function(){});
 }
 // En la sincronización: lo borrado en cualquiera de los dos lados no vuelve
@@ -4280,6 +4291,7 @@ function _keepScroll(fn){
 function render(){
   if(!_accesoAutorizado()){_pantallaAcceso();return;}
   if(!D.user){renderAuth();return;}
+  try{_indexarRegistros();}catch(_){}
   if(!S.proj){renderProjects();return;}
   if((D.tareas||[]).length&&_migrarTareasANotas())setTimeout(sv,0);
   // Tareas y Comentarios ya no son pestañas: todo vive en Notas
@@ -6015,7 +6027,55 @@ function requireDelete(){
 
 
 // ── TOMBSTONES: registro de eliminaciones para sync entre dispositivos ──
+// Índice de lo que había en el último dibujado: permite guardar un registro
+// aunque ya se haya quitado de la lista cuando se marca como eliminado.
+function _indexarRegistros(){
+  var m={};
+  Object.keys(D).forEach(function(k){
+    if(!Array.isArray(D[k])||k==='tombstones'||k==='auditLog'||k==='eliminadosPend')return;
+    D[k].forEach(function(r){if(r&&typeof r==='object'&&r.id)m[k+':'+r.id]=r;});
+  });
+  GD._indice=m;
+}
+// Copia completa de lo eliminado → Drive ("🗑️ Eliminado en la app / REGISTROS ELIMINADOS.json")
+function _guardarEliminado(tbl,id){
+  try{
+    var r=(D[tbl]||[]).find(function(x){return x&&x.id===id;})||(GD._indice&&GD._indice[tbl+':'+id]);
+    if(!r)return;
+    if(!D.eliminadosPend)D.eliminadosPend=[];
+    if(D.eliminadosPend.some(function(e){return e.tbl===tbl&&e.id===id;}))return;
+    D.eliminadosPend.push({tbl:tbl,id:id,ts:nw(),obra:r.projectId||r.proyectoId||'',por:(D.user&&D.user.name)||'',registro:JSON.parse(JSON.stringify(r))});
+    clearTimeout(GD._elimT);GD._elimT=setTimeout(function(){_subirEliminados().catch(function(e){console.warn('eliminados:',e);});},3000);
+  }catch(_){}
+}
+async function _subirEliminados(){
+  var pend=(D.eliminadosPend||[]).slice();
+  if(!pend.length||!GD.accessToken||!GD.online)return;
+  if(GD._subiendoElim)return;GD._subiendoElim=true;
+  try{
+    var porObra={};pend.forEach(function(e){var k=(D.projects||[]).some(function(p){return p.id===e.obra;})?e.obra:'';(porObra[k]=porObra[k]||[]).push(e);});
+    for(var pid in porObra){
+      await ensureFolders('');
+      var fid=pid?await carpetaObra(pid,'eliminados'):await findOrCreateFolder('🗑️ Eliminado en la app',GD.rootId);
+      var nombre='REGISTROS ELIMINADOS.json';
+      var q="name='"+nombre+"' and '"+fid+"' in parents and trashed=false";
+      var sr=await fetchWithTimeout('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(q)+'&fields=files(id)&orderBy=createdTime',{headers:driveHeaders()});
+      var sj=await sr.json();var fileId=sj.files&&sj.files[0]?sj.files[0].id:null;
+      var lista=[];
+      if(fileId){var rr=await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/'+fileId+'?alt=media',{headers:{Authorization:'Bearer '+GD.accessToken}});if(rr.ok){try{lista=await rr.json();}catch(_){lista=[];}}if(!Array.isArray(lista))lista=[];}
+      var ya={};lista.forEach(function(e){ya[e.tbl+':'+e.id+':'+e.ts]=1;});
+      porObra[pid].forEach(function(e){if(!ya[e.tbl+':'+e.id+':'+e.ts])lista.push(e);});
+      var cuerpo=JSON.stringify(lista,null,1);
+      var ok;
+      if(fileId){ok=(await fetchWithTimeout('https://www.googleapis.com/upload/drive/v3/files/'+fileId+'?uploadType=media',{method:'PATCH',headers:{Authorization:'Bearer '+GD.accessToken,'Content-Type':'application/json'},body:cuerpo})).ok;}
+      else{var form=new FormData();form.append('metadata',new Blob([JSON.stringify({name:nombre,parents:[fid],mimeType:'application/json'})],{type:'application/json'}));form.append('file',new Blob([cuerpo],{type:'application/json'}));ok=(await fetchWithTimeout('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{method:'POST',headers:{Authorization:'Bearer '+GD.accessToken},body:form})).ok;}
+      if(ok){var hechos={};porObra[pid].forEach(function(e){hechos[e.tbl+':'+e.id+':'+e.ts]=1;});D.eliminadosPend=(D.eliminadosPend||[]).filter(function(e){return !hechos[e.tbl+':'+e.id+':'+e.ts];});}
+    }
+    sv();
+  }finally{GD._subiendoElim=false;}
+}
 function addTombstone(tbl,id){
+  _guardarEliminado(tbl,id);
   if(!D.tombstones)D.tombstones=[];
   if(!D.tombstones.find(function(t){return t.id===id;}))
     D.tombstones.push({id:id,tbl:tbl,ts:nw()});
@@ -12509,12 +12569,12 @@ async function delEcoImagen(id){
     miniatura:_resolveImg(item.imagen||'')}))return;
   item=D.economia.find(x=>x.id===id);
   if(!item){toast('Ese movimiento ya no está','var(--orange)');render();return;}
-  // Mandar a la papelera de Drive si es un archivo de Drive
+  // El archivo de Drive no se borra: pasa a "Eliminado en la app" de la obra
   if(item.imagen&&item.imagen.includes('drive.google.com')){
     var _m=item.imagen.match(/[?&]id=([^&]+)/);
     if(_m&&_m[1]){
       var r=await _borrarDeDriveSeguro(_m[1],'comprobante '+(item.concepto||''),{tbl:'economia',id:id});
-      if(!r.ok&&r.motivo==='sin sesión de Drive')toast('Reconectá Drive para eliminar también el archivo','var(--orange)',5000);
+      if(!r.ok&&r.motivo==='sin sesión de Drive')toast('Reconectá Drive: el archivo sigue en Drive','var(--orange)',5000);
     }
   }
   // Limpiar cola IDB si es referencia [foto:imgId]
