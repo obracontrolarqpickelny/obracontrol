@@ -1215,6 +1215,12 @@ async function _saveToDriveImpl() {
     }catch(_){}
     if((D.eliminadosPend||[]).length)setTimeout(function(){_subirEliminados().catch(function(){});},1500);
     if(!GD._rescateHecho){GD._rescateHecho=true;setTimeout(function(){_rescatarCarpetaPGarcia().catch(function(e){console.warn('rescate:',e);});},6000);}
+    // Respaldo ordenado (carpeta aparte, cada 30 min como mucho)
+    try{if(!GD._lastResp)GD._lastResp=parseInt(localStorage.getItem('oc_resp_ultimo')||'0',10);}catch(_){}
+    if(!GD._lastResp||(Date.now()-GD._lastResp)>1800000){
+      GD._lastResp=Date.now();
+      setTimeout(function(){_respaldoOrdenado(false).catch(function(e){console.warn('respaldo ordenado:',e);});},20000);
+    }
     // Resumen de cada obra en su carpeta (una vez por hora como mucho)
     if(!GD._lastResumen||(Date.now()-GD._lastResumen)>3600000){
       GD._lastResumen=Date.now();
@@ -1433,6 +1439,158 @@ async function _rescatarCarpetaPGarcia(){
   await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/'+VIEJA,{method:'PATCH',headers:h,body:JSON.stringify({trashed:true})});
   try{localStorage.setItem('oc_rescate_pg','1');}catch(_){}
   if(n)toast(n+' archivo(s) recuperados a la carpeta de la obra ✓','var(--green)',4000);
+}
+// ═══════ RESPALDO ORDENADO ═══════════════════════════════════════════
+// Carpeta NUEVA e independiente en "Mi unidad": "📦 RESPALDO ORDENADO — ObraControl".
+// No toca SISTEMA_GESTION_OBRAS. Por cada obra hay una carpeta con:
+//   1 - RESUMEN DE OBRA.txt          → para leer
+//   2 - DATOS PARA IMPORTAR ….json   → se abre desde la app con "📂 Abrir archivo"
+//   3 - ÍNDICE DE FOTOS Y ARCHIVOS.txt → qué es cada foto/archivo y dónde está
+//   y subcarpetas por módulo con una COPIA de cada foto y documento.
+// Las copias son independientes: aunque se borre el original, la copia queda.
+// Se actualiza sola (cada 30 min como mucho, después de guardar en Drive). Nunca borra nada.
+const _RESP_NOMBRE='📦 RESPALDO ORDENADO — ObraControl';
+const _RESP_MODS={visitas:'📋 Visitas',notas:'📝 Notas',materiales:'🧱 Materiales',matIngresos:'🧱 Materiales',
+  economia:'💰 Economía',documentos:'📁 Documentos',checklists:'☑️ Checklists',chkHistorial:'☑️ Checklists',
+  colaboradores:'👥 Colaboradores',carpetas:'👥 Colaboradores',mensajesColab:'👥 Colaboradores',formulariosPendientes:'👥 Colaboradores',
+  tareas:'✅ Tareas',alertas:'🔔 Alertas',comentarios:'💬 Comentarios',enlaces:'🔗 Enlaces'};
+function _respTablas(){var t=_CIERRE_TABLAS.slice();['notas','mensajesColab'].forEach(function(k){if(t.indexOf(k)<0)t.push(k);});return t;}
+function _respLimpio(n){return String(n||'').replace(/[<>:"/\\|?*\u0000-\u001f]/g,'_').replace(/\s+/g,' ').trim().slice(0,90);}
+function _respQ(n){return String(n).replace(/\\/g,'\\\\').replace(/'/g,"\\'");}
+async function _respGet(url){var r=await fetchWithTimeout(url,{headers:driveHeaders()});if(!r.ok)throw new Error('Drive '+r.status);return r.json();}
+async function _respCarpeta(nombre,padre,props){
+  var q="mimeType='application/vnd.google-apps.folder' and trashed=false and '"+(padre||'root')+"' in parents and ";
+  q+=props?"appProperties has { key='ocResp' and value='"+props.ocResp+"' }":"name='"+_respQ(nombre)+"'";
+  var j=await _respGet('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(q)+'&fields=files(id,name)&orderBy=createdTime');
+  var f=j.files&&j.files[0];
+  if(f){
+    if(props&&f.name!==nombre)await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/'+f.id,{method:'PATCH',headers:driveHeaders(),body:JSON.stringify({name:nombre})});
+    return f.id;
+  }
+  var body={name:nombre,mimeType:'application/vnd.google-apps.folder',parents:[padre||'root']};if(props)body.appProperties=props;
+  var r=await fetchWithTimeout('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:driveHeaders(),body:JSON.stringify(body)});
+  if(!r.ok)throw new Error('Drive '+r.status);return (await r.json()).id;
+}
+async function _respEscribir(fid,nombre,contenido,mime){
+  var q="name='"+_respQ(nombre)+"' and '"+fid+"' in parents and trashed=false";
+  var j=await _respGet('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(q)+'&fields=files(id)&orderBy=createdTime');
+  var id=j.files&&j.files[0]?j.files[0].id:null;
+  var cuerpo=(mime==='text/plain'?'\ufeff':'')+contenido,ct=mime+';charset=utf-8',r;
+  if(id)r=await fetchWithTimeout('https://www.googleapis.com/upload/drive/v3/files/'+id+'?uploadType=media',{method:'PATCH',headers:{Authorization:'Bearer '+GD.accessToken,'Content-Type':ct},body:cuerpo},60000);
+  else{var form=new FormData();form.append('metadata',new Blob([JSON.stringify({name:nombre,parents:[fid],mimeType:mime})],{type:'application/json'}));form.append('file',new Blob([cuerpo],{type:ct}));
+    r=await fetchWithTimeout('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{method:'POST',headers:{Authorization:'Bearer '+GD.accessToken},body:form},60000);}
+  if(!r.ok)throw new Error('Drive '+r.status+' al escribir '+nombre);
+}
+// Cada foto/archivo de Drive que usa la obra: módulo, fecha y registro
+function _respReferencias(pid){
+  var out=[],visto={};
+  var re=/drive\.google\.com[^"\s\\]*?(?:[?&]id=|\/d\/)([A-Za-z0-9_-]{20,})/g,reD=/"driveId":"([A-Za-z0-9_-]{20,})"/g,reF=/\[foto:([^\]]+)\]/g;
+  _respTablas().forEach(function(t){
+    _cTbl(t,pid).forEach(function(r){
+      var js;try{js=JSON.stringify(r);}catch(_){return;}
+      var ids=[],m;
+      while((m=re.exec(js)))ids.push(m[1]);
+      while((m=reD.exec(js)))ids.push(m[1]);
+      while((m=reF.exec(js))){var fd=D.fotosDrive&&D.fotosDrive[m[1]];if(fd){var di=fd.driveId||_cDriveId(fd.url||'');if(di)ids.push(di);}}
+      var tit=_respLimpio(String(r.titulo||r.title||r.name||r.nombre||r.concepto||r.descripcion||r.desc||r.texto||r.text||'').split(/\n/)[0].slice(0,40))||t;
+      var fe=String(r.fecha||r.date||r.createdAt||'').slice(0,10);
+      ids.forEach(function(id){
+        if(visto[id]||(typeof _FOTOS_FALTANTES!=='undefined'&&_FOTOS_FALTANTES.has(id)))return;
+        if(GD.rootId&&id===GD.rootId)return;
+        visto[id]=1;out.push({id:id,mod:_RESP_MODS[t]||'📎 Otros',tbl:t,fecha:fe,titulo:tit});
+      });
+    });
+  });
+  return out;
+}
+async function _respaldoOrdenado(manual){
+  if(!GD.accessToken||!GD.online){if(manual)toast('Conectá Drive para actualizar el respaldo','var(--orange)',4000);return null;}
+  if(GD._respCorriendo){if(manual)toast('El respaldo ya se está actualizando…','var(--blue)',3000);return null;}
+  GD._respCorriendo=true;
+  var tot={obras:0,copias:0,faltan:0,errores:0};
+  try{
+    var raiz=await _respCarpeta(_RESP_NOMBRE,null,null);
+    GD._respRaiz=raiz;try{localStorage.setItem('oc_resp_raiz',raiz);}catch(_){}
+    var tope=manual?600:150; // copias por vuelta: lo que falte sigue en la próxima
+    var obras=(D.projects||[]).filter(function(p){return p&&p.id;});
+    for(var i=0;i<obras.length;i++){
+      var p=obras[i],pid=p.id,nom=_respLimpio(String(p.name||'Obra').toUpperCase());
+      if(manual)toast('Respaldo: '+nom+' ('+(i+1)+'/'+obras.length+')…','var(--blue)',2500);
+      try{
+        var fo=await _respCarpeta((p.cerrada?'(CERRADA) ':'')+nom,raiz,{ocResp:pid});
+        // 1) resumen legible
+        var prev=S.proj,txt='';try{S.proj=pid;txt=buildLogContent();}catch(_){txt='';}finally{S.proj=prev;}
+        if(txt)await _respEscribir(fo,'1 - RESUMEN DE OBRA.txt',txt,'text/plain');
+        // 2) datos para importar (mismo formato que "📂 Abrir archivo")
+        var tablas={};_respTablas().forEach(function(t){tablas[t]=_cTbl(t,pid);});
+        var obra={formato:'obracontrol',version:1,generado:nw(),app:'ObraControl Pro',origen:'respaldo ordenado',project:p,tablas:tablas,fotos:{},archivos:{}};
+        await _respEscribir(fo,'2 - DATOS PARA IMPORTAR - '+nom+'.json',JSON.stringify(obra),'application/json');
+        // 3) copias de fotos y archivos, por módulo
+        var ya={},pt=null;
+        do{
+          var q="appProperties has { key='ocResp' and value='"+pid+"' } and trashed=false and mimeType!='application/vnd.google-apps.folder'";
+          var lj=await _respGet('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(q)+'&fields=nextPageToken,files(id,appProperties)&pageSize=1000'+(pt?'&pageToken='+pt:''));
+          (lj.files||[]).forEach(function(f){var o=f.appProperties&&f.appProperties.ocOrig;if(o)ya[o]=f.id;});
+          pt=lj.nextPageToken;
+        }while(pt);
+        var refs=_respReferencias(pid),mods={},filas=[];
+        for(var k=0;k<refs.length;k++){
+          var rf=refs[k];
+          if(!ya[rf.id]&&tope>0){
+            try{
+              var mr=await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/'+rf.id+'?fields=name,mimeType',{headers:driveHeaders()});
+              if(mr.status===404||mr.status===403){rf.falta=true;tot.faltan++;}
+              else if(mr.ok){
+                var md=await mr.json();
+                if(md.mimeType==='application/vnd.google-apps.folder'){rf.carpeta=true;}
+                else{
+                  if(!mods[rf.mod])mods[rf.mod]=await _respCarpeta(rf.mod,fo,null);
+                  var nn=_respLimpio((rf.fecha?rf.fecha+' - ':'')+rf.titulo+' - '+(md.name||rf.id));
+                  var cr=await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/'+rf.id+'/copy?fields=id',{method:'POST',headers:driveHeaders(),
+                    body:JSON.stringify({name:nn,parents:[mods[rf.mod]],appProperties:{ocResp:pid,ocOrig:rf.id}})},60000);
+                  if(cr.ok){ya[rf.id]=(await cr.json()).id;tot.copias++;tope--;}else tot.errores++;
+                }
+              } else tot.errores++;
+            }catch(e){tot.errores++;}
+          }
+          if(rf.carpeta)continue;
+          filas.push(rf.mod+'\t'+(rf.fecha||'-')+'\t'+rf.titulo+'\t'+(ya[rf.id]?'https://drive.google.com/file/d/'+ya[rf.id]+'/view':(rf.falta?'NO SE PUDO COPIAR (el original ya no existe o la app no tiene acceso)':'pendiente de copiar'))+'\thttps://drive.google.com/file/d/'+rf.id+'/view');
+        }
+        filas.sort();
+        await _respEscribir(fo,'3 - ÍNDICE DE FOTOS Y ARCHIVOS.txt',
+          'ÍNDICE DE FOTOS Y ARCHIVOS — '+nom+'\r\nActualizado: '+new Date().toLocaleString('es-AR')+'\r\nTotal: '+filas.length+'\r\n\r\n'
+          +'MÓDULO\tFECHA\tREGISTRO\tCOPIA EN ESTE RESPALDO\tORIGINAL\r\n'+filas.join('\r\n'),'text/plain');
+        tot.obras++;
+      }catch(e){console.warn('respaldo '+nom+':',e);tot.errores++;}
+    }
+    // Todo junto, por si hay que reconstruir la app entera
+    try{await _respEscribir(raiz,'TODAS LAS OBRAS - datos completos.json',JSON.stringify(D),'application/json');}catch(e){tot.errores++;}
+    await _respEscribir(raiz,'LEÉME - CÓMO RECUPERAR.txt',
+      'RESPALDO ORDENADO DE OBRACONTROL\r\nActualizado: '+new Date().toLocaleString('es-AR')+'\r\n\r\n'
+      +'Esta carpeta la arma la app sola y se actualiza cada vez que guardás (como mucho cada 30 minutos).\r\n'
+      +'Es independiente de SISTEMA_GESTION_OBRAS: nunca borra ni cambia nada de allá.\r\n\r\n'
+      +'QUÉ HAY EN CADA OBRA\r\n'
+      +'  1 - RESUMEN DE OBRA.txt → todo lo de la obra, para leer.\r\n'
+      +'  2 - DATOS PARA IMPORTAR.json → la obra completa (visitas, notas, materiales, economía, checklists, colaboradores…).\r\n'
+      +'  3 - ÍNDICE DE FOTOS Y ARCHIVOS.txt → cada foto y archivo: módulo, fecha, a qué registro pertenece y su link.\r\n'
+      +'  Subcarpetas (Visitas, Notas, Materiales, Economía, Documentos…) → una COPIA de cada foto y archivo.\r\n'
+      +'  Las copias no dependen del original: si algo se borra en la app o en la otra carpeta, acá sigue estando.\r\n\r\n'
+      +'CÓMO RECUPERAR UNA OBRA\r\n'
+      +'  1. Descargá "2 - DATOS PARA IMPORTAR - <OBRA>.json" de la carpeta de la obra.\r\n'
+      +'  2. En ObraControl, pantalla Mis Obras → "📂 Abrir archivo" → elegí ese archivo.\r\n'
+      +'  3. Se agrega lo que falte; de cada registro queda la versión más nueva y no se borra nada.\r\n\r\n'
+      +'"TODAS LAS OBRAS - datos completos.json" tiene todo junto, por si hubiera que reconstruir la app entera.\r\n','text/plain');
+    GD._lastResp=Date.now();try{localStorage.setItem('oc_resp_ultimo',String(GD._lastResp));}catch(_){}
+    if(manual)toast('Respaldo ordenado al día ✓ · '+tot.obras+' obras · '+tot.copias+' copias nuevas'+(tot.faltan?' · '+tot.faltan+' no se pudieron copiar (ya no existen o sin acceso)':'')+(tot.errores?' · '+tot.errores+' con error (se reintenta)':''),tot.errores?'var(--orange)':'var(--green)',7000);
+    return tot;
+  }catch(e){console.warn('respaldo ordenado:',e);if(manual)toast('No se pudo actualizar el respaldo: '+(e&&e.message||e),'var(--red)',6000);return null;}
+  finally{GD._respCorriendo=false;}
+}
+async function abrirRespaldoOrdenado(){
+  var id=GD._respRaiz;try{id=id||localStorage.getItem('oc_resp_raiz');}catch(_){}
+  var w=window.open('about:blank','_blank');
+  if(!id){await _respaldoOrdenado(true);id=GD._respRaiz;}
+  if(id&&w)w.location.href='https://drive.google.com/drive/folders/'+id;else if(w)w.close();
 }
 // Crea o reescribe un archivo de texto en una carpeta de Drive
 async function _escribirTxtDrive(fid,nombre,contenido){
@@ -4705,6 +4863,8 @@ function showDrivePanel() {
 
     // ── Acciones generales
     '<div style="border-top:1px solid #f1f5f9;padding-top:10px;display:flex;flex-direction:column;gap:6px">' +
+      (GD.accessToken?'<button class="btn btn-s" style="background:#ecfdf5;color:#047857;border:1px solid #a7f3d0" onclick="_respaldoOrdenado(true)">\ud83d\udce6 Actualizar respaldo ordenado</button>' +
+      '<button class="btn btn-s" style="background:#ecfdf5;color:#047857;border:1px solid #a7f3d0" onclick="abrirRespaldoOrdenado()">\ud83d\udcc2 Ver respaldo ordenado en Drive</button>':'') +
       '<button class="btn btn-sec btn-s" id="drvBackupBtn">\ud83d\udce6 Backup local</button>' +
       '<button class="btn btn-sec btn-s" id="drvDlBtn">\ud83d\udcbe Descargar JSON</button>' +
       discBtn +
@@ -11566,7 +11726,7 @@ async function abrirArchivoObra(input){
     } else {
       var j=null;try{j=JSON.parse(new TextDecoder().decode(u8));}catch(_){}
       if(j&&j.formato==='obracontrol')obra=j;
-      else if(j&&j.project){var t={};_CIERRE_TABLAS.forEach(function(k){if(Array.isArray(j[k]))t[k]=j[k];});obra={formato:'obracontrol',version:0,project:j.project,tablas:t,fotos:{},archivos:{}};}
+      else if(j&&j.project){var t={};_respTablas().forEach(function(k){if(Array.isArray(j[k]))t[k]=j[k];});obra={formato:'obracontrol',version:0,project:j.project,tablas:t,fotos:{},archivos:{}};}
     }
     if(!obra||!obra.project||!obra.project.id){toast('El archivo no es un respaldo de ObraControl','var(--red)',5000);return;}
     _cierrePreguntarApertura(obra,zip);
