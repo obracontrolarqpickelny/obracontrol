@@ -1214,6 +1214,7 @@ async function _saveToDriveImpl() {
       }
     }catch(_){}
     if((D.eliminadosPend||[]).length)setTimeout(function(){_subirEliminados().catch(function(){});},1500);
+    if(!GD._rescateHecho){GD._rescateHecho=true;setTimeout(function(){_rescatarCarpetaPGarcia().catch(function(e){console.warn('rescate:',e);});},6000);}
     // Resumen de cada obra en su carpeta (una vez por hora como mucho)
     if(!GD._lastResumen||(Date.now()-GD._lastResumen)>3600000){
       GD._lastResumen=Date.now();
@@ -1405,6 +1406,34 @@ function buildLogContent(){
 // La obra, el contenido y el nombre se fijan JUNTOS y antes de cualquier espera:
 // antes el archivo iba a GD.logsFolderId, la carpeta de la última obra preparada,
 // y terminaba en la carpeta de otra obra (25 informes así en el Drive real).
+// La carpeta "CASA P GARCIA" se mandó a la papelera el 06/11 (estaba duplicada).
+// La versión anterior de la app pudo haber subido ahí fotos o informes justo antes:
+// se sacan de la papelera, se pasan a la carpeta original y la vacía vuelve a la papelera.
+async function _rescatarCarpetaPGarcia(){
+  try{if(localStorage.getItem('oc_rescate_pg')==='1')return;}catch(_){}
+  if(!GD.accessToken)return;
+  var VIEJA='1drwRNgROmPLA9lNS75bZkkQchIKT3a_Z',PID='7t1gtd6t';
+  if(!(D.projects||[]).some(function(p){return p.id===PID;}))return;
+  var h=driveHeaders();
+  var r=await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/'+VIEJA+'?fields=id,trashed',{headers:h});
+  if(!r.ok){try{localStorage.setItem('oc_rescate_pg','1');}catch(_){}return;}
+  await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/'+VIEJA,{method:'PATCH',headers:h,body:JSON.stringify({trashed:false})});
+  await ensureFolders(PID);
+  var obraNueva=GD.obraFolders[PID];
+  var lista=async function(par){var q="'"+par+"' in parents";var x=await fetchWithTimeout('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(q)+'&fields=files(id,name,mimeType)&pageSize=200',{headers:h});return x.ok?((await x.json()).files||[]):[];};
+  var mover=async function(id,de,a){await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/'+id+'?addParents='+a+'&removeParents='+de,{method:'PATCH',headers:h,body:JSON.stringify({trashed:false})});};
+  var n=0;
+  for(const it of await lista(VIEJA)){
+    if(it.mimeType==='application/vnd.google-apps.folder'){
+      var mod=Object.keys(DRIVE_MODULE_FOLDERS).find(function(k){return DRIVE_MODULE_FOLDERS[k]===it.name;});
+      var dest=mod?GD.moduleFolders[PID+'_'+mod]:obraNueva;
+      for(const f of await lista(it.id)){if(f.mimeType!=='application/vnd.google-apps.folder'){await mover(f.id,it.id,dest);n++;}}
+    } else if(!/^RESUMEN DE OBRA/.test(it.name)){await mover(it.id,VIEJA,obraNueva);n++;}
+  }
+  await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/'+VIEJA,{method:'PATCH',headers:h,body:JSON.stringify({trashed:true})});
+  try{localStorage.setItem('oc_rescate_pg','1');}catch(_){}
+  if(n)toast(n+' archivo(s) recuperados a la carpeta de la obra ✓','var(--green)',4000);
+}
 // Crea o reescribe un archivo de texto en una carpeta de Drive
 async function _escribirTxtDrive(fid,nombre,contenido){
   const q="name='"+nombre.replace(/'/g,"\\'")+"' and '"+fid+"' in parents and trashed=false";
@@ -1655,6 +1684,31 @@ async function _guardarBytesLocales(driveId,dataUrl,nombre){
 // pid = obra a la que pertenece el archivo. Con pid, la carpeta se valida contra
 // esa obra (si es de otra, va a Imagenes de la obra correcta). Sin carpeta
 // confirmada NO se sube: devuelve null y quien llama lo deja en la cola.
+// ¿Qué registro usa esta foto? Devuelve su obra
+function _obraDeFoto(id){
+  var marca='[foto:'+id+']',pid='';
+  Object.keys(D).some(function(k){
+    if(!Array.isArray(D[k])||k==='tombstones'||k==='eliminadosPend')return false;
+    return D[k].some(function(r){if(r&&typeof r==='object'&&JSON.stringify(r).indexOf(marca)>=0){pid=r.projectId||r.proyectoId||'';return !!pid;}return false;});
+  });
+  return pid;
+}
+function _tblDeFoto(id){
+  var marca='[foto:'+id+']',t='';
+  Object.keys(D).some(function(k){
+    if(!Array.isArray(D[k])||k==='tombstones'||k==='eliminadosPend')return false;
+    if(D[k].some(function(r){return r&&typeof r==='object'&&JSON.stringify(r).indexOf(marca)>=0;})){t=k;return true;}
+    return false;
+  });
+  return t;
+}
+function _fotoUsada(id){
+  var marca='[foto:'+id+']';
+  return Object.keys(D).some(function(k){
+    if(!Array.isArray(D[k])||k==='tombstones'||k==='eliminadosPend')return false;
+    return D[k].some(function(r){return r&&typeof r==='object'&&JSON.stringify(r).indexOf(marca)>=0;});
+  })||(S.notaAdj||[]).some(function(u){return String((u&&u.url)||u)===marca;});
+}
 async function uploadImageToDrive(base64Data, fileName, folderId, pid) {
   const ok = await ensureAuth();
   if (!ok) return null;
@@ -1730,10 +1784,23 @@ async function _processPendingImagesImpl() {
     try{
       var imgRec=await idbGet('images',item.imageId);
       if(!imgRec||imgRec.uploaded){await idbDelete('pending',item.id).catch(function(){});continue;}
-      // Sin obra no hay destino verificable: queda guardada en el dispositivo.
-      var _pidImg=imgRec.projectId||item.projectId||'';
-      if(!_pidImg){_sinObra++;continue;}
-      var result=await uploadImageToDrive(imgRec.data,imgRec.fileName,imgRec.folderId||null,_pidImg);
+      // La obra sale de la foto; si no la trae, de la nota o registro que la usa
+      var _pidImg=imgRec.projectId||item.projectId||_obraDeFoto(item.imageId)||'';
+      if(_pidImg&&!imgRec.projectId){imgRec.projectId=_pidImg;await idbPut('images',imgRec).catch(function(){});}
+      // Foto que ya nadie usa (se quitó antes de guardar): igual se sube, a
+      // "Eliminado en la app", así no queda colgada ni se pierde.
+      var _usada=_fotoUsada(item.imageId);
+      if(!_pidImg&&!_usada){
+        try{await ensureFolders('');imgRec.folderId=await findOrCreateFolder('🗑️ Eliminado en la app',GD.rootId);}catch(_){}
+        if(!imgRec.folderId){_sinObra++;continue;}
+      } else if(!_pidImg){_sinObra++;continue;}
+      else if(!_usada){try{imgRec.folderId=await carpetaObra(_pidImg,'eliminados');}catch(_){}}
+      else if(!imgRec.folderId){
+        // Cada foto a la carpeta de su módulo (las de Notas iban a Imagenes)
+        var _tb=_tblDeFoto(item.imageId),_md={notas:'notas',visitas:'visitas',economia:'economia',materiales:'materiales',matIngresos:'materiales',checklists:'checklist',documentos:'documentos',mensajesColab:'colaboradores'}[_tb];
+        if(_md){try{imgRec.folderId=await carpetaObra(_pidImg,_md);}catch(_){}}
+      }
+      var result=await uploadImageToDrive(imgRec.data,imgRec.fileName,imgRec.folderId||null,_pidImg||null);
       if(result){
         // Un PDF u otro documento se guarda con el link al archivo (antes quedaba
         // el de la miniatura, y al descargar bajaba una imagen en vez del archivo)
@@ -2175,8 +2242,21 @@ const _UI_KEYS=[
 // Si la obra guardada ya no existe (se eliminó o se abrió en otro dispositivo),
 // se vuelve al inicio en lugar de mostrar una obra vacía.
 function _validarObraRestaurada(){
-  if(S.proj&&!(D.projects||[]).some(function(p){return p.id===S.proj;})){S.proj=null;S.mod='dashboard';}
+  if(S.proj&&!(D.projects||[]).some(function(p){return p.id===S.proj;})){
+    // Los datos completos (celular y Drive) llegan un instante después: la obra
+    // se recuerda y se vuelve a abrir cuando aparezca. Antes se perdía y la app
+    // quedaba en la lista de obras (por ejemplo, al volver de sacar una foto).
+    if(!GD._datosListos){S._projEspera=S.proj;S._modEspera=S.mod;}
+    S.proj=null;S.mod='dashboard';
+  }
   if(!S.mod)S.mod='dashboard';
+}
+function _retomarObraEsperada(){
+  if(!S._projEspera)return false;
+  var ok=(D.projects||[]).some(function(p){return p.id===S._projEspera;});
+  if(ok&&!S.proj){S.proj=S._projEspera;S.mod=S._modEspera||'dashboard';}
+  if(ok||GD._datosListos){S._projEspera=null;S._modEspera=null;}
+  return ok;
 }
 try{
   var _sui=localStorage.getItem(_SK_UI);
@@ -4334,7 +4414,7 @@ function createProj(){const n=$('pN').value.trim();if(!n){toast('Nombre obligato
 
 // ═══════ SHELL ═══════
 function renderShell(){
-  const p=D.projects.find(x=>x.id===S.proj);if(!p){S.proj=null;render();return;}
+  const p=D.projects.find(x=>x.id===S.proj);if(!p){if(!GD._datosListos){S._projEspera=S.proj;S._modEspera=S.mod;}S.proj=null;render();return;}
   const pT=pf('tareas');const pA=pf('alertas');const pendT=pT.filter(t=>t.status==='pendiente'||t.status==='en curso').length;const actAl=pA.filter(a=>!a.resolved).length;const pendForms=_formsDeObra().filter(x=>x.estado==='pendiente').length;const pendCarpeta=(D.carpetas||[]).filter(function(cp){return cp.projectId===S.proj;}).reduce(function(sum,cp){return sum+_archivosNuevosCarpeta(cp).length;},0);const pendMsgsColab=(D.mensajesColab||[]).filter(function(m){return m.proyectoId===S.proj&&(m.estadoColab==='completado'||m.chatNoLeidoArq>0);}).length;const _nAlert=_alertaCount();const _nNotasMsg=_nNotasChat();const _nNotasVen=_notasVenc().filter(function(x){return x.d<0;}).length;
   if(!window._vencAvisado)window._vencAvisado={};
   if(!window._vencAvisado[S.proj]){window._vencAvisado[S.proj]=1;var _vv=_notasVenc();if(_vv.length){var _vN=_vv.filter(function(x){return x.d<0;}).length;setTimeout(function(){toast('⏰ '+(_vN?_vN+' tarea'+(_vN>1?'s':'')+' vencida'+(_vN>1?'s':''):'')+(_vN&&_vv.length>_vN?' y ':'')+(_vv.length>_vN?(_vv.length-_vN)+' por vencer':'')+' — mirá Notas','var(--orange)',5000);},900);}}
@@ -14679,6 +14759,18 @@ else{_pantallaAcceso();setTimeout(_autoAutorizarSilencioso,300);}
   if(_nImgs&&!_isPinLocked())render();
   // Try loading better data from IDB — ONLY merge data arrays, never overwrite user/session
   const idbData=await loadFromIDB();
+  if(idbData&&Array.isArray(idbData.notas)){
+    // Listas que antes no se leían del celular: se unen registro por registro (gana el más nuevo)
+    ['notas','cuadernosNotas','chkHistorial','tareasArchivo','comentariosArchivo','eliminadosPend','papeleraDrive','tombstones'].forEach(function(k){
+      if(!Array.isArray(idbData[k]))return;
+      var m={},sinId=[];
+      (D[k]||[]).forEach(function(x){if(x&&x.id)m[x.id]=x;else sinId.push(x);});
+      idbData[k].forEach(function(x){if(!x||!x.id)return;var a=m[x.id];if(!a||String(x.updatedAt||x.ts||'')>String(a.updatedAt||a.ts||''))m[x.id]=x;});
+      D[k]=Object.keys(m).map(function(i){return m[i];}).concat(k==='eliminadosPend'||k==='papeleraDrive'?sinId:[]);
+    });
+    if(idbData.fotosDrive&&typeof idbData.fotosDrive==='object'){D.fotosDrive=Object.assign({},idbData.fotosDrive,D.fotosDrive||{});}
+    try{applyTombstones(D.tombstones,D);}catch(_){}
+  }
   if(idbData&&idbData.projects&&idbData.projects.length>=(D.projects||[]).length){
     const DATA_KEYS=['projects','visitas','tareas','materiales','matIngresos',
                      'alertas','checklists','documentos','enlaces','comentarios',
@@ -14707,6 +14799,9 @@ else{_pantallaAcceso();setTimeout(_autoAutorizarSilencioso,300);}
     _repairEcoMatLinks();
     if(!_isPinLocked())render();
   }
+  // Datos del celular listos: si la obra abierta todavía no estaba, se retoma
+  GD._datosListos=true;
+  if(_retomarObraEsperada()&&!_isPinLocked())render();
   // Si la config del servidor llegó desde otro dispositivo (IDB/Drive), adoptarla
   if(_adoptServerCfg()){
     if(!_isPinLocked())render();
