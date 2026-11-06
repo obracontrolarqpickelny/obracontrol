@@ -744,6 +744,17 @@ async function findOrCreateFolder(name, parentId = null) {
 // volvía SIN haber creado nada para B, y quien venía detrás usaba las carpetas
 // globales, que apuntaban a A. Ahora cada obra tiene su propia promesa y dos
 // pedidos de la misma obra comparten la misma.
+const _CARPETA_OBRA_FIJA = {
+  '7t1gtd6t':'1vQFovXibLaeieH6imI7q5gsocyzC9bD0', // casa P GARCIA → CASA PICKELNY GARCIA (la original)
+  '0mcftzql':'1grXFBpiYNt7pEFaKLvhmfhed1ISNE-VX', // casa MIGUEZ BUSTOS
+  'xpliivgr':'1q9pF0_6BrmCGkIfs2WkgNIe9r8jv179S', // Galpón CORRADI
+  '2vpvcqdg':'1znUaRRJig6ll2BJ9nN5EQ1DUnfPiy-lq', // casa QUINTERO MARTIN
+  '9omkwoxw':'1g9VnS-9LH_RLq28XmmjyXwixF5yfKf0D', // ACA diagonal Don Bosco
+  'z7ct859w':'1_DBaokhSuE0cZafZNRyTHhKgFUOEvPlA', // ampliación FEMENIA RUIZ
+  '4rfqtz5y':'1xZQKTXSynEuPA3QE4QlmmjcqG2UgUJNh', // casa GROSSI LOPEZ
+  'hmi8wdyq':'12EuYsZZZSB31yAC1ElNeLcZq4hlerHWA', // Ampliación NELSON LOPEZ
+  '5w1asiy8':'1Grfo6d1KM78kH1YXX-cukqXPM9nTeq5F'  // Refacción F Martinez
+};
 function ensureFolders(projId) {
   const pid = projId || S.proj || '';
   if (!GD._ensureP) GD._ensureP = {};
@@ -769,6 +780,12 @@ async function _ensureFoldersImpl(pid) {
   if (!GD.obraFolders[pid]) {
     const proj = D.projects.find(p => p.id === pid);
     const obraName = (proj ? proj.name.toUpperCase() : pid).replace(/[<>:"/\|?*]/g, '_');
+    // Carpeta oficial de cada obra (revisión del 05/11/2026): la original, con toda
+    // la historia. Se fija una sola vez; después la carpeta sigue al nombre de la obra.
+    if (proj && _CARPETA_OBRA_FIJA[pid] && proj.carpetaFijada !== _CARPETA_OBRA_FIJA[pid]) {
+      proj.driveFolderId = _CARPETA_OBRA_FIJA[pid]; proj.carpetaFijada = _CARPETA_OBRA_FIJA[pid];
+      proj.updatedAt = nw(); setTimeout(function(){ try{ sv(); }catch(_){} }, 0);
+    }
     let fid = (proj && proj.driveFolderId) || null;
     if (fid) {
       try {
@@ -3221,6 +3238,9 @@ async function _cargarCacheImagenes(){
   }catch(e){console.warn('cache imgs:',e);return 0;}
 }
 
+// Fotos que se borraron de Drive antes de julio y no tienen copia (revisión 05/11/2026)
+const _FOTOS_FALTANTES=new Set(['105Xwm-1elBjMp1OpnN8SKLT1u94GoyAU','154rIogwGw0rjBV848JqDir59fHaLlF_L','16Y5m7iVnoc-4_1mGxJb3krKAFOb5P9wD','19VRfRPbFspg5MggiBVzfZAS9qqGxFyxf','1GfvrtF8lB2OSQXOgmNtys0IGEREsv6qe','1Jrych70p92PDDe_MxtB5yBOZGYK08qgP','1NOzdxvAaegiT5WYzDSizmLhFTVE9Koz5','1PEZC3ngKcWH-wdLIzX9xbWSWaJo65NxA','1S-vJUUBPiJrm8nspvNinfudotZjZ_EUN','1S1FFS1Pgw51AUofCHb_Qwp3NYbpqjaeB','1TBLqTV2EVWquOLqEEQs1oLVABeBONttZ','1WR_zCDw04jZAkfY80SfQX9bx6Gi0LXhs','1X8pgJ3IP1Tkrc1XGrWbxafc9PIfw11UJ','1blq1lgfytRNppflzpAiPJZjTnPD8knRW','1dmgVnvJdSbI8GHPHoCt114OjNHz0FqM-','1frXbEdRRlF7zfHYtnF0mYGIae5_zmsY6','1ghHJxViRWmb3zYAueZvlmxCRM-oyizHh','1hriT7g7MN5G2FITwTL0i_cemiKjefY8x','1i8Te13IgJDA-zqKtsnjvtfk6trnPNf5N','1iebnKFbDJeiX6dTEviqK5F_jTp95RgVZ','1m4_0xG8fLqowVozeSxN0dOXYzsaTmAyp','1mdNn3GesSAc-EfqRaMpSZ0IuN1eAnZvW','1pqnKM_4olLla3BSZdcAP5OOlxgQdcepV','1qFz-mo4XHCVY_oTTaQW5yxdCW9HBwN1E','1qLAUyfjVIoQ8RNTO4DsIe2z4y4sEH0lI','1rWH77iFK1E1mOav5F2bhRhJ7mKocGqoZ','1shxQ3vFzj7ouxi8T0Me32mZMTyC29z6G','1smDgJ8bm72ZZpHWqMKLTcI7hABk29vLZ','1wuFMyB6X8FwwMiSiCCxSxfYrNBtUs1Rx','1za16CS7sDryD7EQm4uae5ysrXCTC4oJc']);
+function _fotoFaltante(p){var u=typeof p==='string'?p:((p&&p.url)||'');var d=(p&&p.driveId)||(/(?:id=|\/d\/)([A-Za-z0-9_-]{20,})/.exec(u)||[])[1];return !!(d&&_FOTOS_FALTANTES.has(d));}
 function photoGrid(photos,tbl,itemId){if(!photos||!photos.length)return '';
   const isVisita=tbl==='visitas'||tbl==='tareas'||tbl==='materiales'||tbl==='matIngresos'||tbl==='alertas'||tbl==='comentarios'||tbl==='checklists'||tbl==='notas';
   return `<div class="pgrid mt-8">${photos.map((p,i)=>{
@@ -3233,6 +3253,7 @@ function photoGrid(photos,tbl,itemId){if(!photos||!photos.length)return '';
     if(!_disp||_disp.startsWith('[foto'))_disp=_resolveImg(u)||_disp;
     const hc=typeof p==='object'&&p.comments&&p.comments.length;
     const isBroken=!_disp||_disp.startsWith('[foto');
+    if(_fotoFaltante(p))return `<div class="pitem" style="position:relative"><div title="Esta foto se borró de Drive antes de julio y no quedó copia" style="width:100%;height:100%;background:#f8fafc;border:1px dashed #cbd5e1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#94a3b8;font-size:16px;text-align:center">📷<div style="font-size:8px;font-weight:700;margin-top:2px;line-height:1.2">Foto no<br>disponible</div></div></div>`;
   return `<div class="pitem" style="position:relative">
       ${isBroken
         ?`<div style="width:100%;height:100%;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:18px;color:#94a3b8" title="Foto pendiente de sincronización con Drive">☁️</div>`
