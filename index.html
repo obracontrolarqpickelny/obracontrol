@@ -2585,6 +2585,52 @@ function _isUserTyping(){var ae=document.activeElement;if(!ae)return false;var t
 // ── _silentMerge: merge Drive snapshot into local D without any I/O, render, or toast.
 // Called both from loadFromDriveAndMerge and from saveToDrive (read-merge-write pattern).
 // Returns true if any data actually changed (items added/removed/updated).
+// Históricos: unión, sin lápidas (applyTombstones no los toca) y sin elegir en
+// silencio. Mismo id con contenido distinto → se conserva el de Drive en la lista
+// y la otra versión completa va a D.conflictosHistorico para revisión.
+// papeleraDrive: un evento por contenido completo (el mismo driveId puede tener
+// varios eventos legítimos en fechas distintas).
+var _HIST_KEYS=['tareasArchivo','comentariosArchivo','chkHistorial','papeleraDrive','conflictosHistorico'];
+function _firmaReg(x){try{return JSON.stringify(x,Object.keys(x).sort());}catch(_){return String(Math.random());}}
+function _firmaProfunda(x){
+  if(Array.isArray(x))return '['+x.map(_firmaProfunda).join(',')+']';
+  if(x&&typeof x==='object')return '{'+Object.keys(x).sort().map(function(k){return JSON.stringify(k)+':'+_firmaProfunda(x[k]);}).join(',')+'}';
+  return JSON.stringify(x);
+}
+function _unirHistoricos(driveData){
+  var changed=false;
+  _HIST_KEYS.forEach(function(k){
+    var dA=Array.isArray(driveData[k])?driveData[k]:[],lA=Array.isArray(D[k])?D[k]:[];
+    if(!dA.length&&!Array.isArray(D[k])&&!Array.isArray(driveData[k]))return;
+    var out=[],porFirma={},porId={};
+    var poner=function(x,deDrive){
+      if(!x||typeof x!=='object')return;
+      var f=_firmaProfunda(x);if(porFirma[f])return;
+      var porContenido=(k==='papeleraDrive'||k==='conflictosHistorico'||!x.id);
+      if(!porContenido&&porId[x.id]){
+        if(!D.conflictosHistorico)D.conflictosHistorico=[];
+        var c={id:'cf_'+k+'_'+x.id+'_'+f.length,tbl:k,regId:x.id,ts:nw(),version:x,origen:deDrive?'drive':'local'};
+        if(!D.conflictosHistorico.some(function(y){return _firmaProfunda(y.version)===f;}))D.conflictosHistorico.push(c);
+        porFirma[f]=1;return;
+      }
+      porFirma[f]=1;if(x.id)porId[x.id]=1;out.push(x);
+    };
+    dA.forEach(function(x){poner(x,true);});
+    var antes=out.length;
+    lA.forEach(function(x){poner(x,false);});
+    if(out.length!==lA.length||out.length!==antes)changed=true;
+    D[k]=out;
+  });
+  // Claves de Drive que esta versión no conoce (driveConfig, campos de otras versiones): se conservan
+  Object.keys(driveData||{}).forEach(function(k){
+    if(D[k]===undefined&&driveData[k]!==undefined){D[k]=JSON.parse(JSON.stringify(driveData[k]));changed=true;}
+    else if(k!=='fotosDrive'&&k!=='serverCfg'&&D[k]&&driveData[k]&&typeof D[k]==='object'&&typeof driveData[k]==='object'&&!Array.isArray(D[k])&&!Array.isArray(driveData[k])){
+      // Objetos de configuración (driveConfig…): se suman las entradas que falten acá, sin pisar las propias
+      Object.keys(driveData[k]).forEach(function(s){if(D[k][s]===undefined){D[k][s]=JSON.parse(JSON.stringify(driveData[k][s]));changed=true;}});
+    }
+  });
+  return changed;
+}
 function _silentMerge(driveData){
   if(!driveData)return false;
   var arrKeys=['visitas','tareas','materiales','matIngresos','alertas','checklists','documentos','enlaces','comentarios','colaboradores','economia','auditLog','formulariosPendientes','projects','mensajesColab','carpetas','notas','cuadernosNotas'];
@@ -2744,6 +2790,7 @@ function _silentMerge(driveData){
     if(merged.length!==D[k].length)changed=true;
     D[k]=merged;
   });
+  if(_unirHistoricos(driveData))changed=true;
   D.tombstones=allTombs;
   applyTombstones(allTombs,D); // Aplicar eliminaciones de todos los dispositivos
   // ── Cascade tombstone: si un material está tombstoned, tombstonear sus matIngresos huérfanos.
@@ -2869,7 +2916,7 @@ function audit(tbl,act,sum){
   // actividad queda en ESA obra y no en la que está abierta.
   D.auditLog.push({id:uid(),table:tbl,action:act,summary:sum,
     user:D.user?.name||'',timestamp:nw(),projectId:GD._auditPid||S.proj});
-  if(D.auditLog.length>500)D.auditLog=D.auditLog.slice(-300);
+  // Sin recorte: la auditoría no se borra sola.
 }
 const $=id=>{var el=document.getElementById(id);if(el)_installMorph(el);return el;};
 const pf=t=>S.proj?(D[t]||[]).filter(r=>r.projectId===S.proj):(D[t]||[]).filter(r=>!r.projectId);
@@ -14943,8 +14990,8 @@ else{_pantallaAcceso();setTimeout(_autoAutorizarSilencioso,300);}
       if(!Array.isArray(idbData[k]))return;
       var m={},sinId=[];
       (D[k]||[]).forEach(function(x){if(x&&x.id)m[x.id]=x;else sinId.push(x);});
-      idbData[k].forEach(function(x){if(!x||!x.id)return;var a=m[x.id];if(!a||String(x.updatedAt||x.ts||'')>String(a.updatedAt||a.ts||''))m[x.id]=x;});
-      D[k]=Object.keys(m).map(function(i){return m[i];}).concat(k==='eliminadosPend'||k==='papeleraDrive'?sinId:[]);
+      idbData[k].forEach(function(x){if(x&&!x.id&&typeof x==='object'){var fx=_firmaProfunda(x);if(!sinId.some(function(y){return _firmaProfunda(y)===fx;}))sinId.push(x);return;}if(!x||!x.id)return;var a=m[x.id];if(!a||String(x.updatedAt||x.ts||'')>String(a.updatedAt||a.ts||''))m[x.id]=x;});
+      D[k]=Object.keys(m).map(function(i){return m[i];}).concat(sinId);
     });
     if(idbData.fotosDrive&&typeof idbData.fotosDrive==='object'){D.fotosDrive=Object.assign({},idbData.fotosDrive,D.fotosDrive||{});}
     try{applyTombstones(D.tombstones,D);}catch(_){}
