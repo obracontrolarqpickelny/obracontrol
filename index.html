@@ -2258,10 +2258,17 @@ function _retomarObraEsperada(){
   if(ok||GD._datosListos){S._projEspera=null;S._modEspera=null;}
   return ok;
 }
+var _uiDeEstaPestana=false;
 try{
-  var _sui=localStorage.getItem(_SK_UI);
+  var _sui=null;
+  try{_sui=sessionStorage.getItem(_SK_UI);}catch(_){}
+  if(_sui)_uiDeEstaPestana=true;else _sui=localStorage.getItem(_SK_UI);
   if(_sui){var _sp=JSON.parse(_sui);_UI_KEYS.forEach(function(k){if(_sp[k]!==undefined)S[k]=_sp[k];});}
 }catch(e){}
+// Si el usuario ya tocó algo, nada que llegue después (copia del celular) le cambia la pantalla
+var _uiTocado=false;
+document.addEventListener('pointerdown',function(){_uiTocado=true;},true);
+document.addEventListener('keydown',function(){_uiTocado=true;},true);
 // Se guarda en los dos lugares. localStorage solo no alcanza: los datos de las
 // obras lo llenan casi hasta el tope (~5 MB) y ahí este guardado fallaba en
 // silencio, así que al reabrir la app volvía todo como estaba por defecto.
@@ -2271,14 +2278,15 @@ var _uiUltimo='';
 // antes de abrirla, y guardar ahí pisaría el estado bueno con el de fábrica.
 var _uiListo=false;
 setTimeout(function(){_uiListo=true;},6000);
-function saveUIState(){
-  if(!_uiListo)return;
+function saveUIState(forzar){
+  if(!_uiListo&&forzar!==true)return;
   var _u={};
   try{_UI_KEYS.forEach(function(k){if(S[k]!==undefined)_u[k]=S[k];});}catch(e){return;}
   var firma;try{firma=JSON.stringify(_u);}catch(e){return;}
   if(firma===_uiUltimo)return;
   _uiUltimo=firma;
   _u._t=Date.now();
+  try{sessionStorage.setItem(_SK_UI,JSON.stringify(_u));}catch(e){}
   try{localStorage.setItem(_SK_UI,JSON.stringify(_u));}catch(e){}
   try{if(GD.idbReady)idbPut('data',{key:'uiState',s:_u}).catch(function(){});}catch(e){}
 }
@@ -2286,7 +2294,7 @@ function saveUIState(){
 async function _restaurarUIStateIDB(){
   var cambio=false;
   try{
-    if(GD.idbReady){
+    if(GD.idbReady&&!_uiDeEstaPestana&&!_uiTocado){
       var r=await idbGet('data','uiState');
       if(r&&r.s){
         var local=null;try{local=JSON.parse(localStorage.getItem(_SK_UI)||'null');}catch(e){}
@@ -2346,12 +2354,17 @@ async function loadAll(){
     const projParam=params.get('proj');
     const obraParam=params.get('obra');
     if(projParam&&D.projects&&D.projects.find(p=>p.id===projParam)){
-      S.proj=projParam;S.mod='dashboard';
+      if(S.proj!==projParam){S.proj=projParam;S.mod='dashboard';}
     }else if(obraParam&&D.projects){
       // Vuelta desde ObraGestion cuando no viaja el id: se resuelve por nombre
       const nm=String(obraParam).trim().toLowerCase();
       const hit=D.projects.find(p=>String(p.name||'').trim().toLowerCase()===nm);
-      if(hit){S.proj=hit.id;S.mod='dashboard';}
+      if(hit&&S.proj!==hit.id){S.proj=hit.id;S.mod='dashboard';}
+    }
+    if((projParam||obraParam)&&D.projects&&D.projects.length){
+      params.delete('proj');params.delete('obra');
+      var _qs=params.toString();
+      try{history.replaceState(null,'',location.pathname+(_qs?'?'+_qs:'')+location.hash);}catch(_){}
     }
   }catch(e){}
 
@@ -2383,12 +2396,17 @@ function load(){
     const projParam=params.get('proj');
     const obraParam=params.get('obra');
     if(projParam&&D.projects&&D.projects.find(p=>p.id===projParam)){
-      S.proj=projParam;S.mod='dashboard';
+      if(S.proj!==projParam){S.proj=projParam;S.mod='dashboard';}
     }else if(obraParam&&D.projects){
       // Vuelta desde ObraGestion cuando no viaja el id: se resuelve por nombre
       const nm=String(obraParam).trim().toLowerCase();
       const hit=D.projects.find(p=>String(p.name||'').trim().toLowerCase()===nm);
-      if(hit){S.proj=hit.id;S.mod='dashboard';}
+      if(hit&&S.proj!==hit.id){S.proj=hit.id;S.mod='dashboard';}
+    }
+    if((projParam||obraParam)&&D.projects&&D.projects.length){
+      params.delete('proj');params.delete('obra');
+      var _qs=params.toString();
+      try{history.replaceState(null,'',location.pathname+(_qs?'?'+_qs:'')+location.hash);}catch(_){}
     }
   }catch(e){}
 }
@@ -14646,8 +14664,8 @@ async function _chequearVersionNueva(){
 }
 function _irAVersionNueva(ts){
   try{sessionStorage.setItem('oc_v_intento',String(ts));}catch(_){}
-  try{saveUIState();}catch(_){}
-  var q=new URLSearchParams(location.search);q.set('v',String(ts));q.delete('chk');
+  try{saveUIState(true);}catch(_){}
+  var q=new URLSearchParams(location.search);q.set('v',String(ts));q.delete('chk');q.delete('proj');q.delete('obra');
   location.replace(location.pathname+'?'+q.toString()+location.hash);
 }
 function _avisoVersionNueva(ts){
