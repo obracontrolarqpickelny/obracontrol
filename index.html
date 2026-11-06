@@ -1762,10 +1762,14 @@ async function _escribirTxtDrive(fid,nombre,contenido){
 // con las notas, la economía y el estado del respaldo de fotos y archivos.
 async function _guardarResumenesObras(){
   if(!GD.accessToken||!GD.online)return;
-  var prev=S.proj;
   for(var i=0;i<(D.projects||[]).length;i++){
     var p=D.projects[i];if(!p||!p.id)continue;
     var txt;
+    // La obra abierta se toma en ESTE instante (antes se tomaba una sola vez al
+    // empezar: como el recorrido tarda, al terminar cada obra devolvía la app a
+    // la obra que estaba abierta al principio —o a ninguna— aunque el usuario ya
+    // hubiera entrado a otra. Lo que se cargaba en ese momento quedaba sin obra).
+    var prev=S.proj;
     try{S.proj=p.id;txt=buildLogContent();}catch(e){txt=null;}finally{S.proj=prev;}
     if(!txt)continue;
     try{var fid=await carpetaObra(p.id,'logs');var obra=GD.obraFolders[p.id];
@@ -3095,6 +3099,7 @@ function _silentMerge(driveData){
   _repairEcoMatLinks(); // Rebuild any broken eco↔matIngreso links after merge
   _repairProjectIds();  // Fix items with missing or mismatched projectId
   if(_recuperarEnviosMat()){changed=true;setTimeout(sv,0);} // que también suba a Drive
+  if(_repararEgresoSinObra0611()){changed=true;setTimeout(sv,0);}
   if(_migrarComentariosANotas()){changed=true;setTimeout(sv,0);}
   if(_migrarTareasANotas()){changed=true;setTimeout(sv,0);}
   if(_aplicarFotosDrive(driveData.fotosDrive)){changed=true;setTimeout(sv,0);}
@@ -3106,6 +3111,18 @@ function _silentMerge(driveData){
 // Nylon la lista se pisó y perdieron la insignia 📤. Se les devuelve el registro
 // del envío (hora aproximada, la del WhatsApp de las 19:33). Sólo a los que no
 // tienen ningún registro: si ya lo tienen no hace nada.
+// Reparación única (06/11/2026): el egreso Benavidez Factura A 00006-00011596 se
+// cargó en casa PICKELNY GARCIA pero quedó sin obra por la falla de arriba.
+// Solo ese registro y solo si sigue sin obra.
+function _repararEgresoSinObra0611(){
+  var e=(D.economia||[]).find(function(x){return x&&x.id==='5334yvyt';});
+  if(!e||e.projectId||!(D.projects||[]).some(function(p){return p.id==='7t1gtd6t';}))return false;
+  e.projectId='7t1gtd6t';e.updatedAt=nw();
+  if(!D.auditLog)D.auditLog=[];
+  if(!D.auditLog.some(function(a){return a&&a.id==='rep0611_5334yvyt';}))
+    D.auditLog.push({id:'rep0611_5334yvyt',table:'economia',action:'update',summary:'Reparación: egreso Benavidez Factura A 00006-00011596 vinculado a casa PICKELNY GARCIA (había quedado sin obra)',user:'sistema',timestamp:nw(),projectId:'7t1gtd6t'});
+  return true;
+}
 function _recuperarEnviosMat(){
   var ids=['u50m0mf0','100inxlp','5gnrs80b','tqut4v1f','ift0r6c7'],n=0;
   (D.matIngresos||[]).forEach(function(i){
