@@ -1214,6 +1214,7 @@ async function _saveToDriveImpl() {
       }
     }catch(_){}
     if((D.eliminadosPend||[]).length)setTimeout(function(){_subirEliminados().catch(function(){});},1500);
+    if(!GD._recHistHecho){GD._recHistHecho=true;setTimeout(function(){_recuperarHistoricos0611().catch(function(e){console.warn('recuperación históricos:',e);});},8000);}
     if(!GD._rescateHecho){GD._rescateHecho=true;setTimeout(function(){_rescatarCarpetaPGarcia().catch(function(e){console.warn('rescate:',e);});},6000);}
     // Respaldo ordenado (carpeta aparte, cada 30 min como mucho)
     try{if(!GD._lastResp)GD._lastResp=parseInt(localStorage.getItem('oc_resp_ultimo')||'0',10);}catch(_){}
@@ -1591,6 +1592,25 @@ async function abrirRespaldoOrdenado(){
   var w=window.open('about:blank','_blank');
   if(!id){await _respaldoOrdenado(true);id=GD._respRaiz;}
   if(id&&w)w.location.href='https://drive.google.com/drive/folders/'+id;else if(w)w.close();
+}
+// Recuperación única (06/11/2026): un dispositivo con una versión anterior guardó sin
+// los historiales y en el archivo principal quedaron 0 comentarios archivados, 4 de 41
+// historiales de checklist y 3 de 9 eventos de papelera. El respaldo automático del
+// 06/11 09:34 los tiene completos: se SUMAN (unión, nada se pisa ni se borra).
+async function _recuperarHistoricos0611(){
+  if(D.recuperacionHist0611)return;
+  if(!GD.accessToken||!GD.online)return;
+  var r=await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/14Zj37blILc5yNCwmQMghkKPdh8PKSHLD?alt=media',{headers:{Authorization:'Bearer '+GD.accessToken}},60000);
+  if(r.status===404){D.recuperacionHist0611={ts:nw(),resultado:'respaldo no disponible'};sv();return;}
+  if(!r.ok)return; // se reintenta en la próxima sesión
+  var bk=await r.json();var d=(bk&&bk.data)||bk||{};
+  var antes={};['tareasArchivo','comentariosArchivo','chkHistorial','papeleraDrive'].forEach(function(k){antes[k]=(D[k]||[]).length;});
+  _unirHistoricos({tareasArchivo:d.tareasArchivo||[],comentariosArchivo:d.comentariosArchivo||[],chkHistorial:d.chkHistorial||[],papeleraDrive:d.papeleraDrive||[]});
+  var sum={};Object.keys(antes).forEach(function(k){sum[k]=(D[k]||[]).length-antes[k];});
+  D.recuperacionHist0611={ts:nw(),por:(D.user&&D.user.name)||'',agregados:sum};
+  sv();
+  var n=Object.keys(sum).reduce(function(a,k){return a+sum[k];},0);
+  if(n)toast('Historial recuperado: '+n+' registro(s) vueltos a su lugar ✓','var(--green)',5000);
 }
 // Crea o reescribe un archivo de texto en una carpeta de Drive
 async function _escribirTxtDrive(fid,nombre,contenido){
@@ -2608,9 +2628,14 @@ function _unirHistoricos(driveData){
       var f=_firmaProfunda(x);if(porFirma[f])return;
       var porContenido=(k==='papeleraDrive'||k==='conflictosHistorico'||!x.id);
       if(!porContenido&&porId[x.id]){
+        // Mismo id, otro contenido: en la lista queda la versión más nueva y la
+        // otra se guarda completa en conflictosHistorico (nada se descarta)
         if(!D.conflictosHistorico)D.conflictosHistorico=[];
-        var c={id:'cf_'+k+'_'+x.id+'_'+f.length,tbl:k,regId:x.id,ts:nw(),version:x,origen:deDrive?'drive':'local'};
-        if(!D.conflictosHistorico.some(function(y){return _firmaProfunda(y.version)===f;}))D.conflictosHistorico.push(c);
+        var guardar=x,i=out.findIndex(function(y){return y&&y.id===x.id;});
+        if(i>=0&&String(x.updatedAt||x.fecha||x.ts||'')>String(out[i].updatedAt||out[i].fecha||out[i].ts||'')){guardar=out[i];out[i]=x;}
+        var fg=_firmaProfunda(guardar);
+        var c={id:'cf_'+k+'_'+x.id+'_'+fg.length,tbl:k,regId:x.id,ts:nw(),version:guardar};
+        if(!D.conflictosHistorico.some(function(y){return _firmaProfunda(y.version)===fg;}))D.conflictosHistorico.push(c);
         porFirma[f]=1;return;
       }
       porFirma[f]=1;if(x.id)porId[x.id]=1;out.push(x);
