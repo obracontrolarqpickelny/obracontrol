@@ -7,6 +7,8 @@
 <meta http-equiv="Cache-Control" content="no-cache, must-revalidate"/>
 <meta http-equiv="Pragma" content="no-cache"/>
 <title>ObraControl Pro v9.1</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#D97706">
 <!-- Google Identity Services - loaded dynamically by drive layer -->
 <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -401,7 +403,7 @@ const DRIVE_MODULE_FOLDERS = {
   alertas:'🔔 Alertas', checklist:'☑️ Checklist', documentos:'📁 Documentos',
   comentarios:'💬 Comentarios', colaboradores:'👥 Colaboradores', logs:'📝 Logs',
   economia:'💰 Economia', auditoria:'📊 Auditoria',
-  imagenes:'🖼️ Imagenes', backups:'💾 Backups', notas:'📝 Notas',
+  imagenes:'🖼️ Imagenes', backups:'💾 Backups', notas:'📝 Notas', fotos:'📷 Fotos WhatsApp',
   eliminados:'🗑️ Eliminado en la app'
 };
 
@@ -2554,8 +2556,8 @@ const UNI=['u','kg','m','m2','m3','l','bolsa 20kg','bolsa 25kg','bolsa 40kg','bo
 const DCT=['Planos','Pliegos','Presupuestos','Computos','Certificados','Ordenes','Legales','Informes','Fotos','Otro'];
 const MEDIOS=['Efectivo','Transferencia','Mercado Pago','Cheque','Tarjeta débito','Tarjeta crédito','Cuenta DNI','Naranja X','Otro'];
 const SC={'En curso':'#f59e0b',Pausada:'#94a3b8',Finalizada:'#22c55e','Por iniciar':'#3b82f6'};
-const MC={dashboard:'#D97706',visitas:'#3b82f6',tareas:'#0891b2',materiales:'#7c3aed',alertas:'#dc2626',checklist:'#db2777',documentos:'#475569',comentarios:'#ea580c',colaboradores:'#16a34a',economia:'#0891b2',informes:'#D97706',config:'#64748b',bandeja:'#0d9488',notas:'#ca8a04'};
-const MCBG={dashboard:'#FFFBEB',visitas:'#EFF6FF',tareas:'#ECFEFF',materiales:'#F5F3FF',alertas:'#FEF2F2',checklist:'#FDF2F8',documentos:'#F8FAFC',comentarios:'#FFF7ED',colaboradores:'#F0FDF4',economia:'#ECFEFF',informes:'#FFFBEB',config:'#F8FAFC',bandeja:'#f0fdfa',notas:'#FEFCE8'};
+const MC={dashboard:'#D97706',visitas:'#3b82f6',tareas:'#0891b2',materiales:'#7c3aed',alertas:'#dc2626',checklist:'#db2777',documentos:'#475569',comentarios:'#ea580c',colaboradores:'#16a34a',economia:'#0891b2',informes:'#D97706',config:'#64748b',bandeja:'#0d9488',notas:'#ca8a04',fotos:'#0d9488'};
+const MCBG={dashboard:'#FFFBEB',visitas:'#EFF6FF',tareas:'#ECFEFF',materiales:'#F5F3FF',alertas:'#FEF2F2',checklist:'#FDF2F8',documentos:'#F8FAFC',comentarios:'#FFF7ED',colaboradores:'#F0FDF4',economia:'#ECFEFF',informes:'#FFFBEB',config:'#F8FAFC',bandeja:'#f0fdfa',notas:'#FEFCE8',fotos:'#f0fdfa'};
 
 let D={user:null,projects:[],visitas:[],notas:[],cuadernosNotas:[],tareas:[],materiales:[],matIngresos:[],alertas:[],documentos:[],enlaces:[],checklists:[],comentarios:[],colaboradores:[],economia:[],auditLog:[],formulariosPendientes:[],carpetas:[],mensajesColab:[],papeleraDrive:[],driveConfig:{},lastSync:null};
 let S={proj:null,mod:'dashboard',menu:false,searchOpen:false,searchQ:'',taskFilter:'',taskEncFilter:'',taskSort:'',chkSort:'',chkCollapsed:{},taskCollapsed:{},visitaDetail:null,matDetail:null,matNoteEditing:null,matIngSort:'rec',cmtFilter:'',cmtSearch:'',cmtTipoFilter:'',ecoFilter:'',ecoTipoFilter:'',ecoSort:'',docSort:'',matFilter:'',matCatFilter:'',matSort:'',matSinCompMin:false,matExistMin:false,matAPedirMin:false,matPedMin:false,ecoMetrosOpen:false,bandejaTab:'pendientes'};
@@ -4965,7 +4967,7 @@ function renderShell(){
   if(!window._vencAvisado[S.proj]){window._vencAvisado[S.proj]=1;var _vv=_notasVenc();if(_vv.length){var _vN=_vv.filter(function(x){return x.d<0;}).length;setTimeout(function(){toast('⏰ '+(_vN?_vN+' tarea'+(_vN>1?'s':'')+' vencida'+(_vN>1?'s':''):'')+(_vN&&_vv.length>_vN?' y ':'')+(_vv.length>_vN?(_vv.length-_vN)+' por vencer':'')+' — mirá Notas','var(--orange)',5000);},900);}}
   const drv=D.driveConfig?.[S.proj];const cloudCol=drv?'var(--green)':'var(--pri)';
   const _pendAlerts=pA.filter(a=>!a.resolved).length; // mantener badge en tareas si hay alertas legacy
-  const mods=[{id:'dashboard',label:'Panel',ic:'dash'},{id:'visitas',label:'Visitas',ic:'clip'},{id:'notas',label:'Notas',ic:'nota',badge:_nNotasMsg+_nNotasVen},{id:'materiales',label:'Materiales',ic:'pkg'},{id:'checklist',label:'Checklist',ic:'chklist'},{id:'documentos',label:'Documentos',ic:'file'},{id:'colaboradores',label:'Colaboradores',ic:'share'},{id:'bandeja',label:'Bandeja',ic:'inbox',badge:pendForms+pendCarpeta+pendMsgsColab+_nAlert},{id:'economia',label:'Economía',ic:'eco'},{id:'informes',label:'Informes',ic:'dl'},{id:'config',label:'Config',ic:'gear'}];
+  const mods=[{id:'dashboard',label:'Panel',ic:'dash'},{id:'visitas',label:'Visitas',ic:'clip'},{id:'notas',label:'Notas',ic:'nota',badge:_nNotasMsg+_nNotasVen},{id:'materiales',label:'Materiales',ic:'pkg'},{id:'checklist',label:'Checklist',ic:'chklist'},{id:'documentos',label:'Documentos',ic:'file'},{id:'fotos',label:'Fotos WhatsApp',ic:'cam'},{id:'colaboradores',label:'Colaboradores',ic:'share'},{id:'bandeja',label:'Bandeja',ic:'inbox',badge:pendForms+pendCarpeta+pendMsgsColab+_nAlert},{id:'economia',label:'Economía',ic:'eco'},{id:'informes',label:'Informes',ic:'dl'},{id:'config',label:'Config',ic:'gear'}];
   const mi=mods.map(m=>{const c=MC[m.id];const act=S.mod===m.id;return `<button class="smi${act?' act':''}" style="${act?'background:'+c+'08;color:'+c+';border-left-color:'+c:''}" onclick="S.mod='${m.id}';S.menu=false;S.visitaDetail=null;S.matDetail=null;S.matSinCompDetail=null;render();"><span style="color:${act?c:'var(--text3)'}">${I[m.ic]||''}</span><span style="flex:1;text-align:left">${m.label}</span>${m.badge>0?`<span class="sbadge">${m.badge}</span>`:''}</button>`;}).join('');
   const allBnav=[
     {id:'dashboard',ic:'dash',l:'Panel'},
@@ -4974,6 +4976,7 @@ function renderShell(){
     {id:'materiales',ic:'pkg',l:'Material'},
     {id:'economia',ic:'eco',l:'Economía'},
     {id:'documentos',ic:'file',l:'Docs'},
+    {id:'fotos',ic:'cam',l:'Fotos'},
     {id:'checklist',ic:'chklist',l:'Checks'},
     {id:'bandeja',ic:'inbox',l:'Bandeja'},
     {id:'colaboradores',ic:'share',l:'Colabs'},
@@ -5025,7 +5028,7 @@ function _installMorph(el){
     set:function(html){patchHTML(this,html);}
   });
 }
-function renderModule(mod,p){const mc=$('mc');if(!mc)return;if(S.visitaDetail){var _vck=(D.visitas||[]).find(function(x){return x.id===S.visitaDetail;});if(!_vck||_vck.projectId!==S.proj){S.visitaDetail=null;}else{rVisitaDetail(mc,S.visitaDetail);return;}}if(S.matDetail){rMatDetail(mc,S.matDetail);return;}if(S.matSinCompDetail){if(mod==='materiales'){rSinCompDetail(mc,S.matSinCompDetail);return;}S.matSinCompDetail=null;}switch(mod){case 'dashboard':rDash(mc,p);break;case 'visitas':rVisitas(mc);break;case 'notas':rNotas(mc);break;case 'tareas':rTareas(mc);break;case 'materiales':rMat(mc);break;case 'alertas':rAlertas(mc);break;case 'checklist':rChecklist(mc);break;case 'documentos':rDocs(mc);break;case 'comentarios':rComentarios(mc);break;case 'informes':rInformes(mc,p);break;case 'colaboradores':rColaboradores(mc,p);break;case 'bandeja':rBandeja(mc,p);break;case 'economia':rEconomia(mc,p);break;case 'config':rConfig(mc,p);break;}if(S.searchOpen)setTimeout(()=>{const si=$('searchInput');if(si)si.focus();},100);}
+function renderModule(mod,p){const mc=$('mc');if(!mc)return;if(S.visitaDetail){var _vck=(D.visitas||[]).find(function(x){return x.id===S.visitaDetail;});if(!_vck||_vck.projectId!==S.proj){S.visitaDetail=null;}else{rVisitaDetail(mc,S.visitaDetail);return;}}if(S.matDetail){rMatDetail(mc,S.matDetail);return;}if(S.matSinCompDetail){if(mod==='materiales'){rSinCompDetail(mc,S.matSinCompDetail);return;}S.matSinCompDetail=null;}switch(mod){case 'dashboard':rDash(mc,p);break;case 'visitas':rVisitas(mc);break;case 'notas':rNotas(mc);break;case 'fotos':rFotos(mc,p);break;case 'tareas':rTareas(mc);break;case 'materiales':rMat(mc);break;case 'alertas':rAlertas(mc);break;case 'checklist':rChecklist(mc);break;case 'documentos':rDocs(mc);break;case 'comentarios':rComentarios(mc);break;case 'informes':rInformes(mc,p);break;case 'colaboradores':rColaboradores(mc,p);break;case 'bandeja':rBandeja(mc,p);break;case 'economia':rEconomia(mc,p);break;case 'config':rConfig(mc,p);break;}if(S.searchOpen)setTimeout(()=>{const si=$('searchInput');if(si)si.focus();},100);}
 
 function navStep(dir){
   const ids=['dashboard','visitas','notas','tareas','materiales','economia','documentos','checklist','comentarios','bandeja','informes'];
@@ -17960,6 +17963,526 @@ setTimeout(function(){
     bc.postMessage('hola');
   }catch(_){}
 },1500);
+// ═══════ FOTOS DE OBRA: lo que llega por WhatsApp, con fecha y ubicación en el archivo ═══════
+var _foCache={},_foCargando={},_foError={},_foInstalar=null,_foProc=null,_foEligiendo=false,_foUrls=[];
+var FO_API='https://www.googleapis.com/drive/v3/files',FO_UP='https://www.googleapis.com/upload/drive/v3/files';
+var FO_CAMPOS='id,name,mimeType,size,thumbnailLink,webViewLink,appProperties,createdTime';
+var FO_TROZO=20*262144;
+
+function _foDB(){return new Promise(function(ok,no){var r=indexedDB.open('oc_compartidas',1);r.onupgradeneeded=function(){r.result.createObjectStore('cola',{keyPath:'id'});r.result.createObjectStore('meta');};r.onsuccess=function(){ok(r.result);};r.onerror=function(){no(r.error);};});}
+async function _foTx(st,modo,fn){var db=await _foDB();try{return await new Promise(function(ok,no){var tx=db.transaction(st,modo),res;var q=fn(tx.objectStore(st));if(q)q.onsuccess=function(){res=q.result;};tx.oncomplete=function(){ok(res);};tx.onerror=function(){no(tx.error);};tx.onabort=function(){no(tx.error);};});}finally{db.close();}}
+function _foCola(){return _foTx('cola','readonly',function(s){return s.getAll();}).then(function(r){return r||[];});}
+function _foPonerCola(it){return _foTx('cola','readwrite',function(s){s.put(it);});}
+function _foSacarCola(id){return _foTx('cola','readwrite',function(s){s.delete(id);});}
+function _foLeerMeta(k){return _foTx('meta','readonly',function(s){return s.get(k);}).catch(function(){return null;});}
+function _foGuardarMeta(k,v){return _foTx('meta','readwrite',function(s){s.put(v,k);}).catch(function(){});}
+
+function _foDos(n){return String(n).padStart(2,'0');}
+function _foHoyDe(ms){var d=new Date(ms||Date.now());return d.getFullYear()+'-'+_foDos(d.getMonth()+1)+'-'+_foDos(d.getDate());}
+function _foFechaTxt(f){var p=String(f||'').split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:String(f||'');}
+function _foFechaValida(a,m,d){a=+a;m=+m;d=+d;var x=new Date(a,m-1,d);return x.getFullYear()===a&&x.getMonth()===m-1&&x.getDate()===d;}
+function _foFechaDeNombre(n){
+  n=String(n||'');
+  var m=/(20\d{2})-(\d{2})-(\d{2})\D{1,10}(\d{1,2})[.:](\d{2})[.:](\d{2})/.exec(n);
+  if(m&&_foFechaValida(m[1],m[2],m[3]))return {fecha:m[1]+'-'+m[2]+'-'+m[3],hora:_foDos(m[4])+':'+m[5]+':'+m[6]};
+  m=/(?:IMG|VID|AUD|PTT|DOC|STK)-(20\d{2})(\d{2})(\d{2})-WA\d+/i.exec(n);
+  if(m&&_foFechaValida(m[1],m[2],m[3]))return {fecha:m[1]+'-'+m[2]+'-'+m[3],hora:null};
+  return null;
+}
+function _foFechaDe(x){
+  var n=_foFechaDeNombre(x.nombre);if(n)return n;
+  var ms=x.archivo&&x.archivo.lastModified;
+  if(!ms||ms>(x.recibido||Date.now())-600000)return null;
+  var d=new Date(ms);
+  return {fecha:_foHoyDe(ms),hora:_foDos(d.getHours())+':'+_foDos(d.getMinutes())+':'+_foDos(d.getSeconds())};
+}
+function _foSecuencia(n){var m=/WA(\d+)/i.exec(String(n||''));return m?+m[1]:0;}
+function _foMime(nombre,tipo){
+  if(tipo&&/^(image|video)\//i.test(tipo))return tipo.toLowerCase();
+  var e=(String(nombre||'').split('.').pop()||'').toLowerCase();
+  return {jpg:'image/jpeg',jpeg:'image/jpeg',png:'image/png',webp:'image/webp',heic:'image/heic',heif:'image/heif',gif:'image/gif',mp4:'video/mp4','3gp':'video/3gpp',mov:'video/quicktime',m4v:'video/mp4'}[e]||tipo||'application/octet-stream';
+}
+function _foExt(nombre,mime){
+  var e=(String(nombre||'').split('.').pop()||'').toLowerCase();
+  if(/^[a-z0-9]{2,5}$/.test(e)&&String(nombre).indexOf('.')>=0)return e==='jpeg'?'jpg':e;
+  return {'image/jpeg':'jpg','image/png':'png','image/webp':'webp','image/heic':'heic','video/mp4':'mp4','video/3gpp':'3gp','video/quicktime':'mov'}[mime]||'bin';
+}
+function _foMomento(fecha,hora,n){return {fecha:fecha,hora:hora||('12:'+_foDos(Math.floor((n%3600)/60))+':'+_foDos(n%60))};}
+function _foComoDate(m){var f=m.fecha.split('-'),h=m.hora.split(':');return new Date(+f[0],+f[1]-1,+f[2],+h[0],+h[1],+h[2]);}
+function _foClaveGeo(g){return g&&isFinite(g.lat)&&isFinite(g.lng)?(+g.lat).toFixed(5)+','+(+g.lng).toFixed(5):'no';}
+
+function _foUnir(partes){var n=0,i;for(i=0;i<partes.length;i++)n+=partes[i].length;var r=new Uint8Array(n),p=0;for(i=0;i<partes.length;i++){r.set(partes[i],p);p+=partes[i].length;}return r;}
+function _foAscii(u,o,n){var s='';for(var i=0;i<n;i++)s+=String.fromCharCode(u[o+i]);return s;}
+function _foLeerExif(u,t,fin){
+  var r={ori:0,geo:null};
+  try{
+    var le=u[t]===0x49,dv=new DataView(u.buffer,u.byteOffset,fin);
+    var w=function(o){return dv.getUint16(t+o,le);},l=function(o){return dv.getUint32(t+o,le);};
+    var ifd=l(4),n=w(ifd),gps=0,i,e;
+    for(i=0;i<n;i++){e=ifd+2+i*12;if(w(e)===0x0112)r.ori=w(e+8);if(w(e)===0x8825)gps=l(e+8);}
+    if(gps){
+      var m={},c=w(gps);
+      for(i=0;i<c;i++){e=gps+2+i*12;m[w(e)]=e;}
+      if(m[1]&&m[2]&&m[3]&&m[4]){
+        var gr=function(x){var of=l(x+8),v=[0,1,2].map(function(k){return l(of+k*8)/l(of+k*8+4);});return v[0]+v[1]/60+v[2]/3600;};
+        var lat=gr(m[2]),lng=gr(m[4]);
+        if(String.fromCharCode(u[t+m[1]+8])==='S')lat=-lat;
+        if(String.fromCharCode(u[t+m[3]+8])==='W')lng=-lng;
+        if(isFinite(lat)&&isFinite(lng)&&(lat||lng))r.geo={lat:lat,lng:lng};
+      }
+    }
+  }catch(_){}
+  return r;
+}
+function _foTiff(m,geo,ori){
+  var txt=function(s){var a=new Uint8Array(s.length+1);for(var i=0;i<s.length;i++)a[i]=s.charCodeAt(i);return a;};
+  var cuatro=function(v){return new Uint8Array([v&255,v>>>8&255,v>>>16&255,v>>>24&255]);};
+  var rac=function(a,b){return _foUnir([cuatro(a),cuatro(b)]);};
+  var dms=function(x){x=Math.abs(x);var g=Math.floor(x),mf=(x-g)*60,mi=Math.floor(mf),s=Math.round((mf-mi)*600000);return _foUnir([rac(g,1),rac(mi,1),rac(s,10000)]);};
+  var cuando=m.fecha.replace(/-/g,':')+' '+m.hora;
+  var tzo=-_foComoDate(m).getTimezoneOffset(),tz=(tzo<0?'-':'+')+_foDos(Math.floor(Math.abs(tzo)/60))+':'+_foDos(Math.abs(tzo)%60);
+  var e=function(t,k,c,v){return {t:t,k:k,c:c,v:v};};
+  var ifd0=[];
+  if(ori)ifd0.push(e(0x0112,3,1,new Uint8Array([ori&255,ori>>8&255])));
+  var t=txt(cuando);
+  ifd0.push(e(0x0132,2,t.length,t));
+  var pExif=e(0x8769,4,1,cuatro(0));ifd0.push(pExif);
+  var pGps=geo?e(0x8825,4,1,cuatro(0)):null;if(pGps)ifd0.push(pGps);
+  var oz=txt(tz);
+  var exif=[e(0x9000,7,4,txt('0232').slice(0,4)),e(0x9003,2,t.length,t),e(0x9004,2,t.length,t),e(0x9011,2,oz.length,oz)];
+  var gps=geo?[e(0,1,4,new Uint8Array([2,3,0,0])),e(1,2,2,txt(geo.lat<0?'S':'N')),e(2,5,3,dms(geo.lat)),e(3,2,2,txt(geo.lng<0?'W':'E')),e(4,5,3,dms(geo.lng))]:null;
+  var mide=function(l){return 2+l.length*12+4+l.reduce(function(a,x){return a+(x.v.length>4?x.v.length+(x.v.length&1):0);},0);};
+  var o0=8,o1=o0+mide(ifd0),o2=o1+mide(exif);
+  pExif.v=cuatro(o1);if(pGps)pGps.v=cuatro(o2);
+  var total=o2+(gps?mide(gps):0),b=new Uint8Array(total),dv=new DataView(b.buffer);
+  b.set([0x49,0x49,0x2A,0,8,0,0,0]);
+  var escribir=function(l,o){
+    dv.setUint16(o,l.length,true);
+    var extra=o+2+l.length*12+4;
+    l.forEach(function(x,i){
+      var p=o+2+i*12;dv.setUint16(p,x.t,true);dv.setUint16(p+2,x.k,true);dv.setUint32(p+4,x.c,true);
+      if(x.v.length<=4)b.set(x.v,p+8);
+      else{dv.setUint32(p+8,extra,true);b.set(x.v,extra);extra+=x.v.length+(x.v.length&1);}
+    });
+    dv.setUint32(o+2+l.length*12,0,true);
+  };
+  escribir(ifd0,o0);escribir(exif,o1);if(gps)escribir(gps,o2);
+  return b;
+}
+async function _foMarcarJpeg(blob,m,geo){
+  var u=new Uint8Array(await blob.arrayBuffer());
+  if(u[0]!==0xFF||u[1]!==0xD8)return blob;
+  var p=2,segs=[],previo={ori:0,geo:null};
+  while(p+4<=u.length){
+    if(u[p]!==0xFF)return blob;
+    var mk=u[p+1];
+    if(mk===0xFF){p++;continue;}
+    if(mk===0xDA||mk===0xD9)break;
+    var len=u[p+2]<<8|u[p+3];
+    if(len<2||p+2+len>u.length)return blob;
+    if(mk===0xE1&&len>=8&&_foAscii(u,p+4,6)==='Exif\0\0')previo=_foLeerExif(u,p+10,p+2+len);
+    else segs.push({mk:mk,de:p,a:p+2+len});
+    p+=2+len;
+  }
+  var tiff=_foTiff(m,geo||previo.geo,previo.ori);
+  var n=tiff.length+8,app1=_foUnir([new Uint8Array([0xFF,0xE1,n>>8&255,n&255,0x45,0x78,0x69,0x66,0,0]),tiff]);
+  var partes=[u.subarray(0,2)],i=0;
+  if(segs[0]&&segs[0].mk===0xE0){partes.push(u.subarray(segs[0].de,segs[0].a));i=1;}
+  partes.push(app1);
+  for(;i<segs.length;i++)partes.push(u.subarray(segs[i].de,segs[i].a));
+  partes.push(u.subarray(p));
+  return new Blob(partes,{type:blob.type||'image/jpeg'});
+}
+function _foCajas(u,ini,fin){
+  var r=[],p=ini,dv=new DataView(u.buffer,u.byteOffset,u.byteLength);
+  while(p+8<=fin){
+    var s=dv.getUint32(p),hl=8;
+    if(s===1){if(p+16>fin)break;s=Number(dv.getBigUint64(p+8));hl=16;}else if(s===0)s=fin-p;
+    if(s<hl||p+s>fin)break;
+    r.push({t:_foAscii(u,p+4,4),p:p,s:s,hl:hl});
+    p+=s;
+  }
+  return r;
+}
+function _foParcharMoov(u,ini,fin,seg,cambiar){
+  var dv=new DataView(u.buffer,u.byteOffset,u.byteLength);
+  _foCajas(u,ini,fin).forEach(function(c){
+    var d=c.p+c.hl;
+    if(c.t==='trak'||c.t==='mdia'||c.t==='minf'||c.t==='stbl')_foParcharMoov(u,d,c.p+c.s,seg,cambiar);
+    else if(c.t==='mvhd'||c.t==='tkhd'||c.t==='mdhd'){
+      if(u[d]===1){dv.setBigUint64(d+4,BigInt(seg));dv.setBigUint64(d+12,BigInt(seg));}
+      else{dv.setUint32(d+4,seg);dv.setUint32(d+8,seg);}
+    }else if(c.t==='stco'&&cambiar){
+      var n=dv.getUint32(d+4);
+      for(var i=0;i<n;i++){var q=d+8+i*4,v=dv.getUint32(q);if(v>cambiar.desde)dv.setUint32(q,v+cambiar.delta);}
+    }else if(c.t==='co64'&&cambiar){
+      var k=dv.getUint32(d+4);
+      for(var j=0;j<k;j++){var q2=d+8+j*8,v2=dv.getBigUint64(q2);if(v2>BigInt(cambiar.desde))dv.setBigUint64(q2,v2+BigInt(cambiar.delta));}
+    }
+  });
+}
+function _foCaja(tipoBytes,partes){var cuerpo=_foUnir(partes),n=cuerpo.length+8;return _foUnir([new Uint8Array([n>>>24&255,n>>>16&255,n>>>8&255,n&255]),tipoBytes,cuerpo]);}
+function _foIso6709(g){var f=function(x,a){return (x<0?'-':'+')+Math.abs(x).toFixed(4).padStart(a,'0');};return f(+g.lat,7)+f(+g.lng,8)+'/';}
+async function _foMarcarMp4(blob,m,geo){
+  var leer=async function(o,n){return new Uint8Array(await blob.slice(o,o+n).arrayBuffer());};
+  var o=0,moov=null,frag=false,primero=true;
+  while(o+8<=blob.size){
+    var h=await leer(o,16),dv=new DataView(h.buffer),s=dv.getUint32(0),hl=8,t=_foAscii(h,4,4);
+    if(s===1){s=Number(dv.getBigUint64(8));hl=16;}else if(s===0)s=blob.size-o;
+    if(s<hl)return blob;
+    if(primero&&t!=='ftyp')return blob;
+    primero=false;
+    if(t==='moov')moov={o:o,s:s,hl:hl};
+    if(t==='moof')frag=true;
+    o+=s;
+  }
+  if(!moov||moov.s>67108864)return blob;
+  var u=await leer(moov.o,moov.s);
+  var seg=Math.floor(_foComoDate(m).getTime()/1000)+2082844800;
+  var nuevo=u,delta=0,hijos=_foCajas(u,moov.hl,moov.s);
+  if(geo&&!frag){
+    var ud=hijos.find(function(c){return c.t==='udta';});
+    var iso=_foIso6709(geo),txt=new Uint8Array(iso.length);
+    for(var i=0;i<iso.length;i++)txt[i]=iso.charCodeAt(i);
+    var xyz=_foCaja(new Uint8Array([0xA9,0x78,0x79,0x7A]),[new Uint8Array([iso.length>>8&255,iso.length&255,0x15,0xC7]),txt]);
+    var viejos=ud?_foCajas(u,ud.p+ud.hl,ud.p+ud.s).filter(function(c){return c.t!=='\xA9xyz';}).map(function(c){return u.subarray(c.p,c.p+c.s);}):[];
+    var udta=_foCaja(new Uint8Array([0x75,0x64,0x74,0x61]),viejos.concat([xyz]));
+    var partes=[];
+    hijos.forEach(function(c){if(c.t!=='udta')partes.push(u.subarray(c.p,c.p+c.s));});
+    partes.push(udta);
+    var cuerpo=_foUnir(partes),n=cuerpo.length+8;
+    nuevo=_foUnir([new Uint8Array([n>>>24&255,n>>>16&255,n>>>8&255,n&255,0x6D,0x6F,0x6F,0x76]),cuerpo]);
+    delta=nuevo.length-moov.s;
+    _foParcharMoov(nuevo,8,nuevo.length,seg,delta?{desde:moov.o,delta:delta}:null);
+  }else{
+    nuevo=u.slice();
+    _foParcharMoov(nuevo,moov.hl,moov.s,seg,null);
+  }
+  return new Blob([blob.slice(0,moov.o),nuevo,blob.slice(moov.o+moov.s)],{type:blob.type||'video/mp4'});
+}
+async function _foMarcar(blob,mime,m,geo){
+  try{
+    if(/^image\/jpe?g$/i.test(mime))return await _foMarcarJpeg(blob,m,geo);
+    if(/^video\/(mp4|3gpp|quicktime)$/i.test(mime))return await _foMarcarMp4(blob,m,geo);
+  }catch(e){console.warn('No se pudo marcar el archivo',e);}
+  return blob;
+}
+async function _foHuella(blob){
+  var inicio=await blob.slice(0,2097152).arrayBuffer();
+  var extra=new TextEncoder().encode('|'+blob.size);
+  var d=await crypto.subtle.digest('SHA-256',_foUnir([new Uint8Array(inicio),extra]));
+  return Array.from(new Uint8Array(d).slice(0,12)).map(function(b){return b.toString(16).padStart(2,'0');}).join('');
+}
+function _foTokenOk(){return !!(GD.accessToken&&GD.tokenExpiry&&GD.tokenExpiry-Date.now()>60000);}
+function _foAuth(){return Promise.race([Promise.resolve().then(function(){return ensureAuth(false);}).catch(function(){return false;}),new Promise(function(ok){setTimeout(function(){ok(false);},45000);})]);}
+function _foAut(){return {'Authorization':'Bearer '+GD.accessToken};}
+async function _foSubir(url,metodo,meta,blob,mime,alAvanzar){
+  var ini=await fetchWithTimeout(url,{method:metodo,headers:Object.assign(_foAut(),{'Content-Type':'application/json; charset=UTF-8','X-Upload-Content-Type':mime,'X-Upload-Content-Length':String(blob.size)}),body:JSON.stringify(meta)},30000);
+  if(!ini.ok)throw new Error('Drive '+ini.status+' al iniciar la subida');
+  var sesion=ini.headers.get('Location');
+  if(!sesion)throw new Error('Drive no devolvió la dirección de subida');
+  var o=0;
+  while(true){
+    var fin=Math.min(o+FO_TROZO,blob.size),r=null,ultimo=null;
+    for(var i=0;i<4;i++){
+      try{
+        r=await fetchWithTimeout(sesion,{method:'PUT',headers:{'Content-Range':'bytes '+o+'-'+(fin-1)+'/'+blob.size},body:blob.slice(o,fin)},180000);
+        if(r.status===308||r.ok)break;
+        ultimo=new Error('Drive '+r.status+' al subir');r=null;
+      }catch(e){ultimo=e;r=null;}
+      await new Promise(function(ok){setTimeout(ok,1500*(i+1));});
+    }
+    if(!r)throw ultimo||new Error('No se pudo subir');
+    if(r.ok)return await r.json();
+    o=fin;
+    if(alAvanzar)alAvanzar(o/blob.size);
+  }
+}
+async function _foListar(pid,forzar){
+  var c=_foCache[pid];
+  if(c&&!forzar&&Date.now()-c.ts<1800000)return c;
+  var fid=await carpetaObra(pid,'fotos'),todos=[],pag='';
+  do{
+    var q="'"+fid+"' in parents and trashed=false and mimeType!='application/vnd.google-apps.folder'";
+    var r=await fetchWithTimeout(FO_API+'?q='+encodeURIComponent(q)+'&pageSize=1000&orderBy=name%20desc&fields='+encodeURIComponent('nextPageToken,files('+FO_CAMPOS+')')+(pag?'&pageToken='+encodeURIComponent(pag):''),{headers:_foAut()},30000);
+    if(!r.ok)throw new Error('Drive '+r.status+' al listar');
+    var j=await r.json();
+    todos=todos.concat(j.files||[]);
+    pag=j.nextPageToken||'';
+  }while(pag);
+  todos.ts=Date.now();todos.fid=fid;
+  _foCache[pid]=todos;
+  return todos;
+}
+function _foDia(f){var a=f.appProperties||{};if(a.ocFecha)return a.ocFecha;var m=/^(\d{4}-\d{2}-\d{2})/.exec(f.name||'');return m?m[1]:String(f.createdTime||'').slice(0,10);}
+function _foProximoNumero(lista,fecha){var mx=0;lista.forEach(function(f){if(_foDia(f)!==fecha)return;var m=/ (\d{3,})\.[^.]+$/.exec(f.name||'');mx=Math.max(mx,m?+m[1]:0);});return mx+1;}
+function _foNombreObra(p){return String(p.name||'OBRA').toUpperCase().replace(/[\\/:*?"<>|]/g,'_').trim();}
+async function _foSubirItem(it){
+  var p=(D.projects||[]).find(function(x){return x.id===it.pid;});
+  if(!p)throw new Error('La obra ya no existe');
+  var lista=await _foListar(it.pid,false);
+  var huella=await _foHuella(it.archivo);
+  if(lista.some(function(f){return (f.appProperties||{}).ocHash===huella;}))return 'repetida';
+  var num=_foProximoNumero(lista,it.fecha),m=_foMomento(it.fecha,it.hora,num);
+  var mime=_foMime(it.nombre,it.tipo),geo=p.geo||null;
+  var cuerpo=await _foMarcar(it.archivo,mime,m,geo);
+  var iso=_foComoDate(m).toISOString();
+  var meta={name:it.fecha+' '+_foNombreObra(p)+' '+String(num).padStart(3,'0')+'.'+_foExt(it.nombre,mime),parents:[lista.fid],mimeType:mime,createdTime:iso,modifiedTime:iso,description:'Recibida por WhatsApp · '+(p.name||'')+(p.location?' · '+p.location:''),appProperties:{ocFotoWA:'1',ocFecha:m.fecha,ocHora:m.hora,ocHash:huella,ocGeo:_foClaveGeo(geo)}};
+  var f=await _foSubir(FO_UP+'?uploadType=resumable&fields='+encodeURIComponent(FO_CAMPOS),'POST',meta,cuerpo,mime,function(fr){_foAvance(fr);});
+  lista.unshift(f);
+  return 'ok';
+}
+function _foOverlay(html){
+  var ov=$('foOv');
+  if(!ov){ov=document.createElement('div');ov.id='foOv';ov.className='mo open';ov.style.zIndex='1500';document.body.appendChild(ov);}
+  ov.innerHTML='<div class="mo-c" style="animation:none" onclick="event.stopPropagation()">'+html+'</div>';
+}
+function _foCerrar(){var ov=$('foOv');if(ov)ov.remove();_foUrls.forEach(function(u){try{URL.revokeObjectURL(u);}catch(_){}});_foUrls=[];}
+function _foCuenta(items){var v=items.filter(function(x){return /^video\//.test(_foMime(x.nombre,x.tipo));}).length,f=items.length-v,t=[];if(f)t.push(f+(f===1?' foto':' fotos'));if(v)t.push(v+(v===1?' video':' videos'));return t.join(' y ')||'0 archivos';}
+async function _foMostrarElegir(items,prefer){
+  items.sort(function(a,b){return (_foSecuencia(a.nombre)-_foSecuencia(b.nombre))||(a.orden-b.orden);});
+  var ultima=await _foLeerMeta('ultimaObra');
+  var obras=(D.projects||[]).filter(function(p){return !p.cerrada;}).slice();
+  var peso=function(p){return p.id===prefer?0:p.id===ultima?1:2;};
+  obras.sort(function(a,b){return peso(a)-peso(b);});
+  var fechas={},sinFecha=0;
+  items.forEach(function(x){var n=_foFechaDe(x);if(n)fechas[n.fecha]=1;else{sinFecha++;fechas[_foHoyDe(x.recibido)]=1;}});
+  var lista=Object.keys(fechas).sort(),unica=lista.length===1?lista[0]:'';
+  _foUrls.forEach(function(u){try{URL.revokeObjectURL(u);}catch(_){}});_foUrls=[];
+  var mini=items.slice(0,8).map(function(x){
+    if(/^image\//.test(_foMime(x.nombre,x.tipo))){var u=URL.createObjectURL(x.archivo);_foUrls.push(u);return '<img src="'+u+'" style="width:54px;height:54px;object-fit:cover;border-radius:8px;flex:none">';}
+    return '<div style="width:54px;height:54px;border-radius:8px;flex:none;background:#1e293b;color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px">&#9654;</div>';
+  }).join('');
+  var aviso=sinFecha?'<div class="txxs" style="color:var(--orange);margin-top:6px">No vino la fecha de '+(sinFecha===items.length?'estos archivos':sinFecha+' de estos archivos')+'. Se usa la de hoy: cambiala si llegaron otro día.</div>':'';
+  var btn=obras.map(function(p){return '<button class="btn btn-g btn-w" style="justify-content:flex-start;padding:13px 14px;font-size:14px;font-weight:700;margin-bottom:8px;text-align:left;background:var(--white);border:1px solid var(--brd)" onclick="_foElegir(\''+p.id+'\')">'+(p.geo?'&#128205; ':'')+esc(p.name)+'</button>';}).join('')||'<div class="ts tc3">No hay obras activas.</div>';
+  _foOverlay('<div class="mo-h"><h3>Guardar '+_foCuenta(items)+'</h3><button class="tbtn" onclick="_foDescartar()">'+I.x+'</button></div>'
+    +'<div style="display:flex;gap:6px;overflow-x:auto;margin-bottom:12px">'+mini+'</div>'
+    +'<label class="ts" style="display:block;font-weight:700;margin-bottom:4px">'+(unica?'Fecha en que llegaron':'Llegaron entre el '+_foFechaTxt(lista[0])+' y el '+_foFechaTxt(lista[lista.length-1])+'. Para ponerles a todas la misma fecha:')+'</label>'
+    +'<input id="foFecha" class="fi" type="date" value="'+unica+'">'+aviso
+    +'<div class="ts" style="font-weight:700;margin:14px 0 8px">Tocá la obra</div>'+btn);
+  window._foFechaInicial=unica;
+}
+async function _foDescartar(){
+  if(!confirm('¿Descartar estos archivos? Las fotos siguen en WhatsApp.'))return;
+  var cola=await _foCola();
+  for(var i=0;i<cola.length;i++)if(!cola[i].pid)await _foSacarCola(cola[i].id);
+  _foCerrar();
+}
+async function _foElegir(pid){
+  if(_foEligiendo)return;
+  _foEligiendo=true;
+  try{
+    var inp=$('foFecha'),valor=inp?inp.value:'',cambio=!!valor&&valor!==window._foFechaInicial;
+    _foOverlay('<div class="ts tac" style="padding:18px">Preparando…</div>');
+    var conectado=await _foAuth();
+    var cola=(await _foCola()).filter(function(x){return !x.pid;});
+    for(var i=0;i<cola.length;i++){
+      var it=cola[i],n=_foFechaDe(it);
+      it.pid=pid;
+      it.fecha=cambio?valor:((n&&n.fecha)||valor||_foHoyDe(it.recibido));
+      it.hora=cambio?null:((n&&n.hora)||null);
+      await _foPonerCola(it);
+    }
+    await _foGuardarMeta('ultimaObra',pid);
+    if(!conectado){
+      _foOverlay('<div class="ts" style="padding:6px;line-height:1.5"><b>Quedaron guardadas en este teléfono.</b><br>No pude conectarme con Drive. Se suben solas cuando abras la app con Drive conectado.</div><button class="btn btn-p btn-w mt-8" onclick="_foCerrar()">Entendido</button>');
+      return;
+    }
+    await _foProcesar();
+  }finally{_foEligiendo=false;}
+}
+function _foProcesar(){if(_foProc)return _foProc;_foProc=_foProcesarImpl().finally(function(){_foProc=null;});return _foProc;}
+var _foIdx=0,_foTotal=0;
+function _foAvance(fr){var b=$('foBarra');if(b&&_foTotal)b.style.width=Math.round(((_foIdx+(fr||0))/_foTotal)*100)+'%';var t=$('foTxt');if(t)t.textContent='Guardando '+(_foIdx+1)+' de '+_foTotal+'…';}
+async function _foProcesarImpl(){
+  var items=(await _foCola()).filter(function(x){return x.pid;});
+  items.sort(function(a,b){return (a.fecha<b.fecha?-1:a.fecha>b.fecha?1:0)||(_foSecuencia(a.nombre)-_foSecuencia(b.nombre))||(a.orden-b.orden);});
+  if(!items.length)return;
+  var ok=0,rep=0,obras={},ultErr='';
+  items.forEach(function(x){obras[x.pid]=1;delete _foCache[x.pid];});
+  _foTotal=items.length;
+  _foOverlay('<div style="padding:8px"><div id="foTxt" class="ts" style="font-weight:700;margin-bottom:10px">Guardando…</div><div style="height:8px;border-radius:6px;background:var(--gray-ll);overflow:hidden"><div id="foBarra" style="height:100%;width:0;background:var(--pri);transition:width .2s"></div></div><div class="txxs tc3" style="margin-top:10px">No cierres la app hasta que termine.</div></div>');
+  for(var i=0;i<items.length;i++){
+    _foIdx=i;_foAvance(0);
+    try{
+      var r=await _foSubirItem(items[i]);
+      await _foSacarCola(items[i].id);
+      if(r==='repetida')rep++;else ok++;
+    }catch(e){
+      console.error('Foto no subida',items[i].nombre,e);ultErr=e&&e.message||'';
+      if(!navigator.onLine)break;
+    }
+  }
+  var fal=items.length-ok-rep,ids=Object.keys(obras);
+  var nom=ids.length===1?esc(_foNombreObraVisible(ids[0])):ids.length+' obras';
+  _foOverlay('<div class="tac" style="padding:8px"><div style="font-size:38px">'+(fal?'&#9888;&#65039;':'&#9989;')+'</div>'
+    +'<div style="font-size:15px;font-weight:800;margin:8px 0">'+(ok?ok+(ok===1?' archivo guardado':' archivos guardados')+' en '+nom:'Nada nuevo para guardar')+'</div>'
+    +(rep?'<div class="ts tc3">'+rep+(rep===1?' ya estaba guardado y no se repitió.':' ya estaban guardados y no se repitieron.')+'</div>':'')
+    +(fal?'<div class="ts" style="color:var(--red);margin-top:6px">'+fal+(fal===1?' no se pudo subir':' no se pudieron subir')+' y '+(fal===1?'quedó':'quedaron')+' en este teléfono. Se reintenta al abrir la app.'+(ultErr?'<br><span class="txxs">'+esc(ultErr)+'</span>':'')+'</div>':'')
+    +'<button class="btn btn-p btn-w" style="margin-top:14px" onclick="_foListo()">Listo</button></div>');
+  if(S.mod==='fotos'&&S.proj&&obras[S.proj])render();
+}
+function _foNombreObraVisible(pid){var p=(D.projects||[]).find(function(x){return x.id===pid;});return p?p.name:'la obra';}
+function _foListo(){_foCerrar();if(new URLSearchParams(location.search).has('compartido')||window._foVinoDeCompartir){window._foVinoDeCompartir=false;try{window.close();}catch(_){}}}
+async function _foRevisar(prefer){
+  if(_foProc||_foEligiendo)return;
+  var cola;
+  try{cola=await _foCola();}catch(e){console.warn(e);return;}
+  var sin=cola.filter(function(x){return !x.pid;}),con=cola.filter(function(x){return x.pid;});
+  if(sin.length){_foMostrarElegir(sin,prefer);return;}
+  if(!con.length)return;
+  if(_foTokenOk())_foProcesar();
+  else _foOverlay('<div class="ts" style="padding:6px;line-height:1.5"><b>'+_foCuenta(con)+' esperando subir a Drive.</b></div><button class="btn btn-p btn-w mt-8" onclick="_foSubirPendientes()">Subir ahora</button><button class="btn btn-g btn-w mt-8" onclick="_foCerrar()">Más tarde</button>');
+}
+async function _foSubirPendientes(){
+  _foOverlay('<div class="ts tac" style="padding:18px">Conectando con Drive…</div>');
+  if(await _foAuth())_foProcesar();
+  else _foOverlay('<div class="ts" style="padding:6px">No pude conectarme con Drive. Probá de nuevo más tarde.</div><button class="btn btn-p btn-w mt-8" onclick="_foCerrar()">Entendido</button>');
+}
+async function _foAgregarArchivos(inp){
+  var fs=Array.from(inp.files||[]),pid=S.proj,lote='m'+Date.now().toString(36);
+  inp.value='';
+  for(var i=0;i<fs.length;i++)await _foPonerCola({id:lote+'_'+i,lote:lote,orden:i,archivo:fs[i],nombre:fs[i].name||'',tipo:fs[i].type||'',tam:fs[i].size,recibido:Date.now(),pid:null,fecha:null,hora:null});
+  _foRevisar(pid);
+}
+async function _foCargar(pid){
+  if(_foCargando[pid])return;
+  if(!_foTokenOk()){_foError[pid]='auth';return;}
+  _foCargando[pid]=true;delete _foError[pid];
+  try{await _foListar(pid,true);}
+  catch(e){console.error(e);_foError[pid]=e&&e.message||'error';}
+  finally{delete _foCargando[pid];}
+  if(S.proj===pid&&S.mod==='fotos')render();
+}
+async function _foConectar(pid){if(await _foAuth()){delete _foError[pid];_foCargar(pid);render();}else toast('No pude conectarme con Drive','var(--red)',3000);}
+function _foMarcable(f){return /^(image\/jpe?g|video\/(mp4|3gpp|quicktime))$/i.test(f.mimeType||'');}
+function _foSinUbicacion(p,lista){var c=_foClaveGeo(p.geo);if(c==='no'||!lista)return [];return lista.filter(function(f){return _foMarcable(f)&&(f.appProperties||{}).ocFotoWA&&(f.appProperties||{}).ocGeo!==c;});}
+function _foTamTxt(b){b=+b||0;return b>=1073741824?(b/1073741824).toFixed(1)+' GB':b>=1048576?Math.round(b/1048576)+' MB':Math.max(1,Math.round(b/1024))+' KB';}
+function rFotos(mc,p){
+  var pid=p.id,lista=_foCache[pid],err=_foError[pid],carg=_foCargando[pid];
+  if((!lista||Date.now()-lista.ts>1800000)&&!carg&&!err)setTimeout(function(){_foCargar(pid);if(_foError[pid]==='auth'&&S.proj===pid&&S.mod==='fotos')render();},0);
+  var h='';
+  if(_foInstalar)h+='<div class="card mb-12" style="border-left:4px solid var(--pri)"><div class="ts" style="font-weight:700;margin-bottom:6px">Instalá la app para que aparezca al compartir desde WhatsApp</div><button class="btn btn-p btn-s" onclick="_foPedirInstalar()">Instalar ObraControl</button></div>';
+  var g=p.geo;
+  h+='<div class="card mb-12"><div class="flex items-center gap-10"><span style="color:var(--pri)">'+I.pin+'</span><div class="flex-1"><div class="ts" style="font-weight:700">Ubicación de las fotos</div><div class="txxs tc3">'+(g?(+g.lat).toFixed(5)+', '+(+g.lng).toFixed(5)+' · <a target="_blank" rel="noopener" href="https://www.google.com/maps?q='+g.lat+','+g.lng+'">ver en el mapa</a>':'Opcional. Sin ubicación, las fotos se guardan igual.')+'</div></div><button class="btn btn-g btn-s" onclick="_foAbrirUbicacion()">'+(g?'Cambiar':'Poner')+'</button></div>';
+  var pend=_foSinUbicacion(p,lista);
+  if(pend.length)h+='<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--gray-ll)"><div class="ts">'+pend.length+(pend.length===1?' archivo guardado no tiene':' archivos guardados no tienen')+' esta ubicación.</div><button class="btn btn-p btn-s mt-8" onclick="_foAplicarUbicacion()">Aplicar la ubicación</button></div>';
+  h+='</div>';
+  h+='<div class="flex gap-10 mb-12 wrap"><label class="btn btn-p btn-s" style="cursor:pointer">'+I.plus+' Agregar fotos<input type="file" multiple accept="image/*,video/*" style="display:none" onchange="_foAgregarArchivos(this)"></label>'+(lista&&lista.fid?'<a class="btn btn-g btn-s" target="_blank" rel="noopener" href="https://drive.google.com/drive/folders/'+lista.fid+'">Abrir carpeta en Drive</a>':'')+'</div>';
+  if(err==='auth')h+='<div class="card tac"><div class="ts mb-8">Conectá Drive para ver las fotos de esta obra.</div><button class="btn btn-p btn-s" onclick="_foConectar(\''+pid+'\')">Conectar Drive</button></div>';
+  else if(err)h+='<div class="card tac"><div class="ts mb-8" style="color:var(--red)">No pude traer las fotos: '+esc(err)+'</div><button class="btn btn-g btn-s" onclick="delete _foError[\''+pid+'\'];render();">Reintentar</button></div>';
+  else if(!lista)h+='<div class="card tac ts tc3">Cargando fotos…</div>';
+  else if(!lista.length)h+='<div class="card ts" style="line-height:1.6"><b>Todavía no hay fotos en esta obra.</b><br>En WhatsApp, seleccioná las fotos o videos, tocá Compartir, elegí ObraControl y tocá la obra.</div>';
+  else{
+    var dias={};
+    lista.forEach(function(f){var d=_foDia(f);(dias[d]=dias[d]||[]).push(f);});
+    h+=Object.keys(dias).sort().reverse().map(function(d){
+      var fs=dias[d].slice().sort(function(a,b){return a.name<b.name?-1:1;});
+      return '<div class="mb-12"><div class="ts" style="font-weight:800;margin-bottom:6px">'+_foFechaTxt(d)+' <span class="txxs tc3" style="font-weight:500">· '+fs.length+'</span></div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px">'+fs.map(function(f){
+        var vid=/^video\//.test(f.mimeType||'');
+        return '<a href="'+esc(f.webViewLink||('https://drive.google.com/file/d/'+f.id+'/view'))+'" target="_blank" rel="noopener" title="'+esc(f.name)+'" style="position:relative;display:block;aspect-ratio:1;border-radius:8px;overflow:hidden;background:#e2e8f0">'+(f.thumbnailLink?'<img loading="lazy" referrerpolicy="no-referrer" src="'+esc(f.thumbnailLink)+'" style="width:100%;height:100%;object-fit:cover">':'')+(vid?'<span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:22px;text-shadow:0 1px 4px #000">&#9654;</span>':'')+'</a>';
+      }).join('')+'</div></div>';
+    }).join('');
+  }
+  mc.innerHTML=h;
+}
+function _foPedirInstalar(){var e=_foInstalar;_foInstalar=null;if(e)e.prompt();render();}
+function _foParseUbicacion(txt){
+  var t=String(txt||'').trim(),m=t.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/)||t.match(/[?&](?:q|ll|query|destination|center)=(-?\d+\.\d+)(?:,|%2C)\s*(-?\d+\.\d+)/i)||t.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+  if(!m)m=t.match(/^(-?\d{1,2}(?:\.\d+)?)\s*[,;\s]\s*(-?\d{1,3}(?:\.\d+)?)$/);
+  if(!m){var c=t.match(/^(-?\d{1,2},\d+)\s*[;\s]\s*(-?\d{1,3},\d+)$/);if(c)m=[0,c[1].replace(',','.'),c[2].replace(',','.')];}
+  if(!m)return null;
+  var lat=+m[1],lng=+m[2];
+  return isFinite(lat)&&isFinite(lng)&&Math.abs(lat)<=90&&Math.abs(lng)<=180?{lat:lat,lng:lng}:null;
+}
+var _foUbicNueva=null;
+function _foAbrirUbicacion(){
+  var p=(D.projects||[]).find(function(x){return x.id===S.proj;});if(!p)return;
+  _foUbicNueva=null;
+  _foOverlay('<div class="mo-h"><h3>Ubicación de la obra</h3><button class="tbtn" onclick="_foCerrar()">'+I.x+'</button></div>'
+    +'<button class="btn btn-p btn-w" onclick="_foUsarGps()">'+I.pin+' Estoy en la obra: usar mi ubicación</button>'
+    +'<div class="ts" style="font-weight:700;margin:14px 0 4px">O escribí la dirección, las coordenadas o un link de Google Maps</div>'
+    +'<input id="foUbic" class="fi" value="'+esc(p.location||'')+'" placeholder="Ej: San Martín 123, Mendoza">'
+    +'<button class="btn btn-g btn-w mt-8" onclick="_foBuscarUbicacion()">Buscar</button>'
+    +'<div id="foUbicRes" class="ts" style="margin-top:12px;line-height:1.5"></div>'
+    +(p.geo?'<button class="btn btn-g btn-w mt-8" style="color:var(--red)" onclick="_foGuardarUbicacion(true)">Quitar ubicación</button>':''));
+}
+function _foMostrarUbic(g,det){
+  _foUbicNueva=g;
+  var el=$('foUbicRes');if(!el)return;
+  el.innerHTML=(det?esc(det)+'<br>':'')+'<b>'+g.lat.toFixed(5)+', '+g.lng.toFixed(5)+'</b> · <a target="_blank" rel="noopener" href="https://www.google.com/maps?q='+g.lat+','+g.lng+'">revisar en el mapa</a><button class="btn btn-p btn-w mt-8" onclick="_foGuardarUbicacion()">Guardar esta ubicación</button>';
+}
+function _foUsarGps(){
+  var el=$('foUbicRes');if(el)el.textContent='Buscando tu ubicación…';
+  if(!navigator.geolocation){if(el)el.textContent='Este dispositivo no da la ubicación.';return;}
+  navigator.geolocation.getCurrentPosition(function(pos){_foMostrarUbic({lat:pos.coords.latitude,lng:pos.coords.longitude},'Precisión aproximada: '+Math.round(pos.coords.accuracy)+' m');},function(){if(el)el.textContent='No pude obtener la ubicación. Revisá el permiso del navegador.';},{enableHighAccuracy:true,timeout:15000,maximumAge:0});
+}
+async function _foBuscarUbicacion(){
+  var inp=$('foUbic'),el=$('foUbicRes'),t=inp?inp.value.trim():'';
+  if(!t){if(el)el.textContent='Escribí una dirección o coordenadas.';return;}
+  var g=_foParseUbicacion(t);
+  if(g){_foMostrarUbic(g,'');return;}
+  if(/^https?:\/\/(maps\.app\.goo\.gl|goo\.gl)\//i.test(t)){if(el)el.textContent='Ese link corto no se puede leer. En Google Maps dejá apretado el punto y pegá acá las coordenadas que aparecen.';return;}
+  if(el)el.textContent='Buscando…';
+  try{
+    var r=await fetchWithTimeout('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(t),{},15000);
+    var j=r.ok?await r.json():[];
+    if(!j.length){if(el)el.textContent='No encontré esa dirección. Probá agregando la ciudad y la provincia.';return;}
+    _foMostrarUbic({lat:+j[0].lat,lng:+j[0].lon},j[0].display_name||'');
+  }catch(e){if(el)el.textContent='No pude buscar la dirección. Revisá la conexión.';}
+}
+function _foGuardarUbicacion(quitar){
+  var p=(D.projects||[]).find(function(x){return x.id===S.proj;});if(!p)return;
+  if(quitar)delete p.geo;
+  else{if(!_foUbicNueva)return;p.geo={lat:+_foUbicNueva.lat.toFixed(6),lng:+_foUbicNueva.lng.toFixed(6)};}
+  p.updatedAt=nw();sv();_foCerrar();render();toast(quitar?'Ubicación quitada':'Ubicación guardada','var(--green)');
+}
+async function _foAplicarUbicacion(){
+  var pid=S.proj,p=(D.projects||[]).find(function(x){return x.id===pid;}),lista=_foCache[pid];
+  if(!p||!p.geo||!lista)return;
+  var pend=_foSinUbicacion(p,lista),peso=pend.reduce(function(a,f){return a+(+f.size||0);},0);
+  if(!pend.length)return;
+  if(!confirm('Se van a actualizar '+pend.length+' archivos ('+_foTamTxt(peso)+' para bajar y volver a subir). Conviene hacerlo con Wi-Fi. ¿Seguimos?'))return;
+  if(_foProc)return;
+  _foProc=(async function(){
+    if(!await _foAuth()){toast('No pude conectarme con Drive','var(--red)',3000);return;}
+    var clave=_foClaveGeo(p.geo),ok=0,fal=0;
+    _foTotal=pend.length;
+    _foOverlay('<div style="padding:8px"><div id="foTxt" class="ts" style="font-weight:700;margin-bottom:10px">Actualizando…</div><div style="height:8px;border-radius:6px;background:var(--gray-ll);overflow:hidden"><div id="foBarra" style="height:100%;width:0;background:var(--pri)"></div></div><div class="txxs tc3" style="margin-top:10px">No cierres la app hasta que termine.</div></div>');
+    for(var i=0;i<pend.length;i++){
+      var f=pend[i],a=f.appProperties||{};
+      _foIdx=i;_foAvance(0);
+      try{
+        var r=await fetch(FO_API+'/'+f.id+'?alt=media',{headers:_foAut()});
+        if(!r.ok)throw new Error('Drive '+r.status+' al bajar');
+        var m=_foMomento(a.ocFecha||_foDia(f),a.ocHora,i);
+        var nuevo=await _foMarcar(await r.blob(),f.mimeType,m,p.geo);
+        await _foSubir(FO_UP+'/'+f.id+'?uploadType=resumable&fields=id','PATCH',{appProperties:{ocGeo:clave},modifiedTime:_foComoDate(m).toISOString()},nuevo,f.mimeType,_foAvance);
+        f.appProperties=Object.assign({},a,{ocGeo:clave});ok++;
+      }catch(e){console.error('No se actualizó',f.name,e);fal++;}
+    }
+    _foOverlay('<div class="tac" style="padding:8px"><div style="font-size:15px;font-weight:800;margin:8px 0">'+ok+' actualizados'+(fal?' · '+fal+' con error':'')+'</div><button class="btn btn-p btn-w" style="margin-top:10px" onclick="_foCerrar();render();">Listo</button></div>');
+  })().finally(function(){_foProc=null;});
+}
+window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();_foInstalar=e;if(S.proj&&S.mod==='fotos')render();});
+(function(){
+  if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'||location.hostname==='127.0.0.1'))navigator.serviceWorker.register('sw.js').catch(function(e){console.warn('sw',e);});
+  var qs=new URLSearchParams(location.search),vino=qs.get('compartido');
+  if(vino!==null){
+    window._foVinoDeCompartir=true;
+    qs.delete('compartido');
+    try{history.replaceState(null,'',location.pathname+(qs.toString()?'?'+qs:'')+location.hash);}catch(_){}
+    if(vino==='error')setTimeout(function(){toast('No se pudieron recibir los archivos. Probá compartirlos de nuevo.','var(--red)',6000);},1500);
+  }
+  var n=0,t=setInterval(function(){
+    n++;
+    var listo=false;
+    try{listo=!!(D&&D.user&&_accesoAutorizado()&&(D.projects||[]).length);}catch(_){}
+    if(listo){clearInterval(t);_foRevisar();}
+    else if(n>150)clearInterval(t);
+  },400);
+  document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible'&&!$('foOv'))_foRevisar();});
+})();
 </script>
 <script>
 // ═══════ FECHAS: se pueden tipear (dd/mm/aaaa) o elegir en el calendario ═══════
