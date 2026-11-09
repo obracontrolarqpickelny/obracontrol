@@ -5050,20 +5050,24 @@ function _installMorph(el){
   Object.defineProperty(el,'innerHTML',{
     configurable:true,
     get:function(){return _MORPH_NATIVE_GET.call(this);},
-    set:function(html){patchHTML(this,html);}
+    set:function(html){try{patchHTML(this,html);}catch(e){console.warn('morph:',e);_MORPH_NATIVE_SET.call(this,html);}}
   });
 }
-function renderModule(mod,p){const mc=$('mc');if(!mc)return;if(S.visitaDetail){var _vck=(D.visitas||[]).find(function(x){return x.id===S.visitaDetail;});if(!_vck||_vck.projectId!==S.proj){S.visitaDetail=null;}else{rVisitaDetail(mc,S.visitaDetail);return;}}if(S.matDetail){rMatDetail(mc,S.matDetail);return;}if(S.matSinCompDetail){if(mod==='materiales'){rSinCompDetail(mc,S.matSinCompDetail);return;}S.matSinCompDetail=null;}switch(mod){case 'dashboard':rDash(mc,p);break;case 'visitas':rVisitas(mc);break;case 'notas':rNotas(mc);break;case 'fotos':rFotos(mc,p);break;case 'tareas':rTareas(mc);break;case 'materiales':rMat(mc);break;case 'alertas':rAlertas(mc);break;case 'checklist':rChecklist(mc);break;case 'documentos':rDocs(mc);break;case 'comentarios':rComentarios(mc);break;case 'informes':rInformes(mc,p);break;case 'colaboradores':rColaboradores(mc,p);break;case 'bandeja':rBandeja(mc,p);break;case 'economia':rEconomia(mc,p);break;case 'config':rConfig(mc,p);break;}if(S.searchOpen)setTimeout(()=>{const si=$('searchInput');if(si)si.focus();},100);}
+function renderModule(mod,p){
+  var mc0=document.getElementById('mc');
+  try{_renderModuloImpl(mod,p);if(mc0)mc0.setAttribute('data-mod',mod);}
+  catch(e){
+    console.error('pantalla '+mod+':',e);
+    if(mc0)_MORPH_NATIVE_SET?_MORPH_NATIVE_SET.call(mc0,_errorPantalla(e)):(mc0.textContent=String(e&&e.message||e));
+  }
+}
+function _errorPantalla(e){return '<div class="card tac" style="margin-top:12px"><div class="ts" style="font-weight:800;margin-bottom:6px">Esta pantalla no se pudo mostrar</div><div class="txxs tc3" style="margin-bottom:10px">'+esc(String(e&&e.message||e).slice(0,160))+'</div><button class="btn btn-p btn-s" onclick="render()">Reintentar</button></div>';}
+function _renderModuloImpl(mod,p){const mc=$('mc');if(!mc)return;if(S.visitaDetail){var _vck=(D.visitas||[]).find(function(x){return x.id===S.visitaDetail;});if(!_vck||_vck.projectId!==S.proj){S.visitaDetail=null;}else{rVisitaDetail(mc,S.visitaDetail);return;}}if(S.matDetail){rMatDetail(mc,S.matDetail);return;}if(S.matSinCompDetail){if(mod==='materiales'){rSinCompDetail(mc,S.matSinCompDetail);return;}S.matSinCompDetail=null;}switch(mod){case 'dashboard':rDash(mc,p);break;case 'visitas':rVisitas(mc);break;case 'notas':rNotas(mc);break;case 'fotos':rFotos(mc,p);break;case 'tareas':rTareas(mc);break;case 'materiales':rMat(mc);break;case 'alertas':rAlertas(mc);break;case 'checklist':rChecklist(mc);break;case 'documentos':rDocs(mc);break;case 'comentarios':rComentarios(mc);break;case 'informes':rInformes(mc,p);break;case 'colaboradores':rColaboradores(mc,p);break;case 'bandeja':rBandeja(mc,p);break;case 'economia':rEconomia(mc,p);break;case 'config':rConfig(mc,p);break;}if(S.searchOpen)setTimeout(()=>{const si=$('searchInput');if(si)si.focus();},100);}
 
 function navStep(dir){
-  const ids=['dashboard','visitas','notas','tareas','materiales','economia','documentos','checklist','comentarios','bandeja','informes'];
+  const ids=['dashboard','visitas','notas','materiales','economia','documentos','fotos','checklist','bandeja','colaboradores','informes'];
   var cur=ids.indexOf(S.mod);
-  if(cur===-1){
-    // If current mod not in nav list, find nearest neighbor
-    const mc=['dashboard','visitas','notas','tareas','materiales','economia','documentos','checklist','comentarios','informes','config','colaboradores','alertas'];
-    var ci=mc.indexOf(S.mod);
-    cur=ci>=0?Math.min(ci,ids.length-1):0;
-  }
+  if(cur===-1)cur=0;
   const next=cur+dir;
   if(next>=0&&next<ids.length){S.mod=ids[next];S.visitaDetail=null;S.matDetail=null;S.matSinCompDetail=null;render();}
 }
@@ -18575,6 +18579,36 @@ function _foCompletarMinis(){
   document.querySelectorAll('img[data-foid]:not([src])').forEach(function(im){_foPedirMini(im.getAttribute('data-foid'));});
 }
 setInterval(function(){if(S.mod==='fotos'&&!document.hidden)_foCompletarMinis();},30000);
+async function _foDescargar(ev,id){
+  ev.preventDefault();ev.stopPropagation();
+  var f=_foBuscarArchivo(id);if(!f)return;
+  if(!_foTokenOk()){toast('Conectá Drive para descargar','var(--orange)',3500);return;}
+  toast('Descargando…','var(--blue)',2000);
+  try{
+    var r=await fetchWithTimeout(FO_API+'/'+id+'?alt=media',{headers:_foAut()},300000);
+    if(!r.ok)throw new Error('Drive '+r.status);
+    _bajarBlob(await r.blob(),f.name);
+    toast('Descargada ✓','var(--green)',2500);
+  }catch(e){toast('No se pudo descargar: '+(e&&e.message||e),'var(--red)',5000);}
+}
+async function _foDescargarDia(ev,pid,dia){
+  ev.preventDefault();ev.stopPropagation();
+  var fs=(_foCache[pid]||[]).filter(function(f){return _foDia(f)===dia;});
+  if(!fs.length)return;
+  if(!_foTokenOk()){toast('Conectá Drive para descargar','var(--orange)',3500);return;}
+  var e2=[],mal=0;
+  for(var i=0;i<fs.length;i++){
+    toast('Preparando '+(i+1)+' de '+fs.length+'…','var(--blue)',1500);
+    try{
+      var r=await fetchWithTimeout(FO_API+'/'+fs[i].id+'?alt=media',{headers:_foAut()},300000);
+      if(!r.ok)throw new Error('Drive '+r.status);
+      e2.push({nombre:fs[i].name,datos:new Uint8Array(await r.arrayBuffer())});
+    }catch(err){mal++;}
+  }
+  if(!e2.length){toast('No se pudieron descargar','var(--red)',4000);return;}
+  _bajarBlob(_zipCrear(e2),'Fotos '+_foNombreObraVisible(pid)+' '+dia+'.zip');
+  toast(e2.length+' descargadas ✓'+(mal?' · '+mal+' con error':''),mal?'var(--orange)':'var(--green)',4000);
+}
 function _foTamBtn(v,t){var si=_foTamMini()===v;return '<button class="btn btn-s" style="font-weight:700;background:'+(si?'#D97706':'var(--gray-ll)')+';color:'+(si?'#fff':'var(--text2)')+'" onclick="S.fotosTam=\''+v+'\';saveUIState();render()">'+t+'</button>';}
 function rFotos(mc,p){
   var pid=p.id,lista=_foCache[pid],err=_foError[pid],carg=_foCargando[pid];
@@ -18596,9 +18630,9 @@ function rFotos(mc,p){
     lista.forEach(function(f){var d=_foDia(f);(dias[d]=dias[d]||[]).push(f);});
     h+=Object.keys(dias).sort().reverse().map(function(d){
       var fs=dias[d].slice().sort(function(a,b){return a.name<b.name?-1:1;});
-      return '<div class="mb-12"><div class="ts" style="font-weight:800;margin-bottom:6px">'+_foFechaTxt(d)+' <span class="txxs tc3" style="font-weight:500">· '+fs.length+'</span></div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax('+(_foTamMini()==='grande'?'150px':'76px')+',1fr));gap:6px">'+fs.map(function(f){
+      return '<div class="mb-12"><div class="ts" style="font-weight:800;margin-bottom:6px">'+_foFechaTxt(d)+' <span class="txxs tc3" style="font-weight:500">· '+fs.length+'</span><a href="#" style="float:right;font-size:12px;font-weight:700;color:var(--pri);text-decoration:none" onclick="_foDescargarDia(event,\''+pid+'\',\''+d+'\')">&#11015; Descargar todas</a></div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax('+(_foTamMini()==='grande'?'150px':'76px')+',1fr));gap:6px">'+fs.map(function(f){
         var vid=/^video\//.test(f.mimeType||'');
-        return '<a href="'+esc(f.webViewLink||('https://drive.google.com/file/d/'+f.id+'/view'))+'" target="_blank" rel="noopener" title="'+esc(f.name)+'" style="position:relative;display:block;aspect-ratio:1;border-radius:8px;overflow:hidden;background:#e2e8f0">'+_foImgMini(f)+(vid?'<span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:22px;text-shadow:0 1px 4px #000">&#9654;</span>':'')+'</a>';
+        return '<a href="'+esc(f.webViewLink||('https://drive.google.com/file/d/'+f.id+'/view'))+'" target="_blank" rel="noopener" title="'+esc(f.name)+'" style="position:relative;display:block;aspect-ratio:1;border-radius:8px;overflow:hidden;background:#e2e8f0">'+_foImgMini(f)+(vid?'<span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:22px;text-shadow:0 1px 4px #000">&#9654;</span>':'')+'<button title="Descargar" onclick="_foDescargar(event,\''+f.id+'\')" style="position:absolute;right:4px;bottom:4px;width:30px;height:30px;border:none;border-radius:50%;background:rgba(15,23,42,.65);color:#fff;font-size:15px;line-height:30px;padding:0;cursor:pointer">&#11015;</button></a>';
       }).join('')+'</div></div>';
     }).join('');
   }
