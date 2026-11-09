@@ -2613,7 +2613,9 @@ const _UI_KEYS=[
   // Bandeja y carpeta de colaboradores
   'bandejaTab','bandejaSearch','carpetaSort','carpetaFilter',
   // Obra y pestaña en las que quedó la app
-  'proj','mod'
+  'proj','mod',
+  // Tamaño de las miniaturas de Fotos
+  'fotosTam'
 ];
 // Si la obra guardada ya no existe (se eliminó o se abrió en otro dispositivo),
 // se vuelve al inicio en lugar de mostrar una obra vacía.
@@ -18260,6 +18262,7 @@ async function _foSubirItem(it){
   var meta={name:it.fecha+' '+_foNombreObra(p)+' '+String(num).padStart(3,'0')+'.'+_foExt(it.nombre,mime),parents:[lista.fid],mimeType:mime,createdTime:iso,modifiedTime:iso,description:'Recibida por WhatsApp · '+(p.name||'')+(p.location?' · '+p.location:''),appProperties:{ocFotoWA:'1',ocFecha:m.fecha,ocHora:m.hora,ocHash:huella,ocGeo:_foClaveGeo(geo)}};
   var f=await _foSubir(FO_UP+'?uploadType=resumable&fields='+encodeURIComponent(FO_CAMPOS),'POST',meta,cuerpo,mime,function(fr){_foAvance(fr);});
   lista.unshift(f);
+  await _foGuardarMini(f.id,it.archivo,mime);
   return 'ok';
 }
 function _foOverlay(html){
@@ -18507,6 +18510,72 @@ async function _foConectar(pid){if(await _foAuth()){delete _foError[pid];_foCarg
 function _foMarcable(f){return /^(image\/jpe?g|video\/(mp4|3gpp|quicktime))$/i.test(f.mimeType||'');}
 function _foSinUbicacion(p,lista){var c=_foClaveGeo(p.geo);if(c==='no'||!lista)return [];return lista.filter(function(f){return _foMarcable(f)&&(f.appProperties||{}).ocFotoWA&&(f.appProperties||{}).ocGeo!==c;});}
 function _foTamTxt(b){b=+b||0;return b>=1073741824?(b/1073741824).toFixed(1)+' GB':b>=1048576?Math.round(b/1048576)+' MB':Math.max(1,Math.round(b/1024))+' KB';}
+// Miniaturas: Drive tarda en generar la de lo recién subido y sus links vencen.
+// Orden: la guardada en este equipo, la de Drive, y si no hay, una hecha acá
+// bajando la foto (queda guardada para la próxima).
+var _foThumb={},_foThumbFallo={},_foThumbPedido={},_foThumbCola=[],_foThumbActivos=0;
+function _foTamMini(){return S.fotosTam==='grande'?'grande':'chica';}
+function _foThumbUrl(link){return String(link||'').replace(/=s\d+(-c)?$/,'=s'+(_foTamMini()==='grande'?700:320));}
+function _foImgMini(f){
+  var src=_foThumb[f.id]||(!_foThumbFallo[f.id]&&f.thumbnailLink?_foThumbUrl(f.thumbnailLink):'');
+  return '<img data-foid="'+f.id+'" loading="lazy" referrerpolicy="no-referrer"'+(src?' src="'+esc(src)+'"':'')+' onerror="_foMiniError(this)" style="width:100%;height:100%;object-fit:cover;display:block">';
+}
+function _foMiniError(img){var id=img.getAttribute('data-foid');img.removeAttribute('src');if(!_foThumb[id])_foThumbFallo[id]=1;delete _foThumbPedido[id];_foPedirMini(id);}
+function _foPonerMini(id,src){document.querySelectorAll('img[data-foid="'+id+'"]').forEach(function(im){im.src=src;});}
+function _foBuscarArchivo(id){for(var k in _foCache){var l=_foCache[k];for(var i=0;l&&i<l.length;i++)if(l[i].id===id)return l[i];}return null;}
+function _foPedirMini(id){
+  if(_foThumbPedido[id]&&Date.now()-_foThumbPedido[id]<45000)return;
+  _foThumbPedido[id]=Date.now();_foThumbCola.push(id);_foBombearMinis();
+}
+function _foBombearMinis(){
+  while(_foThumbActivos<3&&_foThumbCola.length){
+    _foThumbActivos++;
+    _foTraerMini(_foThumbCola.shift()).catch(function(e){console.warn('miniatura',e);}).finally(function(){_foThumbActivos--;_foBombearMinis();});
+  }
+}
+async function _foReducir(fuente,ancho,alto){
+  var c=document.createElement('canvas'),k=Math.min(1,480/Math.max(ancho,alto));
+  c.width=Math.max(1,Math.round(ancho*k));c.height=Math.max(1,Math.round(alto*k));
+  c.getContext('2d').drawImage(fuente,0,0,c.width,c.height);
+  return c.toDataURL('image/jpeg',0.72);
+}
+async function _foMiniDeImagen(blob){var b=await createImageBitmap(blob);try{return await _foReducir(b,b.width,b.height);}finally{if(b.close)b.close();}}
+function _foMiniDeVideo(blob){
+  return new Promise(function(ok){
+    var v=document.createElement('video'),u=URL.createObjectURL(blob),listo=false;
+    var fin=function(r){if(listo)return;listo=true;try{URL.revokeObjectURL(u);}catch(_){}ok(r);};
+    v.muted=true;v.playsInline=true;v.preload='auto';
+    v.onloadeddata=function(){try{v.currentTime=Math.min(0.5,(v.duration||1)/2);}catch(_){fin(null);}};
+    v.onseeked=function(){_foReducir(v,v.videoWidth,v.videoHeight).then(fin,function(){fin(null);});};
+    v.onerror=function(){fin(null);};
+    setTimeout(function(){fin(null);},7000);
+    v.src=u;
+  });
+}
+async function _foGuardarMini(id,blob,mime){
+  try{
+    var du=/^video\//.test(mime)?await _foMiniDeVideo(blob):await _foMiniDeImagen(blob);
+    if(du){_foThumb[id]=du;await _foGuardarMeta('th_'+id,du);_foPonerMini(id,du);}
+  }catch(e){console.warn('miniatura local',e);}
+}
+async function _foTraerMini(id){
+  var g=await _foLeerMeta('th_'+id);
+  if(g){_foThumb[id]=g;_foPonerMini(id,g);return;}
+  if(!_foTokenOk())return;
+  var f=_foBuscarArchivo(id),r=await fetchWithTimeout(FO_API+'/'+id+'?fields=thumbnailLink,mimeType',{headers:_foAut()},20000);
+  if(!r.ok)return;
+  var j=await r.json();
+  if(j.thumbnailLink&&(!_foThumbFallo[id]||/^video\//.test(j.mimeType||''))){if(f)f.thumbnailLink=j.thumbnailLink;_foPonerMini(id,_foThumbUrl(j.thumbnailLink));return;}
+  if(/^video\//.test(j.mimeType||''))return; // la genera Drive: se vuelve a mirar más tarde
+  var rb=await fetchWithTimeout(FO_API+'/'+id+'?alt=media',{headers:_foAut()},60000);
+  if(!rb.ok)return;
+  await _foGuardarMini(id,await rb.blob(),j.mimeType||'image/jpeg');
+}
+function _foCompletarMinis(){
+  document.querySelectorAll('img[data-foid]:not([src])').forEach(function(im){_foPedirMini(im.getAttribute('data-foid'));});
+}
+setInterval(function(){if(S.mod==='fotos'&&!document.hidden)_foCompletarMinis();},30000);
+function _foTamBtn(v,t){var si=_foTamMini()===v;return '<button class="btn btn-s" style="font-weight:700;background:'+(si?'#D97706':'var(--gray-ll)')+';color:'+(si?'#fff':'var(--text2)')+'" onclick="S.fotosTam=\''+v+'\';saveUIState();render()">'+t+'</button>';}
 function rFotos(mc,p){
   var pid=p.id,lista=_foCache[pid],err=_foError[pid],carg=_foCargando[pid];
   if((!lista||Date.now()-lista.ts>1800000)&&!carg&&!err)setTimeout(function(){_foCargar(pid);if(_foError[pid]==='auth'&&S.proj===pid&&S.mod==='fotos')render();},0);
@@ -18517,7 +18586,7 @@ function rFotos(mc,p){
   var pend=_foSinUbicacion(p,lista);
   if(pend.length)h+='<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--gray-ll)"><div class="ts">'+pend.length+(pend.length===1?' archivo guardado no tiene':' archivos guardados no tienen')+' esta ubicación.</div><button class="btn btn-p btn-s mt-8" onclick="_foAplicarUbicacion()">Aplicar la ubicación</button></div>';
   h+='</div>';
-  h+='<div class="flex gap-10 mb-12 wrap"><label class="btn btn-p btn-s" style="cursor:pointer">'+I.plus+' Agregar fotos<input type="file" multiple accept="image/*,video/*" style="display:none" onchange="_foAgregarArchivos(this)"></label>'+(lista&&lista.fid?'<a class="btn btn-g btn-s" target="_blank" rel="noopener" href="https://drive.google.com/drive/folders/'+lista.fid+'">Abrir carpeta en Drive</a>':'')+'</div>';
+  h+='<div class="flex gap-10 mb-12 wrap"><label class="btn btn-p btn-s" style="cursor:pointer">'+I.plus+' Agregar fotos<input type="file" multiple accept="image/*,video/*" style="display:none" onchange="_foAgregarArchivos(this)"></label>'+(lista&&lista.fid?'<a class="btn btn-g btn-s" target="_blank" rel="noopener" href="https://drive.google.com/drive/folders/'+lista.fid+'">Abrir carpeta en Drive</a>':'')+(lista&&lista.length?'<div style="margin-left:auto;display:flex;gap:4px">'+_foTamBtn('chica','Pequeñas')+_foTamBtn('grande','Grandes')+'</div>':'')+'</div>';
   if(err==='auth')h+='<div class="card tac"><div class="ts mb-8">Conectá Drive para ver las fotos de esta obra.</div><button class="btn btn-p btn-s" onclick="_foConectar(\''+pid+'\')">Conectar Drive</button></div>';
   else if(err)h+='<div class="card tac"><div class="ts mb-8" style="color:var(--red)">No pude traer las fotos: '+esc(err)+'</div><button class="btn btn-g btn-s" onclick="delete _foError[\''+pid+'\'];render();">Reintentar</button></div>';
   else if(!lista)h+='<div class="card tac ts tc3">Cargando fotos…</div>';
@@ -18527,13 +18596,14 @@ function rFotos(mc,p){
     lista.forEach(function(f){var d=_foDia(f);(dias[d]=dias[d]||[]).push(f);});
     h+=Object.keys(dias).sort().reverse().map(function(d){
       var fs=dias[d].slice().sort(function(a,b){return a.name<b.name?-1:1;});
-      return '<div class="mb-12"><div class="ts" style="font-weight:800;margin-bottom:6px">'+_foFechaTxt(d)+' <span class="txxs tc3" style="font-weight:500">· '+fs.length+'</span></div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px">'+fs.map(function(f){
+      return '<div class="mb-12"><div class="ts" style="font-weight:800;margin-bottom:6px">'+_foFechaTxt(d)+' <span class="txxs tc3" style="font-weight:500">· '+fs.length+'</span></div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax('+(_foTamMini()==='grande'?'150px':'76px')+',1fr));gap:6px">'+fs.map(function(f){
         var vid=/^video\//.test(f.mimeType||'');
-        return '<a href="'+esc(f.webViewLink||('https://drive.google.com/file/d/'+f.id+'/view'))+'" target="_blank" rel="noopener" title="'+esc(f.name)+'" style="position:relative;display:block;aspect-ratio:1;border-radius:8px;overflow:hidden;background:#e2e8f0">'+(f.thumbnailLink?'<img loading="lazy" referrerpolicy="no-referrer" src="'+esc(f.thumbnailLink)+'" style="width:100%;height:100%;object-fit:cover">':'')+(vid?'<span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:22px;text-shadow:0 1px 4px #000">&#9654;</span>':'')+'</a>';
+        return '<a href="'+esc(f.webViewLink||('https://drive.google.com/file/d/'+f.id+'/view'))+'" target="_blank" rel="noopener" title="'+esc(f.name)+'" style="position:relative;display:block;aspect-ratio:1;border-radius:8px;overflow:hidden;background:#e2e8f0">'+_foImgMini(f)+(vid?'<span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:22px;text-shadow:0 1px 4px #000">&#9654;</span>':'')+'</a>';
       }).join('')+'</div></div>';
     }).join('');
   }
   mc.innerHTML=h;
+  _foCompletarMinis();
 }
 function _foPedirInstalar(){var e=_foInstalar;_foInstalar=null;if(e)e.prompt();render();}
 function _foParseUbicacion(txt){
