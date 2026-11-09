@@ -407,6 +407,12 @@ const DRIVE_MODULE_FOLDERS = {
   eliminados:'🗑️ Eliminado en la app'
 };
 
+// Pestañas de la app. Cada una tiene su carpeta en la obra: si se agrega una
+// pestaña acá, la carpeta se crea sola en todas las obras.
+const _PESTANAS_APP=[{id:'dashboard',label:'Panel',ic:'dash'},{id:'visitas',label:'Visitas',ic:'clip'},{id:'notas',label:'Notas',ic:'nota'},{id:'materiales',label:'Materiales',ic:'pkg'},{id:'checklist',label:'Checklist',ic:'chklist'},{id:'documentos',label:'Documentos',ic:'file'},{id:'fotos',label:'Fotos WhatsApp',ic:'cam'},{id:'colaboradores',label:'Colaboradores',ic:'share'},{id:'bandeja',label:'Bandeja',ic:'inbox'},{id:'economia',label:'Economía',ic:'eco'},{id:'informes',label:'Informes',ic:'dl'},{id:'config',label:'Config',ic:'gear'}];
+DRIVE_MODULE_FOLDERS.bandeja='📥 Bandeja';DRIVE_MODULE_FOLDERS.informes='📄 Informes';
+_PESTANAS_APP.forEach(function(m){if(m.id!=='dashboard'&&m.id!=='config'&&!DRIVE_MODULE_FOLDERS[m.id])DRIVE_MODULE_FOLDERS[m.id]='📂 '+m.label;});
+
 // ─── STATE ──────────────────────────────────────────────────────────
 const GD = {
   tokenClient: null,
@@ -1250,6 +1256,7 @@ async function _saveToDriveImpl() {
     // Respaldo ordenado (carpeta aparte, cada 30 min como mucho)
     try{if(!GD._lastResp)GD._lastResp=parseInt(localStorage.getItem('oc_resp_ultimo')||'0',10);}catch(_){}
     _programarRespaldo();
+    _programarSistema();
     // Resumen de cada obra en su carpeta (una vez por hora como mucho)
     if(!GD._lastResumen||(Date.now()-GD._lastResumen)>3600000){
       GD._lastResumen=Date.now();
@@ -1484,7 +1491,7 @@ const _RESP_MODS={visitas:'📋 Visitas',notas:'📝 Notas',materiales:'🧱 Mat
   economia:'💰 Economía',documentos:'📁 Documentos',checklists:'☑️ Checklists',chkHistorial:'☑️ Checklists',
   colaboradores:'👥 Colaboradores',carpetas:'👥 Colaboradores',mensajesColab:'👥 Colaboradores',formulariosPendientes:'👥 Colaboradores',
   tareas:'✅ Tareas',alertas:'🔔 Alertas',comentarios:'💬 Comentarios',enlaces:'🔗 Enlaces'};
-function _respTablas(){var t=_CIERRE_TABLAS.slice();['notas','mensajesColab'].forEach(function(k){if(t.indexOf(k)<0)t.push(k);});return t;}
+function _respTablas(){return Object.keys(D).filter(function(k){return Array.isArray(D[k])&&['projects','tombstones','restaurados','eliminadosPend','_revs'].indexOf(k)<0;});}
 function _respLimpio(n){return String(n||'').replace(/[<>:"/\\|?*\u0000-\u001f]/g,'_').replace(/\s+/g,' ').trim().slice(0,90);}
 function _respQ(n){return String(n).replace(/\\/g,'\\\\').replace(/'/g,"\\'");}
 async function _respGet(url){var r=await fetchWithTimeout(url,{headers:driveHeaders()});if(!r.ok)throw new Error('Drive '+r.status);return r.json();}
@@ -1594,6 +1601,175 @@ async function _respEliminados(lista){
     await _respEscribir(fo,'4 - ELIMINADOS EN LA APP.txt',txt,'text/plain');
     es.forEach(function(e){e.respOk=true;});
   }
+}
+// ═══════ CARPETAS DE CADA OBRA EN SISTEMA_GESTION_OBRAS ═══════════════
+// En la carpeta de cada obra:
+//   <OBRA> - DATOS PARA IMPORTAR.json → se abre con "📂 Abrir archivo" y regenera la obra
+//   <OBRA> - TODA LA INFORMACION.txt  → absolutamente todo, para leer
+//   <OBRA> - FOTOS Y ARCHIVOS.zip     → todas las fotos y archivos
+// y en la carpeta de cada pestaña, INFORMACION - <pestaña>.txt.
+// Los archivos se reconocen por appProperties, no por el nombre: si la obra cambia
+// de nombre se renombran, no se duplican. Nunca borra nada.
+var _SIS_NL=String.fromCharCode(13,10),_SIS_BOM=String.fromCharCode(0xFEFF);
+var _SIS_TABS={visitas:['visitas'],notas:['notas','cuadernosNotas'],materiales:['materiales','matIngresos'],checklist:['checklists','chkHistorial'],documentos:['documentos','enlaces'],colaboradores:['colaboradores','carpetas','mensajesColab'],bandeja:['formulariosPendientes'],economia:['economia'],tareas:['tareas','tareasArchivo'],alertas:['alertas'],comentarios:['comentarios','comentariosArchivo'],auditoria:['auditLog']};
+var _SIS_OMITIR={id:1,projectId:1,proyectoId:1,obraId:1,localUrl:1};
+function _sisLimpio(x){return JSON.parse(JSON.stringify(x,function(k,v){return (typeof v==='string'&&v.slice(0,5)==='data:')?'[foto-local-no-sincronizada]':v;}));}
+function _sisTexto(v){
+  v=String(v);
+  if(v==='[foto-local-no-sincronizada]')return '(foto guardada solo en el equipo que la cargó)';
+  var m=/^\[foto:([^\]]+)\]$/.exec(v);
+  if(m){var f=D.fotosDrive&&D.fotosDrive[m[1]];return f&&f.url?f.url:'(foto pendiente de subir)';}
+  return v.replace(/\r?\n/g,_SIS_NL+'      ');
+}
+function _sisVacio(v){return v===null||v===undefined||v===''||(Array.isArray(v)&&!v.length)||(typeof v==='object'&&!Array.isArray(v)&&v&&!Object.keys(v).length);}
+function _sisLineas(o,ind){
+  var out=[],pre=new Array(ind+1).join('  ');
+  Object.keys(o).forEach(function(k){
+    var v=o[k];
+    if(_SIS_OMITIR[k]||_sisVacio(v))return;
+    if(Array.isArray(v)){
+      if(v.every(function(x){return typeof x!=='object';})){out.push(pre+k+': '+v.map(_sisTexto).join(', '));return;}
+      out.push(pre+k+':');
+      v.forEach(function(x,i){if(x&&typeof x==='object'){out.push(pre+'  ['+(i+1)+']');out=out.concat(_sisLineas(x,ind+2));}else out.push(pre+'  - '+_sisTexto(x));});
+    }else if(typeof v==='object'){out.push(pre+k+':');out=out.concat(_sisLineas(v,ind+1));}
+    else out.push(pre+k+': '+_sisTexto(v));
+  });
+  return out;
+}
+function _sisTabla(t,pid){
+  var filas=_sisLimpio(_cTbl(t,pid)).sort(function(a,b){return String(a.fecha||a.date||a.timestamp||'').localeCompare(String(b.fecha||b.date||b.timestamp||''));});
+  var c=['','===== '+(_TBL_NOMBRE[t]||t).toUpperCase()+' ('+filas.length+') ====='];
+  filas.forEach(function(r,i){c.push('');c.push((i+1)+') '+String(r.fecha||r.date||r.timestamp||'').slice(0,10)+' - '+_tituloReg(r));c=c.concat(_sisLineas(r,1));});
+  return c.join(_SIS_NL);
+}
+function _sisListaFotosDrive(pid,tablas){
+  var ids={},sub={};(JSON.stringify(tablas).match(/\[foto:[^\]]+\]/g)||[]).forEach(function(m){ids[m.slice(6,-1)]=1;});
+  Object.keys(ids).forEach(function(id){if(D.fotosDrive&&D.fotosDrive[id])sub[id]=D.fotosDrive[id];});
+  return sub;
+}
+async function _sisListar(pid){
+  var q="appProperties has { key='ocSisObra' and value='"+pid+"' } and trashed=false",mapa={};
+  var j=await _respGet('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(q)+'&fields=files(id,name,appProperties)&pageSize=200&orderBy=createdTime');
+  (j.files||[]).forEach(function(f){var c=f.appProperties&&f.appProperties.ocSis;if(c&&!mapa[c])mapa[c]=f;});
+  return mapa;
+}
+async function _sisEscribir(mapa,pid,clave,carpeta,nombre,contenido,mime){
+  var cuerpo=(mime==='text/plain'?_SIS_BOM:'')+contenido,ct=mime+';charset=utf-8',ex=mapa[clave],r;
+  if(ex){
+    r=await fetchWithTimeout('https://www.googleapis.com/upload/drive/v3/files/'+ex.id+'?uploadType=media',{method:'PATCH',headers:{Authorization:'Bearer '+GD.accessToken,'Content-Type':ct},body:cuerpo},60000);
+    if(!r.ok)throw new Error('Drive '+r.status+' al escribir '+nombre);
+    if(ex.name!==nombre){await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/'+ex.id,{method:'PATCH',headers:driveHeaders(),body:JSON.stringify({name:nombre})});ex.name=nombre;}
+    return ex.id;
+  }
+  var form=new FormData();
+  form.append('metadata',new Blob([JSON.stringify({name:nombre,parents:[carpeta],mimeType:mime,appProperties:{ocSis:clave,ocSisObra:pid}})],{type:'application/json'}));
+  form.append('file',new Blob([cuerpo],{type:ct}));
+  r=await fetchWithTimeout('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{method:'POST',headers:{Authorization:'Bearer '+GD.accessToken},body:form},60000);
+  if(!r.ok)throw new Error('Drive '+r.status+' al crear '+nombre);
+  var nuevo=await r.json();
+  var id=await _quedarseConUna("appProperties has { key='ocSis' and value='"+clave+"' } and appProperties has { key='ocSisObra' and value='"+pid+"' } and trashed=false",nuevo.id);
+  mapa[clave]={id:id,name:nombre};
+  return id;
+}
+function _sisExt(ct,tit,d){
+  if(d&&d.length>11){
+    if(d[0]===0xFF&&d[1]===0xD8)return 'jpg';if(d[0]===0x89&&d[1]===0x50)return 'png';if(d[0]===0x25&&d[1]===0x50&&d[2]===0x44)return 'pdf';
+    if(d[0]===0x52&&d[1]===0x49&&d[8]===0x57&&d[9]===0x45)return 'webp';if(d[4]===0x66&&d[5]===0x74&&d[6]===0x79&&d[7]===0x70)return 'mp4';
+  }
+  var m=/\.([A-Za-z0-9]{2,5})$/.exec(tit||'');if(m)return m[1].toLowerCase();
+  return ({'image/jpeg':'jpg','image/png':'png','image/webp':'webp','image/gif':'gif','application/pdf':'pdf','video/mp4':'mp4','video/quicktime':'mov'})[String(ct||'').split(';')[0]]||'bin';
+}
+async function _sisZip(p,nom,carpeta,mapa,reg,manual,tot){
+  var pid=p.id,refs=_respReferencias(pid).filter(function(r){return r.tbl!=='enlaces';});
+  try{(await _foListar(pid,manual)).forEach(function(f){refs.push({id:f.id,mod:DRIVE_MODULE_FOLDERS.fotos,tbl:'fotos',fecha:_foDia(f),titulo:f.name,size:+f.size||0});});}catch(e){console.warn('zip fotos whatsapp',e);}
+  // Si la obra cambió de nombre, el ZIP se renombra aunque las fotos sean las mismas
+  var _nz=nom+' - FOTOS Y ARCHIVOS.zip';
+  if(mapa.zip&&mapa.zip.name!==_nz){await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/'+mapa.zip.id,{method:'PATCH',headers:driveHeaders(),body:JSON.stringify({name:_nz})});mapa.zip.name=_nz;}
+  var firma=_h32(refs.map(function(r){return r.id;}).sort().join(','));
+  // La marca viaja en el propio ZIP: otro equipo sabe que ya está al día y no lo rearma
+  var _zHecha=reg.z||(mapa.zip&&mapa.zip.appProperties&&mapa.zip.appProperties.ocFirma)||'';
+  if(!refs.length||(_zHecha===firma&&mapa.zip))return;
+  if(!manual&&(_nombreEquipo()!=='computadora'||(reg.zt&&Date.now()-reg.zt<6*3600000)))return;
+  var entradas=[],faltan=[],acum=0,TOPE=600*1048576,TOPE_UNO=200*1048576;
+  for(var i=0;i<refs.length;i++){
+    var rf=refs[i];
+    if(manual&&i%5===0)toast(nom+': juntando fotos '+(i+1)+'/'+refs.length+'…','var(--blue)',1800);
+    if(rf.size>TOPE_UNO||acum+rf.size>TOPE){faltan.push(rf.mod+' - '+rf.titulo+' (muy pesado para el ZIP) - https://drive.google.com/file/d/'+rf.id+'/view');continue;}
+    try{
+      var rr=await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/'+rf.id+'?alt=media',{headers:_foAut()},180000);
+      if(!rr.ok){faltan.push(rf.mod+' - '+rf.fecha+' - '+rf.titulo+' (la app no tiene permiso sobre este archivo; el original está en Drive) - https://drive.google.com/file/d/'+rf.id+'/view');continue;}
+      var datos=new Uint8Array(await rr.arrayBuffer());acum+=datos.length;
+      if(acum>TOPE){acum-=datos.length;faltan.push(rf.mod+' - '+rf.titulo+' (no entró en el ZIP) - https://drive.google.com/file/d/'+rf.id+'/view');continue;}
+      var base=_respLimpio((rf.fecha?rf.fecha+' - ':'')+rf.titulo).replace(/\.[A-Za-z0-9]{2,5}$/,'');
+      entradas.push({nombre:_respLimpio(rf.mod)+'/'+base+' - '+rf.id.slice(0,6)+'.'+_sisExt(rr.headers.get('Content-Type'),rf.titulo,datos),datos:datos});
+    }catch(e){faltan.push(rf.mod+' - '+rf.titulo+' (error al bajarla: se reintenta) - https://drive.google.com/file/d/'+rf.id+'/view');}
+  }
+  entradas.unshift({nombre:'INDICE.txt',datos:_u8Texto(_SIS_BOM+'FOTOS Y ARCHIVOS - '+nom+_SIS_NL+'Generado: '+new Date().toLocaleString('es-AR')+_SIS_NL+'Incluidos: '+(entradas.length)+' de '+refs.length+_SIS_NL+_SIS_NL+(faltan.length?'NO INCLUIDOS:'+_SIS_NL+faltan.join(_SIS_NL):'Están todos.'))});
+  var blob=_zipCrear(entradas),nombre=nom+' - FOTOS Y ARCHIVOS.zip',ex=mapa.zip;
+  if(ex)await _foSubir(FO_UP+'/'+ex.id+'?uploadType=resumable&fields=id','PATCH',{name:nombre,appProperties:{ocFirma:firma}},blob,'application/zip');
+  else{var f=await _foSubir(FO_UP+'?uploadType=resumable&fields=id','POST',{name:nombre,parents:[carpeta],mimeType:'application/zip',appProperties:{ocSis:'zip',ocSisObra:pid,ocFirma:firma}},blob,'application/zip');mapa.zip={id:f.id,name:nombre};}
+  reg.z=faltan.some(function(x){return x.indexOf('error al bajarla')>=0;})?'':firma;reg.zt=Date.now();
+  tot.zips++;tot.faltan+=faltan.length;
+}
+async function _sisActualizar(manual){
+  if(!GD.accessToken||!GD.online){if(manual)toast('Conectá Drive para actualizar las carpetas','var(--orange)',4000);return null;}
+  if(GD._sisCorriendo){if(manual)toast('Ya se están actualizando las carpetas…','var(--blue)',3000);return null;}
+  GD._sisCorriendo=true;
+  var tot={obras:0,archivos:0,zips:0,faltan:0,errores:0};
+  try{
+    var firmas={};try{firmas=JSON.parse(localStorage.getItem('oc_sis_firmas')||'{}')||{};}catch(_){firmas={};}
+    if(!GD._sisNom)GD._sisNom={};
+    var obras=(D.projects||[]).filter(function(p){return p&&p.id;});
+    for(var i=0;i<obras.length;i++){
+      var p=obras[i],pid=p.id,nom=_respLimpio(String(p.name||'Obra').toUpperCase()),reg=firmas[pid]||{tabs:{}};
+      try{
+        var tablas={};_respTablas().forEach(function(t){var f=_cTbl(t,pid);if(f.length)tablas[t]=f;});
+        var limpio=_sisLimpio({p:p,t:tablas}),fObra=_h32(JSON.stringify(limpio));
+        var cambio=manual||reg.f!==fObra;
+        if(cambio){
+          if(manual)toast('Carpetas: '+nom+' ('+(i+1)+'/'+obras.length+')…','var(--blue)',2200);
+        }
+        await ensureFolders(pid);
+        var carpeta=GD.obraFolders[pid];if(!carpeta)throw new Error('no pude confirmar la carpeta de la obra');
+        if(GD._sisNom[pid]!==p.name){
+          // La obra cambió de nombre con la app abierta: se renombra su misma carpeta
+          var _esp=String(p.name||'').toUpperCase().replace(/[<>:"/\|?*]/g,'_');
+          var _mf=await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/'+carpeta+'?fields=name',{headers:driveHeaders()});
+          if(_mf.ok&&(await _mf.json()).name!==_esp)await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/'+carpeta,{method:'PATCH',headers:driveHeaders(),body:JSON.stringify({name:_esp})});
+          GD._sisNom[pid]=p.name;
+        }
+        var mapa=await _sisListar(pid);
+        if(cambio){
+          var obraJ={formato:'obracontrol',version:2,generado:nw(),app:'ObraControl Pro',origen:'SISTEMA_GESTION_OBRAS',project:limpio.p,tablas:limpio.t,fotos:{},archivos:{},fotosDrive:_sisListaFotosDrive(pid,limpio.t)};
+          await _sisEscribir(mapa,pid,'json',carpeta,nom+' - DATOS PARA IMPORTAR.json',JSON.stringify(obraJ),'application/json');tot.archivos++;
+          var prev=S.proj,res='';try{S.proj=pid;res=buildLogContent();}catch(_){res='';}finally{S.proj=prev;}
+          var cab='TODA LA INFORMACION - '+nom+_SIS_NL+'Actualizado: '+new Date().toLocaleString('es-AR')+_SIS_NL+_SIS_NL+'===== DATOS DE LA OBRA ====='+_SIS_NL+_sisLineas(limpio.p,0).join(_SIS_NL)+_SIS_NL+_SIS_NL+res+_SIS_NL;
+          var usadas={},cuerpoTabs=[];
+          for(const tab of Object.keys(_SIS_TABS)){
+            var txt=_SIS_TABS[tab].map(function(t){usadas[t]=1;return _sisTabla(t,pid);}).join(_SIS_NL);
+            cuerpoTabs.push(txt);
+            var hT=_h32(txt);
+            if(manual||reg.tabs[tab]!==hT||!mapa['tab_'+tab]){
+              var cTab=GD.moduleFolders[pid+'_'+tab];
+              if(cTab){await _sisEscribir(mapa,pid,'tab_'+tab,cTab,'INFORMACION - '+DRIVE_MODULE_FOLDERS[tab].replace(/^[^A-Za-zÁÉÍÓÚÑáéíóúñ]+/,'')+'.txt','INFORMACION - '+nom+_SIS_NL+'Actualizado: '+new Date().toLocaleString('es-AR')+_SIS_NL+txt,'text/plain');reg.tabs[tab]=hT;tot.archivos++;}
+            }
+          }
+          Object.keys(tablas).forEach(function(t){if(!usadas[t])cuerpoTabs.push(_sisTabla(t,pid));});
+          await _sisEscribir(mapa,pid,'txt',carpeta,nom+' - TODA LA INFORMACION.txt',cab+cuerpoTabs.join(_SIS_NL),'text/plain');tot.archivos++;
+          reg.f=fObra;tot.obras++;
+          firmas[pid]=reg;try{localStorage.setItem('oc_sis_firmas',JSON.stringify(firmas));}catch(_){}
+        }
+        await _sisZip(p,nom,carpeta,mapa,reg,manual,tot);
+        firmas[pid]=reg;try{localStorage.setItem('oc_sis_firmas',JSON.stringify(firmas));}catch(_){}
+      }catch(e){console.warn('carpetas '+nom+':',e);tot.errores++;}
+    }
+    if(manual)toast('Carpetas al día ✓ · '+tot.obras+' obras · '+tot.zips+' ZIP'+(tot.faltan?' · '+tot.faltan+' archivos sin incluir (ver INDICE)':'')+(tot.errores?' · '+tot.errores+' con error (se reintenta)':''),tot.errores?'var(--orange)':'var(--green)',7000);
+    return tot;
+  }finally{GD._sisCorriendo=false;}
+}
+function _programarSistema(){
+  if(GD._sisT)return;
+  GD._sisT=setTimeout(function(){GD._sisT=null;if(GD.accessToken&&GD.online)_sisActualizar(false).catch(function(e){console.warn('carpetas:',e);});},30000);
 }
 async function _respaldoOrdenado(manual){
   if(!GD.accessToken||!GD.online){if(manual)toast('Conectá Drive para actualizar el respaldo','var(--orange)',4000);return null;}
@@ -4967,7 +5143,7 @@ function renderShell(){
   if(!window._vencAvisado[S.proj]){window._vencAvisado[S.proj]=1;var _vv=_notasVenc();if(_vv.length){var _vN=_vv.filter(function(x){return x.d<0;}).length;setTimeout(function(){toast('⏰ '+(_vN?_vN+' tarea'+(_vN>1?'s':'')+' vencida'+(_vN>1?'s':''):'')+(_vN&&_vv.length>_vN?' y ':'')+(_vv.length>_vN?(_vv.length-_vN)+' por vencer':'')+' — mirá Notas','var(--orange)',5000);},900);}}
   const drv=D.driveConfig?.[S.proj];const cloudCol=drv?'var(--green)':'var(--pri)';
   const _pendAlerts=pA.filter(a=>!a.resolved).length; // mantener badge en tareas si hay alertas legacy
-  const mods=[{id:'dashboard',label:'Panel',ic:'dash'},{id:'visitas',label:'Visitas',ic:'clip'},{id:'notas',label:'Notas',ic:'nota',badge:_nNotasMsg+_nNotasVen},{id:'materiales',label:'Materiales',ic:'pkg'},{id:'checklist',label:'Checklist',ic:'chklist'},{id:'documentos',label:'Documentos',ic:'file'},{id:'fotos',label:'Fotos WhatsApp',ic:'cam'},{id:'colaboradores',label:'Colaboradores',ic:'share'},{id:'bandeja',label:'Bandeja',ic:'inbox',badge:pendForms+pendCarpeta+pendMsgsColab+_nAlert},{id:'economia',label:'Economía',ic:'eco'},{id:'informes',label:'Informes',ic:'dl'},{id:'config',label:'Config',ic:'gear'}];
+  const _bdg={notas:_nNotasMsg+_nNotasVen,bandeja:pendForms+pendCarpeta+pendMsgsColab+_nAlert};const mods=_PESTANAS_APP.map(function(m){return _bdg[m.id]!==undefined?Object.assign({},m,{badge:_bdg[m.id]}):m;});
   const mi=mods.map(m=>{const c=MC[m.id];const act=S.mod===m.id;return `<button class="smi${act?' act':''}" style="${act?'background:'+c+'08;color:'+c+';border-left-color:'+c:''}" onclick="S.mod='${m.id}';S.menu=false;S.visitaDetail=null;S.matDetail=null;S.matSinCompDetail=null;render();"><span style="color:${act?c:'var(--text3)'}">${I[m.ic]||''}</span><span style="flex:1;text-align:left">${m.label}</span>${m.badge>0?`<span class="sbadge">${m.badge}</span>`:''}</button>`;}).join('');
   const allBnav=[
     {id:'dashboard',ic:'dash',l:'Panel'},
@@ -5374,6 +5550,7 @@ function showDrivePanel() {
     '<div style="border-top:1px solid #f1f5f9;padding-top:10px;display:flex;flex-direction:column;gap:6px">' +
       (GD.accessToken?'<button class="btn btn-s" style="background:#ecfdf5;color:#047857;border:1px solid #a7f3d0" onclick="_respaldoOrdenado(true)">\ud83d\udce6 Actualizar respaldo ordenado</button>' +
       '<button class="btn btn-s" style="background:#ecfdf5;color:#047857;border:1px solid #a7f3d0" onclick="abrirRespaldoOrdenado()">\ud83d\udcc2 Ver respaldo ordenado en Drive</button>':'') +
+      (GD.accessToken?'<button class="btn btn-s" style="background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;white-space:normal;line-height:1.3" onclick="_sisActualizar(true)">🗂️ Actualizar ya: JSON, TXT y ZIP de cada obra</button>':'') +
       '<button class="btn btn-sec btn-s" id="drvBackupBtn">\ud83d\udce6 Backup local</button>' +
       '<button class="btn btn-sec btn-s" id="drvDlBtn">\ud83d\udcbe Descargar JSON</button>' +
       discBtn +
@@ -11559,8 +11736,8 @@ function deleteProj(){
   addTombstone('projects',id);
   // Tombstone every related record so they don't come back either
   ['visitas','tareas','materiales','matIngresos','alertas','documentos','enlaces','checklists','comentarios','colaboradores','economia','formulariosPendientes','carpetas','notas','cuadernosNotas','mensajesColab'].forEach(function(tbl){
-    (D[tbl]||[]).filter(function(x){return x.projectId===id;}).forEach(function(x){addTombstone(tbl,x.id);});
-    D[tbl]=(D[tbl]||[]).filter(function(x){return x.projectId!==id;});
+    (D[tbl]||[]).filter(function(x){return _obraDeReg(x)===id;}).forEach(function(x){addTombstone(tbl,x.id);});
+    D[tbl]=(D[tbl]||[]).filter(function(x){return _obraDeReg(x)!==id;});
   });
   }finally{GD._elimEnLote=false;}
   D.projects=D.projects.filter(function(p){return p.id!==id;});
@@ -11715,7 +11892,8 @@ async function _zipLeer(buf){
 
 // ── Datos de una obra ──
 var _CIERRE_TABLAS=['visitas','tareas','materiales','matIngresos','alertas','checklists','documentos','enlaces','comentarios','colaboradores','economia','chkHistorial','carpetas','formulariosPendientes','auditLog'];
-function _cTbl(tbl,pid){return (D[tbl]||[]).filter(function(x){return x&&x.projectId===pid;});}
+function _obraDeReg(x){return (x&&(x.projectId||x.proyectoId||x.obraId))||'';}
+function _cTbl(tbl,pid){return (D[tbl]||[]).filter(function(x){return x&&_obraDeReg(x)===pid;});}
 function _cUrlFoto(ph){return typeof ph==='string'?ph:((ph&&ph.url)||'');}
 function _cDriveId(u){return (u&&u.indexOf('drive.google.com')>=0)?((u.match(/[?&]id=([^&]+)/)||u.match(/\/d\/([^/?]+)/)||[])[1]||null):null;}
 // Cada foto y archivo de la obra, con dónde está referenciado.
@@ -12308,12 +12486,13 @@ async function _cierreRestaurar(obra,zip,reabrir){
     Object.keys(tablas).forEach(function(t){
       if(!Array.isArray(D[t]))D[t]=[];
       (tablas[t]||[]).forEach(function(r){
-        if(!r||!r.id)return;r.projectId=pid;
+        if(!r||!r.id)return;if(!r.proyectoId&&!r.obraId)r.projectId=pid;
         var i=D[t].findIndex(function(x){return x.id===r.id;});
         if(i<0){D[t].push(r);cuenta++;}
         else if(nuevo(r,D[t][i])){D[t][i]=r;cuenta++;}
       });
     });
+    if(obra.fotosDrive){try{_aplicarFotosDrive(obra.fotosDrive);}catch(_){}}
     var fotosOk=0;
     if(zip&&obra.fotos){
       for(var ref in obra.fotos){
