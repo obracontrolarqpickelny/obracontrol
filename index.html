@@ -18270,52 +18270,136 @@ function _foOverlay(html){
 }
 function _foCerrar(){var ov=$('foOv');if(ov)ov.remove();_foUrls.forEach(function(u){try{URL.revokeObjectURL(u);}catch(_){}});_foUrls=[];}
 function _foCuenta(items){var v=items.filter(function(x){return /^video\//.test(_foMime(x.nombre,x.tipo));}).length,f=items.length-v,t=[];if(f)t.push(f+(f===1?' foto':' fotos'));if(v)t.push(v+(v===1?' video':' videos'));return t.join(' y ')||'0 archivos';}
+var _foPick=null,_foPospuesta='',_foHechos=0,_foSubiendo=false;
+function _foMini(x,url){
+  return url?'<img src="'+url+'" loading="lazy" decoding="async" style="width:58px;height:58px;object-fit:cover;border-radius:8px;display:block">'
+    :'<div style="width:58px;height:58px;border-radius:8px;background:#1e293b;color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px">&#9654;</div>';
+}
+function _foUrlDe(x){
+  if(!/^image\//.test(_foMime(x.nombre,x.tipo)))return '';
+  var u=URL.createObjectURL(x.archivo);_foUrls.push(u);return u;
+}
 async function _foMostrarElegir(items,prefer){
   items.sort(function(a,b){return (_foSecuencia(a.nombre)-_foSecuencia(b.nombre))||(a.orden-b.orden);});
   var ultima=await _foLeerMeta('ultimaObra');
   var obras=(D.projects||[]).filter(function(p){return !p.cerrada;}).slice();
   var peso=function(p){return p.id===prefer?0:p.id===ultima?1:2;};
   obras.sort(function(a,b){return peso(a)-peso(b);});
-  var fechas={},sinFecha=0;
-  items.forEach(function(x){var n=_foFechaDe(x);if(n)fechas[n.fecha]=1;else{sinFecha++;fechas[_foHoyDe(x.recibido)]=1;}});
-  var lista=Object.keys(fechas).sort(),unica=lista.length===1?lista[0]:'';
   _foUrls.forEach(function(u){try{URL.revokeObjectURL(u);}catch(_){}});_foUrls=[];
-  var mini=items.slice(0,8).map(function(x){
-    if(/^image\//.test(_foMime(x.nombre,x.tipo))){var u=URL.createObjectURL(x.archivo);_foUrls.push(u);return '<img src="'+u+'" style="width:54px;height:54px;object-fit:cover;border-radius:8px;flex:none">';}
-    return '<div style="width:54px;height:54px;border-radius:8px;flex:none;background:#1e293b;color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px">&#9654;</div>';
-  }).join('');
-  var aviso=sinFecha?'<div class="txxs" style="color:var(--orange);margin-top:6px">No vino la fecha de '+(sinFecha===items.length?'estos archivos':sinFecha+' de estos archivos')+'. Se usa la de hoy: cambiala si llegaron otro día.</div>':'';
-  var btn=obras.map(function(p){return '<button class="btn btn-g btn-w" style="justify-content:flex-start;padding:13px 14px;font-size:14px;font-weight:700;margin-bottom:8px;text-align:left;background:var(--white);border:1px solid var(--brd)" onclick="_foElegir(\''+p.id+'\')">'+(p.geo?'&#128205; ':'')+esc(p.name)+'</button>';}).join('')||'<div class="ts tc3">No hay obras activas.</div>';
-  _foOverlay('<div class="mo-h"><h3>Guardar '+_foCuenta(items)+'</h3><button class="tbtn" onclick="_foDescartar()">'+I.x+'</button></div>'
-    +'<div style="display:flex;gap:6px;overflow-x:auto;margin-bottom:12px">'+mini+'</div>'
-    +'<label class="ts" style="display:block;font-weight:700;margin-bottom:4px">'+(unica?'Fecha en que llegaron':'Llegaron entre el '+_foFechaTxt(lista[0])+' y el '+_foFechaTxt(lista[lista.length-1])+'. Para ponerles a todas la misma fecha:')+'</label>'
-    +'<input id="foFecha" class="fi" type="date" value="'+unica+'">'+aviso
-    +'<div class="ts" style="font-weight:700;margin:14px 0 8px">Tocá la obra</div>'+btn);
+  var fechas={},sinF={},dias={},urls={};
+  items.forEach(function(x){
+    var n=_foFechaDe(x);
+    fechas[x.id]=n?n.fecha:_foHoyDe(x.recibido);if(!n)sinF[x.id]=1;
+    dias[fechas[x.id]]=1;urls[x.id]=_foUrlDe(x);
+  });
+  var lista=Object.keys(dias).sort(),unico=lista.length===1;
+  _foPick={items:items,fechas:fechas,sinF:sinF,urls:urls,sel:{},modo:unico?'uno':'dias',uno:unico?lista[0]:_foHoyDe(Date.now()),obra:(prefer&&obras.some(function(p){return p.id===prefer;}))?prefer:null};
+  var btn=obras.map(function(p){return '<button class="btn btn-g btn-w fo-obra" data-pid="'+p.id+'" style="justify-content:flex-start;padding:13px 14px;font-size:14px;font-weight:700;margin-bottom:8px;text-align:left;background:var(--white);border:1px solid var(--brd)" onclick="_foMarcarObra(\''+p.id+'\')">'+(p.geo?'&#128205; ':'')+esc(p.name)+'</button>';}).join('')||'<div class="ts tc3">No hay obras activas.</div>';
+  _foOverlay('<div class="mo-h"><h3>Guardar '+_foCuenta(items)+'</h3><button class="tbtn" onclick="_foPedirCerrar()">'+I.x+'</button></div>'
+    +'<div id="foFechasBox"></div>'
+    +'<div class="ts" style="font-weight:700;margin:14px 0 8px">Elegí la obra</div>'+btn
+    +'<div style="position:sticky;bottom:-20px;background:var(--white);padding:10px 0 12px;margin-top:6px;display:flex;gap:8px"><button class="btn btn-sec" style="flex:1" onclick="_foPedirCerrar()">Cerrar</button><button id="foGuardar" class="btn btn-p" style="flex:2" onclick="_foGuardarElegidos()">Guardar</button></div>');
   var ovE=$('foOv');if(ovE)ovE.setAttribute('data-firma',_foFirma(items));
-  window._foFechaInicial=unica;
+  _foPintarFechas();_foPintarObra();
+}
+function _foPintarObra(){
+  var P=_foPick;if(!P)return;
+  document.querySelectorAll('#foOv .fo-obra').forEach(function(b){
+    var si=b.getAttribute('data-pid')===P.obra;
+    b.style.background=si?'#FEF3C7':'var(--white)';b.style.borderColor=si?'#D97706':'var(--brd)';b.style.color=si?'#92400E':'';
+  });
+  var g=document.getElementById('foGuardar');if(g)g.style.opacity=P.obra?'1':'.55';
+}
+function _foMarcarObra(pid){if(_foPick){_foPick.obra=pid;_foPintarObra();}}
+function _foModo(m){if(_foPick){_foPick.modo=m;_foPick.sel={};_foPintarFechas();}}
+function _foPintarFechas(){
+  var P=_foPick,box=document.getElementById('foFechasBox');if(!P||!box)return;
+  var tab=function(m,t){var si=P.modo===m;return '<button class="btn btn-s" style="flex:1;font-weight:700;background:'+(si?'#D97706':'var(--gray-ll)')+';color:'+(si?'#fff':'var(--text2)')+'" onclick="_foModo(\''+m+'\')">'+t+'</button>';};
+  var nSin=P.items.filter(function(x){return P.sinF[x.id];}).length;
+  var h='<div style="display:flex;gap:6px;margin-bottom:10px">'+tab('uno','Todas el mismo día')+tab('dias','Un día para cada una')+'</div>';
+  if(P.modo==='uno'){
+    h+='<div style="display:flex;gap:6px;overflow-x:auto;margin-bottom:10px">'+P.items.map(function(x){return '<div style="flex:none">'+_foMini(x,P.urls[x.id])+'</div>';}).join('')+'</div>'
+      +'<label class="ts" style="display:block;font-weight:700;margin-bottom:4px">Fecha de todas</label><input id="foFechaUna" class="fi" type="date" value="'+P.uno+'" onchange="if(_foPick)_foPick.uno=this.value">';
+  }else{
+    var grupos={};P.items.forEach(function(x,i){var f=P.fechas[x.id];(grupos[f]=grupos[f]||[]).push(i);});
+    h+='<div class="txxs tc3" style="margin-bottom:8px">Están agrupadas por el día en que llegaron. Cambiá la fecha de un grupo, o tocá miniaturas para elegir algunas y pasarlas a otro día.</div>'
+      +(nSin?'<div class="txxs" style="color:var(--orange);margin-bottom:8px">Las marcadas con ? no traían fecha: se les puso la de hoy.</div>':'');
+    h+='<div id="foSelBar" style="display:none;position:sticky;top:-20px;z-index:2;background:#FEF3C7;border:1px solid #D97706;border-radius:10px;padding:8px;margin-bottom:8px"><div class="ts" style="font-weight:700;margin-bottom:4px"><span id="foSelN"></span> · pasarlas al día:</div><div style="display:flex;gap:6px;align-items:center"><input id="foSelFecha" class="fi" type="date" style="flex:1;margin:0" onchange="_foMoverSel(this.value)"><button class="btn btn-sec btn-s" onclick="_foQuitarSel()">Quitar</button></div></div>';
+    Object.keys(grupos).sort().forEach(function(f){
+      h+='<div style="border:1px solid var(--brd);border-radius:10px;padding:8px;margin-bottom:8px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap"><b class="ts">'+_foFechaTxt(f)+'</b><span class="txxs tc3">'+grupos[f].length+(grupos[f].length===1?' archivo':' archivos')+'</span><input class="fi" type="date" value="'+f+'" style="flex:1;min-width:130px;margin:0" onchange="_foMoverGrupo(\''+f+'\',this.value)"></div>'
+        +'<div style="display:flex;flex-wrap:wrap;gap:6px">'+grupos[f].map(function(i){var x=P.items[i];return '<div id="foT'+i+'" style="position:relative;border-radius:10px;cursor:pointer" onclick="_foElegirMini('+i+')">'+_foMini(x,P.urls[x.id])+(P.sinF[x.id]?'<div style="position:absolute;top:2px;left:2px;background:var(--orange);color:#fff;border-radius:8px;font-size:10px;font-weight:800;padding:0 5px">?</div>':'')+'<div id="foC'+i+'" style="display:none;position:absolute;top:2px;right:2px;background:#D97706;color:#fff;border-radius:50%;width:18px;height:18px;text-align:center;font-size:12px;line-height:18px">&#10003;</div></div>';}).join('')+'</div></div>';
+    });
+  }
+  box.innerHTML=h;
+}
+function _foElegirMini(i){
+  var P=_foPick;if(!P)return;var x=P.items[i];
+  if(P.sel[x.id])delete P.sel[x.id];else P.sel[x.id]=1;
+  var c=document.getElementById('foC'+i),t=document.getElementById('foT'+i);
+  if(c)c.style.display=P.sel[x.id]?'block':'none';
+  if(t)t.style.outline=P.sel[x.id]?'3px solid #D97706':'none';
+  var n=Object.keys(P.sel).length,b=document.getElementById('foSelBar');
+  if(b){b.style.display=n?'block':'none';var e=document.getElementById('foSelN');if(e)e.textContent=n+(n===1?' elegida':' elegidas');}
+}
+function _foMoverGrupo(de,a){var P=_foPick;if(!P||!a||a===de)return;Object.keys(P.fechas).forEach(function(k){if(P.fechas[k]===de){P.fechas[k]=a;delete P.sinF[k];}});P.sel={};_foPintarFechas();}
+function _foMoverSel(a){var P=_foPick;if(!P||!a)return;Object.keys(P.sel).forEach(function(k){P.fechas[k]=a;delete P.sinF[k];});P.sel={};_foPintarFechas();}
+function _foQuitarSel(){if(_foPick){_foPick.sel={};_foPintarFechas();}}
+function _foDialogo(html){
+  var d=document.getElementById('foDlg');if(d)d.remove();
+  d=document.createElement('div');d.id='foDlg';
+  d.style.cssText='position:fixed;inset:0;z-index:1600;background:rgba(15,23,42,.5);display:flex;align-items:center;justify-content:center;padding:18px';
+  d.innerHTML='<div style="background:var(--white);border-radius:14px;padding:18px;width:100%;max-width:400px">'+html+'</div>';
+  document.body.appendChild(d);
+}
+function _foCerrarDlg(){var d=document.getElementById('foDlg');if(d)d.remove();}
+function _foPedirCerrar(){
+  var n=_foPick?_foPick.items.length:0;
+  _foDialogo('<div style="font-size:15px;font-weight:800;margin-bottom:6px">Todavía no las guardaste</div><div class="ts" style="margin-bottom:12px">Estos '+n+' archivos no están en ninguna obra.</div>'
+    +'<button class="btn btn-p btn-w mb-8" onclick="_foCerrarDlg()">Seguir eligiendo</button>'
+    +'<button class="btn btn-sec btn-w mb-8" onclick="_foMasTarde()">Terminar más tarde</button>'
+    +'<button class="btn btn-g btn-w" style="color:var(--red)" onclick="_foDescartar()">Descartar</button>');
+}
+function _foMasTarde(){
+  _foCerrarDlg();
+  if(_foPick)_foPospuesta=_foFirma(_foPick.items);
+  _foPick=null;_foCerrar();
+  toast('Quedan guardadas en este teléfono. Te las muestro de nuevo al abrir la app.','var(--blue)',4500);
+}
+function _foPedirCerrarSubida(){
+  var n=_foTotal-_foHechos;
+  if(!_foSubiendo||n<=0){_foListo();return;}
+  _foDialogo('<div style="font-size:15px;font-weight:800;margin-bottom:6px">Hay '+n+(n===1?' archivo que todavía no terminó':' archivos que todavía no terminaron')+' de subir</div><div class="ts" style="margin-bottom:12px">Se siguen subiendo mientras la app esté abierta. Si la cerrás, continúan cuando la vuelvas a abrir.</div>'
+    +'<button class="btn btn-p btn-w mb-8" onclick="_foCerrarDlg()">Seguir viendo</button>'
+    +'<button class="btn btn-sec btn-w" onclick="_foCerrarDlg();_foCerrar();toast(\'Se siguen subiendo…\',\'var(--blue)\',3000)">Cerrar</button>');
 }
 async function _foDescartar(){
+  _foCerrarDlg();
   if(!confirm('¿Descartar estos archivos? Las fotos siguen en WhatsApp.'))return;
   var cola=await _foCola();
   for(var i=0;i<cola.length;i++)if(!cola[i].pid)await _foSacarCola(cola[i].id);
-  _foCerrar();
+  _foPick=null;_foCerrar();
 }
-async function _foElegir(pid){
+async function _foGuardarElegidos(){
+  var P=_foPick;if(!P)return;
+  if(!P.obra){toast('Tocá la obra donde guardarlas','var(--orange)',2800);return;}
+  var uno=P.modo==='uno';
+  if(uno){var inpU=document.getElementById('foFechaUna');if(inpU&&inpU.value)P.uno=inpU.value;}
+  if(uno&&!P.uno){toast('Elegí la fecha','var(--orange)',2800);return;}
   if(_foEligiendo)return;
   _foEligiendo=true;
   try{
-    var inp=$('foFecha'),valor=inp?inp.value:'',cambio=!!valor&&valor!==window._foFechaInicial;
+    var pid=P.obra;
     _foOverlay('<div class="ts tac" style="padding:18px">Preparando…</div>');
     var conectado=await _foAuth();
-    var cola=(await _foCola()).filter(function(x){return !x.pid;});
+    var cola=(await _foCola()).filter(function(x){return !x.pid&&P.fechas[x.id]!==undefined;});
     for(var i=0;i<cola.length;i++){
-      var it=cola[i],n=_foFechaDe(it);
-      it.pid=pid;
-      it.fecha=cambio?valor:((n&&n.fecha)||valor||_foHoyDe(it.recibido));
-      it.hora=cambio?null:((n&&n.hora)||null);
+      var it=cola[i],n=_foFechaDe(it),f=uno?P.uno:P.fechas[it.id];
+      it.pid=pid;it.fecha=f;
+      it.hora=(n&&n.fecha===f)?(n.hora||null):null;
       await _foPonerCola(it);
     }
     await _foGuardarMeta('ultimaObra',pid);
+    _foPick=null;
     if(!conectado){
       _foOverlay('<div class="ts" style="padding:6px;line-height:1.5"><b>Quedaron guardadas en este teléfono.</b><br>No pude conectarme con Drive. Se suben solas cuando abras la app con Drive conectado.</div><button class="btn btn-p btn-w mt-8" onclick="_foCerrar()">Entendido</button>');
       return;
@@ -18325,33 +18409,45 @@ async function _foElegir(pid){
 }
 function _foProcesar(){if(_foProc)return _foProc;_foProc=_foProcesarImpl().finally(function(){_foProc=null;setTimeout(_foMirarCola,300);});return _foProc;}
 var _foIdx=0,_foTotal=0;
-function _foAvance(fr){var b=$('foBarra');if(b&&_foTotal)b.style.width=Math.round(((_foIdx+(fr||0))/_foTotal)*100)+'%';var t=$('foTxt');if(t)t.textContent='Guardando '+(_foIdx+1)+' de '+_foTotal+'…';}
+function _foAvance(fr){var bi=document.getElementById('foB'+_foIdx),si=document.getElementById('foS'+_foIdx);if(bi){var pc=Math.max(3,Math.round((fr||0)*100));bi.style.width=pc+'%';if(si)si.textContent=pc+'%';}var b=$('foBarra');if(b&&_foTotal)b.style.width=Math.round(((_foIdx+(fr||0))/_foTotal)*100)+'%';var t=$('foTxt');if(t)t.textContent='Guardando '+(_foIdx+1)+' de '+_foTotal+'…';}
 async function _foProcesarImpl(){
   var items=(await _foCola()).filter(function(x){return x.pid;});
   items.sort(function(a,b){return (a.fecha<b.fecha?-1:a.fecha>b.fecha?1:0)||(_foSecuencia(a.nombre)-_foSecuencia(b.nombre))||(a.orden-b.orden);});
   if(!items.length)return;
   var ok=0,rep=0,obras={},ultErr='';
   items.forEach(function(x){obras[x.pid]=1;delete _foCache[x.pid];});
-  _foTotal=items.length;
-  _foOverlay('<div style="padding:8px"><div id="foTxt" class="ts" style="font-weight:700;margin-bottom:10px">Guardando…</div><div style="height:8px;border-radius:6px;background:var(--gray-ll);overflow:hidden"><div id="foBarra" style="height:100%;width:0;background:var(--pri);transition:width .2s"></div></div><div class="txxs tc3" style="margin-top:10px">No cierres la app hasta que termine.</div></div>');
+  _foTotal=items.length;_foHechos=0;_foSubiendo=true;
+  _foUrls.forEach(function(u){try{URL.revokeObjectURL(u);}catch(_){}});_foUrls=[];
+  var grilla=items.map(function(x,i){return '<div style="width:58px"><div style="position:relative">'+_foMini(x,_foUrlDe(x))+'<div id="foS'+i+'" style="position:absolute;left:0;right:0;bottom:3px;text-align:center;color:#fff;font-size:11px;font-weight:800;text-shadow:0 1px 3px #000"></div></div><div style="height:6px;border-radius:4px;background:var(--gray-ll);overflow:hidden;margin-top:3px"><div id="foB'+i+'" style="height:100%;width:0;background:var(--pri);transition:width .2s"></div></div></div>';}).join('');
+  _foOverlay('<div id="foRes" style="padding:4px 2px"><div id="foTxt" class="ts" style="font-weight:700;margin-bottom:10px">Guardando…</div><div style="height:8px;border-radius:6px;background:var(--gray-ll);overflow:hidden"><div id="foBarra" style="height:100%;width:0;background:var(--pri);transition:width .2s"></div></div></div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px">'+grilla+'</div>'
+    +'<div style="position:sticky;bottom:-20px;background:var(--white);padding:10px 0 12px;margin-top:8px"><button id="foCierre" class="btn btn-sec btn-w" onclick="_foPedirCerrarSubida()">Cerrar</button></div>');
+  var marcar=function(i,color,txt){var b=document.getElementById('foB'+i),s=document.getElementById('foS'+i);if(b){b.style.width='100%';b.style.background=color;}if(s)s.textContent=txt;};
   for(var i=0;i<items.length;i++){
     _foIdx=i;_foAvance(0);
     try{
       var r=await _foSubirItem(items[i]);
       await _foSacarCola(items[i].id);
-      if(r==='repetida')rep++;else ok++;
+      if(r==='repetida'){rep++;marcar(i,'var(--gray-l)','ya estaba');}else{ok++;marcar(i,'var(--green)','✓');}
     }catch(e){
       console.error('Foto no subida',items[i].nombre,e);ultErr=e&&e.message||'';
-      if(!navigator.onLine)break;
+      marcar(i,'var(--red)','error');
+      if(!navigator.onLine){_foHechos++;break;}
     }
+    _foHechos++;
   }
+  _foSubiendo=false;
   var fal=items.length-ok-rep,ids=Object.keys(obras);
   var nom=ids.length===1?esc(_foNombreObraVisible(ids[0])):ids.length+' obras';
-  _foOverlay('<div class="tac" style="padding:8px"><div style="font-size:38px">'+(fal?'&#9888;&#65039;':'&#9989;')+'</div>'
-    +'<div style="font-size:15px;font-weight:800;margin:8px 0">'+(ok?ok+(ok===1?' archivo guardado':' archivos guardados')+' en '+nom:'Nada nuevo para guardar')+'</div>'
-    +(rep?'<div class="ts tc3">'+rep+(rep===1?' ya estaba guardado y no se repitió.':' ya estaban guardados y no se repitieron.')+'</div>':'')
-    +(fal?'<div class="ts" style="color:var(--red);margin-top:6px">'+fal+(fal===1?' no se pudo subir':' no se pudieron subir')+' y '+(fal===1?'quedó':'quedaron')+' en este teléfono. Se reintenta al abrir la app.'+(ultErr?'<br><span class="txxs">'+esc(ultErr)+'</span>':'')+'</div>':'')
-    +'<button class="btn btn-p btn-w" style="margin-top:14px" onclick="_foListo()">Listo</button></div>');
+  var titulo=ok?ok+(ok===1?' archivo guardado':' archivos guardados')+' en '+nom:'Nada nuevo para guardar';
+  var res=document.getElementById('foRes');
+  if(res){
+    res.innerHTML='<div class="tac"><div style="font-size:38px">'+(fal?'&#9888;&#65039;':'&#9989;')+'</div><div style="font-size:15px;font-weight:800;margin:8px 0">'+titulo+'</div>'
+      +(rep?'<div class="ts tc3">'+rep+(rep===1?' ya estaba guardado y no se repitió.':' ya estaban guardados y no se repitieron.')+'</div>':'')
+      +(fal?'<div class="ts" style="color:var(--red);margin-top:6px">'+fal+(fal===1?' no se pudo subir':' no se pudieron subir')+' y '+(fal===1?'quedó':'quedaron')+' en este teléfono. Se reintenta al abrir la app.'+(ultErr?'<br><span class="txxs">'+esc(ultErr)+'</span>':'')+'</div>':'')+'</div>';
+    var ci=document.getElementById('foCierre');if(ci){ci.textContent='Listo';ci.className='btn btn-p btn-w';}
+    _foCerrarDlg();
+  }else toast(titulo+(fal?' · '+fal+' sin subir':''),fal?'var(--orange)':'var(--green)',5000);
   if(S.mod==='fotos'&&S.proj&&obras[S.proj])render();
 }
 function _foNombreObraVisible(pid){var p=(D.projects||[]).find(function(x){return x.id===pid;});return p?p.name:'la obra';}
@@ -18369,7 +18465,7 @@ async function _foMirarCola(){
   try{cola=await _foCola();}catch(e){console.warn(e);return;}
   if(_foProc||_foEligiendo)return;
   var sin=cola.filter(function(x){return !x.pid;}),ov=$('foOv');
-  if(sin.length){if(!ov||ov.getAttribute('data-firma')!==_foFirma(sin))_foMostrarElegir(sin);return;}
+  if(sin.length){if(_foFirma(sin)===_foPospuesta)return;if(!ov||ov.getAttribute('data-firma')!==_foFirma(sin))_foMostrarElegir(sin);return;}
   if(cola.length&&!ov)_foRevisar();
 }
 var _foEsperas=[];
@@ -18382,7 +18478,7 @@ async function _foRevisar(prefer){
   var cola;
   try{cola=await _foCola();}catch(e){console.warn(e);return;}
   var sin=cola.filter(function(x){return !x.pid;}),con=cola.filter(function(x){return x.pid;});
-  if(sin.length){_foMostrarElegir(sin,prefer);return;}
+  if(sin.length){if(!prefer&&_foFirma(sin)===_foPospuesta)return;_foMostrarElegir(sin,prefer);return;}
   if(!con.length)return;
   if(_foTokenOk())_foProcesar();
   else _foOverlay('<div class="ts" style="padding:6px;line-height:1.5"><b>'+_foCuenta(con)+' esperando subir a Drive.</b></div><button class="btn btn-p btn-w mt-8" onclick="_foSubirPendientes()">Subir ahora</button><button class="btn btn-g btn-w mt-8" onclick="_foCerrar()">Más tarde</button>');
