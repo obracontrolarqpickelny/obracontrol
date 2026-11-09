@@ -1239,6 +1239,9 @@ async function _saveToDriveImpl() {
         createVersionBackup('diario').then(function(ok){if(!ok)try{localStorage.removeItem(_kBk);}catch(_){}});
       }
     }catch(_){}
+    // Las fotos rescatadas al guardar (informes de colaboradores) entran a la cola
+    // acá adentro: sin esto recién se subían la próxima vez que se abría la app.
+    setTimeout(function(){processPendingImages().catch(function(){});},1500);
     if((D.eliminadosPend||[]).length)setTimeout(function(){_subirEliminados().catch(function(){});},1500);
     if(!GD._recHistHecho){GD._recHistHecho=true;setTimeout(function(){_recuperarHistoricos0611().catch(function(e){console.warn('recuperación históricos:',e);});},8000);}
     if(!GD._rescateHecho){GD._rescateHecho=true;setTimeout(function(){_rescatarCarpetaPGarcia().catch(function(e){console.warn('rescate:',e);});},6000);}
@@ -2402,6 +2405,7 @@ window.addEventListener('beforeunload', () => {
 var _SYNC_EST={
   ok:       {color:'var(--green)', icon:'✓',lbl:'Sincronizado',titulo:'Sincronizado',title:'Sincronizado: todo lo de este equipo ya está en Drive'},
   pendiente:{color:'var(--orange)',icon:'●',lbl:'Pendiente',titulo:'Pendiente de sincronizar',title:'Guardado en este equipo; falta subirlo a Drive (se sube solo en unos segundos)'},
+  fotos:    {color:'var(--orange)',icon:'●',lbl:'Faltan fotos',titulo:'Datos en Drive, faltan fotos por subir',title:'Los datos ya están en Drive, pero hay fotos de este equipo que todavía no subieron'},
   syncing:  {color:'var(--pri)',   icon:'↻',lbl:'Subiendo…',titulo:'Sincronizando…',title:'Sincronizando con Drive…'},
   offline:  {color:'var(--orange)',icon:'⊘',lbl:'Sin conexión',titulo:'Sin conexión — guardado en este equipo',title:'Sin conexión: lo que cargues queda guardado en este equipo y se sube solo al volver la conexión'},
   error:    {color:'var(--red)',   icon:'⚠',lbl:'Error',titulo:'Error al sincronizar',title:'No se pudo guardar en Drive: quedó guardado en este equipo y se reintenta solo'},
@@ -2410,13 +2414,17 @@ var _SYNC_EST={
 try{if(localStorage.getItem('oc_pend_desde'))GD._cambiosSinSubir=true;}catch(_){}
 function _syncEstadoReal(st){
   if(!GD.online&&(st==='ok'||st==='pendiente'||st==='syncing'))return 'offline';
-  return (st==='ok'&&GD._cambiosSinSubir)?'pendiente':st;
+  if(st==='ok'&&GD._cambiosSinSubir)return 'pendiente';
+  if(st==='ok'&&(GD._fotosPend||0)>0)return 'fotos';
+  return st;
 }
 function _syncDotInner(st){
   var c=_SYNC_EST[st]||_SYNC_EST.noauth,nc=_conflictosNuevos();
   // Sin conexión y con cambios sin subir: lo importante es que quedó guardado en el equipo
   var lbl=(st==='offline'&&GD._cambiosSinSubir)?'Guardado local':c.lbl;
+  var fp=GD._fotosPend||0;
   return c.icon+'<span class="sync-lbl">'+lbl+'</span>'
+    +(fp?'<span id="pendingBadge" title="'+fp+' foto(s) pendientes de subir a Drive" style="position:absolute;top:-4px;right:-4px;background:var(--orange);color:#fff;font-size:9px;font-weight:700;border-radius:8px;padding:1px 4px;min-width:14px;text-align:center;pointer-events:none">'+fp+'</span>':'')
     +(nc?'<span id="conflBadge" title="'+nc+' cambio(s) hechos a la vez en dos dispositivos: tocá para revisar" style="position:absolute;top:-6px;left:-3px;background:var(--red);color:#fff;font-size:9px;font-weight:800;border-radius:8px;padding:1px 4px;min-width:14px;text-align:center;pointer-events:none">'+nc+'</span>':'');
 }
 function _syncDotHTML(){
@@ -2442,6 +2450,10 @@ async function updatePendingBadge() {
   try {
     const pending = await idbGetAll('pending');
     const imgPending = (pending || []).filter(p => p.type === 'image').length;
+    if ((GD._fotosPend || 0) !== imgPending) {
+      GD._fotosPend = imgPending;
+      if (GD._syncEst === 'ok' || GD._syncEst === 'fotos') { updateSyncIndicator('ok'); return; }
+    }
     let badge = document.getElementById('pendingBadge');
     if (imgPending > 0) {
       if (!badge) {
@@ -2839,11 +2851,13 @@ function _unirHistoricos(driveData){
 var _BASE={},_baseCargada=false;
 var _BASE_TBLS=['visitas','tareas','materiales','matIngresos','alertas','checklists','documentos','enlaces','comentarios','colaboradores','economia','formulariosPendientes','projects','mensajesColab','carpetas','notas','cuadernosNotas'];
 function _h32(s){var h=0x811c9dc5;for(var i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return (h>>>0).toString(36)+'.'+s.length.toString(36);}
+function _sigReemplazo(k,v){
+  if(k==='updatedAt'||k==='localUrl')return undefined;
+  if(typeof v==='string'&&(v.slice(0,5)==='data:'||v==='[foto-local-no-sincronizada]'))return '~';
+  return v;
+}
 function _sigReg(x){
-  try{return _h32(JSON.stringify(x,function(k,v){
-    if(k==='updatedAt'||k==='localUrl')return undefined;
-    if(typeof v==='string'&&(v.slice(0,5)==='data:'||v==='[foto-local-no-sincronizada]'))return '~';
-    return v;}));}catch(_){return '';}
+  try{return _h32(JSON.stringify(x,_sigReemplazo));}catch(_){return '';}
 }
 async function _cargarBase(){
   if(_baseCargada||!GD.idbReady)return;
@@ -5234,6 +5248,77 @@ function _conflResolver(id,usar){
   S.proj=_pp;
   sv();render();abrirConflictos();updateSyncIndicator(GD._syncEst||'ok');
 }
+// Comprobación a pedido: sube lo que falte, RELEE el archivo de Drive y lo compara
+// registro por registro con lo que hay en este equipo. No cambia nada por su cuenta.
+function _firmaVerif(x){try{return _firmaProfunda(JSON.parse(JSON.stringify(x,_sigReemplazo)));}catch(_){return '';}}
+async function verificarSincronizacion(){
+  var dp=document.getElementById('drvPanel');if(dp)dp.remove();
+  if(!GD.online||!GD.accessToken){toast('Para verificar hace falta conexión y Drive conectado','var(--orange)',4500);return;}
+  toast('Verificando contra Drive…','var(--blue)',3000);
+  var res={total:0,faltanDrive:[],soloDrive:[],distintos:[],error:null};
+  var fotos=0,otroEquipo=0;
+  try{
+    GD._ultimoError=null;
+    await processPendingImages();
+    await saveToDrive();
+    if(GD._ultimoError)throw new Error(GD._ultimoError.msg);
+    await ensureFolders('');
+    var fid=await findMainFile(S.proj);
+    if(!fid)throw new Error('no encontré el archivo de datos en Drive');
+    var rs=await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/'+fid+'?alt=media',{headers:driveHeaders()},30000);
+    if(!rs.ok)throw new Error('Drive respondió '+rs.status);
+    var dd=await rs.json();
+    _verificarMiEscritura(dd);
+    var nom=function(k,r){return (_TBL_NOMBRE[k]||k)+': '+_tituloReg(r);};
+    _BASE_TBLS.concat(['auditLog'],_HIST_KEYS).forEach(function(k){
+      var porFirma=(k==='papeleraDrive'||k==='conflictosHistorico');
+      var clave=function(r){return (!porFirma&&r.id)||_firmaVerif(r);};
+      var d={},l={};
+      (Array.isArray(dd[k])?dd[k]:[]).forEach(function(r){if(r&&typeof r==='object')d[clave(r)]=r;});
+      (Array.isArray(D[k])?D[k]:[]).forEach(function(r){if(r&&typeof r==='object')l[clave(r)]=r;});
+      Object.keys(l).forEach(function(c){
+        res.total++;
+        if(!d[c])res.faltanDrive.push(nom(k,l[c]));
+        else if(_firmaVerif(l[c])!==_firmaVerif(d[c]))res.distintos.push(nom(k,l[c]));
+      });
+      Object.keys(d).forEach(function(c){if(!l[c])res.soloDrive.push(nom(k,d[c]));});
+    });
+    var pend=(await idbGetAll('pending')).filter(function(p){return p.type==='image';});
+    fotos=pend.length;
+    var mias={};pend.forEach(function(p){mias[p.imageId]=1;});
+    var fd=dd.fotosDrive||{},vistos={};
+    Object.keys(dd).forEach(function(k){
+      if(!Array.isArray(dd[k])||k==='auditLog'||k==='tombstones'||k==='conflictos'||k==='conflictosHistorico'||k==='eliminadosPend')return;
+      (JSON.stringify(dd[k]).match(/\[foto:[^\]]+\]/g)||[]).forEach(function(m){var id=m.slice(6,-1);if(!fd[id]&&!mias[id]&&!vistos[id]){vistos[id]=1;otroEquipo++;}});
+    });
+  }catch(e){res.error=(e&&e.message)||String(e);}
+  var elim=(D.eliminadosPend||[]).length,sinSubir=!!GD._cambiosSinSubir;
+  var ok=!res.error&&!res.faltanDrive.length&&!res.soloDrive.length&&!res.distintos.length&&!fotos&&!otroEquipo&&!elim&&!sinSubir;
+  var fila=function(bien,txt){return '<div style="font-size:13px;margin:5px 0;color:'+(bien?'#047857':'#b91c1c')+'">'+(bien?'✓ ':'✗ ')+txt+'</div>';};
+  var ej=function(a){return a.length?'<div style="font-size:11px;color:var(--text3);margin:0 0 6px 18px">'+a.slice(0,5).map(esc).join('<br>')+(a.length>5?'<br>…y '+(a.length-5)+' más':'')+'</div>':'';};
+  var h=res.error?fila(false,'No se pudo completar la verificación: '+esc(res.error))
+    :fila(!res.faltanDrive.length&&!res.distintos.length,res.total+' registros de este equipo comparados con Drive'+((res.faltanDrive.length||res.distintos.length)?': '+res.faltanDrive.length+' no están y '+res.distintos.length+' son distintos':': todos iguales'))
+      +ej(res.faltanDrive.concat(res.distintos))
+      +(res.soloDrive.length?fila(false,res.soloDrive.length+' registro(s) están en Drive y todavía no llegaron a este equipo')+ej(res.soloDrive):'')
+      +fila(!fotos,fotos?fotos+' foto(s) de este equipo no pudieron subir (se reintenta sola)':'Sin fotos pendientes en este equipo')
+      +fila(!otroEquipo,otroEquipo?otroEquipo+' foto(s) esperan subir desde otro equipo: abrí la app en ese equipo':'Sin fotos pendientes en otros equipos')
+      +fila(!elim,elim?elim+' eliminado(s) esperando copiarse al respaldo':'Lo eliminado ya está copiado en Drive')
+      +(sinSubir?fila(false,'Se cargó algo mientras verificaba: volvé a verificar en unos segundos'):'');
+  var v=document.getElementById('verifPanel');if(v)v.remove();
+  v=document.createElement('div');v.id='verifPanel';
+  v.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:9000;display:flex;align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto';
+  v.innerHTML='<div style="background:#fff;border-radius:14px;padding:16px;width:100%;max-width:460px;box-shadow:0 8px 32px rgba(0,0,0,.2)">'
+    +'<div style="font-size:15px;font-weight:800;margin-bottom:4px;color:'+(ok?'#047857':'#b91c1c')+'">'+(ok?'✅ Verificado: todo está en Drive':'⚠️ Hay cosas por revisar')+'</div>'
+    +'<div style="font-size:11px;color:var(--text3);margin-bottom:8px">Se releyó el archivo de Drive recién ('+new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})+') y se comparó con este equipo.</div>'
+    +h
+    +'<div style="font-size:11px;color:var(--text3);margin-top:10px">Comprueba este equipo. Lo que hayas cargado en otro sin conexión sube cuando ese equipo se conecte.</div>'
+    +'<button class="btn btn-sec btn-s" style="width:100%;margin-top:10px" id="verifCerrar">Cerrar</button></div>';
+  document.body.appendChild(v);
+  document.getElementById('verifCerrar').onclick=function(){v.remove();};
+  v.addEventListener('click',function(e){if(e.target===v)v.remove();});
+  updateSyncIndicator(GD._syncEst||'ok');
+  return {ok:ok,total:res.total,fotos:fotos,otroEquipo:otroEquipo,error:res.error,faltanDrive:res.faltanDrive.length,distintos:res.distintos.length,soloDrive:res.soloDrive.length};
+}
 function showDrivePanel() {
   const ex = document.getElementById('drvPanel'); if (ex) { ex.remove(); return; }
   const status = document.getElementById('syncIndicator')?.dataset.status || 'noauth';
@@ -5243,7 +5328,7 @@ function showDrivePanel() {
   var _pd=null;try{_pd=localStorage.getItem('oc_pend_desde');}catch(_){}
   const _fh=function(x){return new Date(x).toLocaleString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});};
   const ts = (D.lastSync ? ('\u00daltima sincronizaci\u00f3n: ' + _fh(D.lastSync)) : 'Todav\u00eda no se sincroniz\u00f3')
-    + '<br>' + (_pd ? '\u25cf Hay cambios guardados en este equipo sin subir (desde ' + _fh(_pd) + ')' : '\u2713 Todo lo de este equipo ya est\u00e1 en Drive')
+    + '<br>' + (_pd ? '● Hay cambios guardados en este equipo sin subir (desde ' + _fh(_pd) + ')' : ((GD._fotosPend||0) ? '● Los datos están en Drive, faltan ' + GD._fotosPend + ' foto(s) por subir' : '✓ Todo lo de este equipo ya está en Drive'))
     + ((D.eliminadosPend||[]).length ? '<br>\ud83d\uddd1\ufe0f ' + D.eliminadosPend.length + ' eliminado(s) esperando copiarse al respaldo' : '')
     + (GD._ultimoError && status === 'error' ? '<br><span style="color:var(--red)">\u00daltimo error: ' + esc(GD._ultimoError.msg) + '</span>' : '');
   const _ncf = _conflictosNuevos(), _tcf = (D.conflictos||[]).length;
@@ -5265,7 +5350,7 @@ function showDrivePanel() {
     '<div style="font-size:12px;color:'+stColor+';font-weight:600;margin-bottom:3px">'+stLabel+'</div>' +
     '<div style="font-size:10px;color:var(--text3);margin-bottom:4px">'+ts+'</div>' +
     '<div style="font-size:10px;background:var(--gray-ll);padding:4px 8px;border-radius:6px;margin-bottom:12px">M\u00e9todo: '+curMethod+'</div>' +
-    _cfBtn + saveBtn +
+    _cfBtn + (GD.accessToken ? '<button class="btn btn-s" style="width:100%;margin-bottom:6px;background:#ecfdf5;color:#047857;border:1px solid #a7f3d0" onclick="verificarSincronizacion()">🔍 Verificar que todo esté en Drive</button>' : '') + saveBtn +
 
     // ── Google Drive OAuth
     '<div style="border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin-bottom:8px">' +
