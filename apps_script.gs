@@ -362,3 +362,67 @@ function doGet(e) {
     return _json({ ok: false, error: String(err) });
   }
 }
+
+// ─── ZIP DE CADA OBRA: LO QUE LA APP NO PUEDE LEER ──────────────────────
+// La app arma "<OBRA> - FOTOS Y ARCHIVOS.zip" en SISTEMA_GESTION_OBRAS, pero solo
+// puede abrir los archivos que subió ella. En la descripción de ese ZIP deja la
+// lista de los que no pudo. Este script, que sí tiene acceso a tu Drive, arma con
+// ellos "<OBRA> - FOTOS Y ARCHIVOS 2.zip". Corre solo, una vez por hora.
+// No es una dirección web: nadie de afuera puede llamarlo.
+var CARPETA_SISTEMA = 'SISTEMA_GESTION_OBRAS';
+var FIN_ZIP = ' - FOTOS Y ARCHIVOS.zip';
+var FIN_ZIP2 = ' - FOTOS Y ARCHIVOS 2.zip';
+var TOPE_ZIP2 = 45 * 1024 * 1024; // Google no comprime más de ~50 MB de una vez
+
+/** Se ejecuta UNA vez desde el editor: deja programada la tarea de cada hora. */
+function instalarRespaldoAutomatico() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'completarZips') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('completarZips').timeBased().everyHours(1).create();
+  completarZips();
+}
+
+function completarZips() {
+  var raices = DriveApp.getFoldersByName(CARPETA_SISTEMA);
+  if (!raices.hasNext()) return;
+  var obras = raices.next().getFolders(), props = PropertiesService.getScriptProperties(), inicio = Date.now();
+  while (obras.hasNext() && Date.now() - inicio < 300000) {
+    var obra = obras.next();
+    try { _completarZipObra(obra, props); } catch (e) { console.warn('zip ' + obra.getName() + ': ' + e); }
+  }
+}
+
+function _completarZipObra(obra, props) {
+  var it = obra.getFiles(), zip = null, previo = null;
+  while (it.hasNext()) {
+    var f = it.next(), n = f.getName();
+    if (n.slice(-FIN_ZIP.length) === FIN_ZIP) zip = f;
+    else if (n.slice(-FIN_ZIP2.length) === FIN_ZIP2) previo = f;
+  }
+  if (!zip) return;
+  var ids = [];
+  try { ids = JSON.parse(zip.getDescription() || '{}').faltan || []; } catch (e) { return; }
+  if (!ids.length) return;
+  var nombre = zip.getName().slice(0, -FIN_ZIP.length) + FIN_ZIP2;
+  if (previo && previo.getName() !== nombre) previo.setName(nombre); // la obra cambió de nombre
+  var clave = 'z2_' + obra.getId();
+  var firma = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, ids.slice().sort().join(',')));
+  if (previo && props.getProperty(clave) === firma) return;
+  var blobs = [], total = 0;
+  ids.forEach(function (id) {
+    try {
+      var a = DriveApp.getFileById(id);
+      if (a.isTrashed() || a.getMimeType() === 'application/vnd.google-apps.folder' || total + a.getSize() > TOPE_ZIP2) return;
+      var padres = a.getParents(), carpeta = padres.hasNext() ? padres.next().getName() : 'Otros';
+      var b = a.getBlob();
+      b.setName(carpeta.replace(/[\/\\:*?"<>|]/g, '_') + '/' + id.slice(0, 6) + ' - ' + a.getName().replace(/[\/\\:*?"<>|]/g, '_'));
+      blobs.push(b);
+      total += a.getSize();
+    } catch (e) { console.warn('no pude leer ' + id + ': ' + e); }
+  });
+  if (!blobs.length) return;
+  obra.createFile(Utilities.zip(blobs, nombre));
+  if (previo) previo.setTrashed(true); // reemplazado por el recién creado
+  props.setProperty(clave, firma);
+}

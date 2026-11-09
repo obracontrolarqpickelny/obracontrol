@@ -1253,9 +1253,6 @@ async function _saveToDriveImpl() {
     if((D.eliminadosPend||[]).length)setTimeout(function(){_subirEliminados().catch(function(){});},1500);
     if(!GD._recHistHecho){GD._recHistHecho=true;setTimeout(function(){_recuperarHistoricos0611().catch(function(e){console.warn('recuperación históricos:',e);});},8000);}
     if(!GD._rescateHecho){GD._rescateHecho=true;setTimeout(function(){_rescatarCarpetaPGarcia().catch(function(e){console.warn('rescate:',e);});},6000);}
-    // Respaldo ordenado (carpeta aparte, cada 30 min como mucho)
-    try{if(!GD._lastResp)GD._lastResp=parseInt(localStorage.getItem('oc_resp_ultimo')||'0',10);}catch(_){}
-    _programarRespaldo();
     _programarSistema();
     // Resumen de cada obra en su carpeta (una vez por hora como mucho)
     if(!GD._lastResumen||(Date.now()-GD._lastResumen)>3600000){
@@ -1477,16 +1474,7 @@ async function _rescatarCarpetaPGarcia(){
   try{localStorage.setItem('oc_rescate_pg','1');}catch(_){}
   if(n)toast(n+' archivo(s) recuperados a la carpeta de la obra ✓','var(--green)',4000);
 }
-// ═══════ RESPALDO ORDENADO ═══════════════════════════════════════════
-// Carpeta NUEVA e independiente en "Mi unidad": "📦 RESPALDO ORDENADO — ObraControl".
-// No toca SISTEMA_GESTION_OBRAS. Por cada obra hay una carpeta con:
-//   1 - RESUMEN DE OBRA.txt          → para leer
-//   2 - DATOS PARA IMPORTAR ….json   → se abre desde la app con "📂 Abrir archivo"
-//   3 - ÍNDICE DE FOTOS Y ARCHIVOS.txt → qué es cada foto/archivo y dónde está
-//   y subcarpetas por módulo con una COPIA de cada foto y documento.
-// Las copias son independientes: aunque se borre el original, la copia queda.
-// Se actualiza sola (cada 30 min como mucho, después de guardar en Drive). Nunca borra nada.
-const _RESP_NOMBRE='📦 RESPALDO ORDENADO — ObraControl';
+// Módulo de cada registro (nombre de carpeta) y utilidades de las carpetas de obra
 const _RESP_MODS={visitas:'📋 Visitas',notas:'📝 Notas',materiales:'🧱 Materiales',matIngresos:'🧱 Materiales',
   economia:'💰 Economía',documentos:'📁 Documentos',checklists:'☑️ Checklists',chkHistorial:'☑️ Checklists',
   colaboradores:'👥 Colaboradores',carpetas:'👥 Colaboradores',mensajesColab:'👥 Colaboradores',formulariosPendientes:'👥 Colaboradores',
@@ -1495,33 +1483,6 @@ function _respTablas(){return Object.keys(D).filter(function(k){return Array.isA
 function _respLimpio(n){return String(n||'').replace(/[<>:"/\\|?*\u0000-\u001f]/g,'_').replace(/\s+/g,' ').trim().slice(0,90);}
 function _respQ(n){return String(n).replace(/\\/g,'\\\\').replace(/'/g,"\\'");}
 async function _respGet(url){var r=await fetchWithTimeout(url,{headers:driveHeaders()});if(!r.ok)throw new Error('Drive '+r.status);return r.json();}
-async function _respCarpeta(nombre,padre,props){
-  var q="mimeType='application/vnd.google-apps.folder' and trashed=false and '"+(padre||'root')+"' in parents and ";
-  q+=props?"appProperties has { key='ocResp' and value='"+props.ocResp+"' }":"name='"+_respQ(nombre)+"'";
-  var j=await _respGet('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(q)+'&fields=files(id,name)&orderBy=createdTime');
-  var f=j.files&&j.files[0];
-  if(f){
-    if(props&&f.name!==nombre){
-      // Obra que estaba eliminada y se volvió a abrir: se avisa adentro de la carpeta
-      if(f.name.indexOf('🗑️ ELIMINADA EN LA APP — ')===0)(GD._respRevividas=GD._respRevividas||{})[f.id]=1;
-      await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/'+f.id,{method:'PATCH',headers:driveHeaders(),body:JSON.stringify({name:nombre})});
-    }
-    return f.id;
-  }
-  var body={name:nombre,mimeType:'application/vnd.google-apps.folder',parents:[padre||'root']};if(props)body.appProperties=props;
-  var r=await fetchWithTimeout('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:driveHeaders(),body:JSON.stringify(body)});
-  if(!r.ok)throw new Error('Drive '+r.status);return _quedarseConUna(q,(await r.json()).id);
-}
-async function _respEscribir(fid,nombre,contenido,mime){
-  var q="name='"+_respQ(nombre)+"' and '"+fid+"' in parents and trashed=false";
-  var j=await _respGet('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(q)+'&fields=files(id)&orderBy=createdTime');
-  var id=j.files&&j.files[0]?j.files[0].id:null;
-  var cuerpo=(mime==='text/plain'?'\ufeff':'')+contenido,ct=mime+';charset=utf-8',r;
-  if(id)r=await fetchWithTimeout('https://www.googleapis.com/upload/drive/v3/files/'+id+'?uploadType=media',{method:'PATCH',headers:{Authorization:'Bearer '+GD.accessToken,'Content-Type':ct},body:cuerpo},60000);
-  else{var form=new FormData();form.append('metadata',new Blob([JSON.stringify({name:nombre,parents:[fid],mimeType:mime})],{type:'application/json'}));form.append('file',new Blob([cuerpo],{type:ct}));
-    r=await fetchWithTimeout('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{method:'POST',headers:{Authorization:'Bearer '+GD.accessToken},body:form},60000);}
-  if(!r.ok)throw new Error('Drive '+r.status+' al escribir '+nombre);
-}
 // Cada foto/archivo de Drive que usa la obra: módulo, fecha y registro
 function _respReferencias(pid){
   var out=[],visto={};
@@ -1547,61 +1508,6 @@ function _respReferencias(pid){
 // Carpeta de una obra en el respaldo ordenado. Si la obra ya no está en la app,
 // la carpeta se conserva y se renombra "🗑️ ELIMINADA EN LA APP — …".
 var _RESP_ELIM='🗑️ ELIMINADA EN LA APP — ';
-async function _respCarpetaObraElim(raiz,pid,nombre){
-  var q="mimeType='application/vnd.google-apps.folder' and trashed=false and '"+raiz+"' in parents and appProperties has { key='ocResp' and value='"+pid+"' }";
-  var j=await _respGet('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(q)+'&fields=files(id,name)&orderBy=createdTime');
-  var f=j.files&&j.files[0];
-  if(f){
-    if(f.name.indexOf(_RESP_ELIM)!==0)await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/'+f.id,{method:'PATCH',headers:driveHeaders(),body:JSON.stringify({name:_RESP_ELIM+f.name.replace(/^\(CERRADA\) /,'')})});
-    return f.id;
-  }
-  return _respCarpeta(_RESP_ELIM+_respLimpio(String(nombre||pid).toUpperCase()),raiz,{ocResp:pid});
-}
-async function _respNotaEliminada(fo,nombre,ts,por){
-  await _respEscribir(fo,'0 - ESTA OBRA SE ELIMINÓ EN LA APP.txt',
-    'OBRA ELIMINADA EN LA APP: '+nombre+'\r\n'
-    +'Eliminada: '+(ts?new Date(ts).toLocaleString('es-AR'):'(fecha no registrada)')+(por?' por '+por:'')+'\r\n\r\n'
-    +'La obra ya no aparece en ObraControl, pero acá se conserva todo lo que tenía: los datos completos,\r\n'
-    +'los registros eliminados y las copias de fotos y archivos. Esta carpeta no la borra la app.\r\n\r\n'
-    +'PARA VOLVER A TENERLA EN LA APP\r\n'
-    +'  1. Descargá "2 - DATOS PARA IMPORTAR - ….json" de esta carpeta.\r\n'
-    +'  2. En ObraControl, Mis Obras → "📂 Abrir archivo" → elegí ese archivo.\r\n\r\n'
-    +'PARA BORRARLA DEFINITIVAMENTE: borrá esta carpeta a mano desde Drive.\r\n','text/plain');
-}
-async function _respEliminados(lista){
-  if(!lista||!lista.length||!GD.accessToken||!GD.online)return;
-  var raiz=await _respCarpeta(_RESP_NOMBRE,null,null);
-  var porObra={};lista.forEach(function(e){var k=e.obra||'';(porObra[k]=porObra[k]||[]).push(e);});
-  for(var pid in porObra){
-    var es=porObra[pid],fo;
-    var activa=(D.projects||[]).find(function(p){return p.id===pid;});
-    if(!pid)fo=await _respCarpeta('🗑️ Eliminados sin obra',raiz,null);
-    else if(activa)fo=await _respCarpeta((activa.cerrada?'(CERRADA) ':'')+_respLimpio(String(activa.name||'Obra').toUpperCase()),raiz,{ocResp:pid});
-    else{var ec=es.find(function(e){return e.tbl==='obraCompleta';});fo=await _respCarpetaObraElim(raiz,pid,ec&&ec.nombre);}
-    // Copia completa de la obra eliminada (importable)
-    for(const e of es){
-      if(e.tbl!=='obraCompleta'||!e.obraCompleta)continue;
-      var nom=_respLimpio(String(e.nombre||pid).toUpperCase());
-      await _respEscribir(fo,'2 - DATOS PARA IMPORTAR - '+nom+'.json',JSON.stringify(e.obraCompleta),'application/json');
-      await _respNotaEliminada(fo,e.nombre||pid,e.ts,e.por);
-    }
-    // Lista acumulada de registros eliminados (solo se agrega)
-    var nj='4 - ELIMINADOS EN LA APP.json',acum=[];
-    var q="name='"+_respQ(nj)+"' and '"+fo+"' in parents and trashed=false";
-    var sj=await _respGet('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(q)+'&fields=files(id)&orderBy=createdTime');
-    if(sj.files&&sj.files[0]){var rr=await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/'+sj.files[0].id+'?alt=media',{headers:{Authorization:'Bearer '+GD.accessToken}});
-      if(!rr.ok)throw new Error('Drive '+rr.status+' al leer eliminados');try{acum=await rr.json();}catch(_){acum=[];}if(!Array.isArray(acum))acum=[];}
-    var ya={};acum.forEach(function(e){ya[e.tbl+':'+e.id+':'+e.ts]=1;});
-    es.forEach(function(e){if(!ya[e.tbl+':'+e.id+':'+e.ts]){var c=Object.assign({},e);delete c.obraCompleta;delete c.respOk;delete c.sisOk;acum.push(c);}});
-    await _respEscribir(fo,nj,JSON.stringify(acum,null,1),'application/json');
-    var txt='REGISTROS ELIMINADOS EN LA APP\r\nSe conservan acá aunque ya no aparezcan en ObraControl. Actualizado: '+new Date().toLocaleString('es-AR')+'\r\n\r\n'
-      +'FECHA\tMÓDULO\tREGISTRO\tELIMINADO POR\r\n'
-      +acum.slice().sort(function(a,b){return String(b.ts).localeCompare(String(a.ts));}).map(function(e){
-        var r=e.registro||{};return new Date(e.ts).toLocaleString('es-AR')+'\t'+(e.tbl==='obraCompleta'?'OBRA COMPLETA':(_TBL_NOMBRE[e.tbl]||e.tbl))+'\t'+_tituloReg(r)+'\t'+(e.por||'-');}).join('\r\n');
-    await _respEscribir(fo,'4 - ELIMINADOS EN LA APP.txt',txt,'text/plain');
-    es.forEach(function(e){e.respOk=true;});
-  }
-}
 // ═══════ CARPETAS DE CADA OBRA EN SISTEMA_GESTION_OBRAS ═══════════════
 // En la carpeta de cada obra:
 //   <OBRA> - DATOS PARA IMPORTAR.json → se abre con "📂 Abrir archivo" y regenera la obra
@@ -1649,7 +1555,7 @@ function _sisListaFotosDrive(pid,tablas){
 }
 async function _sisListar(pid){
   var q="appProperties has { key='ocSisObra' and value='"+pid+"' } and trashed=false",mapa={};
-  var j=await _respGet('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(q)+'&fields=files(id,name,appProperties)&pageSize=200&orderBy=createdTime');
+  var j=await _respGet('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(q)+'&fields=files(id,name,appProperties,parents)&pageSize=200&orderBy=createdTime');
   (j.files||[]).forEach(function(f){var c=f.appProperties&&f.appProperties.ocSis;if(c&&!mapa[c])mapa[c]=f;});
   return mapa;
 }
@@ -1689,15 +1595,15 @@ async function _sisZip(p,nom,carpeta,mapa,reg,manual,tot){
   // La marca viaja en el propio ZIP: otro equipo sabe que ya está al día y no lo rearma
   var _zHecha=reg.z||(mapa.zip&&mapa.zip.appProperties&&mapa.zip.appProperties.ocFirma)||'';
   if(!refs.length||(_zHecha===firma&&mapa.zip))return;
-  if(!manual&&(_nombreEquipo()!=='computadora'||(reg.zt&&Date.now()-reg.zt<6*3600000)))return;
-  var entradas=[],faltan=[],acum=0,TOPE=600*1048576,TOPE_UNO=200*1048576;
+  if(!manual&&(_nombreEquipo()!=='computadora'||(reg.zt&&Date.now()-reg.zt<3600000)))return;
+  var sinPermiso=[];var entradas=[],faltan=[],acum=0,TOPE=600*1048576,TOPE_UNO=200*1048576;
   for(var i=0;i<refs.length;i++){
     var rf=refs[i];
     if(manual&&i%5===0)toast(nom+': juntando fotos '+(i+1)+'/'+refs.length+'…','var(--blue)',1800);
     if(rf.size>TOPE_UNO||acum+rf.size>TOPE){faltan.push(rf.mod+' - '+rf.titulo+' (muy pesado para el ZIP) - https://drive.google.com/file/d/'+rf.id+'/view');continue;}
     try{
       var rr=await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/'+rf.id+'?alt=media',{headers:_foAut()},180000);
-      if(!rr.ok){faltan.push(rf.mod+' - '+rf.fecha+' - '+rf.titulo+' (la app no tiene permiso sobre este archivo; el original está en Drive) - https://drive.google.com/file/d/'+rf.id+'/view');continue;}
+      if(!rr.ok){sinPermiso.push(rf.id);faltan.push(rf.mod+' - '+rf.fecha+' - '+rf.titulo+' (la app no tiene permiso sobre este archivo; el original está en Drive) - https://drive.google.com/file/d/'+rf.id+'/view');continue;}
       var datos=new Uint8Array(await rr.arrayBuffer());acum+=datos.length;
       if(acum>TOPE){acum-=datos.length;faltan.push(rf.mod+' - '+rf.titulo+' (no entró en el ZIP) - https://drive.google.com/file/d/'+rf.id+'/view');continue;}
       var base=_respLimpio((rf.fecha?rf.fecha+' - ':'')+rf.titulo).replace(/\.[A-Za-z0-9]{2,5}$/,'');
@@ -1706,10 +1612,61 @@ async function _sisZip(p,nom,carpeta,mapa,reg,manual,tot){
   }
   entradas.unshift({nombre:'INDICE.txt',datos:_u8Texto(_SIS_BOM+'FOTOS Y ARCHIVOS - '+nom+_SIS_NL+'Generado: '+new Date().toLocaleString('es-AR')+_SIS_NL+'Incluidos: '+(entradas.length)+' de '+refs.length+_SIS_NL+_SIS_NL+(faltan.length?'NO INCLUIDOS:'+_SIS_NL+faltan.join(_SIS_NL):'Están todos.'))});
   var blob=_zipCrear(entradas),nombre=nom+' - FOTOS Y ARCHIVOS.zip',ex=mapa.zip;
-  if(ex)await _foSubir(FO_UP+'/'+ex.id+'?uploadType=resumable&fields=id','PATCH',{name:nombre,appProperties:{ocFirma:firma}},blob,'application/zip');
-  else{var f=await _foSubir(FO_UP+'?uploadType=resumable&fields=id','POST',{name:nombre,parents:[carpeta],mimeType:'application/zip',appProperties:{ocSis:'zip',ocSisObra:pid,ocFirma:firma}},blob,'application/zip');mapa.zip={id:f.id,name:nombre};}
+  if(ex)await _foSubir(FO_UP+'/'+ex.id+'?uploadType=resumable&fields=id','PATCH',{name:nombre,description:JSON.stringify({faltan:sinPermiso}).slice(0,7900),appProperties:{ocFirma:firma}},blob,'application/zip');
+  else{var f=await _foSubir(FO_UP+'?uploadType=resumable&fields=id','POST',{name:nombre,description:JSON.stringify({faltan:sinPermiso}).slice(0,7900),parents:[carpeta],mimeType:'application/zip',appProperties:{ocSis:'zip',ocSisObra:pid,ocFirma:firma}},blob,'application/zip');mapa.zip={id:f.id,name:nombre};}
   reg.z=faltan.some(function(x){return x.indexOf('error al bajarla')>=0;})?'':firma;reg.zt=Date.now();
   tot.zips++;tot.faltan+=faltan.length;
+}
+var _RESP_ELIM='🗑️ ELIMINADA EN LA APP — ';
+async function _sisMarcarEliminada(e){
+  var pid=e.id,mapa=await _sisListar(pid),carpeta=(e.registro&&e.registro.driveFolderId)||GD.obraFolders[pid]||null;
+  if(!carpeta&&mapa.json&&mapa.json.parents)carpeta=mapa.json.parents[0];
+  if(!carpeta)return;
+  var mr=await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/'+carpeta+'?fields=name,trashed',{headers:driveHeaders()});
+  if(!mr.ok)throw new Error('Drive '+mr.status);
+  var mt=await mr.json();if(mt.trashed)return;
+  var nom=_respLimpio(String(e.nombre||pid).toUpperCase());
+  var obraJ=_sisLimpio(e.obraCompleta);obraJ.fotosDrive=_sisListaFotosDrive(pid,obraJ.tablas);
+  await _sisEscribir(mapa,pid,'json',carpeta,nom+' - DATOS PARA IMPORTAR.json',JSON.stringify(obraJ),'application/json');
+  await _sisEscribir(mapa,pid,'aviso',carpeta,'0 - ESTA OBRA SE ELIMINÓ EN LA APP.txt','OBRA ELIMINADA EN LA APP: '+(e.nombre||pid)+_SIS_NL+'Eliminada: '+new Date(e.ts).toLocaleString('es-AR')+(e.por?' por '+e.por:'')+_SIS_NL+_SIS_NL+'Ya no aparece en ObraControl, pero acá se conserva todo. La app no borra esta carpeta.'+_SIS_NL+_SIS_NL+'PARA VOLVER A TENERLA: en ObraControl, Mis Obras → "📂 Abrir archivo" → elegí "'+nom+' - DATOS PARA IMPORTAR.json".'+_SIS_NL+'PARA BORRARLA DEFINITIVAMENTE: borrá esta carpeta a mano desde Drive.','text/plain');
+  if(String(mt.name).indexOf(_RESP_ELIM)!==0)await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/'+carpeta,{method:'PATCH',headers:driveHeaders(),body:JSON.stringify({name:_RESP_ELIM+mt.name})});
+  if(GD._sisNom)delete GD._sisNom[pid];
+}
+// Fotos viejas que quedaron en "Imagenes": pasan a la carpeta de la pestaña que las usa
+// (se mueven, no se copian; los links siguen andando).
+var _SIS_FOTO_TAB={notas:'notas',visitas:'visitas',economia:'economia',materiales:'materiales',matIngresos:'materiales',checklists:'checklist',chkHistorial:'checklist',documentos:'documentos',carpetas:'colaboradores',mensajesColab:'colaboradores',colaboradores:'colaboradores',formulariosPendientes:'bandeja',tareas:'tareas',tareasArchivo:'tareas',alertas:'alertas',comentarios:'comentarios',comentariosArchivo:'comentarios'};
+async function _sisOrdenarFotos(pid){
+  var im=GD.moduleFolders[pid+'_imagenes'];if(!im)return 0;
+  var j=await _respGet('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent("'"+im+"' in parents and trashed=false and mimeType!='application/vnd.google-apps.folder'")+'&fields=files(id)&pageSize=1000');
+  var en={},n=0;(j.files||[]).forEach(function(f){en[f.id]=1;});
+  if(!Object.keys(en).length)return 0;
+  for(const rf of _respReferencias(pid)){
+    if(!en[rf.id])continue;
+    var dest=GD.moduleFolders[pid+'_'+_SIS_FOTO_TAB[rf.tbl]];
+    if(!dest||dest===im)continue;
+    var r=await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/'+rf.id+'?addParents='+dest+'&removeParents='+im,{method:'PATCH',headers:driveHeaders(),body:'{}'});
+    if(r.ok)n++;
+  }
+  return n;
+}
+async function _sisZips(manual,tot){
+  if(GD._sisZipC)return;
+  if(!manual&&GD._sisZipUlt&&Date.now()-GD._sisZipUlt<600000)return;
+  GD._sisZipC=true;GD._sisZipUlt=Date.now();
+  try{
+    var est={};try{est=JSON.parse(localStorage.getItem('oc_sis_zips')||'{}')||{};}catch(_){est={};}
+    var obras=(D.projects||[]).filter(function(p){return p&&p.id;});
+    for(var i=0;i<obras.length;i++){
+      var p=obras[i],nom=_respLimpio(String(p.name||'Obra').toUpperCase()),reg=est[p.id]||{};
+      try{
+        await ensureFolders(p.id);
+        var carpeta=GD.obraFolders[p.id];if(!carpeta)continue;
+        await _sisOrdenarFotos(p.id);
+        await _sisZip(p,nom,carpeta,await _sisListar(p.id),reg,manual,tot);
+        est[p.id]=reg;try{localStorage.setItem('oc_sis_zips',JSON.stringify(est));}catch(_){}
+      }catch(e){console.warn('zip '+nom+':',e);tot.errores++;}
+    }
+  }finally{GD._sisZipC=false;}
 }
 async function _sisActualizar(manual){
   if(!GD.accessToken||!GD.online){if(manual)toast('Conectá Drive para actualizar las carpetas','var(--orange)',4000);return null;}
@@ -1738,7 +1695,9 @@ async function _sisActualizar(manual){
           if(_mf.ok&&(await _mf.json()).name!==_esp)await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/'+carpeta,{method:'PATCH',headers:driveHeaders(),body:JSON.stringify({name:_esp})});
           GD._sisNom[pid]=p.name;
         }
+        if(!cambio)continue;
         var mapa=await _sisListar(pid);
+        if(mapa.aviso&&/SE ELIMIN/.test(mapa.aviso.name))await _sisEscribir(mapa,pid,'aviso',carpeta,'0 - OBRA RESTAURADA (había sido eliminada).txt','OBRA RESTAURADA: '+(p.name||'')+_SIS_NL+'Se volvió a abrir el '+new Date().toLocaleString('es-AR')+'. Está activa otra vez.','text/plain');
         if(cambio){
           var obraJ={formato:'obracontrol',version:2,generado:nw(),app:'ObraControl Pro',origen:'SISTEMA_GESTION_OBRAS',project:limpio.p,tablas:limpio.t,fotos:{},archivos:{},fotosDrive:_sisListaFotosDrive(pid,limpio.t)};
           await _sisEscribir(mapa,pid,'json',carpeta,nom+' - DATOS PARA IMPORTAR.json',JSON.stringify(obraJ),'application/json');tot.archivos++;
@@ -1759,151 +1718,21 @@ async function _sisActualizar(manual){
           reg.f=fObra;tot.obras++;
           firmas[pid]=reg;try{localStorage.setItem('oc_sis_firmas',JSON.stringify(firmas));}catch(_){}
         }
-        await _sisZip(p,nom,carpeta,mapa,reg,manual,tot);
-        firmas[pid]=reg;try{localStorage.setItem('oc_sis_firmas',JSON.stringify(firmas));}catch(_){}
       }catch(e){console.warn('carpetas '+nom+':',e);tot.errores++;}
     }
+    if(manual)await _sisZips(true,tot);else _sisZips(false,tot).catch(function(e){console.warn('zips:',e);});
     if(manual)toast('Carpetas al día ✓ · '+tot.obras+' obras · '+tot.zips+' ZIP'+(tot.faltan?' · '+tot.faltan+' archivos sin incluir (ver INDICE)':'')+(tot.errores?' · '+tot.errores+' con error (se reintenta)':''),tot.errores?'var(--orange)':'var(--green)',7000);
     return tot;
   }finally{GD._sisCorriendo=false;}
 }
 function _programarSistema(){
   if(GD._sisT)return;
-  GD._sisT=setTimeout(function(){GD._sisT=null;if(GD.accessToken&&GD.online)_sisActualizar(false).catch(function(e){console.warn('carpetas:',e);});},30000);
-}
-async function _respaldoOrdenado(manual){
-  if(!GD.accessToken||!GD.online){if(manual)toast('Conectá Drive para actualizar el respaldo','var(--orange)',4000);return null;}
-  if(GD._respCorriendo){if(manual)toast('El respaldo ya se está actualizando…','var(--blue)',3000);return null;}
-  GD._respCorriendo=true;
-  var tot={obras:0,copias:0,faltan:0,errores:0};
-  try{
-    var raiz=await _respCarpeta(_RESP_NOMBRE,null,null);
-    GD._respRaiz=raiz;try{localStorage.setItem('oc_resp_raiz',raiz);}catch(_){}
-    var tope=manual?600:150; // copias por vuelta: lo que falte sigue en la próxima
-    var obras=(D.projects||[]).filter(function(p){return p&&p.id;});
-    // Obras sin cambios desde la última vuelta (y sin copias pendientes) no se reescriben
-    var firmas={};try{firmas=JSON.parse(localStorage.getItem('oc_resp_firmas')||'{}')||{};}catch(_){firmas={};}
-    var hubo=false;tot.sinCambios=0;
-    for(var i=0;i<obras.length;i++){
-      var p=obras[i],pid=p.id,nom=_respLimpio(String(p.name||'Obra').toUpperCase());
-      var _tf={};_respTablas().forEach(function(t){_tf[t]=_cTbl(t,pid);});
-      var fObra=_h32(JSON.stringify({p:p,t:_tf}));
-      if(!manual&&firmas[pid]&&firmas[pid].f===fObra&&!firmas[pid].pend){tot.sinCambios++;continue;}
-      hubo=true;
-      if(manual)toast('Respaldo: '+nom+' ('+(i+1)+'/'+obras.length+')…','var(--blue)',2500);
-      try{
-        var fo=await _respCarpeta((p.cerrada?'(CERRADA) ':'')+nom,raiz,{ocResp:pid});
-        if(GD._respRevividas&&GD._respRevividas[fo]){
-          delete GD._respRevividas[fo];
-          try{
-            var nRest='0 - OBRA RESTAURADA (había sido eliminada).txt';
-            var jn=await _respGet('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent("name='0 - ESTA OBRA SE ELIMINÓ EN LA APP.txt' and '"+fo+"' in parents and trashed=false")+'&fields=files(id)');
-            for(const nf of (jn.files||[]))await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/'+nf.id,{method:'PATCH',headers:driveHeaders(),body:JSON.stringify({name:nRest})});
-            await _respEscribir(fo,nRest,'OBRA RESTAURADA: '+(p.name||'')+'\r\nEstuvo eliminada en la app y se volvió a abrir el '+new Date().toLocaleString('es-AR')+'.\r\nEstá activa otra vez: esta carpeta se sigue actualizando sola.\r\n','text/plain');
-          }catch(e){console.warn('respaldo: aviso de restaurada',e);}
-        }
-        // 1) resumen legible
-        var prev=S.proj,txt='';try{S.proj=pid;txt=buildLogContent();}catch(_){txt='';}finally{S.proj=prev;}
-        if(txt)await _respEscribir(fo,'1 - RESUMEN DE OBRA.txt',txt,'text/plain');
-        // 2) datos para importar (mismo formato que "📂 Abrir archivo")
-        var tablas={};_respTablas().forEach(function(t){tablas[t]=_cTbl(t,pid);});
-        var obra={formato:'obracontrol',version:1,generado:nw(),app:'ObraControl Pro',origen:'respaldo ordenado',project:p,tablas:tablas,fotos:{},archivos:{}};
-        await _respEscribir(fo,'2 - DATOS PARA IMPORTAR - '+nom+'.json',JSON.stringify(obra),'application/json');
-        // 3) copias de fotos y archivos, por módulo
-        var ya={},pt=null;
-        do{
-          var q="appProperties has { key='ocResp' and value='"+pid+"' } and trashed=false and mimeType!='application/vnd.google-apps.folder'";
-          var lj=await _respGet('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(q)+'&fields=nextPageToken,files(id,appProperties)&pageSize=1000'+(pt?'&pageToken='+pt:''));
-          (lj.files||[]).forEach(function(f){var o=f.appProperties&&f.appProperties.ocOrig;if(o)ya[o]=f.id;});
-          pt=lj.nextPageToken;
-        }while(pt);
-        var refs=_respReferencias(pid),mods={},filas=[];
-        for(var k=0;k<refs.length;k++){
-          var rf=refs[k];
-          if(!ya[rf.id]&&tope>0){
-            try{
-              var mr=await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/'+rf.id+'?fields=name,mimeType',{headers:driveHeaders()});
-              if(mr.status===404||mr.status===403){rf.falta=true;tot.faltan++;}
-              else if(mr.ok){
-                var md=await mr.json();
-                if(md.mimeType==='application/vnd.google-apps.folder'){rf.carpeta=true;}
-                else{
-                  if(!mods[rf.mod])mods[rf.mod]=await _respCarpeta(rf.mod,fo,null);
-                  var nn=_respLimpio((rf.fecha?rf.fecha+' - ':'')+rf.titulo+' - '+(md.name||rf.id));
-                  var cr=await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/'+rf.id+'/copy?fields=id',{method:'POST',headers:driveHeaders(),
-                    body:JSON.stringify({name:nn,parents:[mods[rf.mod]],appProperties:{ocResp:pid,ocOrig:rf.id}})},60000);
-                  if(cr.ok){ya[rf.id]=(await cr.json()).id;tot.copias++;tope--;}else tot.errores++;
-                }
-              } else tot.errores++;
-            }catch(e){tot.errores++;}
-          }
-          if(rf.carpeta)continue;
-          filas.push(rf.mod+'\t'+(rf.fecha||'-')+'\t'+rf.titulo+'\t'+(ya[rf.id]?'https://drive.google.com/file/d/'+ya[rf.id]+'/view':(rf.falta?'NO SE PUDO COPIAR (el original ya no existe o la app no tiene acceso)':'pendiente de copiar'))+'\thttps://drive.google.com/file/d/'+rf.id+'/view');
-        }
-        filas.sort();
-        firmas[pid]={f:fObra,pend:filas.some(function(x){return x.indexOf('pendiente de copiar')>=0;})};
-        await _respEscribir(fo,'3 - ÍNDICE DE FOTOS Y ARCHIVOS.txt',
-          'ÍNDICE DE FOTOS Y ARCHIVOS — '+nom+'\r\nActualizado: '+new Date().toLocaleString('es-AR')+'\r\nTotal: '+filas.length+'\r\n\r\n'
-          +'MÓDULO\tFECHA\tREGISTRO\tCOPIA EN ESTE RESPALDO\tORIGINAL\r\n'+filas.join('\r\n'),'text/plain');
-        tot.obras++;
-      }catch(e){console.warn('respaldo '+nom+':',e);tot.errores++;delete firmas[pid];}
-    }
-    try{localStorage.setItem('oc_resp_firmas',JSON.stringify(firmas));}catch(_){}
-    // Carpetas de obras que ya no están en la app (eliminadas acá o en otro equipo):
-    // se conservan enteras y se marcan "ELIMINADA EN LA APP"
-    try{
-      var activas={};obras.forEach(function(o){activas[o.id]=1;});
-      var qe="mimeType='application/vnd.google-apps.folder' and trashed=false and '"+raiz+"' in parents";
-      var je=await _respGet('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(qe)+'&fields=files(id,name,appProperties)&pageSize=500');
-      for(const f of (je.files||[])){
-        var op=f.appProperties&&f.appProperties.ocResp;
-        if(!op||activas[op]||f.name.indexOf(_RESP_ELIM)===0)continue;
-        await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/'+f.id,{method:'PATCH',headers:driveHeaders(),body:JSON.stringify({name:_RESP_ELIM+f.name.replace(/^\(CERRADA\) /,'')})});
-        var tb=(D.tombstones||[]).find(function(t){return t.id===op;});
-        await _respNotaEliminada(f.id,f.name.replace(/^\(CERRADA\) /,''),tb&&tb.ts,'');
-        tot.marcadas=(tot.marcadas||0)+1;
-      }
-    }catch(e){console.warn('respaldo: marcar eliminadas',e);tot.errores++;}
-    // Todo junto, por si hay que reconstruir la app entera
-    if(hubo||manual||!localStorage.getItem('oc_resp_todas')){try{await _respEscribir(raiz,'TODAS LAS OBRAS - datos completos.json',JSON.stringify(buildCleanData()),'application/json');try{localStorage.setItem('oc_resp_todas',nw());}catch(_){}}catch(e){tot.errores++;}}
-    await _respEscribir(raiz,'LEÉME - CÓMO RECUPERAR.txt',
-      'RESPALDO ORDENADO DE OBRACONTROL\r\nActualizado: '+new Date().toLocaleString('es-AR')+'\r\n\r\n'
-      +'Esta carpeta la arma la app sola y se actualiza cada vez que guardás (como mucho cada 10 minutos).\r\n'
-      +'Si eliminás una obra en la app, su carpeta queda acá marcada "🗑️ ELIMINADA EN LA APP" con todo adentro.\r\n'
-      +'Lo que elimines dentro de una obra queda en "4 - ELIMINADOS EN LA APP" de esa obra.\r\n'
-      +'Es independiente de SISTEMA_GESTION_OBRAS: nunca borra ni cambia nada de allá.\r\n\r\n'
-      +'QUÉ HAY EN CADA OBRA\r\n'
-      +'  1 - RESUMEN DE OBRA.txt → todo lo de la obra, para leer.\r\n'
-      +'  2 - DATOS PARA IMPORTAR.json → la obra completa (visitas, notas, materiales, economía, checklists, colaboradores…).\r\n'
-      +'  3 - ÍNDICE DE FOTOS Y ARCHIVOS.txt → cada foto y archivo: módulo, fecha, a qué registro pertenece y su link.\r\n'
-      +'  Subcarpetas (Visitas, Notas, Materiales, Economía, Documentos…) → una COPIA de cada foto y archivo.\r\n'
-      +'  Las copias no dependen del original: si algo se borra en la app o en la otra carpeta, acá sigue estando.\r\n\r\n'
-      +'CÓMO RECUPERAR UNA OBRA\r\n'
-      +'  1. Descargá "2 - DATOS PARA IMPORTAR - <OBRA>.json" de la carpeta de la obra.\r\n'
-      +'  2. En ObraControl, pantalla Mis Obras → "📂 Abrir archivo" → elegí ese archivo.\r\n'
-      +'  3. Se agrega lo que falte; de cada registro queda la versión más nueva y no se borra nada.\r\n\r\n'
-      +'"TODAS LAS OBRAS - datos completos.json" tiene todo junto, por si hubiera que reconstruir la app entera.\r\n','text/plain');
-    GD._lastResp=Date.now();try{localStorage.setItem('oc_resp_ultimo',String(GD._lastResp));}catch(_){}
-    if(manual)toast('Respaldo ordenado al día ✓ · '+tot.obras+' obras · '+tot.copias+' copias nuevas'+(tot.faltan?' · '+tot.faltan+' no se pudieron copiar (ya no existen o sin acceso)':'')+(tot.errores?' · '+tot.errores+' con error (se reintenta)':''),tot.errores?'var(--orange)':'var(--green)',7000);
-    return tot;
-  }catch(e){console.warn('respaldo ordenado:',e);if(manual)toast('No se pudo actualizar el respaldo: '+(e&&e.message||e),'var(--red)',6000);return null;}
-  finally{GD._respCorriendo=false;}
-}
-function _programarRespaldo(){
-  var falta=600000-(Date.now()-(GD._lastResp||0));
-  if(GD._respProg)return;
-  GD._respProg=setTimeout(function(){
-    GD._respProg=null;
+  GD._sisT=setTimeout(function(){
+    GD._sisT=null;
     if(!GD.accessToken||!GD.online)return;
-    GD._lastResp=Date.now();
-    _respaldoOrdenado(false).catch(function(e){console.warn('respaldo ordenado:',e);});
-  },Math.max(20000,falta));
-}
-async function abrirRespaldoOrdenado(){
-  var id=GD._respRaiz;try{id=id||localStorage.getItem('oc_resp_raiz');}catch(_){}
-  var w=window.open('about:blank','_blank');
-  if(!id){await _respaldoOrdenado(true);id=GD._respRaiz;}
-  if(id&&w)w.location.href='https://drive.google.com/drive/folders/'+id;else if(w)w.close();
+    if(GD._sisCorriendo){_programarSistema();return;}
+    _sisActualizar(false).catch(function(e){console.warn('carpetas:',e);});
+  },5000);
 }
 // Recuperación única (06/11/2026): un dispositivo con una versión anterior guardó sin
 // los historiales y en el archivo principal quedaron 0 comentarios archivados, 4 de 41
@@ -5548,8 +5377,7 @@ function showDrivePanel() {
 
     // ── Acciones generales
     '<div style="border-top:1px solid #f1f5f9;padding-top:10px;display:flex;flex-direction:column;gap:6px">' +
-      (GD.accessToken?'<button class="btn btn-s" style="background:#ecfdf5;color:#047857;border:1px solid #a7f3d0" onclick="_respaldoOrdenado(true)">\ud83d\udce6 Actualizar respaldo ordenado</button>' +
-      '<button class="btn btn-s" style="background:#ecfdf5;color:#047857;border:1px solid #a7f3d0" onclick="abrirRespaldoOrdenado()">\ud83d\udcc2 Ver respaldo ordenado en Drive</button>':'') +
+      (GD.accessToken&&GD.rootId?'<a class="btn btn-s" style="background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;text-align:center;text-decoration:none" target="_blank" href="https://drive.google.com/drive/folders/'+GD.rootId+'">📂 Ver la carpeta de las obras en Drive</a>':'') +
       (GD.accessToken?'<button class="btn btn-s" style="background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;white-space:normal;line-height:1.3" onclick="_sisActualizar(true)">🗂️ Actualizar ya: JSON, TXT y ZIP de cada obra</button>':'') +
       '<button class="btn btn-sec btn-s" id="drvBackupBtn">\ud83d\udce6 Backup local</button>' +
       '<button class="btn btn-sec btn-s" id="drvDlBtn">\ud83d\udcbe Descargar JSON</button>' +
@@ -6998,8 +6826,8 @@ async function _subirEliminados(){
   if(!pend.length||!GD.accessToken||!GD.online)return;
   if(GD._subiendoElim)return;GD._subiendoElim=true;
   try{
-    // Destino 2: respaldo ordenado (carpeta de la obra, marcada si se eliminó)
-    try{await _respEliminados(pend.filter(function(e){return !e.respOk;}));}catch(e){console.warn('eliminados → respaldo ordenado:',e);}
+    // Obra eliminada: su carpeta queda en Drive, marcada y con los datos finales
+    for(const e of pend){if(e.tbl==='obraCompleta'&&!e.marcada){try{await _sisMarcarEliminada(e);e.marcada=true;}catch(err){console.warn('marcar obra eliminada:',err);}}}
     var porObra={};pend.filter(function(e){return !e.sisOk;}).forEach(function(e){var k=(D.projects||[]).some(function(p){return p.id===e.obra;})?e.obra:'';(porObra[k]=porObra[k]||[]).push(e);});
     for(var pid in porObra){
       await ensureFolders('');
@@ -7029,10 +6857,13 @@ async function _subirEliminados(){
       var ok;
       if(fileId){ok=(await fetchWithTimeout('https://www.googleapis.com/upload/drive/v3/files/'+fileId+'?uploadType=media',{method:'PATCH',headers:{Authorization:'Bearer '+GD.accessToken,'Content-Type':'application/json'},body:cuerpo})).ok;}
       else{var form=new FormData();form.append('metadata',new Blob([JSON.stringify({name:nombre,parents:[fid],mimeType:'application/json'})],{type:'application/json'}));form.append('file',new Blob([cuerpo],{type:'application/json'}));ok=(await fetchWithTimeout('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{method:'POST',headers:{Authorization:'Bearer '+GD.accessToken},body:form})).ok;}
-      if(ok)porObra[pid].forEach(function(e){e.sisOk=true;});
+      if(ok){
+        porObra[pid].forEach(function(e){e.sisOk=true;});
+        try{await _escribirTxtDrive(fid,'REGISTROS ELIMINADOS.txt','REGISTROS ELIMINADOS EN LA APP'+_SIS_NL+'Se conservan acá aunque ya no aparezcan en ObraControl.'+_SIS_NL+_SIS_NL+lista.slice().sort(function(a,b){return String(b.ts).localeCompare(String(a.ts));}).map(function(e){return new Date(e.ts).toLocaleString('es-AR')+' | '+(e.tbl==='obraCompleta'?'OBRA COMPLETA':(_TBL_NOMBRE[e.tbl]||e.tbl))+' | '+_tituloReg(e.registro||{})+' | '+(e.por||'-');}).join(_SIS_NL));}catch(_){}
+      }
     }
     // Sale de pendientes recién cuando quedó en los dos lugares
-    D.eliminadosPend=(D.eliminadosPend||[]).filter(function(e){return !(e.sisOk&&e.respOk);});
+    D.eliminadosPend=(D.eliminadosPend||[]).filter(function(e){return !(e.sisOk&&(e.tbl!=='obraCompleta'||e.marcada));});
     sv();
   }finally{GD._subiendoElim=false;}
 }
