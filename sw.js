@@ -17,6 +17,7 @@ async function recibirCompartido(request) {
   try {
     const datos = await request.formData();
     const archivos = datos.getAll('archivos').filter((f) => f && f.size);
+    if (!archivos.length) return Response.redirect(base + '?compartido=vacio', 303);
     const lote = Date.now().toString(36);
     const db = await abrirDB();
     await new Promise((ok, no) => {

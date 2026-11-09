@@ -644,7 +644,8 @@ function initGoogleAuth() {
 
 async function ensureAuth(forcePrompt = false) {
   // 1. Token en memoria y no expirado → usar directo
-  if (GD.accessToken && GD.tokenExpiry && (GD.tokenExpiry - Date.now()) > 60000) return true;
+  if (!GD._forzarRenovar && GD.accessToken && GD.tokenExpiry && (GD.tokenExpiry - Date.now()) > 60000) return true;
+  GD._forzarRenovar = false;
 
   // 2. No hay librería GSI cargada (file://)
   if (!window.google?.accounts?.oauth2) {
@@ -679,28 +680,20 @@ async function ensureAuth(forcePrompt = false) {
       }
       const expiresIn = parseInt(resp.expires_in) || 3600;
       saveGToken(resp.access_token, expiresIn);
+      const access = resp.access_token;
       // Guardar email preferido para no volver a preguntar la cuenta
       if(D.user?.email)try{localStorage.setItem('obracontrol-gaccount',D.user.email);}catch(e){};
-      // Programar auto-refresh 5 min antes de expirar
+      // El permiso dura 1 hora. Sigue valiendo hasta que venza: antes se borraba 5
+      // minutos antes y, si el navegador bloqueaba la ventana, la app quedaba sin Drive.
       const refreshIn = Math.max((expiresIn - 300) * 1000, 60000);
       setTimeout(() => {
-        GD.accessToken = null;
-        // Renovar solo, para no tener que reconectar a mano cada hora.
-        // Si no se puede, queda el cartel de reconectar como respaldo.
-        if (SYNC.method === 'oauth' || GD.rootId) {
-          ensureAuth(false).then(function(ok){
-            if(ok){
-              updateSyncIndicator('ok');
-              if(GD.pendingSync)cloudSave();
-              processPendingImages().catch(function(){});
-            } else {
-              updateSyncIndicator('noauth');showDriveReconnectBanner();
-            }
-          }).catch(function(){updateSyncIndicator('noauth');showDriveReconnectBanner();});
-        } else {
-          updateSyncIndicator('noauth');
-        }
+        if (_nombreEquipo() !== 'computadora' || GD.accessToken !== access) return; // en el celular se renueva con el próximo toque
+        GD._forzarRenovar = true;
+        ensureAuth(false).then(function(ok){
+          if(ok){ updateSyncIndicator('ok'); if(GD.pendingSync)cloudSave(); processPendingImages().catch(function(){}); }
+        }).catch(function(){});
       }, refreshIn);
+      setTimeout(() => { if (GD.accessToken === access) { GD.accessToken = null; updateSyncIndicator('noauth'); } }, expiresIn * 1000);
       resolve(true);
     };
 
@@ -711,6 +704,8 @@ async function ensureAuth(forcePrompt = false) {
       scope: GAPI_SCOPES,
       hint: _hint, // pre-selecciona la cuenta si está guardada
       callback: onToken,
+      // Ventana bloqueada o cerrada: sin esto la app quedaba esperando para siempre
+      error_callback: function(){ resolve(false); },
     });
 
     // Primer intento: silencioso (sin popup si ya dio consentimiento antes)
@@ -1651,7 +1646,7 @@ async function _sisOrdenarFotos(pid){
 }
 async function _sisZips(manual,tot){
   if(GD._sisZipC)return;
-  if(!manual&&GD._sisZipUlt&&Date.now()-GD._sisZipUlt<600000)return;
+  if(!manual&&(_nombreEquipo()!=='computadora'||(GD._sisZipUlt&&Date.now()-GD._sisZipUlt<600000)))return;
   GD._sisZipC=true;GD._sisZipUlt=Date.now();
   try{
     var est={};try{est=JSON.parse(localStorage.getItem('oc_sis_zips')||'{}')||{};}catch(_){est={};}
@@ -2345,8 +2340,8 @@ function scheduleSync(delay = 3000) {
     if (GD.online && GD.accessToken) {
       await saveToDrive();
     } else if (GD.online && !GD.accessToken) {
-      // Don't auto-prompt, just save locally
-      updateSyncIndicator('offline');
+      // Sin permiso de Google: queda en el equipo y el indicador pide un toque
+      updateSyncIndicator('noauth');
     }
   }, delay);
 }
@@ -2428,12 +2423,35 @@ function _syncEstadoReal(st){
 function _syncDotInner(st){
   var c=_SYNC_EST[st]||_SYNC_EST.noauth,nc=_conflictosNuevos();
   // Sin conexión y con cambios sin subir: lo importante es que quedó guardado en el equipo
-  var lbl=(st==='offline'&&GD._cambiosSinSubir)?'Guardado local':c.lbl;
+  var lbl=(st==='offline'&&GD._cambiosSinSubir)?'Guardado local':((st==='noauth'&&_tuvoDrive())?'Tocá y conecta':c.lbl);
   var fp=GD._fotosPend||0;
   return c.icon+'<span class="sync-lbl">'+lbl+'</span>'
     +(fp?'<span id="pendingBadge" title="'+fp+' foto(s) pendientes de subir a Drive" style="position:absolute;top:-4px;right:-4px;background:var(--orange);color:#fff;font-size:9px;font-weight:700;border-radius:8px;padding:1px 4px;min-width:14px;text-align:center;pointer-events:none">'+fp+'</span>':'')
     +(nc?'<span id="conflBadge" title="'+nc+' cambio(s) hechos a la vez en dos dispositivos: tocá para revisar" style="position:absolute;top:-6px;left:-3px;background:var(--red);color:#fff;font-size:9px;font-weight:800;border-radius:8px;padding:1px 4px;min-width:14px;text-align:center;pointer-events:none">'+nc+'</span>':'');
 }
+// Permiso vencido (también el que venía guardado de antes): se muestra enseguida
+setInterval(function(){if(GD.accessToken&&GD.tokenExpiry&&Date.now()>=GD.tokenExpiry){GD.accessToken=null;updateSyncIndicator('noauth');}},60000);
+function _tuvoDrive(){try{return SYNC.method==='oauth'||!!localStorage.getItem('obracontrol-gaccount');}catch(_){return false;}}
+document.addEventListener('click',function(ev){
+  try{
+    if(!GD.online||!_tuvoDrive()||!_accesoAutorizado()||_isPinLocked()||GD._renovando)return;
+    var resta=(GD.accessToken&&GD.tokenExpiry)?GD.tokenExpiry-Date.now():0;
+    if(resta>600000||Date.now()-(GD._renovIntento||0)<60000)return;
+    if(ev.target&&ev.target.closest&&ev.target.closest('#driveReconnectBanner'))return;
+    if(!(window.google&&window.google.accounts&&window.google.accounts.oauth2)){initGoogleAuth();return;}
+    var conToken=resta>60000;
+    GD._renovando=true;GD._renovIntento=Date.now();
+    if(conToken)GD._forzarRenovar=true;else updateSyncIndicator('syncing');
+    var fin=function(ok){
+      if(!GD._renovando)return;
+      GD._renovando=false;
+      if(ok&&!conToken&&window._drivePost)window._drivePost();
+      else if(!GD.accessToken)updateSyncIndicator('noauth');
+    };
+    ensureAuth(false).then(fin).catch(function(){fin(false);});
+    setTimeout(function(){fin(false);},45000);
+  }catch(_){}
+},true);
 function _syncDotHTML(){
   var st=GD._syncEst||'noauth',c=_SYNC_EST[st]||_SYNC_EST.noauth;
   return '<span id="syncIndicator" class="sync-dot" data-status="'+st+'" onclick="showDrivePanel()" title="'+c.title+'" style="color:'+c.color+'">'+_syncDotInner(st)+'</span>';
@@ -15569,6 +15587,8 @@ else{_pantallaAcceso();setTimeout(_autoAutorizarSilencioso,300);}
     }
     if (loadGToken()) { _drivePost(); return; }             // token vigente: sin ventana
     if (SYNC.method==='oauth' || localStorage.getItem('obracontrol-gaccount')) {
+      // En el celular la ventana de Google solo se abre con un toque: se conecta con el primero
+      if(_nombreEquipo()!=='computadora'){updateSyncIndicator('noauth');return;}
       // Ya conectó antes: se reconecta solo, sin que tenga que tocar nada
       updateSyncIndicator('syncing');
       ensureAuth(false).then(function(ok){
@@ -18184,7 +18204,7 @@ async function _foHuella(blob){
   return Array.from(new Uint8Array(d).slice(0,12)).map(function(b){return b.toString(16).padStart(2,'0');}).join('');
 }
 function _foTokenOk(){return !!(GD.accessToken&&GD.tokenExpiry&&GD.tokenExpiry-Date.now()>60000);}
-function _foAuth(){return Promise.race([Promise.resolve().then(function(){return ensureAuth(false);}).catch(function(){return false;}),new Promise(function(ok){setTimeout(function(){ok(false);},45000);})]);}
+function _foAuth(){return Promise.race([Promise.resolve().then(function(){return ensureAuth(false);}).catch(function(){return false;}),new Promise(function(ok){setTimeout(function(){ok(false);},25000);})]);}
 function _foAut(){return {'Authorization':'Bearer '+GD.accessToken};}
 async function _foSubir(url,metodo,meta,blob,mime,alAvanzar){
   var ini=await fetchWithTimeout(url,{method:metodo,headers:Object.assign(_foAut(),{'Content-Type':'application/json; charset=UTF-8','X-Upload-Content-Type':mime,'X-Upload-Content-Length':String(blob.size)}),body:JSON.stringify(meta)},30000);
@@ -18301,9 +18321,9 @@ async function _foElegir(pid){
       return;
     }
     await _foProcesar();
-  }finally{_foEligiendo=false;}
+  }finally{_foEligiendo=false;setTimeout(_foMirarCola,300);}
 }
-function _foProcesar(){if(_foProc)return _foProc;_foProc=_foProcesarImpl().finally(function(){_foProc=null;});return _foProc;}
+function _foProcesar(){if(_foProc)return _foProc;_foProc=_foProcesarImpl().finally(function(){_foProc=null;setTimeout(_foMirarCola,300);});return _foProc;}
 var _foIdx=0,_foTotal=0;
 function _foAvance(fr){var b=$('foBarra');if(b&&_foTotal)b.style.width=Math.round(((_foIdx+(fr||0))/_foTotal)*100)+'%';var t=$('foTxt');if(t)t.textContent='Guardando '+(_foIdx+1)+' de '+_foTotal+'…';}
 async function _foProcesarImpl(){
@@ -18505,7 +18525,7 @@ window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();_fo
     window._foVinoDeCompartir=true;
     qs.delete('compartido');
     try{history.replaceState(null,'',location.pathname+(qs.toString()?'?'+qs:'')+location.hash);}catch(_){}
-    if(vino==='error')setTimeout(function(){toast('No se pudieron recibir los archivos. Probá compartirlos de nuevo.','var(--red)',6000);},1500);
+    if(vino==='error'||vino==='vacio')setTimeout(function(){_foOverlay('<div class="ts" style="padding:6px;line-height:1.5"><b>No llegaron los archivos.</b><br>'+(vino==='vacio'?'WhatsApp abrió la app pero no le pasó ninguna foto.':'El teléfono no pudo entregarlos.')+' Probá compartirlos de nuevo o usá "Agregar fotos" dentro de la obra.</div><button class="btn btn-p btn-w mt-8" onclick="_foCerrar()">Entendido</button>');},1500);
   }
   var n=0,t=setInterval(function(){
     n++;
