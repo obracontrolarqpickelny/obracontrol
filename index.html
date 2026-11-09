@@ -18235,6 +18235,7 @@ async function _foSubirItem(it){
 function _foOverlay(html){
   var ov=$('foOv');
   if(!ov){ov=document.createElement('div');ov.id='foOv';ov.className='mo open';ov.style.zIndex='1500';document.body.appendChild(ov);}
+  ov.removeAttribute('data-firma');
   ov.innerHTML='<div class="mo-c" style="animation:none" onclick="event.stopPropagation()">'+html+'</div>';
 }
 function _foCerrar(){var ov=$('foOv');if(ov)ov.remove();_foUrls.forEach(function(u){try{URL.revokeObjectURL(u);}catch(_){}});_foUrls=[];}
@@ -18260,6 +18261,7 @@ async function _foMostrarElegir(items,prefer){
     +'<label class="ts" style="display:block;font-weight:700;margin-bottom:4px">'+(unica?'Fecha en que llegaron':'Llegaron entre el '+_foFechaTxt(lista[0])+' y el '+_foFechaTxt(lista[lista.length-1])+'. Para ponerles a todas la misma fecha:')+'</label>'
     +'<input id="foFecha" class="fi" type="date" value="'+unica+'">'+aviso
     +'<div class="ts" style="font-weight:700;margin:14px 0 8px">Tocá la obra</div>'+btn);
+  var ovE=$('foOv');if(ovE)ovE.setAttribute('data-firma',_foFirma(items));
   window._foFechaInicial=unica;
 }
 async function _foDescartar(){
@@ -18323,7 +18325,28 @@ async function _foProcesarImpl(){
   if(S.mod==='fotos'&&S.proj&&obras[S.proj])render();
 }
 function _foNombreObraVisible(pid){var p=(D.projects||[]).find(function(x){return x.id===pid;});return p?p.name:'la obra';}
-function _foListo(){_foCerrar();if(new URLSearchParams(location.search).has('compartido')||window._foVinoDeCompartir){window._foVinoDeCompartir=false;try{window.close();}catch(_){}}}
+async function _foListo(){
+  _foCerrar();
+  var cola=[];try{cola=await _foCola();}catch(_){}
+  if(cola.some(function(x){return !x.pid;})){_foRevisar();return;}
+  if(new URLSearchParams(location.search).has('compartido')||window._foVinoDeCompartir){window._foVinoDeCompartir=false;try{window.close();}catch(_){}}
+}
+function _foFirma(items){return items.map(function(x){return x.id;}).sort().join('|');}
+function _foPuedeMostrar(){try{return !!(D&&D.user&&_accesoAutorizado()&&(D.projects||[]).length);}catch(_){return false;}}
+async function _foMirarCola(){
+  if(!_foPuedeMostrar()||_foProc||_foEligiendo)return;
+  var cola;
+  try{cola=await _foCola();}catch(e){console.warn(e);return;}
+  if(_foProc||_foEligiendo)return;
+  var sin=cola.filter(function(x){return !x.pid;}),ov=$('foOv');
+  if(sin.length){if(!ov||ov.getAttribute('data-firma')!==_foFirma(sin))_foMostrarElegir(sin);return;}
+  if(cola.length&&!ov)_foRevisar();
+}
+var _foEsperas=[];
+function _foAlVolver(){
+  _foEsperas.forEach(clearTimeout);
+  _foEsperas=[0,400,1500,4000,8000,15000].map(function(ms){return setTimeout(_foMirarCola,ms);});
+}
 async function _foRevisar(prefer){
   if(_foProc||_foEligiendo)return;
   var cola;
@@ -18481,7 +18504,10 @@ window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();_fo
     if(listo){clearInterval(t);_foRevisar();}
     else if(n>150)clearInterval(t);
   },400);
-  document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible'&&!$('foOv'))_foRevisar();});
+  document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')_foAlVolver();});
+  window.addEventListener('focus',_foAlVolver);
+  window.addEventListener('pageshow',_foAlVolver);
+  if('serviceWorker' in navigator)navigator.serviceWorker.addEventListener('message',function(e){if(e.data&&e.data.tipo==='oc-compartido')_foMirarCola();});
 })();
 </script>
 <script>

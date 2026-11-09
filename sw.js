@@ -41,6 +41,8 @@ async function recibirCompartido(request) {
       tx.onabort = () => no(tx.error);
     });
     db.close();
+    const ventanas = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    ventanas.forEach((c) => c.postMessage({ tipo: 'oc-compartido', lote }));
     return Response.redirect(base + '?compartido=' + lote, 303);
   } catch (e) {
     return Response.redirect(base + '?compartido=error', 303);
