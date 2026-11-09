@@ -1591,7 +1591,7 @@ async function _sisZip(p,nom,carpeta,mapa,reg,manual,tot){
   // Si la obra cambió de nombre, el ZIP se renombra aunque las fotos sean las mismas
   var _nz=nom+' - FOTOS Y ARCHIVOS.zip';
   if(mapa.zip&&mapa.zip.name!==_nz){await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/'+mapa.zip.id,{method:'PATCH',headers:driveHeaders(),body:JSON.stringify({name:_nz})});mapa.zip.name=_nz;}
-  var firma=_h32(refs.map(function(r){return r.id;}).sort().join(','));
+  var firma=_h32('v2|'+refs.map(function(r){return r.id;}).sort().join(','));
   // La marca viaja en el propio ZIP: otro equipo sabe que ya está al día y no lo rearma
   var _zHecha=reg.z||(mapa.zip&&mapa.zip.appProperties&&mapa.zip.appProperties.ocFirma)||'';
   if(!refs.length||(_zHecha===firma&&mapa.zip))return;
