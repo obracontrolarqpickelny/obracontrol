@@ -13734,9 +13734,8 @@ function rColaboradores(mc,p){
   var colabs=pf('colaboradores');
   var colG='#16a34a';
   mc.innerHTML=modHeader('colaboradores','Colaboradores','<button class="btn btn-s bt" style="--c:'+colG+'" onclick="openM(\'newColabM\')">'+ I.plus+' Agregar</button>')
-  +((SYNC.apiUrl&&SYNC.apiSecret)
-    ?'<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px 10px;margin-bottom:10px;display:flex;align-items:center;gap:8px"><span style="font-size:14px">🚀</span><div style="flex:1;font-size:11px;color:#15803d"><strong>Servidor activo.</strong> Los informes llegan solos.</div><button class="btn btn-s" style="background:var(--green);color:#fff;flex-shrink:0;font-size:10px" onclick="revisarServidor(true)">📥 Buscar</button></div>'
-    :'<div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:8px;padding:10px 12px;margin-bottom:10px;display:flex;align-items:center;gap:10px"><span style="font-size:18px">⚠️</span><div style="flex:1;font-size:11px;color:#92400e"><strong>Servidor sin configurar.</strong> Los informes dependen de que el colaborador los mande por WhatsApp, y las fotos no van a llegar. Configuralo en Configuración → Servidor propio.</div><button class="btn btn-s" style="background:#d97706;color:#fff;flex-shrink:0;font-size:10px" onclick="S.mod=\'config\';render()">Ir</button></div>')
+  +((SYNC.apiUrl&&SYNC.apiSecret)?'':'<div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:8px;padding:10px 12px;margin-bottom:10px;display:flex;align-items:center;gap:10px"><span style="font-size:18px">⚠️</span><div style="flex:1;font-size:11px;color:#92400e"><strong>Servidor sin configurar.</strong> Los informes dependen de que el colaborador los mande por WhatsApp, y las fotos no van a llegar. Configuralo en Configuración → Servidor propio.</div><button class="btn btn-s" style="background:#d97706;color:#fff;flex-shrink:0;font-size:10px" onclick="S.mod=\'config\';render()">Ir</button></div>')
+  +_colabNovedadesTop(colabs)
   +(colabs.length?colabs.map(function(co){
     var _rev=co.estado==='revocado';
     var stCol=co.estado==='aceptado'?'var(--green)':_rev?'var(--red)':'var(--orange)';
@@ -13756,7 +13755,7 @@ function rColaboradores(mc,p){
     var btnEdit='<button class="btn btn-sec btn-s" onclick="editColab(\''+ co.id +'\')">'+I.edit+'</button>';
     var btnBaja='<button class="btn btn-s" style="font-size:10px;'+ (_rev?'background:var(--green);color:#fff':'background:var(--gray-ll);color:var(--red)')+'" onclick="'+ (_rev?'reactivateColab(\''+ co.id +'\')':'revokeColab(\''+ co.id +'\')') +'">'+(_rev?'Reactivar':'Dar de baja')+'</button>';
     var btnDel='<button class="btn btn-g btn-s" style="color:var(--red)" onclick="if(confirmDel())delI(\'colaboradores\',\''+ co.id +'\')">'+I.trash+'</button>';
-    return '<div class="card" style="padding:12px;margin-bottom:8px'+ (_rev?';opacity:.65':'')+'"><div><div class="ts fw7" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="openPerfilColab(\''+co.id+'\')">'+esc(co.name||co.email||'Sin nombre')+'</div><div class="txxs tc3 mt-4">'+( co.phone?'📱 '+co.phone:'Sin teléfono')+(co.email?' · '+co.email:'')+(co.role?' · <strong>'+co.role+'</strong>':'')+'</div><div class="mt-4">'+colBadge(_rev?'Dado de baja':(co.estado||'pendiente'),stCol,true)+(co.ultimoAcceso?'<span class="txxs" style="color:var(--green);margin-left:6px">👁 abrió el link '+fmts(co.ultimoAcceso)+'</span>':'')+'</div></div><div class="fila-igual mt-8">'+btnCarpeta+btnForm+btnEdit+btnBaja+btnDel+'</div></div>';
+    return _colabTarjeta(co,_rev,_isAcept);
   }).join(''): '<div class="empty">'+I.share+'<div class="ts mt-8">Sin colaboradores</div><div class="txxs tc3 mt-4">Agregá personas para que carguen datos de campo.</div></div>')
   +'<div class="mo" id="newColabM"><div class="mo-c"><div class="mo-h"><h3 style="color:'+colG+'">Agregar Colaborador</h3><button class="tbtn" onclick="closeM(\'newColabM\')">'+ I.x+'</button></div>'
   +'<div class="fg"><label class="fl">Nombre *</label><input class="fi" id="nc_name" placeholder="Nombre"></div>'
@@ -13769,6 +13768,56 @@ function rColaboradores(mc,p){
   }catch(e){mc.innerHTML='<div class="card" style="color:var(--red);padding:16px">Error al cargar colaboradores: '+e.message+'</div>';console.error('rColaboradores',e);}
 }
 
+// Novedades de una persona: lo que espera que hagas vos
+function _colabNovedades(id){
+  var n=_tlEventos({colabId:id}).filter(_tlAtencion).length;
+  var cp=(D.carpetas||[]).find(function(c){return c.colabId===id&&c.projectId===S.proj;});
+  return n+(((cp&&cp.archivos)||[]).filter(function(a){return a.subidoPor==='col'&&a.visto===false;}).length?1:0);
+}
+function _colabPedidos(id){return (D.mensajesColab||[]).filter(function(m){return m.colabId===id&&m.proyectoId===S.proj&&m.id!=='_biblioteca'&&m.tipo!=='biblioteca'&&!m.enPapelera&&!_esAvisoCarpeta(m);});}
+function _colabNovedadesTop(colabs){
+  var h='';
+  colabs.forEach(function(co){
+    if(co.estado==='revocado')return;
+    var n=_colabNovedades(co.id);if(!n)return;
+    h+='<div onclick="openPerfilColab(\''+co.id+'\',\'recibido\')" style="cursor:pointer;display:flex;align-items:center;gap:10px;background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:12px 14px;margin-bottom:8px"><span style="min-width:26px;height:26px;border-radius:13px;background:#dc2626;color:#fff;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;padding:0 6px">'+n+'</span><div style="flex:1;font-size:14px;font-weight:700;color:#991b1b">'+(n===1?'Tenés 1 novedad de ':'Tenés '+n+' novedades de ')+esc(co.name||'')+'</div><span style="font-size:13px;font-weight:700;color:#b91c1c">Ver →</span></div>';
+  });
+  return h;
+}
+function _colabTarjeta(co,rev,acept){
+  var id=co.id,n=rev?0:_colabNovedades(id),ped=_colabPedidos(id),hechos=ped.filter(function(m){return m.estadoColab==='aceptado'||m.estadoColab==='completado';}).length,arch=0;
+  try{arch=_bibliotecaColab(id).length;}catch(_){}
+  var res=[];
+  if(ped.length)res.push(ped.length+(ped.length===1?' pedido':' pedidos')+' · '+hechos+(hechos===1?' hecho':' hechos'));
+  if(arch)res.push(arch+(arch===1?' archivo':' archivos'));
+  var linea=res.join(' · ')||'Todavía sin actividad';
+  var estado=rev?'<span style="color:var(--red)">Dado de baja</span>':(acept?'':'<span style="color:var(--orange)">Invitación sin aceptar</span>');
+  var sub=[co.role?esc(co.role):'',estado].filter(Boolean).join(' · ');
+  var principal=rev?'':(acept
+    ?'<button class="btn btn-s" style="flex:2;background:#16a34a;color:#fff;font-weight:700;justify-content:center;height:38px" onclick="openAsignarModal(\''+id+'\')">➕ Pedirle algo</button>'
+    :'<button class="btn btn-s" style="flex:2;background:#16a34a;color:#fff;font-weight:700;justify-content:center;height:38px" onclick="shareFormColaborador(\''+id+'\')">Invitar por WhatsApp</button>');
+  return '<div class="card" style="padding:14px;margin-bottom:10px'+(rev?';opacity:.65':'')+'">'
+    +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;cursor:pointer" onclick="openPerfilColab(\''+id+'\')"><div style="min-width:0"><div style="font-size:16px;font-weight:800">'+esc(co.name||co.email||'Sin nombre')+'</div>'+(sub?'<div class="txxs tc3 mt-2">'+sub+'</div>':'')+'</div>'
+    +(n?'<span style="flex-shrink:0;background:#dc2626;color:#fff;border-radius:11px;padding:3px 9px;font-size:11px;font-weight:800">'+n+(n===1?' novedad':' novedades')+'</span>':'')+'</div>'
+    +'<div class="ts" style="margin:8px 0 12px;color:var(--text2)">'+linea+'</div>'
+    +'<div style="display:flex;gap:6px">'+principal
+    +'<button class="btn btn-sec btn-s" style="flex:1;justify-content:center;height:38px;font-weight:700" onclick="openPerfilColab(\''+id+'\')">Ver todo</button>'
+    +'<button class="btn btn-sec btn-s" title="Más opciones" style="width:42px;height:38px;justify-content:center;font-size:18px;font-weight:800" onclick="_colabMenu(\''+id+'\')">⋯</button></div></div>';
+}
+function _colabMenu(id){
+  var co=(D.colaboradores||[]).find(function(x){return x.id===id;});if(!co)return;
+  var rev=co.estado==='revocado',m=document.getElementById('colabMenuM');if(m)m.remove();
+  m=document.createElement('div');m.className='mo open';m.id='colabMenuM';
+  m.onclick=function(e){if(e.target===m)m.remove();};
+  var op=function(t,fn,est){return '<button class="btn btn-sec btn-w mb-8" style="justify-content:flex-start;'+(est||'')+'" onclick="document.getElementById(\'colabMenuM\').remove();'+fn+'">'+t+'</button>';};
+  m.innerHTML='<div class="mo-c" style="max-width:360px"><div class="mo-h"><h3>'+esc(co.name||'')+'</h3><button class="tbtn" onclick="document.getElementById(\'colabMenuM\').remove()">'+I.x+'</button></div>'
+    +(co.phone||co.email?'<div class="txxs tc3 mb-8">'+esc([co.phone,co.email].filter(Boolean).join(' · '))+(co.ultimoAcceso?'<br>Abrió su link el '+fmts(co.ultimoAcceso):'')+'</div>':'')
+    +op('✏️ Editar datos','editColab(\''+id+'\')')
+    +(rev?'':op('🔗 Volver a enviarle su link','shareFormColaborador(\''+id+'\')'))
+    +op(rev?'↩️ Reactivar':'🚫 Dar de baja',(rev?'reactivateColab':'revokeColab')+'(\''+id+'\')',rev?'':'color:var(--red)')
+    +op('🗑️ Eliminar','if(confirmDel())delI(\'colaboradores\',\''+id+'\')','color:var(--red)')+'</div>';
+  document.body.appendChild(m);
+}
 function toggleGuide(btn){
   const panel=btn.parentElement.nextElementSibling;
   const isOpen=panel.style.display!=='none';
@@ -14109,7 +14158,9 @@ function getCarpeta(colabId){
 function openPerfilColab(colabId,tab){
   if(_limpiarDuplicadosColab())sv();
   var _fPend=(D.formulariosPendientes||[]).filter(function(f){return (f.token===colabId||f.colabId===colabId)&&f.estado==='pendiente';}).length;
-  if(!tab||tab==='historial'||tab==='bandeja')tab='resumen'; // todo en un solo historial
+  if(tab==='bandeja')tab='pedidos';
+  if(tab==='historial'||tab==='resumen')tab='recibido';
+  if(!tab)tab=_colabNovedades(colabId)?'recibido':'pedidos';
   var co=(D.colaboradores||[]).find(function(x){return x.id===colabId;});if(!co)return;
   // Marcar archivos de carpeta como vistos si el arquitecto abre la carpeta
   if(tab==='carpeta'){
@@ -14129,25 +14180,20 @@ function openPerfilColab(colabId,tab){
   var d=_reuso?_dPrev:document.createElement('div');d.className='mo open';d.id='carpetaM';d.dataset.colab=colabId;
   if(_reuso&&d.dataset.tab!==tab){_scrPrev=0;_scrMo=0;}
   d.dataset.tab=tab;
-  var tabDefs=[{id:'resumen',label:'🕒 Historial'},{id:'carpeta',label:'📁 Carpeta'},{id:'mensajes',label:'✉️ Mensajes'}];
+  var _nNov=_colabNovedades(colabId),_nPed=_colabPedidos(colabId).length,_nArch=0;try{_nArch=_bibliotecaColab(colabId).length;}catch(_){}
+  var tabDefs=[{id:'pedidos',label:'Le pedí',n:_nPed},{id:'recibido',label:'Me mandó',n:_nNov,rojo:true},{id:'carpeta',label:'Archivos',n:_nArch}];
   var h='<div class="mo-c" style="display:flex;flex-direction:column;max-height:90vh;'+(_reuso?'animation:none':'')+'">';
   h+='<div class="mo-h"><h3>'+esc(co.name||co.email||'?')+'</h3><button class="tbtn" onclick="document.getElementById(\'carpetaM\').remove()">'+I.x+'</button></div>';
   // Pestañas en varias líneas si no entran (antes se cortaban con una barra de desplazamiento)
   h+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">';
   tabDefs.forEach(function(t){
     var act=t.id===tab;
-    var badge='';
-    var badgeBg='';
-    if(t.id==='historial'){var hpend=(D.formulariosPendientes||[]).filter(function(f){return (f.token===colabId||f.colabId===colabId)&&f.estado==='pendiente';}).length;var htot=_historialColabEntradas(colabId).length;if(htot){badge=' ('+htot+')';if(hpend)badgeBg='background:#ef4444;color:#fff;';}};
-    if(t.id==='bandeja'){var bresp=(D.mensajesColab||[]).filter(function(m){return m.colabId===colabId&&m.proyectoId===S.proj&&m.estadoColab==='completado';}).length;var btot=(D.mensajesColab||[]).filter(function(m){return m.colabId===colabId&&m.proyectoId===S.proj;}).length;if(btot){badge=' ('+btot+')';if(bresp)badgeBg='background:#16a34a;color:#fff;';}}
-    if(t.id==='mensajes'){var mnotaCnt=(co.notas||[]).length;if(mnotaCnt)badge=' ('+mnotaCnt+')';}
-    var actBg=(!badgeBg&&act)?'background:var(--teal);color:#fff;':(badgeBg||'background:var(--gray-ll);color:var(--text2);');
-    h+='<button onclick="openPerfilColab(\''+colabId+'\',\''+t.id+'\')" style="flex-shrink:0;white-space:nowrap;border:none;'+actBg+'border-radius:20px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer">'+t.label+badge+'</button>';
+    h+='<button onclick="openPerfilColab(\''+colabId+'\',\''+t.id+'\')" style="flex:1;white-space:nowrap;border:none;background:'+(act?'#16a34a':'var(--gray-ll)')+';color:'+(act?'#fff':'var(--text2)')+';border-radius:10px;padding:9px 6px;font-size:13px;font-weight:700;cursor:pointer">'+t.label+(t.n?' <span style="'+(t.rojo?'background:#dc2626;color:#fff;':(act?'background:rgba(255,255,255,.25);':'background:rgba(15,23,42,.08);'))+'border-radius:9px;padding:1px 6px;font-size:11px">'+t.n+'</span>':'')+'</button>';
   });
   h+='</div>';
   h+='<div data-scroll-perfil style="flex:1;overflow-y:auto">';
 
-  if(tab==='resumen'){
+  if(tab==='recibido'){
     h+=_resumenColabHtml(colabId,co);
   } else if(tab==='carpeta'){
     // reuse carpeta render logic
@@ -14170,7 +14216,7 @@ function openPerfilColab(colabId,tab){
     // informes (con su comentario). Se puede elegir y descargar todo o una parte.
     var bib=_bibliotecaColab(colabId);
     if(!bib.length){
-      h+='<div class="empty">📁<div class="ts mt-8">Biblioteca vacía</div><div class="txxs tc3 mt-4">Subí archivos o compartí el link al colaborador.</div></div>';
+      h+='<div class="empty">📁<div class="ts mt-8">Sin archivos todavía</div><div class="txxs tc3 mt-4">Subí archivos o compartí el link al colaborador.</div></div>';
     } else {
       if(!S.carpetaSort)S.carpetaSort='desc';if(!S.carpetaFilter)S.carpetaFilter='all';
       var selB=window._selBib||(window._selBib={}),modoSel=!!window._modoSelBib;
@@ -14252,11 +14298,12 @@ function openPerfilColab(colabId,tab){
   } else if(tab==='historial'){
     h+=_historialColabHtml(colabId,co);
 
-  } else if(tab==='bandeja'){
+  } else if(tab==='pedidos'){
     _consolidarAvisosCarpeta(colabId);
+    if(co.estado!=='revocado')h+='<button class="btn btn-w mb-10" style="background:#16a34a;color:#fff;font-weight:700;justify-content:center" onclick="document.getElementById(\'carpetaM\').remove();openAsignarModal(\''+colabId+'\')">➕ Pedirle algo</button>';
     var msgs=(D.mensajesColab||[]).filter(function(m){return m.colabId===colabId&&m.proyectoId===S.proj;}).slice().reverse();
     if(!msgs.length){
-      h+='<div class="empty">📥<div class="ts mt-8">Bandeja vacía</div><div class="txxs tc3 mt-4">Usá el botón ✅ para asignar tareas o checklists a este colaborador.</div></div>';
+      h+='<div class="empty">📥<div class="ts mt-8">Todavía no le pediste nada</div><div class="txxs tc3 mt-4">Tocá «Pedirle algo» y escribí lo que necesitás.</div></div>';
     } else {
       var uC={alta:'#dc2626',media:'#f59e0b',baja:'#16a34a'};
       var eC={'nuevo':'var(--orange)','visto':'#0891b2','completado':'var(--green)','aceptado':'var(--green)','rechazado':'var(--red)'};
@@ -14268,7 +14315,7 @@ function openPerfilColab(colabId,tab){
         h+='<div class="flex justify-between items-start gap-8 mb-6">';
         h+='<div style="flex:1"><div class="ts fw7">'+esc(m.titulo||'Sin título')+'</div>';
         var _esCarp=_esAvisoCarpeta(m);
-        h+='<div class="txxs tc3 mt-2">'+(_esCarp?'📁 Carpeta':({checklist:'✅ Checklist',tarea:'📋 Tarea',nota:'📝 Nota',materiales:'📦 Materiales'}[m.tipo]||m.tipo))+' · '+fmts(m.fechaEnvio)+'</div>';
+        h+='<div class="txxs tc3 mt-2">'+(_esCarp?'📁 Archivos':({checklist:'✅ Checklist',tarea:'📋 Tarea',nota:'📝 Nota',materiales:'📦 Materiales'}[m.tipo]||m.tipo))+' · '+fmts(m.fechaEnvio)+'</div>';
         if(m.nota&&!_esCarp)h+='<div class="txxs mt-4 tc3" style="font-style:italic">'+esc(m.nota)+'</div>';
         h+='</div>';
         h+='<span style="background:'+ec+'22;color:'+ec+';border-radius:8px;padding:2px 8px;font-size:10px;font-weight:700;flex-shrink:0;white-space:nowrap">'+(eL[m.estadoColab]||m.estadoColab)+'</span>';
@@ -14297,7 +14344,7 @@ function openPerfilColab(colabId,tab){
               +'<a href="'+_resolveImg(f.data)+'" download="'+esc(f.nombre)+'" class="btn btn-sec btn-s" style="padding:4px 8px;text-decoration:none">⬇</a></div>';
           });
           if(!_fsAv.length)h+='<div class="txxs tc3 mb-6">Los archivos de este aviso ya no están en la carpeta.</div>';
-          h+='<button onclick="openPerfilColab(\''+colabId+'\',\'carpeta\')" style="border:none;background:none;color:var(--teal);font-size:11px;font-weight:700;cursor:pointer;padding:0;margin-bottom:8px">📁 Abrir la carpeta →</button>';
+          h+='<button onclick="openPerfilColab(\''+colabId+'\',\'carpeta\')" style="border:none;background:none;color:var(--teal);font-size:11px;font-weight:700;cursor:pointer;padding:0;margin-bottom:8px">Ver archivos →</button>';
         }
         // Content: expand checklist items or task details
         if(m.tipo==='checklist'&&m.entidadId){
@@ -16374,17 +16421,13 @@ function _resumenColabHtml(colabId,co){
   var archArq=arch.filter(function(a){return a.subidoPor!=='col';}).length;
   var resp=msgs.filter(function(m){return m.respuesta||m.estadoColab==='completado'||m.estadoColab==='aceptado';}).length;
   var h='';
-  if(!window._filtColab)window._filtColab={};
+  window._filtColab={};
   if(!window._expColab)window._expColab={};
   var FC=window._filtColab,hayF=Object.keys(FC).some(function(k){return FC[k];});
   var dato=function(n,t,k,col,bg){var on=!!FC[k];return '<div onclick="window._filtColab[\''+k+'\']=!window._filtColab[\''+k+'\'];openPerfilColab(\''+colabId+'\',\'resumen\')" title="Tocá para ver sólo esto (se pueden elegir varios)" style="flex:1;min-width:84px;cursor:pointer;user-select:none;background:'+(on?col:bg)+';color:'+(on?'#fff':'inherit')+';border:2px solid '+(on?col:'transparent')+';border-radius:10px;padding:8px;text-align:center"><div style="font-size:18px;font-weight:800">'+(on?'✓ ':'')+n+'</div><div class="txxs" style="'+(on?'color:#fff':'color:var(--text3)')+'">'+t+'</div></div>';};
-  h+='<div class="txxs fw7 mb-6" style="color:#0d9488">⬅ LO QUE TE MANDÓ</div><div class="flex gap-6 mb-8 flex-wrap">'
-    +dato(informes.length,'informes','inf','#0d9488','#ecfdf5')+dato(fotosRec,'fotos','fot','#0d9488','#ecfdf5')+dato(archCol,'archivos en carpeta','arc','#0d9488','#ecfdf5')+'</div>';
-  h+='<div class="txxs fw7 mb-6" style="color:#6366f1">➡ LO QUE LE MANDASTE</div><div class="flex gap-6 mb-8 flex-wrap">'
-    +dato(msgs.length,'tareas y avisos','msg','#6366f1','#eef2ff')+dato(resp,'respondidos','resp','#6366f1','#eef2ff')+dato(archArq,'archivos subidos','arq','#6366f1','#eef2ff')+'</div>';
   if(hayF)h+='<div class="mb-8"><button class="btn btn-sec btn-s" onclick="window._filtColab={};openPerfilColab(\''+colabId+'\',\'resumen\')">✕ Ver todo</button> <span class="txxs tc3">Mostrando sólo lo tildado arriba</span></div>';
   // Línea de tiempo (la misma tarjeta que en la Bandeja)
-  var ev=_tlEventos({colabId:colabId,conArq:true});
+  var ev=_tlEventos({colabId:colabId}).filter(function(e){return e.k==='form'||_tlConMovimiento(e);});
   var _catEv=function(e){
     if(e.k==='form'){var car=e.f.mode==='carpeta',nf=car?_archivosDeEnvioCarpeta(e.f).filter(_esImagenArch).length:_itemsForm(e.f).reduce(function(a,it){return a+(it.x?_fotosFormItem(it.x).length:0);},0);return (car?['arc']:['inf']).concat(nf?['fot']:[]);}
     if(e.k==='msg')return ['msg'].concat((e.m.respuesta||['completado','aceptado'].indexOf(e.m.estadoColab)>=0)?['resp']:[]);
@@ -16399,7 +16442,7 @@ function _resumenColabHtml(colabId,co){
     +'<button class="btn btn-s'+(nParc?' bt':'')+'" style="'+(nParc?'--c:#dc2626':'background:var(--gray-ll);color:var(--text3)')+'" onclick="'+(nParc?'exportPdfColab(\''+colabId+'\',true)':'toast(\'Tildá envíos de la lista o elegí un cuadrito de arriba\',\'var(--orange)\')')+'">'+I.pdf.replace('width="20" height="20"','width="15" height="15"')+' PDF parcial'+(nParc?' ('+nParc+')':'')+'</button>'
     +(nSel?'<button class="btn btn-sec btn-s" onclick="window._selColab={};openPerfilColab(\''+colabId+'\',\'resumen\')">Quitar tildes</button>':'')
     +'</div><div class="txxs tc3 mb-6">Tocá un envío para resolverlo ahí mismo · tildá para el PDF parcial</div>';
-  if(!ev.length)h+='<div class="empty">🕒<div class="ts mt-8">Todavía no hay intercambio</div></div>';
+  if(!ev.length)h+='<div class="empty">🕒<div class="ts mt-8">Todavía no te mandó nada</div></div>';
   ev.forEach(function(e){h+=_tlCard(e,{chk:true,colabId:colabId});});
   return h;
 }
@@ -17892,22 +17935,29 @@ function openAsignarModal(colId){
   var co=(D.colaboradores||[]).find(function(c){return c.id===colId;});if(!co)return;
   var tareas=(D.tareas||[]).filter(function(t){return t.projectId===S.proj&&!t.done;});
   var chks=(D.checklists||[]).filter(function(c){return c.projectId===S.proj;});
-  if(!tareas.length&&!chks.length){toast('No hay tareas ni checklists en este proyecto','var(--orange)');return;}
+  var pendN=pf('notas').filter(function(n){return n.tipo==='pendiente'&&!_notaHecha(n);});
   document.getElementById('asignarMod')?.remove();
   var d=document.createElement('div');d.className='mo open';d.id='asignarMod';
   var h='<div class="mo-c" style="display:flex;flex-direction:column">';
-  h+='<div class="mo-h"><h3>✅ Asignar a '+esc(co.name||co.id)+'</h3><button class="tbtn" onclick="document.getElementById(\'asignarMod\').remove()">✕</button></div>';
+  h+='<div class="mo-h"><h3>Pedirle algo a '+esc(co.name||co.id)+'</h3><button class="tbtn" onclick="document.getElementById(\'asignarMod\').remove()">✕</button></div>';
   h+='<div style="flex:1;overflow-y:auto;padding-bottom:4px">';
+  h+='<div class="fg"><label class="fl">¿Qué necesitás?</label><textarea class="ft" id="asig_pedido" rows="3" placeholder="Ej: Mandame foto del armado de la platea antes de hormigonar"></textarea><button class="btn btn-sec btn-s mt-4" onclick="dictarNota(\'asig_pedido\',this)">🎤 Dictar</button></div>';
   h+='<div class="fg"><label class="fl">Urgencia</label><select class="fs" id="asig_urg"><option value="baja">🟢 Baja</option><option value="media" selected>🟡 Media</option><option value="alta">🔴 Alta</option></select></div>';
-  h+='<div class="fg"><label class="fl">Nota (opcional)</label><textarea class="ft" id="asig_nota" rows="2" placeholder="Indicaciones para el colaborador..."></textarea></div>';
+  h+='<div class="fg"><label class="fl">Aclaración (opcional)</label><textarea class="ft" id="asig_nota" rows="2" placeholder="Algo más que deba saber"></textarea></div>';
   if(chks.length){
-    h+='<div class="txxs fw7 tc3 mb-6 mt-4">✅ Checklists</div>';
+    h+='<div class="txxs fw7 tc3 mb-6 mt-4">✅ O mandale un checklist</div>';
     chks.forEach(function(ch){
       var dn=ch.items.filter(function(i){return i.done;}).length;
       h+='<label style="display:flex;align-items:center;gap:8px;padding:8px;border:1px solid var(--brd);border-radius:8px;margin-bottom:6px;cursor:pointer">'
         +'<input type="checkbox" value="chk:'+ch.id+'" style="width:16px;height:16px;flex-shrink:0">'
         +'<div><div class="ts fw6">'+esc(ch.title)+'</div><div class="txxs tc3">'+dn+'/'+ch.items.length+' ítems</div></div>'
         +'</label>';
+    });
+  }
+  if(pendN.length){
+    h+='<div class="txxs fw7 tc3 mb-6 mt-6">☑️ O elegí un pendiente de Notas</div>';
+    pendN.forEach(function(n){
+      h+='<label style="display:flex;align-items:center;gap:8px;padding:8px;border:1px solid var(--brd);border-radius:8px;margin-bottom:6px;cursor:pointer"><input type="checkbox" value="nota:'+n.id+'" style="width:16px;height:16px;flex-shrink:0"><div class="ts fw6">'+esc(_notaTituloCorto(n))+'</div></label>';
     });
   }
   if(tareas.length){
@@ -17922,7 +17972,7 @@ function openAsignarModal(colId){
   h+=_extrasEnvioHtml({tarea:1,chk:1});
   h+='</div>';
   h+='<div style="position:sticky;bottom:0;background:var(--white);padding:12px 0 0;border-top:1px solid var(--brd);margin-top:8px">';
-  h+='<button class="btn btn-w" style="background:var(--teal);color:#fff" onclick="confirmarAsignar(\''+colId+'\')">✅ Enviar a bandeja del colaborador</button>';
+  h+='<button class="btn btn-w" style="background:var(--teal);color:#fff" onclick="confirmarAsignar(\''+colId+'\')">Enviar pedido</button>';
   h+='</div></div>';
   d.innerHTML=h;document.body.appendChild(d);
 }
@@ -17931,11 +17981,22 @@ function confirmarAsignar(colId){
   var nota=document.getElementById('asig_nota')?.value.trim()||'';
   var checks=document.querySelectorAll('#asignarMod input[type=checkbox]:checked:not(.envx_chk)');
   var nExtra=document.querySelectorAll('#asignarMod .envx_chk:checked').length;
-  if(!checks.length&&!nExtra){toast('Seleccioná al menos un ítem','var(--orange)');return;}
+  var _texto=(document.getElementById('asig_pedido')?.value||'').trim();
+  if(!checks.length&&!nExtra&&!_texto){toast('Escribí qué necesitás o elegí algo de la lista','var(--orange)');return;}
   if(!D.mensajesColab)D.mensajesColab=[];
   var _env=[];
+  var _pedirNota=function(n){_env.push(_guardarPedidoColab({id:uid(),proyectoId:S.proj,colabId:colId,tipo:'tarea',entidadId:n.id,notaId:n.id,titulo:_notaTituloCorto(n),nota:nota,urgencia:urg,fechaEnvio:nw(),updatedAt:nw(),estadoColab:'nuevo',respuesta:null,fechaRespuesta:null}));};
+  if(_texto){
+    // Lo escrito queda como pendiente en Notas, con él de responsable
+    var _coP=(D.colaboradores||[]).find(function(c){return c.id===colId;});
+    if(!D.notas)D.notas=[];
+    var _nP={id:uid(),projectId:S.proj,fecha:td(),hora:_notaHora(),tipo:'pendiente',cuaderno:NOTA_CUADERNO_DEF,titulo:'',texto:_texto,personas:'',photos:[],fijada:false,derivados:[],prioridad:urg,responsable:(_coP&&_coP.name)||'',cargadoPor:(D.user&&D.user.name)||'',date:nw(),updatedAt:nw()};
+    D.notas.push(_nP);audit('notas','create',_texto.slice(0,30));
+    _pedirNota(_nP);
+  }
   checks.forEach(function(cb){
     var parts=cb.value.split(':');var tipo=parts[0];var entId=parts[1];
+    if(tipo==='nota'){var _nS=(D.notas||[]).find(function(x){return x.id===entId;});if(_nS)_pedirNota(_nS);return;}
     var titulo='';
     if(tipo==='chk'){var ch=(D.checklists||[]).find(function(x){return x.id===entId;});titulo=ch?ch.title:'';}
     else if(tipo==='tarea'){var t=(D.tareas||[]).find(function(x){return x.id===entId;});titulo=t?t.title:'';}
@@ -17947,8 +18008,8 @@ function confirmarAsignar(colId){
   document.getElementById('asignarMod')?.remove();
   render();
   var _coA=(D.colaboradores||[]).find(function(c){return c.id===colId;});
-  var _nA=checks.length+nExtra;
-  toast(_nA+' ítem'+(_nA>1?'s':'')+' asignados a '+(_coA&&_coA.name||'colaborador')+' ✓','var(--teal)',2500);
+  var _nA=checks.length+nExtra+(_texto?1:0);
+  toast((_nA>1?_nA+' pedidos enviados a ':'Pedido enviado a ')+(_coA&&_coA.name||'colaborador')+' ✓','var(--teal)',2500);
   setTimeout(function(){
     if(_coA&&_coA.phone){notificarColabWA(colId,_env);}
     else{toast('⚠️ El colaborador no tiene teléfono — entrá a su perfil para notificarlo','var(--orange)',4500);}
