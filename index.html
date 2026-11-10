@@ -209,6 +209,11 @@ a{color:var(--blue);text-decoration:none}
 .nota-fila{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
 .nota-fila>span,.nota-fila>button{font-size:10px!important;margin-left:0}
 .nota-acc{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:3px;margin-top:8px}
+.nota-fila>span,.nota-fila>button{display:inline-flex;align-items:center;min-height:18px;line-height:1.2}
+.nota-filtros{display:flex;gap:6px;overflow-x:auto;margin-bottom:10px;align-items:center;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+.nota-acc>button{background:transparent!important;border:none!important;box-shadow:none!important}
+.nota-acc>button[title*="alerta"]{background:#fef2f2!important}
+.nota-acc>button[title="Volver a pendiente"]{background:var(--green)!important}
 .nota-acc>*{width:100%;min-width:0;height:34px;padding:0!important;margin:0!important;display:flex;align-items:center;justify-content:center}
 .mod-hdr h2 .mod-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .hero{background:linear-gradient(135deg,var(--pri-bg),var(--pri-mid));border:1px solid #FDE68A}
@@ -2593,7 +2598,7 @@ const _SK_UI=SK+'_s';
 // guardaba, así que al cerrar la app se perdían.
 const _UI_KEYS=[
   // Notas (filtros, cuaderno y borrador del asiento rápido)
-  'notasCuaderno','notasTipo','notasBuscar','notasOrden','notasEstado','notasAlerta','notasChat','notaTipoNueva','notaCuadernoNuevo','notaBorrador','notaAdj','notasResp','notasVencF','notasSelMode','notasSel','notaPriNueva','notaVenNueva','notaRespNueva',
+  'notasFiltros','notasCuaderno','notasTipo','notasBuscar','notasOrden','notasEstado','notasAlerta','notasChat','notaTipoNueva','notaCuadernoNuevo','notaBorrador','notaAdj','notasResp','notasVencF','notasSelMode','notasSel','notaPriNueva','notaVenNueva','notaRespNueva',
   // PDF de Economía: incluir fotos de comprobantes
   'pdfEcoFotos',
   // Tareas
@@ -2801,7 +2806,7 @@ function mergeLocalData(){
     });
   }catch(e){}
 }
-function _isUserTyping(){var ae=document.activeElement;if(!ae)return false;var t=ae.tagName;return t==='INPUT'||t==='TEXTAREA'||ae.isContentEditable;}
+function _isUserTyping(){if(window._notaRec)return true;var ae=document.activeElement;if(!ae)return false;var t=ae.tagName;return t==='INPUT'||t==='TEXTAREA'||ae.isContentEditable;}
 // ── _silentMerge: merge Drive snapshot into local D without any I/O, render, or toast.
 // Called both from loadFromDriveAndMerge and from saveToDrive (read-merge-write pattern).
 // Returns true if any data actually changed (items added/removed/updated).
@@ -9330,7 +9335,7 @@ function _notasFiltradas(){
   return pf('notas').filter(function(n){
     if(S.notasCuaderno&&(n.cuaderno||NOTA_CUADERNO_DEF)!==S.notasCuaderno)return false;
     if(S.notasTipo&&(n.tipo||'registro')!==S.notasTipo)return false;
-    if(S.notasTipo==='pendiente'&&S.notasResp&&(S.notasResp==='__sin'?!!String(n.responsable||'').trim():!_mismoResp(n.responsable,S.notasResp)))return false;
+    if(S.notasResp&&(S.notasResp==='__sin'?!!String(n.responsable||'').trim():!_mismoResp(n.responsable,S.notasResp)))return false;
     if(S.notasAlerta||S.notasChat){
       var _okA=S.notasAlerta&&!!n.alerta,_okC=S.notasChat&&_chatMsgsDe('notas',n.id).some(function(m){return (m.chat||[]).length>0;});
       if(!_okA&&!_okC)return false;
@@ -9512,19 +9517,20 @@ function rNotas(mc){
     +'<div class="flex gap-6 mb-6" style="flex-wrap:nowrap">'
     +'<div style="position:relative;flex:1;min-width:0"><input class="fi" style="margin:0;width:100%;padding-right:34px" placeholder="🔎 Buscar en las notas…" value="'+esc(S.notasBuscar||'')+'" id="notas_q" enterkeyhint="search" oninput="this.nextElementSibling.style.display=this.value?\'flex\':\'none\';_notasBuscarVivo(this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}" onchange="S.notasBuscar=this.value;saveUIState()">'
     +'<button title="Borrar la búsqueda" onmousedown="event.preventDefault()" onclick="var i=this.previousElementSibling;i.value=\'\';this.style.display=\'none\';S.notasBuscar=\'\';saveUIState();render()" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);display:'+(S.notasBuscar?'flex':'none')+';align-items:center;justify-content:center;width:24px;height:24px;border:none;border-radius:50%;background:var(--gray-ll);color:var(--text2);font-size:13px;font-weight:700;cursor:pointer">✕</button></div>'
-    +'<select class="fs" style="margin:0;flex:0 0 auto;width:auto" onchange="S.notasEstado=this.value;saveUIState();render()"><option value=""'+(!S.notasEstado?' selected':'')+'>Todas</option><option value="vig"'+(S.notasEstado==='vig'?' selected':'')+'>⏳ Vigentes</option><option value="hechas"'+(S.notasEstado==='hechas'?' selected':'')+'>✓ Realizadas</option></select>'
-    +'</div><div class="flex gap-6 mb-10" style="flex-wrap:nowrap;align-items:stretch">'
-    +'<select class="fs" style="margin:0;flex:0 1 128px;min-width:0" onchange="S.notasOrden=this.value;saveUIState();render()"><option value="desc"'+(['asc','pri','venc'].indexOf(S.notasOrden)<0?' selected':'')+'>📅 Recientes</option><option value="asc"'+(S.notasOrden==='asc'?' selected':'')+'>📅 Antiguas</option><option value="pri"'+(S.notasOrden==='pri'?' selected':'')+'>⚡ Prioridad</option><option value="venc"'+(S.notasOrden==='venc'?' selected':'')+'>⏰ Vencimiento</option></select>'
-    +'<div style="display:flex;gap:6px;flex:1;min-width:0"><select class="fs" style="margin:0;flex:1;min-width:0" onchange="S.notasTipo=this.value;saveUIState();render()"><option value="">Tipo: todos</option>'+Object.keys(NOTA_TIPOS).map(function(k){return '<option value="'+k+'"'+(S.notasTipo===k?' selected':'')+'>'+NOTA_TIPOS[k]+'</option>';}).join('')+'</select>'
-    +'<button title="Sólo las que tienen alerta" onclick="S.notasAlerta=!S.notasAlerta;saveUIState();render()" style="flex-shrink:0;width:38px;border-radius:10px;font-size:16px;cursor:pointer;'+(S.notasAlerta?'background:#fef2f2;border:2px solid #dc2626':'background:var(--white);border:1px solid var(--brd)')+'">🚨</button>'
-    +'<button title="Sólo las que tienen conversación iniciada" onclick="S.notasChat=!S.notasChat;saveUIState();render()" style="flex-shrink:0;width:38px;border-radius:10px;font-size:16px;cursor:pointer;'+(S.notasChat?'background:#dbeafe;border:2px solid #1d4ed8':'background:var(--white);border:1px solid var(--brd)')+'">🗨️</button>'+'</div>'
+    +(function(){var n=_notasFiltrosN();return '<button class="btn btn-s" onclick="S.notasFiltros=!S.notasFiltros;saveUIState();render()" style="flex:0 0 auto;font-weight:700;padding:0 12px;background:'+(n||S.notasFiltros?'#FEF3C7':'var(--gray-ll)')+';color:'+(n||S.notasFiltros?'#92400E':'var(--text2)')+';border:1px solid '+(n?'#D97706':'transparent')+'">Filtros'+(n?' ('+n+')':'')+' '+(S.notasFiltros?'▴':'▾')+'</button>';})()
     +'</div>'
-    +(S.notasTipo==='pendiente'?(function(){
-      var rs=_responsablesObra();if(S.notasResp&&rs.indexOf(S.notasResp)<0)rs.push(S.notasResp);
-      return '<div class="flex gap-6 mb-10 items-center"><span class="txs fw7" style="white-space:nowrap;color:var(--cyan)">👤 Responsable</span>'
-        +'<select class="fs" style="margin:0;flex:1;min-width:0" onchange="S.notasResp=this.value;saveUIState();render()"><option value="">Todos</option>'
-        +rs.map(function(r){var k=pf('notas').filter(function(n){return n.tipo==='pendiente'&&!_notaHecha(n)&&_mismoResp(n.responsable,r);}).length;return '<option value="'+esc(r)+'"'+(_mismoResp(S.notasResp,r)?' selected':'')+'>'+esc(r)+(k?' ('+k+')':'')+'</option>';}).join('')
-        +'<option value="__sin"'+(S.notasResp==='__sin'?' selected':'')+'>Sin responsable</option></select></div>';
+    +(S.notasFiltros?(function(){
+      var rs=_responsablesObra();if(S.notasResp&&S.notasResp!=='__sin'&&rs.indexOf(S.notasResp)<0)rs.push(S.notasResp);
+      var est='flex:0 0 auto;width:auto;max-width:158px;margin:0;font-size:13px';
+      return '<div class="nota-filtros">'
+      +'<select class="fs" style="'+est+'" onchange="S.notasOrden=this.value;saveUIState();render()"><option value="desc"'+(['asc','pri','venc'].indexOf(S.notasOrden)<0?' selected':'')+'>Más recientes</option><option value="asc"'+(S.notasOrden==='asc'?' selected':'')+'>Más antiguas</option><option value="pri"'+(S.notasOrden==='pri'?' selected':'')+'>Por prioridad</option><option value="venc"'+(S.notasOrden==='venc'?' selected':'')+'>Por vencimiento</option></select>'
+      +'<select class="fs" style="'+est+'" onchange="S.notasTipo=this.value;saveUIState();render()"><option value="">Tipo: todos</option>'+Object.keys(NOTA_TIPOS).map(function(k){return '<option value="'+k+'"'+(S.notasTipo===k?' selected':'')+'>'+NOTA_TIPOS[k]+'</option>';}).join('')+'</select>'
+      +'<select class="fs" style="'+est+'" onchange="S.notasEstado=this.value;saveUIState();render()"><option value=""'+(!S.notasEstado?' selected':'')+'>Vigentes y hechas</option><option value="vig"'+(S.notasEstado==='vig'?' selected':'')+'>Vigentes</option><option value="hechas"'+(S.notasEstado==='hechas'?' selected':'')+'>Realizadas</option></select>'
+      +'<select class="fs" style="'+est+'" onchange="S.notasResp=this.value;saveUIState();render()"><option value="">Responsable: todos</option>'+rs.map(function(r){return '<option value="'+esc(r)+'"'+(_mismoResp(S.notasResp,r)?' selected':'')+'>'+esc(r)+'</option>';}).join('')+'<option value="__sin"'+(S.notasResp==='__sin'?' selected':'')+'>Sin responsable</option></select>'
+      +'<button title="Sólo las que tienen alerta" onclick="S.notasAlerta=!S.notasAlerta;saveUIState();render()" style="flex:0 0 auto;width:40px;height:38px;border-radius:10px;font-size:16px;cursor:pointer;'+(S.notasAlerta?'background:#fef2f2;border:2px solid #dc2626':'background:var(--white);border:1px solid var(--brd)')+'">🚨</button>'
+      +'<button title="Sólo las que tienen conversación" onclick="S.notasChat=!S.notasChat;saveUIState();render()" style="flex:0 0 auto;width:40px;height:38px;border-radius:10px;font-size:16px;cursor:pointer;'+(S.notasChat?'background:#dbeafe;border:2px solid #1d4ed8':'background:var(--white);border:1px solid var(--brd)')+'">🗨️</button>'
+      +(_notasFiltrosN()?'<button class="btn btn-g btn-s" style="flex:0 0 auto;white-space:nowrap" onclick="S.notasOrden=\'desc\';S.notasTipo=\'\';S.notasEstado=\'\';S.notasResp=\'\';S.notasAlerta=false;S.notasChat=false;saveUIState();render()">Limpiar</button>':'')
+      +'</div>';
     })():'');
   if(S.notasSelMode){var _ns=Object.keys(S.notasSel||{}).filter(function(k){return lista.some(function(x){return x.id===k;});}).length;
     h+='<div class="flex items-center gap-6 mb-10" style="position:sticky;top:0;z-index:5;padding:8px 10px;border-radius:10px;background:#fefce8;border:2px solid #ca8a04">'
@@ -9550,6 +9556,7 @@ function rNotas(mc){
   }
   mc.innerHTML=h;
 }
+function _notasFiltrosN(){return (['asc','pri','venc'].indexOf(S.notasOrden)>=0?1:0)+(S.notasTipo?1:0)+(S.notasEstado?1:0)+(S.notasResp?1:0)+(S.notasAlerta?1:0)+(S.notasChat?1:0);}
 function _notaCard(n,conFecha){
   var c=MC.notas;
   var ph=(n.photos||[]).filter(function(p){return p&&!p.deletedAt;});
@@ -9569,18 +9576,21 @@ function _notaCard(n,conFecha){
     +pill(_notaTipoLabel(n.tipo||'registro'),'#fef9c3','#a16207')
     +((n.tipo==='pendiente'||n.prioridad)&&NOTA_PRI[n.prioridad||'media']?pill(NOTA_PRI[n.prioridad||'media'][0],NOTA_PRI[n.prioridad||'media'][2],NOTA_PRI[n.prioridad||'media'][1]):'')
     +_alertTag(n)
-    +(function(){var nl=_chatSinLeer('notas',n.id);return nl?'<span title="'+nl+' mensaje'+(nl>1?'s':'')+' nuevo'+(nl>1?'s':'')+' del colaborador" style="margin-left:auto;min-width:22px;height:22px;padding:0 6px;border-radius:11px;background:#0d9488;color:#fff;font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px #ccfbf1">'+nl+'</span>':'';})()
-    +'</div><div class="nota-fila" style="margin-top:4px">'
-    +(conFecha?'<span class="txxs fw7" style="color:var(--text2);white-space:nowrap">📅 '+esc(_notaDiaCorto(n.fecha))+(n.hora?' · '+esc(n.hora):'')+'</span>':'<span class="txxs fw7 tc3">'+esc(n.hora||'')+'</span>')
-    +(function(){var dv=_notaDiasVence(n);if(!n.vence)return '';if(dv===null)return pill('⏰ '+esc(fmts(n.vence)||n.vence),'#f1f5f9','#64748b');return pill('⏰ '+esc(fmts(n.vence)||n.vence)+(dv<=2?' · '+_txtVence(dv):''),dv<0?'#fee2e2':dv<=2?'#ffedd5':'#f1f5f9',dv<0?'#dc2626':dv<=2?'#c2410c':'#475569');})()
-    +(n.responsable?'<button onclick="asignarResponsableNota(\''+n.id+'\')" title="Cambiar responsable" style="border:none;font-size:9px;background:#e0f2fe;color:#0369a1;border-radius:9px;padding:1px 7px;font-weight:700;white-space:nowrap;cursor:pointer">👤 '+esc(n.responsable)+'</button>':'')
-    +((n.cuaderno&&n.cuaderno!==NOTA_CUADERNO_DEF)?pill('📒 '+esc(n.cuaderno),'#f1f5f9','#475569'):'')
-    +(n.personas&&!(n.tipo==='pendiente'&&_mismoResp(n.personas,n.responsable))?pill('👥 '+esc(n.personas),'#eff6ff','#2563eb'):'')
-    +_chatBtns('notas',n)
-    +(esDot?pill('💻 DOT','#f0fdf4','#16a34a'):'')
-    +(n.fijada?'<span title="Fijada">📌</span>':'')
-    +(hecha?pill('✓ Hecha','#dcfce7','#16a34a'):'')
+    +'<span style="margin-left:auto;font-size:11px!important;font-weight:700;color:var(--text2);white-space:nowrap">'+(conFecha?esc(_notaDiaCorto(n.fecha))+(n.hora?' · '+esc(n.hora):''):esc(n.hora||''))+'</span>'
+    +(function(){var nl=_chatSinLeer('notas',n.id);return nl?'<span title="'+nl+' mensaje'+(nl>1?'s':'')+' nuevo'+(nl>1?'s':'')+' del colaborador" style="min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:#0d9488;color:#fff;font-weight:800;justify-content:center">'+nl+'</span>':'';})()
     +'</div>'
+    +(function(){
+      var dv=_notaDiasVence(n),l='';
+      if(n.vence)l+=dv===null?pill('⏰ '+esc(fmts(n.vence)||n.vence),'#f1f5f9','#64748b'):pill('⏰ '+esc(fmts(n.vence)||n.vence)+(dv<=2?' · '+_txtVence(dv):''),dv<0?'#fee2e2':dv<=2?'#ffedd5':'#f1f5f9',dv<0?'#dc2626':dv<=2?'#c2410c':'#475569');
+      if(n.responsable)l+='<button onclick="asignarResponsableNota(\''+n.id+'\')" title="Cambiar responsable" style="border:none;background:#e0f2fe;color:#0369a1;border-radius:9px;padding:1px 7px;font-weight:700;white-space:nowrap;cursor:pointer">👤 '+esc(n.responsable)+'</button>';
+      if(n.cuaderno&&n.cuaderno!==NOTA_CUADERNO_DEF)l+=pill('📒 '+esc(n.cuaderno),'#f1f5f9','#475569');
+      if(n.personas&&!(n.tipo==='pendiente'&&_mismoResp(n.personas,n.responsable)))l+=pill('👥 '+esc(n.personas),'#eff6ff','#2563eb');
+      l+=_chatBtns('notas',n);
+      if(esDot)l+=pill('DOT','#f1f5f9','#64748b');
+      if(n.fijada)l+='<span title="Fijada">📌</span>';
+      if(hecha)l+=pill('✓ Hecha','#dcfce7','#16a34a');
+      return l?'<div class="nota-fila" style="margin-top:5px">'+l+'</div>':'';
+    })()
     +(n.titulo?'<div class="ts fw7 mt-4" style="'+(hecha?'text-decoration:line-through;color:var(--text3)':'')+'">'+esc(n.titulo)+'</div>':'')
     +(n.texto?'<div class="ts mt-4" style="white-space:pre-wrap;line-height:1.55;'+(hecha?'color:var(--text3)':'')+'">'+esc(n.texto)+'</div>':'')
     +(ph.length?photoGrid(ph,'notas',n.id):'')
@@ -9795,23 +9805,48 @@ function borrarNota(id){
 function dictarNota(taId,btn){
   var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SR){toast('El dictado por voz no está disponible en este navegador (probá con Chrome)','var(--orange)',4000);return;}
-  if(window._notaRec){try{window._notaRec.stop();}catch(_){}return;}
+  // Segundo toque: recién ahí se termina
+  if(window._notaRec){window._notaRec._parar=true;try{window._notaRec.stop();}catch(_){}return;}
   var rec=new SR();rec.lang='es-AR';rec.continuous=true;rec.interimResults=false;
+  rec._parar=false;
   window._notaRec=rec;
-  var txt0=btn?btn.textContent:'';
-  rec.onstart=function(){if(btn){btn.textContent='🔴 Parar';btn.title='Escuchando… tocá para terminar';btn.style.color='var(--red)';}};
-  rec.onend=function(){window._notaRec=null;if(btn){btn.textContent=txt0;btn.style.color='';}var ta=document.getElementById(taId);if(ta&&taId==='nota_q'){S.notaBorrador=ta.value;saveUIState();}};
-  rec.onerror=function(e){if(e.error!=='no-speech'&&e.error!=='aborted')toast('Micrófono: '+e.error,'var(--orange)',3000);};
+  var txt0=btn?btn.textContent:'',ultimo='',inicio=0,cortes=0,lock=null;
+  var pintar=function(on){if(!btn)return;btn.textContent=on?'🔴 Parar':txt0;btn.title=on?'Escuchando… tocá para terminar':'Dictar';btn.style.color=on?'var(--red)':'';};
+  var guardar=function(){var ta=document.getElementById(taId);if(ta&&taId==='nota_q'){S.notaBorrador=ta.value;saveUIState();}};
+  // El teléfono no apaga la pantalla mientras dictás
+  try{if(navigator.wakeLock)navigator.wakeLock.request('screen').then(function(l){lock=l;}).catch(function(){});}catch(_){}
+  var terminar=function(){window._notaRec=null;pintar(false);guardar();try{if(lock)lock.release();}catch(_){}};
+  var arrancar=function(){inicio=Date.now();try{rec.start();}catch(_){terminar();toast('No se pudo iniciar el micrófono','var(--orange)');}};
+  rec.onstart=function(){pintar(true);};
+  // El navegador corta solo en cada silencio: si no lo pediste, vuelve a escuchar
+  rec.onend=function(){
+    if(rec._parar){terminar();return;}
+    guardar();
+    cortes=(Date.now()-inicio<800)?cortes+1:0;
+    if(cortes>=6){terminar();toast('El micrófono se cortó. Tocá 🎤 para seguir.','var(--orange)',4000);return;}
+    ultimo='';
+    setTimeout(function(){if(rec._parar)terminar();else arrancar();},cortes?400:120);
+  };
+  rec.onerror=function(e){
+    if(e.error==='not-allowed'||e.error==='service-not-allowed'||e.error==='audio-capture'){rec._parar=true;toast('Micrófono: '+(e.error==='audio-capture'?'no se encontró micrófono':'falta el permiso'),'var(--orange)',4000);}
+  };
   rec.onresult=function(e){
     var ta=document.getElementById(taId);if(!ta)return;
     for(var i=e.resultIndex;i<e.results.length;i++){
       if(!e.results[i].isFinal)continue;
       var t=e.results[i][0].transcript.trim();if(!t)continue;
-      t=t.charAt(0).toUpperCase()+t.slice(1);
-      ta.value=ta.value+(ta.value&&!/\s$/.test(ta.value)?(/[.!?]$/.test(ta.value.trim())?' ':'. '):'')+t;
+      // En Android cada resultado repite lo anterior: se agrega solo lo nuevo
+      var nuevo=t;
+      if(ultimo&&t.toLowerCase().indexOf(ultimo.toLowerCase())===0)nuevo=t.slice(ultimo.length).trim();
+      else if(ultimo&&ultimo.toLowerCase()===t.toLowerCase())nuevo='';
+      ultimo=t;
+      if(!nuevo)continue;
+      nuevo=nuevo.charAt(0).toUpperCase()+nuevo.slice(1);
+      ta.value=ta.value+(ta.value&&!/\s$/.test(ta.value)?(/[.!?]$/.test(ta.value.trim())?' ':'. '):'')+nuevo;
     }
+    guardar();
   };
-  try{rec.start();}catch(_){window._notaRec=null;toast('No se pudo iniciar el micrófono','var(--orange)');}
+  arrancar();
 }
 // ── Dibujo a mano alzada ──
 function abrirDibujoNota(destino){
@@ -10188,7 +10223,7 @@ function exportNotasPDF(soloElegidas){
   if(S.notasAlerta&&S.notasChat)filtros.push('Con alerta o conversación');
   else if(S.notasAlerta)filtros.push('Con alerta');
   else if(S.notasChat)filtros.push('Con conversación');
-  if(S.notasTipo==='pendiente'&&S.notasResp)filtros.push(S.notasResp==='__sin'?'Sin responsable':'Responsable: '+S.notasResp);
+  if(S.notasResp)filtros.push(S.notasResp==='__sin'?'Sin responsable':'Responsable: '+S.notasResp);
   if(S.notasVencF)filtros.push('Vencidas y por vencer');
   var dia='',body='',sinDias=S.notasOrden==='pri'||S.notasOrden==='venc';
   lista.forEach(function(n){
