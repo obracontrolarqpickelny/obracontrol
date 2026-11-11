@@ -2633,7 +2633,9 @@ const _UI_KEYS=[
   // Tamaño de las miniaturas de Fotos
   'fotosTam',
   // Listado de un colaborador: origen, chat y orden
-  'colabOrigen','colabChat','colabOrden'
+  'colabOrigen','colabChat','colabOrden',
+  // Historial de DOT abierto o plegado
+  'dotHist'
 ];
 // Si la obra guardada ya no existe (se eliminó o se abrió en otro dispositivo),
 // se vuelve al inicio en lugar de mostrar una obra vacía.
@@ -18291,11 +18293,11 @@ function _dotCardHtml(){
   }
   if(log.length){
     var obraN=function(id){var p=(D.projects||[]).find(function(x){return x.id===id;});return p?p.name:'';};
-    h+='<div class="txxs fw7 tc3 mt-8 mb-4">Lo último que hizo DOT</div>'+log.map(function(l){
+    h+='<button onclick="S.dotHist=!S.dotHist;saveUIState();render()" style="display:flex;width:100%;justify-content:space-between;align-items:center;margin-top:10px;padding:8px 10px;border:1px solid var(--brd);border-radius:9px;background:var(--gray-ll);color:var(--text2);font-size:13px;font-weight:700;cursor:pointer"><span>🕒 Lo que hizo DOT ('+(D.dotLog||[]).length+')</span><span>'+(S.dotHist?'▲':'▼')+'</span></button>'+(!S.dotHist?'':log.map(function(l){
       var v={crear:'➕ Cargó',modificar:'✏️ Modificó',eliminar:'🗑 Eliminó'}[l.op]||l.op;
       return '<div class="flex items-center gap-6" style="padding:5px 0;border-top:1px solid var(--gray-ll)"><div style="flex:1;min-width:0"><div class="txs" style="'+(l.deshecho?'text-decoration:line-through;color:var(--text3)':'')+'">'+v+' · '+esc(l.titulo||l.tabla)+'</div><div class="txxs tc3">'+esc(fmts(l.ts)||'')+' · '+esc(obraN(l.obra))+' · '+esc(l.tabla)+'</div></div>'
         +(l.ok&&!l.deshecho?'<button class="btn btn-sec btn-s" style="flex:0 0 auto" onclick="dotDeshacer(\''+l.id+'\')">↩ Deshacer</button>':(l.ok?'<span class="txxs tc3">deshecho</span>':'<span class="txxs" style="color:var(--red)">'+esc(l.error||'error')+'</span>'))+'</div>';
-    }).join('');
+    }).join(''));
   }
   return h+'</div>';
 }
