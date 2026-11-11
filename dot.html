@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<title>ObraControl · Acceso de DOT</title>
+<style>
+body{font-family:system-ui,Arial,sans-serif;margin:0;background:#f1f5f9;color:#1e293b}
+main{max-width:760px;margin:0 auto;padding:16px}
+h1{font-size:20px;margin:6px 0 2px}
+h2{font-size:15px;margin:0 0 8px}
+.c{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin:12px 0}
+select,textarea,input{font:inherit;width:100%;box-sizing:border-box;padding:8px;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:8px}
+textarea{font-family:ui-monospace,Consolas,monospace;font-size:13px;min-height:190px}
+button{font:inherit;font-weight:700;padding:9px 14px;border:0;border-radius:8px;background:#d97706;color:#fff;cursor:pointer}
+button.s{background:#e2e8f0;color:#334155}
+pre{white-space:pre-wrap;word-break:break-word;background:#0f172a;color:#e2e8f0;border-radius:8px;padding:10px;font-size:12px;max-height:440px;overflow:auto;margin:8px 0 0}
+.m{color:#64748b;font-size:13px}
+code{background:#f1f5f9;border-radius:4px;padding:0 4px}
+#est{font-weight:700}
+</style>
+</head>
+<body>
+<main>
+<h1>🤖 ObraControl · Acceso de DOT</h1>
+<div class="m" id="est">Conectando…</div>
+
+<section class="c">
+<h2>1. Leer</h2>
+<select id="obra" aria-label="Obra"></select>
+<select id="tabla" aria-label="Tabla"></select>
+<button id="bLeer">Leer registros</button>
+<pre id="sLeer" hidden></pre>
+</section>
+
+<section class="c">
+<h2>2. Cargar, modificar o eliminar</h2>
+<div class="m">Una lista JSON de hasta 50 operaciones. Los ids de las obras y de los registros salen de "Leer".</div>
+<pre>[
+ {"op":"crear","tabla":"notas","obra":"ID_OBRA","datos":{"titulo":"…","texto":"…","tipo":"registro"}},
+ {"op":"crear","tabla":"economia","obra":"ID_OBRA","datos":{"tipo":"egreso","monto":1000,"concepto":"…","fecha":"2026-11-11"}},
+ {"op":"modificar","tabla":"notas","id":"ID_REGISTRO","datos":{"texto":"nuevo texto"}},
+ {"op":"eliminar","tabla":"notas","id":"ID_REGISTRO"}
+]</pre>
+<br>
+<textarea id="ops" spellcheck="false" aria-label="Operaciones en JSON"></textarea>
+<button id="bEnv">Enviar</button>
+<pre id="sEnv" hidden></pre>
+</section>
+
+<section class="c">
+<h2>3. Ver resultado</h2>
+<input id="lote" placeholder="Número de envío" aria-label="Número de envío">
+<button class="s" id="bEst">Ver resultado</button>
+<pre id="sEst" hidden></pre>
+<p class="m">"pendiente" significa que todavía no entró: se aplica cuando la app esté abierta en algún equipo con Drive conectado.</p>
+</section>
+</main>
+<script>
+(function(){
+  var p=new URLSearchParams(location.hash.slice(1)),k=p.get('k')||'',ep=p.get('ep')||'';
+  var $=function(i){return document.getElementById(i);};
+  function ver(id,o){var e=$(id);e.hidden=false;e.textContent=typeof o==='string'?o:JSON.stringify(o,null,1);}
+  function get(acc,extra){return fetch(ep+'?action='+acc+'&dot='+encodeURIComponent(k)+(extra||'')).then(function(r){return r.json();});}
+  if(!k||!ep){$('est').textContent='Falta la autorización: usá el link completo.';return;}
+  get('dot_leer').then(function(j){
+    if(!j.ok){$('est').textContent='✗ '+j.error;return;}
+    $('est').textContent='✓ Autorizado';
+    $('obra').innerHTML='';
+    j.obras.forEach(function(o){var e=document.createElement('option');e.value=o.id;e.textContent=o.nombre+' ('+o.id+')'+(o.cerrada?' · cerrada':'');$('obra').appendChild(e);});
+    j.tablas.forEach(function(t){var e=document.createElement('option');e.value=t;e.textContent=t;$('tabla').appendChild(e);});
+  }).catch(function(e){$('est').textContent='✗ No se pudo conectar: '+e.message;});
+  $('bLeer').onclick=function(){
+    ver('sLeer','Leyendo…');
+    get('dot_leer','&obra='+encodeURIComponent($('obra').value)+'&tabla='+encodeURIComponent($('tabla').value)).then(function(j){ver('sLeer',j);}).catch(function(e){ver('sLeer','Error: '+e.message);});
+  };
+  $('bEnv').onclick=function(){
+    var ops;
+    try{ops=JSON.parse($('ops').value);}catch(e){ver('sEnv','El JSON no es válido: '+e.message);return;}
+    if(!Array.isArray(ops))ops=[ops];
+    ver('sEnv','Enviando…');
+    fetch(ep,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({accion:'dot_enviar',dot:k,ops:ops})})
+      .then(function(r){return r.json();}).then(function(j){ver('sEnv',j);if(j.lote)$('lote').value=j.lote;}).catch(function(e){ver('sEnv','Error: '+e.message);});
+  };
+  $('bEst').onclick=function(){
+    ver('sEst','Consultando…');
+    get('dot_estado','&lote='+encodeURIComponent($('lote').value.trim())).then(function(j){ver('sEst',j);}).catch(function(e){ver('sEst','Error: '+e.message);});
+  };
+})();
+</script>
+</body>
+</html>

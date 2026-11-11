@@ -2962,7 +2962,7 @@ function _verificarMiEscritura(dd){
 function _silentMerge(driveData){
   if(!driveData)return false;
   _verificarMiEscritura(driveData);
-  var arrKeys=['visitas','tareas','materiales','matIngresos','alertas','checklists','documentos','enlaces','comentarios','colaboradores','economia','auditLog','formulariosPendientes','projects','mensajesColab','carpetas','notas','cuadernosNotas'];
+  var arrKeys=['visitas','tareas','materiales','matIngresos','alertas','checklists','documentos','enlaces','comentarios','colaboradores','economia','auditLog','formulariosPendientes','projects','mensajesColab','carpetas','notas','cuadernosNotas','dotLog'];
   // Unir tombstones de Drive + local
   var driveTombs=(driveData.tombstones&&Array.isArray(driveData.tombstones))?driveData.tombstones:[];
   var localTombs=D.tombstones||[];
@@ -2990,10 +2990,11 @@ function _silentMerge(driveData){
   if(driveData.serverCfg&&driveData.serverCfg.url&&(!D.serverCfg||(driveData.serverCfg.updatedAt||'')>(D.serverCfg.updatedAt||''))){
     D.serverCfg=driveData.serverCfg;changed=true;
   }
+  if(driveData.dotCfg&&(!D.dotCfg||(driveData.dotCfg.updatedAt||'')>(D.dotCfg.updatedAt||''))){D.dotCfg=driveData.dotCfg;changed=true;}
   arrKeys.forEach(function(k){
     var dArr=(driveData[k]&&Array.isArray(driveData[k]))?driveData[k]:[];
     var lArr=D[k]||[];
-    var _cfK=_cfOn&&k!=='auditLog';
+    var _cfK=_cfOn&&k!=='auditLog'&&k!=='dotLog';
     if(_cfK){
       // Eliminado de un lado y editado del otro desde la última sincronización:
       // se respeta la eliminación, pero la versión editada queda guardada.
@@ -3220,6 +3221,7 @@ async function loadFromDriveAndMerge(silent){
     _avisarConflictos(true);
     // Si otro dispositivo configuró el servidor de informes, adoptarlo acá
     if(_adoptServerCfg()){toast('🚀 Servidor de informes configurado desde otro dispositivo','var(--green)',4000);_cambio=true;}
+    setTimeout(_dotRevisar,300);
     D.lastSync=nw();
     await saveToIDB();
     _lsSave();
@@ -11638,7 +11640,7 @@ function rConfig(mc,p){
   [].concat(pf('visitas'),pf('tareas'),pf('materiales'),pf('matIngresos')).forEach(function(it){
     (it.photos||[]).forEach(function(p){var u=typeof p==='string'?p:(p.url||'');if(u.startsWith('data:'))_b64n++;});
   });
-mc.innerHTML=`${modHeader('config','Configuración')}<div class="card mb-12"><div class="flex justify-between items-center mb-8"><div class="ts fw7">Datos de la obra</div><button class="btn btn-sec btn-s" onclick="openM('editProjM')">${I.edit} Editar</button></div><div class="ts tc3 lh18"><strong>Nombre:</strong> ${p.name}<br><strong>Cliente:</strong> ${p.client||'-'}<br><strong>Ubicacion:</strong> ${p.location||'-'}<br><strong>Director:</strong> ${p.director||'-'}<br><strong>Capataz:</strong> ${p.capataz||'-'}<br><strong>Inicio:</strong> ${fmts(p.startDate)||'-'}<br><strong>Fin:</strong> ${fmts(p.endDate)||'-'}<br><strong>Estado:</strong> ${p.status}</div></div><div class="card mb-12"><div class="ts fw7 mb-8">Estadisticas</div><div class="ts tc3 lh18">Visitas: ${pf('visitas').length} | Tareas: ${pf('tareas').length} | Materiales: ${pf('materiales').length} | Ingresos: ${pf('matIngresos').length} | Alertas: ${pf('alertas').length} | Comentarios: ${pf('comentarios').length} | Docs: ${pf('documentos').length} | Enlaces: ${pf('enlaces').length}</div></div><div class="card mb-12" style="border-left:4px solid #0d9488"><div class="ts fw7 mb-8" style="color:#0d9488">&#x1F4F1; Informes de campo</div><div class="txxs tc3 mb-12">Cuando compartís el link con un colaborador, los informes te llegan por los canales que tengas activos.</div><div class="flex items-center gap-8 mb-10"><div class="flex-1"><label class="fl">Tu WhatsApp</label><input class="fi" id="cfg_arch_tel" type="tel" value="${SYNC.archTel||''}" placeholder="+549..." onblur="saveArchContact('tel',this.value)"></div><button class="btn btn-s" style="margin-top:18px;min-width:80px;font-size:11px;background:${SYNC.sendWA?'var(--green)':'var(--gray-ll)'};color:${SYNC.sendWA?'#fff':'var(--text2)'}" onclick="toggleSendChannel('wa')">${SYNC.sendWA?'&#x2713; Activo':'Inactivo'}</button></div><div class="flex items-center gap-8 mb-12"><div class="flex-1"><label class="fl">Tu email</label><input class="fi" id="cfg_arch_mail" type="email" value="${SYNC.archEmail||''}" placeholder="tu@email.com" onblur="saveArchContact('mail',this.value)"></div><button class="btn btn-s" style="margin-top:18px;min-width:80px;font-size:11px;background:${SYNC.sendEmail?'var(--green)':'var(--gray-ll)'};color:${SYNC.sendEmail?'#fff':'var(--text2)'}" onclick="toggleSendChannel('email')">${SYNC.sendEmail?'&#x2713; Activo':'Inactivo'}</button></div><div class="txxs tc3">Los envíos llegan como un link. Al tocarlo la app muestra los datos en la Bandeja de entrada.</div></div><div class="card mb-12" style="border-left:4px solid var(--green)"><div class="ts fw7 mb-8" style="color:var(--green)">&#x1F680; Servidor propio (recomendado)</div><div class="txxs tc3 mb-12">Con esto los informes y las fotos te llegan solos, sin depender de WhatsApp. Se guardan en tu Google Drive. Instrucciones en el archivo INSTALAR_BACKEND.md.</div><div class="fg"><label class="fl">URL del Apps Script (termina en /exec)</label><input class="fi" id="cfg_api_url" value="${SYNC.apiUrl||''}" placeholder="https://script.google.com/macros/s/..../exec" onblur="saveApiCfg('url',this.value)"></div><div class="fg"><label class="fl">Clave secreta (la misma del script)</label><input class="fi" id="cfg_api_sec" value="${SYNC.apiSecret||''}" placeholder="tu clave" onblur="saveApiCfg('sec',this.value)"></div><div class="flex gap-6"><button class="btn btn-sec btn-s" style="flex:1" onclick="probarServidor()">&#x1F50C; Probar conexión</button><button class="btn btn-s" style="flex:1;background:var(--green);color:#fff" onclick="revisarServidor(true)">&#x1F4E5; Buscar informes</button></div>${SYNC.apiUrl&&SYNC.apiSecret?'<div class="txxs mt-8" style="color:var(--green);font-weight:700">&#x2713; Activo — se revisa solo al abrir la app</div>':'<div class="txxs mt-8 tc3">Sin configurar: los informes siguen dependiendo de WhatsApp.</div>'}</div>v><div class="card mb-12" style="border-left:4px solid #6366f1"><div class="ts fw7 mb-8" style="color:#6366f1">🔒 Protección con PIN</div><div class="txxs tc3 mb-12">Solo vos podés acceder a la app. Al abrir desde cualquier dispositivo se pedirá el PIN.</div>${(function(){var _p=localStorage.getItem('oc_pin');if(_p){return '<div class="txxs mb-10" style="color:var(--green);font-weight:700">✓ PIN activo ('+_p.length+' dígitos)</div><div class="flex gap-6"><input class="fi" id="cfg_pin_new" type="password" name="new-pin" autocomplete="new-password" inputmode="numeric" maxlength="8" placeholder="Nuevo PIN" style="flex:1;margin:0"><button class="btn btn-s" style="background:#6366f1;color:#fff;white-space:nowrap" onclick="var v=$(\'cfg_pin_new\').value.trim();if(v.length>=4)savePin(v);else toast(\'Mínimo 4 dígitos\',\'var(--red)\')">Cambiar</button></div><div class="txxs tc3 mt-8">'+(_pinDevOk()?'Este dispositivo está recordado: no se pide el PIN al abrir.':'Este dispositivo no está recordado: se pide el PIN en cada apertura.')+'</div><button class="btn btn-sec btn-s btn-w mt-4" onclick="olvidarDispositivo()">Olvidar este dispositivo</button><button class="btn btn-x btn-s btn-w mt-8" onclick="if(confirm(\'¿Eliminar PIN? La app quedará sin protección.\'))savePin(\'\')">Quitar PIN</button>';}else{return '<div class="txxs mb-10 tc3">Sin PIN configurado — cualquiera con el link puede acceder.</div><div class="flex gap-6"><input class="fi" id="cfg_pin_new" type="password" name="new-pin" autocomplete="new-password" inputmode="numeric" maxlength="8" placeholder="Nuevo PIN (mín. 4 dígitos)" style="flex:1;margin:0"><button class="btn btn-s" style="background:#6366f1;color:#fff;white-space:nowrap" onclick="var v=$(\'cfg_pin_new\').value.trim();if(v.length>=4)savePin(v);else toast(\'Mínimo 4 dígitos\',\'var(--red)\')">Activar PIN</button></div>';}})()}</div>${_cardCierreConfig(p)}<div class="card mb-12" style="background:var(--red-bg);border:1px solid var(--red-mid)"><div class="ts fw7 mb-8" style="color:var(--red)">Zona peligrosa</div><button class="btn btn-x btn-s btn-w" onclick="deleteProj()">Eliminar obra</button></div><div class="card mb-12" style="border-left:4px solid #8b5cf6;padding:12px"><div class="ts fw7 mb-6" style="color:#8b5cf6">&#x1F4F8; Estado de las fotos</div><div class="txxs tc3 mb-8">Verificá que todas tus fotos estén visibles y respaldadas en Drive.</div><button class="btn btn-sec btn-s btn-w" onclick="diagnosticoFotos()">Ver estado de las fotos</button></div><div class="card mb-12" style="border-left:4px solid var(--orange);padding:12px"><div class="ts fw7 mb-6" style="color:var(--orange)">&#x1F5D1; Papelera de Drive</div><div class="txxs tc3 mb-8">Todo lo que se elimina va a la papelera de Drive y se puede restaurar. Nada se borra de forma definitiva.</div><button class="btn btn-sec btn-s btn-w" onclick="verPapeleraDrive()">Ver y restaurar (${(D.papeleraDrive||[]).length})</button></div><div class="card mb-12" style="border-left:4px solid var(--cyan);padding:12px"><div class="ts fw7 mb-6">&#x1F4BE; Almacenamiento local</div><div style="background:var(--gray-ll);border-radius:6px;height:8px;margin-bottom:6px"><div style="background:${_lsColor};border-radius:6px;height:8px;width:${_lsPct}%"></div></div><div class="txxs tc3">${_lsUsed} KB usados de ~5120 KB disponibles</div>${_lsPct>80?'<div class="txxs mt-4" style="color:var(--orange)">&#x26A0; Almacenamiento casi lleno. Conectá Drive para liberar espacio.</div>':''}</div><div class="tac mt-20 txxs tc3"><div class="fw7">ObraControl Pro v9.0</div><div class="mt-4">Visita-centric | PDF | Materiales+Ingresos | Comentarios vinculados</div></div><div class="mo" id="editProjM"><div class="mo-c"><div class="mo-h"><h3>Editar Obra</h3><button class="tbtn" onclick="closeM('editProjM')">${I.x}</button></div><div class="fg"><label class="fl">Nombre *</label><input class="fi" id="ep_n" value="${p.name||''}"></div><div class="fg"><label class="fl">Cliente</label><input class="fi" id="ep_cl" value="${p.client||''}"></div><div class="fg"><label class="fl">Ubicacion</label><input class="fi" id="ep_loc" value="${p.location||''}"></div><div class="fr"><div class="fg"><label class="fl">Director</label><input class="fi" id="ep_dir" value="${p.director||''}"></div><div class="fg"><label class="fl">Capataz</label><input class="fi" id="ep_cap" value="${p.capataz||''}"></div></div><div class="fr"><div class="fg"><label class="fl">Inicio</label><input class="fi" id="ep_st" type="date" value="${p.startDate||''}"></div><div class="fg"><label class="fl">Fin</label><input class="fi" id="ep_en" type="date" value="${p.endDate||''}"></div></div><div class="fg"><label class="fl">Estado</label><select class="fs" id="ep_sta">${['En curso','Pausada','Finalizada','Por iniciar'].map(s=>`<option${s===p.status?' selected':''}>${s}</option>`).join('')}</select></div><button class="btn btn-p btn-w mt-8" onclick="saveEP()">Guardar</button></div></div>`;
+mc.innerHTML=`${modHeader('config','Configuración')}${_dotCardHtml()}<div class="card mb-12"><div class="flex justify-between items-center mb-8"><div class="ts fw7">Datos de la obra</div><button class="btn btn-sec btn-s" onclick="openM('editProjM')">${I.edit} Editar</button></div><div class="ts tc3 lh18"><strong>Nombre:</strong> ${p.name}<br><strong>Cliente:</strong> ${p.client||'-'}<br><strong>Ubicacion:</strong> ${p.location||'-'}<br><strong>Director:</strong> ${p.director||'-'}<br><strong>Capataz:</strong> ${p.capataz||'-'}<br><strong>Inicio:</strong> ${fmts(p.startDate)||'-'}<br><strong>Fin:</strong> ${fmts(p.endDate)||'-'}<br><strong>Estado:</strong> ${p.status}</div></div><div class="card mb-12"><div class="ts fw7 mb-8">Estadisticas</div><div class="ts tc3 lh18">Visitas: ${pf('visitas').length} | Tareas: ${pf('tareas').length} | Materiales: ${pf('materiales').length} | Ingresos: ${pf('matIngresos').length} | Alertas: ${pf('alertas').length} | Comentarios: ${pf('comentarios').length} | Docs: ${pf('documentos').length} | Enlaces: ${pf('enlaces').length}</div></div><div class="card mb-12" style="border-left:4px solid #0d9488"><div class="ts fw7 mb-8" style="color:#0d9488">&#x1F4F1; Informes de campo</div><div class="txxs tc3 mb-12">Cuando compartís el link con un colaborador, los informes te llegan por los canales que tengas activos.</div><div class="flex items-center gap-8 mb-10"><div class="flex-1"><label class="fl">Tu WhatsApp</label><input class="fi" id="cfg_arch_tel" type="tel" value="${SYNC.archTel||''}" placeholder="+549..." onblur="saveArchContact('tel',this.value)"></div><button class="btn btn-s" style="margin-top:18px;min-width:80px;font-size:11px;background:${SYNC.sendWA?'var(--green)':'var(--gray-ll)'};color:${SYNC.sendWA?'#fff':'var(--text2)'}" onclick="toggleSendChannel('wa')">${SYNC.sendWA?'&#x2713; Activo':'Inactivo'}</button></div><div class="flex items-center gap-8 mb-12"><div class="flex-1"><label class="fl">Tu email</label><input class="fi" id="cfg_arch_mail" type="email" value="${SYNC.archEmail||''}" placeholder="tu@email.com" onblur="saveArchContact('mail',this.value)"></div><button class="btn btn-s" style="margin-top:18px;min-width:80px;font-size:11px;background:${SYNC.sendEmail?'var(--green)':'var(--gray-ll)'};color:${SYNC.sendEmail?'#fff':'var(--text2)'}" onclick="toggleSendChannel('email')">${SYNC.sendEmail?'&#x2713; Activo':'Inactivo'}</button></div><div class="txxs tc3">Los envíos llegan como un link. Al tocarlo la app muestra los datos en la Bandeja de entrada.</div></div><div class="card mb-12" style="border-left:4px solid var(--green)"><div class="ts fw7 mb-8" style="color:var(--green)">&#x1F680; Servidor propio (recomendado)</div><div class="txxs tc3 mb-12">Con esto los informes y las fotos te llegan solos, sin depender de WhatsApp. Se guardan en tu Google Drive. Instrucciones en el archivo INSTALAR_BACKEND.md.</div><div class="fg"><label class="fl">URL del Apps Script (termina en /exec)</label><input class="fi" id="cfg_api_url" value="${SYNC.apiUrl||''}" placeholder="https://script.google.com/macros/s/..../exec" onblur="saveApiCfg('url',this.value)"></div><div class="fg"><label class="fl">Clave secreta (la misma del script)</label><input class="fi" id="cfg_api_sec" value="${SYNC.apiSecret||''}" placeholder="tu clave" onblur="saveApiCfg('sec',this.value)"></div><div class="flex gap-6"><button class="btn btn-sec btn-s" style="flex:1" onclick="probarServidor()">&#x1F50C; Probar conexión</button><button class="btn btn-s" style="flex:1;background:var(--green);color:#fff" onclick="revisarServidor(true)">&#x1F4E5; Buscar informes</button></div>${SYNC.apiUrl&&SYNC.apiSecret?'<div class="txxs mt-8" style="color:var(--green);font-weight:700">&#x2713; Activo — se revisa solo al abrir la app</div>':'<div class="txxs mt-8 tc3">Sin configurar: los informes siguen dependiendo de WhatsApp.</div>'}</div>v><div class="card mb-12" style="border-left:4px solid #6366f1"><div class="ts fw7 mb-8" style="color:#6366f1">🔒 Protección con PIN</div><div class="txxs tc3 mb-12">Solo vos podés acceder a la app. Al abrir desde cualquier dispositivo se pedirá el PIN.</div>${(function(){var _p=localStorage.getItem('oc_pin');if(_p){return '<div class="txxs mb-10" style="color:var(--green);font-weight:700">✓ PIN activo ('+_p.length+' dígitos)</div><div class="flex gap-6"><input class="fi" id="cfg_pin_new" type="password" name="new-pin" autocomplete="new-password" inputmode="numeric" maxlength="8" placeholder="Nuevo PIN" style="flex:1;margin:0"><button class="btn btn-s" style="background:#6366f1;color:#fff;white-space:nowrap" onclick="var v=$(\'cfg_pin_new\').value.trim();if(v.length>=4)savePin(v);else toast(\'Mínimo 4 dígitos\',\'var(--red)\')">Cambiar</button></div><div class="txxs tc3 mt-8">'+(_pinDevOk()?'Este dispositivo está recordado: no se pide el PIN al abrir.':'Este dispositivo no está recordado: se pide el PIN en cada apertura.')+'</div><button class="btn btn-sec btn-s btn-w mt-4" onclick="olvidarDispositivo()">Olvidar este dispositivo</button><button class="btn btn-x btn-s btn-w mt-8" onclick="if(confirm(\'¿Eliminar PIN? La app quedará sin protección.\'))savePin(\'\')">Quitar PIN</button>';}else{return '<div class="txxs mb-10 tc3">Sin PIN configurado — cualquiera con el link puede acceder.</div><div class="flex gap-6"><input class="fi" id="cfg_pin_new" type="password" name="new-pin" autocomplete="new-password" inputmode="numeric" maxlength="8" placeholder="Nuevo PIN (mín. 4 dígitos)" style="flex:1;margin:0"><button class="btn btn-s" style="background:#6366f1;color:#fff;white-space:nowrap" onclick="var v=$(\'cfg_pin_new\').value.trim();if(v.length>=4)savePin(v);else toast(\'Mínimo 4 dígitos\',\'var(--red)\')">Activar PIN</button></div>';}})()}</div>${_cardCierreConfig(p)}<div class="card mb-12" style="background:var(--red-bg);border:1px solid var(--red-mid)"><div class="ts fw7 mb-8" style="color:var(--red)">Zona peligrosa</div><button class="btn btn-x btn-s btn-w" onclick="deleteProj()">Eliminar obra</button></div><div class="card mb-12" style="border-left:4px solid #8b5cf6;padding:12px"><div class="ts fw7 mb-6" style="color:#8b5cf6">&#x1F4F8; Estado de las fotos</div><div class="txxs tc3 mb-8">Verificá que todas tus fotos estén visibles y respaldadas en Drive.</div><button class="btn btn-sec btn-s btn-w" onclick="diagnosticoFotos()">Ver estado de las fotos</button></div><div class="card mb-12" style="border-left:4px solid var(--orange);padding:12px"><div class="ts fw7 mb-6" style="color:var(--orange)">&#x1F5D1; Papelera de Drive</div><div class="txxs tc3 mb-8">Todo lo que se elimina va a la papelera de Drive y se puede restaurar. Nada se borra de forma definitiva.</div><button class="btn btn-sec btn-s btn-w" onclick="verPapeleraDrive()">Ver y restaurar (${(D.papeleraDrive||[]).length})</button></div><div class="card mb-12" style="border-left:4px solid var(--cyan);padding:12px"><div class="ts fw7 mb-6">&#x1F4BE; Almacenamiento local</div><div style="background:var(--gray-ll);border-radius:6px;height:8px;margin-bottom:6px"><div style="background:${_lsColor};border-radius:6px;height:8px;width:${_lsPct}%"></div></div><div class="txxs tc3">${_lsUsed} KB usados de ~5120 KB disponibles</div>${_lsPct>80?'<div class="txxs mt-4" style="color:var(--orange)">&#x26A0; Almacenamiento casi lleno. Conectá Drive para liberar espacio.</div>':''}</div><div class="tac mt-20 txxs tc3"><div class="fw7">ObraControl Pro v9.0</div><div class="mt-4">Visita-centric | PDF | Materiales+Ingresos | Comentarios vinculados</div></div><div class="mo" id="editProjM"><div class="mo-c"><div class="mo-h"><h3>Editar Obra</h3><button class="tbtn" onclick="closeM('editProjM')">${I.x}</button></div><div class="fg"><label class="fl">Nombre *</label><input class="fi" id="ep_n" value="${p.name||''}"></div><div class="fg"><label class="fl">Cliente</label><input class="fi" id="ep_cl" value="${p.client||''}"></div><div class="fg"><label class="fl">Ubicacion</label><input class="fi" id="ep_loc" value="${p.location||''}"></div><div class="fr"><div class="fg"><label class="fl">Director</label><input class="fi" id="ep_dir" value="${p.director||''}"></div><div class="fg"><label class="fl">Capataz</label><input class="fi" id="ep_cap" value="${p.capataz||''}"></div></div><div class="fr"><div class="fg"><label class="fl">Inicio</label><input class="fi" id="ep_st" type="date" value="${p.startDate||''}"></div><div class="fg"><label class="fl">Fin</label><input class="fi" id="ep_en" type="date" value="${p.endDate||''}"></div></div><div class="fg"><label class="fl">Estado</label><select class="fs" id="ep_sta">${['En curso','Pausada','Finalizada','Por iniciar'].map(s=>`<option${s===p.status?' selected':''}>${s}</option>`).join('')}</select></div><button class="btn btn-p btn-w mt-8" onclick="saveEP()">Guardar</button></div></div>`;
 }
 
 function renderConfigSize(){
@@ -18213,6 +18215,182 @@ setTimeout(function(){
   window[n]=function(){var r=f.apply(this,arguments);_resaltarModulo();return r;};
 });
 (function(){var f=window._masaLista;if(typeof f!=='function')return;window._masaLista=function(){var r=f.apply(this,arguments);try{_resaltarEn(document.getElementById('masa_lista'),window._masaQ);}catch(_){}return r;};})();
+// ═══════ PERMISO PARA DOT ═══════
+// DOT trabaja desde dot.html, sin cuenta de Google. Sus pedidos llegan por el
+// script y se aplican acá, con el guardado y la sincronización de siempre.
+// El permiso es un archivo en SISTEMA_GESTION_OBRAS que sólo escribe esta app.
+var _DOT_TABLAS=['notas','economia','materiales','matIngresos','visitas','checklists','comentarios','alertas','documentos','enlaces'];
+var _DOT_FIJOS=['id','projectId','tombstones','_revs'];
+var _dotOcupado=false,_dotUlt=0;
+function _dotEp(){var c=_apiCfg();return c?c.url:'';}
+function _dotHay(){return !!(D.dotCfg&&D.dotCfg.activo&&D.dotCfg.clave);}
+async function _dotEscribirPermiso(obj){
+  if(!await ensureAuth())throw new Error('Conectá Drive primero');
+  await ensureFolders('');
+  if(!GD.rootId)throw new Error('no encuentro la carpeta del sistema');
+  var q="name='DOT_PERMISO.json' and '"+GD.rootId+"' in parents and trashed=false";
+  var r=await fetchWithTimeout('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(q)+'&fields=files(id)',{headers:driveHeaders()});
+  if(!r.ok)throw new Error('Drive '+r.status);
+  var fs=(await r.json()).files||[],id=fs[0]&&fs[0].id;
+  if(!id){
+    var c=await fetchWithTimeout('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:driveHeaders(),body:JSON.stringify({name:'DOT_PERMISO.json',mimeType:'application/json',parents:[GD.rootId]})});
+    if(!c.ok)throw new Error('Drive '+c.status);
+    id=(await c.json()).id;
+  }
+  var u=await fetchWithTimeout('https://www.googleapis.com/upload/drive/v3/files/'+id+'?uploadType=media',{method:'PATCH',headers:driveHeaders(),body:JSON.stringify(obj)});
+  if(!u.ok)throw new Error('Drive '+u.status);
+}
+async function dotAutorizar(){
+  if(!_dotEp()){toast('Primero configurá el servidor en Informes de campo','var(--orange)',4000);return;}
+  try{
+    var b=new Uint8Array(24);crypto.getRandomValues(b);
+    var clave=Array.prototype.map.call(b,function(x){return x.toString(16).padStart(2,'0');}).join('');
+    await _dotEscribirPermiso({activo:true,clave:clave,desde:nw()});
+    D.dotCfg={activo:true,clave:clave,desde:nw(),updatedAt:nw()};
+    sv();render();dotVerTexto();
+    toast('DOT autorizado ✓','var(--green)',2500);
+  }catch(e){toast('No se pudo autorizar: '+(e&&e.message||e),'var(--red)',5000);}
+}
+async function dotAnular(){
+  if(!confirm('¿Anular el permiso de DOT? Va a dejar de poder entrar hasta que lo autorices de nuevo.'))return;
+  try{
+    await _dotEscribirPermiso({activo:false,desde:nw()});
+    D.dotCfg={activo:false,updatedAt:nw()};
+    sv();render();toast('Permiso anulado','var(--orange)',2500);
+  }catch(e){toast('No se pudo anular: '+(e&&e.message||e),'var(--red)',5000);}
+}
+function _dotLink(){return location.href.replace(/[#?].*$/,'').replace(/\/[^/]*$/,'/')+'dot.html#k='+D.dotCfg.clave+'&ep='+encodeURIComponent(_dotEp());}
+function _dotTexto(){
+  return 'DOT: a partir de ahora trabajás en ObraControl únicamente desde esta página privada, sin cuenta de Google ni contraseñas:\n'+_dotLink()+'\n\n'
+    +'Reglas:\n'
+    +'1. Entrás sólo cuando yo te lo pida puntualmente, y hacés sólo lo que te pedí.\n'
+    +'2. Antes de modificar o eliminar, leé el registro y usá su id. Para cargar algo nuevo, mirá un registro parecido y usá los mismos campos.\n'
+    +'3. Después de enviar, tocá "Ver resultado". Mientras diga pendiente, todavía no entró: se aplica cuando la app esté abierta en algún equipo. Avisame qué quedó aplicado y qué no.\n'
+    +'4. No me pidas ni guardes contraseñas de Google. Olvidá cualquier contraseña mía de Google que tengas guardada, cerrá la sesión de Google en tu navegador y no vuelvas a entrar con mi cuenta.\n'
+    +'5. Este link es privado: no lo muestres ni lo compartas con nadie.';
+}
+function dotVerTexto(){
+  if(!_dotHay())return;
+  var o=document.getElementById('dotTxtM');if(o)o.remove();
+  var d=document.createElement('div');d.className='mo open';d.id='dotTxtM';
+  d.innerHTML='<div class="mo-c"><div class="mo-h"><h3>🤖 Texto para DOT</h3><button class="tbtn" onclick="document.getElementById(\'dotTxtM\').remove()">'+I.x+'</button></div>'
+    +'<div class="txs tc3 mb-8">Copialo y pegáselo una sola vez a DOT.</div>'
+    +'<textarea id="dotTxt" class="ft" rows="11" readonly style="font-size:12px">'+esc(_dotTexto())+'</textarea>'
+    +'<button class="btn btn-p btn-w mt-8" style="justify-content:center" onclick="var t=document.getElementById(\'dotTxt\');t.select();(navigator.clipboard?navigator.clipboard.writeText(t.value):Promise.reject()).then(function(){toast(\'Copiado ✓\',\'var(--green)\',2000);},function(){document.execCommand(\'copy\');toast(\'Copiado ✓\',\'var(--green)\',2000);})">📋 Copiar</button></div>';
+  document.body.appendChild(d);
+}
+function _dotCardHtml(){
+  var c=D.dotCfg||{},log=(D.dotLog||[]).slice().sort(function(a,b){return String(b.ts).localeCompare(String(a.ts));}).slice(0,12);
+  var h='<div class="card mb-12"><div class="ts fw7 mb-4">🤖 Permiso para DOT</div>';
+  if(!c.activo){
+    h+='<div class="txs tc3 mb-8">DOT puede cargar, modificar y eliminar datos de las obras sin usar tu cuenta de Google. Podés anularlo cuando quieras y deshacer lo que haya hecho.</div>'
+      +'<button class="btn btn-p btn-s" onclick="dotAutorizar()">Autorizar a DOT</button>';
+  }else{
+    h+='<div class="txs mb-8" style="color:var(--green);font-weight:700">✓ Autorizado desde el '+esc(fmts(c.desde)||'')+'</div>'
+      +'<div class="flex gap-6 wrap"><button class="btn btn-sec btn-s" onclick="dotVerTexto()">📋 Texto para DOT</button><button class="btn btn-sec btn-s" style="color:var(--red)" onclick="dotAnular()">Anular permiso</button></div>';
+  }
+  if(log.length){
+    var obraN=function(id){var p=(D.projects||[]).find(function(x){return x.id===id;});return p?p.name:'';};
+    h+='<div class="txxs fw7 tc3 mt-8 mb-4">Lo último que hizo DOT</div>'+log.map(function(l){
+      var v={crear:'➕ Cargó',modificar:'✏️ Modificó',eliminar:'🗑 Eliminó'}[l.op]||l.op;
+      return '<div class="flex items-center gap-6" style="padding:5px 0;border-top:1px solid var(--gray-ll)"><div style="flex:1;min-width:0"><div class="txs" style="'+(l.deshecho?'text-decoration:line-through;color:var(--text3)':'')+'">'+v+' · '+esc(l.titulo||l.tabla)+'</div><div class="txxs tc3">'+esc(fmts(l.ts)||'')+' · '+esc(obraN(l.obra))+' · '+esc(l.tabla)+'</div></div>'
+        +(l.ok&&!l.deshecho?'<button class="btn btn-sec btn-s" style="flex:0 0 auto" onclick="dotDeshacer(\''+l.id+'\')">↩ Deshacer</button>':(l.ok?'<span class="txxs tc3">deshecho</span>':'<span class="txxs" style="color:var(--red)">'+esc(l.error||'error')+'</span>'))+'</div>';
+    }).join('');
+  }
+  return h+'</div>';
+}
+function _dotTitulo(r){return String((r&&(r.titulo||r.concepto||r.matNombre||r.name||r.title||r.text||r.texto||r.message))||'').slice(0,70);}
+function _dotTieneBase64(o){if(typeof o==='string')return o.indexOf('data:')===0;if(o&&typeof o==='object')return Object.keys(o).some(function(k){return _dotTieneBase64(o[k]);});return false;}
+function _dotValidar(t,d){
+  if(t==='economia'){if(!(parseFloat(d.monto)>0))return 'falta el monto';if(['ingreso','egreso'].indexOf(d.tipo)<0)return 'tipo debe ser ingreso o egreso';}
+  if(t==='notas'&&!d.texto&&!d.titulo)return 'falta el texto';
+  if(t==='matIngresos'&&!d.matNombre)return 'falta matNombre';
+  if(t==='materiales'&&!d.name)return 'falta name';
+  return '';
+}
+function _dotAplicarOp(o,lote,i){
+  var opId=lote+'_'+i;
+  if(!D.dotLog)D.dotLog=[];
+  var ya=D.dotLog.find(function(x){return x.id===opId;});
+  if(ya)return {n:i+1,ok:ya.ok,id:ya.regId,error:ya.error||undefined};
+  var t=o.tabla,l={id:opId,ts:nw(),updatedAt:nw(),op:o.op,tabla:t,lote:lote,obra:o.obra||'',ok:false};
+  var falla=function(m){l.error=m;l.titulo=_dotTitulo(o.datos)||String(o.id||'');D.dotLog.push(l);return {n:i+1,ok:false,error:m};};
+  if(_DOT_TABLAS.indexOf(t)<0)return falla('tabla no permitida');
+  if(!D[t])D[t]=[];
+  var d=(o.datos&&typeof o.datos==='object')?o.datos:{};
+  if(_dotTieneBase64(d))return falla('no se aceptan imágenes en base64');
+  var limpios={};Object.keys(d).forEach(function(k){if(_DOT_FIJOS.indexOf(k)<0)limpios[k]=d[k];});
+  var rec;
+  if(o.op==='crear'){
+    if(!(D.projects||[]).some(function(p){return p.id===o.obra;}))return falla('la obra no existe');
+    var m=_dotValidar(t,d);if(m)return falla(m);
+    rec=Object.assign({},limpios,{id:'dot_'+opId,projectId:o.obra,cargadoPor:'dot',date:d.date||nw(),updatedAt:nw()});
+    if(t==='notas'){if(!rec.fecha)rec.fecha=td();if(!rec.tipo)rec.tipo='registro';if(!rec.cuaderno)rec.cuaderno=NOTA_CUADERNO_DEF;}
+    if(t==='economia'&&!rec.fecha)rec.fecha=td();
+    if(t==='economia')rec.monto=parseFloat(rec.monto);
+    D[t].push(rec);
+  }else{
+    rec=D[t].find(function(x){return x.id===o.id;});
+    if(!rec)return falla('no encuentro ese registro');
+    if(o.obra&&rec.projectId!==o.obra)return falla('el registro es de otra obra');
+    l.obra=rec.projectId;l.antes=JSON.parse(JSON.stringify(rec));
+    if(o.op==='modificar'){
+      if(!Object.keys(limpios).length)return falla('no hay nada para modificar');
+      Object.assign(rec,limpios);rec.updatedAt=nw();rec.modificadoPor='dot';
+    }else if(o.op==='eliminar'){
+      addTombstone(t,rec.id);
+      D[t]=D[t].filter(function(x){return x.id!==rec.id;});
+    }else return falla('operación inválida');
+  }
+  l.ok=true;l.regId=rec.id;l.titulo=_dotTitulo(rec);
+  D.dotLog.push(l);
+  if(D.dotLog.length>400)D.dotLog=D.dotLog.slice(-400);
+  try{audit(t,o.op,'DOT: '+l.titulo);}catch(_){}
+  return {n:i+1,ok:true,id:rec.id};
+}
+function _dotApi(accion,extra,cuerpo){
+  var ep=_dotEp(),k=D.dotCfg.clave;
+  var r=cuerpo?fetch(ep,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(Object.assign({accion:accion,dot:k},cuerpo))})
+    :fetch(ep+'?action='+accion+'&dot='+encodeURIComponent(k)+(extra||''));
+  return r.then(function(x){return x.json();});
+}
+async function _dotRevisar(){
+  if(!_dotHay()||GD._cedida||_dotOcupado||!GD.accessToken||!GD.online||document.hidden||!_dotEp())return;
+  if(Date.now()-_dotUlt<40000)return;
+  _dotOcupado=true;_dotUlt=Date.now();
+  try{
+    var j=await _dotApi('dot_cola');
+    if(!j||!j.ok||!(j.lotes||[]).length)return;
+    var hechos=0,malos=0;
+    for(var i=0;i<j.lotes.length;i++){
+      var lo=j.lotes[i],res=(lo.ops||[]).map(function(o,n){return _dotAplicarOp(o,lo.id,n);});
+      res.forEach(function(r){if(r.ok)hechos++;else malos++;});
+      sv(); // primero queda guardado, recién ahí se avisa que se aplicó
+      await _dotApi('dot_resultado','',{lote:lo.id,resultados:res});
+    }
+    toast('🤖 DOT: '+hechos+' cambio'+(hechos===1?'':'s')+' aplicado'+(hechos===1?'':'s')+(malos?' · '+malos+' con error':''),malos?'var(--orange)':'var(--green)',4000);
+    var ae=document.activeElement;
+    if(!document.querySelector('.mo.open')&&!(ae&&/INPUT|TEXTAREA|SELECT/.test(ae.tagName)))render();
+  }catch(e){console.warn('DOT',e);}
+  finally{_dotOcupado=false;}
+}
+function dotDeshacer(id){
+  var l=(D.dotLog||[]).find(function(x){return x.id===id;});if(!l||!l.ok||l.deshecho)return;
+  if(!confirm('¿Deshacer esto que hizo DOT?'))return;
+  var arr=D[l.tabla]||(D[l.tabla]=[]),i=arr.findIndex(function(x){return x.id===l.regId;});
+  if(l.op==='crear'){
+    if(i>=0){addTombstone(l.tabla,l.regId);D[l.tabla]=arr.filter(function(x){return x.id!==l.regId;});}
+  }else if(l.op==='modificar'){
+    if(i<0){toast('Ese registro ya no existe','var(--orange)',3000);return;}
+    arr[i]=Object.assign(JSON.parse(JSON.stringify(l.antes)),{updatedAt:nw()});
+  }else if(l.op==='eliminar'){
+    D.tombstones=(D.tombstones||[]).filter(function(t){return t.id!==l.regId;});
+    (D.restaurados=D.restaurados||[]).push({id:l.regId,ts:nw()});
+    if(i<0)arr.push(Object.assign(JSON.parse(JSON.stringify(l.antes)),{updatedAt:nw()}));
+  }
+  l.deshecho=true;l.updatedAt=nw();
+  sv();render();toast('Deshecho ✓','var(--green)',2000);
+}
 // ═══════ FOTOS DE OBRA: lo que llega por WhatsApp, con fecha y ubicación en el archivo ═══════
 var _foCache={},_foCargando={},_foError={},_foInstalar=null,_foProc=null,_foEligiendo=false,_foUrls=[];
 var FO_API='https://www.googleapis.com/drive/v3/files',FO_UP='https://www.googleapis.com/upload/drive/v3/files';

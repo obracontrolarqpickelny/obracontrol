@@ -92,6 +92,9 @@ function doPost(e) {
 
     var body = JSON.parse(e.postData.contents);
 
+    // Buzón de DOT: tiene su propio permiso (no usa la clave de los colaboradores)
+    if (String(body.accion || '').indexOf('dot_') === 0) return _dotPost(body);
+
     if (String(body.secreto || '') !== SECRETO) {
       return _json({ ok: false, error: 'Clave incorrecta.' });
     }
@@ -248,6 +251,8 @@ function doGet(e) {
   try {
     var p = (e && e.parameter) || {};
     var accion = p.action || 'ping';
+
+    if (String(accion).indexOf('dot_') === 0) return _dotGet(p);
 
     if (accion === 'ping') {
       // Chequeo de conexión: no expone nada si la clave está mal.
@@ -425,4 +430,121 @@ function _completarZipObra(obra, props) {
   obra.createFile(Utilities.zip(blobs, nombre));
   if (previo) previo.setTrashed(true); // reemplazado por el recién creado
   props.setProperty(clave, firma);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  BUZÓN DE DOT
+//  DOT lee los datos y deja pedidos de cargar, modificar o eliminar.
+//  Este script NO toca ObraControl_datos.json: la app toma los pedidos y los
+//  aplica con su sincronización normal, dejando historial y "Deshacer".
+//  El permiso NO está en este código: es el archivo DOT_PERMISO.json que crea
+//  la app (botón "Autorizar a DOT") en SISTEMA_GESTION_OBRAS. Anularlo en la
+//  app corta el acceso enseguida.
+// ═══════════════════════════════════════════════════════════════
+var DOT_TABLAS = ['notas', 'economia', 'materiales', 'matIngresos', 'visitas', 'checklists', 'comentarios', 'alertas', 'documentos', 'enlaces'];
+var DOT_MAX_OPS = 50;
+
+function _dotSistema() {
+  var it = DriveApp.getFoldersByName(CARPETA_SISTEMA);
+  return it.hasNext() ? it.next() : null;
+}
+function _dotLeerJSON(f) {
+  return JSON.parse(f.getBlob().getDataAsString().replace(/^\uFEFF/, ''));
+}
+function _dotClaveOk(k) {
+  k = String(k || '');
+  if (k.length < 32) return false;
+  var c = CacheService.getScriptCache(), v = c.get('dot_permiso');
+  if (v === null) {
+    var s = _dotSistema(), f = s ? _archivoPorNombre(s, 'DOT_PERMISO.json') : null, per = null;
+    try { per = f ? _dotLeerJSON(f) : null; } catch (err) {}
+    v = (per && per.activo && per.clave) ? String(per.clave) : '-';
+    c.put('dot_permiso', v, 20);
+  }
+  return v !== '-' && v === k;
+}
+function _dotBuzon() { return _carpeta(_raiz(), '_DOT_buzon'); }
+function _dotDatos() {
+  var s = _dotSistema(), it = s ? s.getFilesByName('ObraControl_datos.json') : null, f = null;
+  while (it && it.hasNext()) { var x = it.next(); if (!f || x.getLastUpdated() > f.getLastUpdated()) f = x; }
+  if (!f) throw new Error('No encuentro ObraControl_datos.json');
+  return _dotLeerJSON(f);
+}
+function _dotLote(id) {
+  var carp = _dotBuzon(), pre = ['P_', 'A_'];
+  for (var i = 0; i < pre.length; i++) {
+    var f = _archivoPorNombre(carp, pre[i] + id + '.json');
+    if (f) return f;
+  }
+  return null;
+}
+function _dotGet(p) {
+  if (!_dotClaveOk(p.dot)) return _json({ ok: false, error: 'Sin autorización.' });
+  var a = p.action;
+  if (a === 'dot_leer') {
+    var d = _dotDatos();
+    if (!p.obra) {
+      return _json({ ok: true, tablas: DOT_TABLAS, obras: (d.projects || []).map(function (o) { return { id: o.id, nombre: o.name, cerrada: !!o.cerrada }; }) });
+    }
+    if (DOT_TABLAS.indexOf(p.tabla) < 0) return _json({ ok: false, error: 'Tabla no permitida.' });
+    var regs = (d[p.tabla] || []).filter(function (r) { return r && r.projectId === p.obra; });
+    return _json({ ok: true, obra: p.obra, tabla: p.tabla, datosDe: d.lastSync || '', registros: regs });
+  }
+  if (a === 'dot_estado') {
+    var fe = _dotLote(String(p.lote || '').replace(/[^A-Za-z0-9_]/g, ''));
+    if (!fe) return _json({ ok: false, error: 'No encuentro ese envío.' });
+    var le = _dotLeerJSON(fe);
+    return _json({ ok: true, lote: le.id, estado: le.estado, resultados: le.resultados || [] });
+  }
+  if (a === 'dot_cola') {
+    var lock = LockService.getScriptLock();
+    if (!lock.tryLock(5000)) return _json({ ok: true, lotes: [] });
+    try {
+      var ahora = Date.now(), lotes = [], files = _dotBuzon().getFiles(), lista = [];
+      while (files.hasNext()) {
+        var f = files.next(), nom = f.getName();
+        if (nom.indexOf('P_') === 0) lista.push(f);
+        else if (nom.indexOf('A_') === 0 && ahora - f.getLastUpdated().getTime() > 30 * 864e5) f.setTrashed(true);
+      }
+      lista.sort(function (x, y) { return x.getName() < y.getName() ? -1 : 1; });
+      for (var i = 0; i < lista.length && lotes.length < 10; i++) {
+        var l = _dotLeerJSON(lista[i]);
+        // Si otro equipo lo tomó hace menos de 2 minutos, no se reparte de nuevo
+        if (l.tomado && ahora - l.tomado < 120000) continue;
+        l.tomado = ahora;
+        lista[i].setContent(JSON.stringify(l));
+        lotes.push({ id: l.id, ops: l.ops });
+      }
+      return _json({ ok: true, lotes: lotes });
+    } finally { lock.releaseLock(); }
+  }
+  return _json({ ok: false, error: 'Acción desconocida.' });
+}
+function _dotPost(b) {
+  if (!_dotClaveOk(b.dot)) return _json({ ok: false, error: 'Sin autorización.' });
+  if (b.accion === 'dot_enviar') {
+    var ops = b.ops;
+    if (!Array.isArray(ops) || !ops.length) return _json({ ok: false, error: 'No hay operaciones.' });
+    if (ops.length > DOT_MAX_OPS) return _json({ ok: false, error: 'Máximo ' + DOT_MAX_OPS + ' operaciones por envío.' });
+    for (var i = 0; i < ops.length; i++) {
+      var o = ops[i] || {};
+      if (['crear', 'modificar', 'eliminar'].indexOf(o.op) < 0) return _json({ ok: false, error: 'Operación ' + (i + 1) + ': op inválida.' });
+      if (DOT_TABLAS.indexOf(o.tabla) < 0) return _json({ ok: false, error: 'Operación ' + (i + 1) + ': tabla no permitida.' });
+      if (o.op === 'crear' && !o.obra) return _json({ ok: false, error: 'Operación ' + (i + 1) + ': falta la obra.' });
+      if (o.op !== 'crear' && !o.id) return _json({ ok: false, error: 'Operación ' + (i + 1) + ': falta el id.' });
+    }
+    var id = Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    _dotBuzon().createFile(Utilities.newBlob(JSON.stringify({ id: id, creado: new Date().toISOString(), estado: 'pendiente', ops: ops }), 'application/json', 'P_' + id + '.json'));
+    return _json({ ok: true, lote: id, estado: 'pendiente', operaciones: ops.length });
+  }
+  if (b.accion === 'dot_resultado') {
+    var f = _dotLote(String(b.lote || '').replace(/[^A-Za-z0-9_]/g, ''));
+    if (!f) return _json({ ok: false, error: 'No encuentro ese envío.' });
+    var l = _dotLeerJSON(f);
+    l.estado = 'aplicado'; l.resultados = b.resultados || []; l.aplicado = new Date().toISOString();
+    f.setContent(JSON.stringify(l));
+    f.setName('A_' + l.id + '.json');
+    return _json({ ok: true });
+  }
+  return _json({ ok: false, error: 'Acción desconocida.' });
 }
