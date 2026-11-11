@@ -389,6 +389,7 @@ function instalarRespaldoAutomatico() {
 }
 
 function completarZips() {
+  try { _dotDrenarConLock(); } catch (err) {}
   var raices = DriveApp.getFoldersByName(CARPETA_SISTEMA);
   if (!raices.hasNext()) return;
   var obras = raices.next().getFolders(), props = PropertiesService.getScriptProperties(), inicio = Date.now();
@@ -434,9 +435,10 @@ function _completarZipObra(obra, props) {
 
 // ═══════════════════════════════════════════════════════════════
 //  BUZÓN DE DOT
-//  DOT lee los datos y deja pedidos de cargar, modificar o eliminar.
-//  Este script NO toca ObraControl_datos.json: la app toma los pedidos y los
-//  aplica con su sincronización normal, dejando historial y "Deshacer".
+//  DOT lee los datos, carga, modifica, elimina y adjunta fotos, aunque la app
+//  no esté abierta. El pedido queda guardado primero en el buzón y después se
+//  aplica en ObraControl_datos.json con las mismas reglas de la app: control de
+//  versión, marca de guardado (_revs), lápidas e historial con "Deshacer".
 //  El permiso NO está en este código: es el archivo DOT_PERMISO.json que crea
 //  la app (botón "Autorizar a DOT") en SISTEMA_GESTION_OBRAS. Anularlo en la
 //  app corta el acceso enseguida.
@@ -464,12 +466,13 @@ function _dotClaveOk(k) {
   return v !== '-' && v === k;
 }
 function _dotBuzon() { return _carpeta(_raiz(), '_DOT_buzon'); }
-function _dotDatos() {
+function _dotArchivoDatos() {
   var s = _dotSistema(), it = s ? s.getFilesByName('ObraControl_datos.json') : null, f = null;
   while (it && it.hasNext()) { var x = it.next(); if (!f || x.getLastUpdated() > f.getLastUpdated()) f = x; }
   if (!f) throw new Error('No encuentro ObraControl_datos.json');
-  return _dotLeerJSON(f);
+  return f;
 }
+function _dotDatos() { return _dotLeerJSON(_dotArchivoDatos()); }
 function _dotLote(id) {
   var carp = _dotBuzon(), pre = ['P_', 'A_'];
   for (var i = 0; i < pre.length; i++) {
@@ -497,26 +500,8 @@ function _dotGet(p) {
     return _json({ ok: true, lote: le.id, estado: le.estado, resultados: le.resultados || [] });
   }
   if (a === 'dot_cola') {
-    var lock = LockService.getScriptLock();
-    if (!lock.tryLock(5000)) return _json({ ok: true, lotes: [] });
-    try {
-      var ahora = Date.now(), lotes = [], files = _dotBuzon().getFiles(), lista = [];
-      while (files.hasNext()) {
-        var f = files.next(), nom = f.getName();
-        if (nom.indexOf('P_') === 0) lista.push(f);
-        else if (nom.indexOf('A_') === 0 && ahora - f.getLastUpdated().getTime() > 30 * 864e5) f.setTrashed(true);
-      }
-      lista.sort(function (x, y) { return x.getName() < y.getName() ? -1 : 1; });
-      for (var i = 0; i < lista.length && lotes.length < 10; i++) {
-        var l = _dotLeerJSON(lista[i]);
-        // Si otro equipo lo tomó hace menos de 2 minutos, no se reparte de nuevo
-        if (l.tomado && ahora - l.tomado < 120000) continue;
-        l.tomado = ahora;
-        lista[i].setContent(JSON.stringify(l));
-        lotes.push({ id: l.id, ops: l.ops });
-      }
-      return _json({ ok: true, lotes: lotes });
-    } finally { lock.releaseLock(); }
+    // La app abierta solo da el empujón: lo que haya quedado pendiente se aplica acá
+    return _json({ ok: true, lotes: [], aplicados: _dotDrenar() });
   }
   return _json({ ok: false, error: 'Acción desconocida.' });
 }
@@ -528,14 +513,22 @@ function _dotPost(b) {
     if (ops.length > DOT_MAX_OPS) return _json({ ok: false, error: 'Máximo ' + DOT_MAX_OPS + ' operaciones por envío.' });
     for (var i = 0; i < ops.length; i++) {
       var o = ops[i] || {};
-      if (['crear', 'modificar', 'eliminar'].indexOf(o.op) < 0) return _json({ ok: false, error: 'Operación ' + (i + 1) + ': op inválida.' });
+      if (['crear', 'modificar', 'eliminar', 'foto'].indexOf(o.op) < 0) return _json({ ok: false, error: 'Operación ' + (i + 1) + ': op inválida.' });
       if (DOT_TABLAS.indexOf(o.tabla) < 0) return _json({ ok: false, error: 'Operación ' + (i + 1) + ': tabla no permitida.' });
       if (o.op === 'crear' && !o.obra) return _json({ ok: false, error: 'Operación ' + (i + 1) + ': falta la obra.' });
       if (o.op !== 'crear' && !o.id) return _json({ ok: false, error: 'Operación ' + (i + 1) + ': falta el id.' });
+      if (o.op === 'foto' && (!o.b64 || !/^image\//.test(String(o.mime || '')))) return _json({ ok: false, error: 'Operación ' + (i + 1) + ': falta la imagen.' });
     }
     var id = Date.now() + '_' + Math.random().toString(36).slice(2, 8);
-    _dotBuzon().createFile(Utilities.newBlob(JSON.stringify({ id: id, creado: new Date().toISOString(), estado: 'pendiente', ops: ops }), 'application/json', 'P_' + id + '.json'));
-    return _json({ ok: true, lote: id, estado: 'pendiente', operaciones: ops.length });
+    var lote = { id: id, creado: new Date().toISOString(), estado: 'pendiente', ops: ops };
+    // Primero queda a salvo en el buzón; recién después se aplica
+    var arch = _dotBuzon().createFile(Utilities.newBlob(JSON.stringify(lote), 'application/json', 'P_' + id + '.json'));
+    try {
+      var res = _dotAplicarLote(arch, lote);
+      return _json({ ok: true, lote: id, estado: 'aplicado', resultados: res });
+    } catch (err) {
+      return _json({ ok: true, lote: id, estado: 'pendiente', aviso: 'Quedó guardado y se aplica solo en unos minutos. No lo reenvíes.', detalle: String(err && err.message || err) });
+    }
   }
   if (b.accion === 'dot_resultado') {
     var f = _dotLote(String(b.lote || '').replace(/[^A-Za-z0-9_]/g, ''));
@@ -547,4 +540,149 @@ function _dotPost(b) {
     return _json({ ok: true });
   }
   return _json({ ok: false, error: 'Acción desconocida.' });
+}
+
+// ─── Aplicar lo de DOT en los datos ───────────────────────────────
+var DOT_FIJOS = ['id', 'projectId', 'tombstones', '_revs'];
+var DOT_CARPETAS = { notas: '📝 Notas', economia: '💰 Economia', materiales: '🧱 Materiales', matIngresos: '🧱 Materiales', visitas: '📋 Visitas', checklists: '☑️ Checklist', documentos: '📁 Documentos', comentarios: '💬 Comentarios', alertas: '🔔 Alertas' };
+
+function _dotAhora() { return new Date().toISOString(); }
+function _dotHoy() { return Utilities.formatDate(new Date(), 'America/Argentina/Buenos_Aires', 'yyyy-MM-dd'); }
+function _dotTitulo(r) { return String((r && (r.titulo || r.concepto || r.matNombre || r.name || r.title || r.text || r.texto || r.message)) || '').slice(0, 70); }
+function _dotTieneBase64(o) {
+  if (typeof o === 'string') return o.indexOf('data:') === 0;
+  if (o && typeof o === 'object') return Object.keys(o).some(function (k) { return _dotTieneBase64(o[k]); });
+  return false;
+}
+function _dotValidar(t, d) {
+  if (t === 'economia') {
+    if (!(parseFloat(d.monto) > 0)) return 'falta el monto';
+    if (['ingreso', 'egreso'].indexOf(d.tipo) < 0) return 'tipo debe ser ingreso o egreso';
+  }
+  if (t === 'notas' && !d.texto && !d.titulo) return 'falta el texto';
+  if (t === 'matIngresos' && !d.matNombre) return 'falta matNombre';
+  if (t === 'materiales' && !d.name) return 'falta name';
+  return '';
+}
+function _dotCarpetaObra(d, projectId, modulo) {
+  var p = (d.projects || []).filter(function (x) { return x.id === projectId; })[0];
+  if (!p || !p.driveFolderId) throw new Error('la obra no tiene carpeta en Drive');
+  return _carpeta(DriveApp.getFolderById(p.driveFolderId), modulo);
+}
+// Sube la foto una sola vez: si hay que reintentar, se reusa la ya subida
+function _dotSubirFoto(d, o) {
+  var rec = (d[o.tabla] || []).filter(function (x) { return x.id === o.id; })[0];
+  if (!rec || (o.tabla === 'economia' && rec.imagen && !o.reemplazar)) return false;
+  var nombre = String(o.nombre || ('foto_' + Date.now() + '.jpg')).replace(/[\/\\:*?"<>|]/g, '_');
+  var f = _dotCarpetaObra(d, rec.projectId, DOT_CARPETAS[o.tabla] || '🖼️ Imagenes')
+    .createFile(Utilities.newBlob(Utilities.base64Decode(String(o.b64).replace(/^data:[^,]*,/, '')), o.mime, nombre));
+  // Igual que las fotos que sube la app: el link de la miniatura tiene que verse siempre
+  f.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  o.driveId = f.getId();
+  delete o.b64;
+  return true;
+}
+function _dotOp(d, o, lote, i) {
+  var opId = lote + '_' + i;
+  if (!Array.isArray(d.dotLog)) d.dotLog = [];
+  var ya = d.dotLog.filter(function (x) { return x.id === opId; })[0];
+  if (ya) return { n: i + 1, ok: ya.ok, id: ya.regId, error: ya.error || undefined };
+  var t = o.tabla, ahora = _dotAhora();
+  var l = { id: opId, ts: ahora, updatedAt: ahora, op: o.op, tabla: t, lote: lote, obra: o.obra || '', ok: false };
+  var falla = function (m) { l.error = m; l.titulo = _dotTitulo(o.datos) || String(o.id || ''); d.dotLog.push(l); return { n: i + 1, ok: false, error: m }; };
+  if (DOT_TABLAS.indexOf(t) < 0) return falla('tabla no permitida');
+  if (!Array.isArray(d[t])) d[t] = [];
+  var dat = (o.datos && typeof o.datos === 'object') ? o.datos : {};
+  if (_dotTieneBase64(dat)) return falla('las imágenes van con la opción de adjuntar foto');
+  var limpios = {};
+  Object.keys(dat).forEach(function (k) { if (DOT_FIJOS.indexOf(k) < 0) limpios[k] = dat[k]; });
+  var rec;
+  if (o.op === 'crear') {
+    if (!(d.projects || []).some(function (p) { return p.id === o.obra; })) return falla('la obra no existe');
+    var m = _dotValidar(t, dat);
+    if (m) return falla(m);
+    rec = Object.assign({}, limpios, { id: 'dot_' + opId, projectId: o.obra, cargadoPor: 'dot', date: dat.date || ahora, updatedAt: ahora });
+    if (t === 'notas') { rec.fecha = rec.fecha || _dotHoy(); rec.tipo = rec.tipo || 'registro'; rec.cuaderno = rec.cuaderno || 'Libro de obra'; }
+    if (t === 'economia') { rec.fecha = rec.fecha || _dotHoy(); rec.monto = parseFloat(rec.monto); }
+    d[t].push(rec);
+  } else {
+    rec = d[t].filter(function (x) { return x.id === o.id; })[0];
+    if (!rec) return falla('no encuentro ese registro');
+    if (o.obra && rec.projectId !== o.obra) return falla('el registro es de otra obra');
+    l.obra = rec.projectId;
+    l.antes = JSON.parse(JSON.stringify(rec));
+    if (o.op === 'modificar') {
+      if (!Object.keys(limpios).length) return falla('no hay nada para modificar');
+      Object.keys(limpios).forEach(function (k) { rec[k] = limpios[k]; });
+      rec.updatedAt = ahora; rec.modificadoPor = 'dot';
+    } else if (o.op === 'foto') {
+      if (t === 'economia' && rec.imagen && !o.reemplazar) return falla('ya tiene comprobante: para cambiarlo marcá reemplazar');
+      if (!o.driveId) return falla('no se pudo subir la imagen');
+      var url = 'https://drive.google.com/thumbnail?id=' + o.driveId + '&sz=w800';
+      if (t === 'economia') rec.imagen = url;
+      else {
+        if (!Array.isArray(rec.photos)) rec.photos = [];
+        rec.photos.push({ id: 'dot' + o.driveId.slice(-10), url: url, driveId: o.driveId, caption: String(o.caption || ''), date: _dotHoy(), author: 'DOT', comments: [] });
+      }
+      rec.updatedAt = ahora; rec.modificadoPor = 'dot';
+    } else if (o.op === 'eliminar') {
+      // Queda una copia legible en la carpeta de eliminados de la obra
+      try {
+        _dotCarpetaObra(d, rec.projectId, '🗑️ Eliminado en la app').createFile(Utilities.newBlob(JSON.stringify({ tabla: t, eliminadoPor: 'DOT', fecha: ahora, registro: rec }, null, 2), 'application/json', t + ' - ' + rec.id + '.json'));
+      } catch (err) {}
+      if (!Array.isArray(d.tombstones)) d.tombstones = [];
+      if (!d.tombstones.some(function (x) { return x.id === rec.id; })) d.tombstones.push({ id: rec.id, tbl: t, ts: ahora });
+      d[t] = d[t].filter(function (x) { return x.id !== rec.id; });
+    } else return falla('operación inválida');
+  }
+  l.ok = true; l.regId = rec.id; l.titulo = _dotTitulo(rec);
+  d.dotLog.push(l);
+  if (d.dotLog.length > 400) d.dotLog = d.dotLog.slice(-400);
+  return { n: i + 1, ok: true, id: rec.id };
+}
+/** Hay que llamarla con el LockService tomado. */
+function _dotAplicarLote(archivo, l) {
+  var f = _dotArchivoDatos(), res = null;
+  for (var intento = 1; intento <= 4; intento++) {
+    var version = f.getLastUpdated().getTime();
+    var d = _dotLeerJSON(f);
+    var hizoFoto = false;
+    l.ops.forEach(function (o) { if (o.op === 'foto' && !o.driveId && o.b64 && _dotSubirFoto(d, o)) hizoFoto = true; });
+    if (hizoFoto) archivo.setContent(JSON.stringify(l));
+    res = l.ops.map(function (o, i) { return _dotOp(d, o, l.id, i); });
+    // Si un equipo guardó mientras tanto, se vuelve a leer en lugar de pisarlo
+    if (f.getLastUpdated().getTime() !== version) { Utilities.sleep(1500); continue; }
+    var marca = 'rdot' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    d._revs = (Array.isArray(d._revs) ? d._revs : []).concat([marca]).slice(-100);
+    d.lastSync = _dotAhora();
+    f.setContent(JSON.stringify(d, null, 2));
+    // Se confirma que nadie escribió encima, igual que hace la app
+    Utilities.sleep(5000);
+    var v = _dotLeerJSON(f);
+    if ((Array.isArray(v._revs) ? v._revs : []).indexOf(marca) < 0) continue;
+    l.estado = 'aplicado'; l.resultados = res; l.aplicado = _dotAhora();
+    l.ops.forEach(function (o) { delete o.b64; });
+    archivo.setContent(JSON.stringify(l));
+    archivo.setName('A_' + l.id + '.json');
+    return res;
+  }
+  throw new Error('Los datos estaban ocupados');
+}
+function _dotDrenar() {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) return 0;
+  try { return _dotDrenarConLock(); } finally { lock.releaseLock(); }
+}
+function _dotDrenarConLock() {
+  var ahora = Date.now(), files = _dotBuzon().getFiles(), lista = [], n = 0;
+  while (files.hasNext()) {
+    var f = files.next(), nom = f.getName();
+    if (nom.indexOf('P_') === 0) lista.push(f);
+    else if (nom.indexOf('A_') === 0 && ahora - f.getLastUpdated().getTime() > 30 * 864e5) f.setTrashed(true);
+  }
+  lista.sort(function (x, y) { return x.getName() < y.getName() ? -1 : 1; });
+  for (var i = 0; i < lista.length && Date.now() - ahora < 20000; i++) {
+    try { _dotAplicarLote(lista[i], _dotLeerJSON(lista[i])); n++; } catch (err) { break; }
+  }
+  return n;
 }

@@ -51,11 +51,23 @@ code{background:#f1f5f9;border-radius:4px;padding:0 4px}
 </section>
 
 <section class="c">
-<h2>3. Ver resultado</h2>
+<h2>3. Adjuntar foto o comprobante</h2>
+<div class="m">A un registro que ya existe. En economía va como comprobante; en las demás se suma a sus fotos.</div><br>
+<select id="fTabla" aria-label="Tabla de la foto"></select>
+<input id="fId" placeholder="id del registro" aria-label="Id del registro">
+<input id="fPie" placeholder="Comentario de la foto (opcional)" aria-label="Comentario de la foto">
+<input id="fArch" type="file" accept="image/*" multiple aria-label="Imágenes">
+<label class="m" style="display:block;margin-bottom:8px"><input id="fRee" type="checkbox" style="width:auto;margin:0 6px 0 0">Reemplazar el comprobante que ya tiene</label>
+<button id="bFoto">Adjuntar</button>
+<pre id="sFoto" hidden></pre>
+</section>
+
+<section class="c">
+<h2>4. Ver resultado</h2>
 <input id="lote" placeholder="Número de envío" aria-label="Número de envío">
 <button class="s" id="bEst">Ver resultado</button>
 <pre id="sEst" hidden></pre>
-<p class="m">"pendiente" significa que todavía no entró: se aplica cuando la app esté abierta en algún equipo con Drive conectado.</p>
+<p class="m">Se aplica en el momento, con la app abierta o cerrada. Si alguna vez dice "pendiente", ya quedó guardado y entra solo en unos minutos: no lo reenvíes.</p>
 </section>
 </main>
 <script>
@@ -70,7 +82,7 @@ code{background:#f1f5f9;border-radius:4px;padding:0 4px}
     $('est').textContent='✓ Autorizado';
     $('obra').innerHTML='';
     j.obras.forEach(function(o){var e=document.createElement('option');e.value=o.id;e.textContent=o.nombre+' ('+o.id+')'+(o.cerrada?' · cerrada':'');$('obra').appendChild(e);});
-    j.tablas.forEach(function(t){var e=document.createElement('option');e.value=t;e.textContent=t;$('tabla').appendChild(e);});
+    j.tablas.forEach(function(t){var e=document.createElement('option');e.value=t;e.textContent=t;$('tabla').appendChild(e);$('fTabla').appendChild(e.cloneNode(true));});
   }).catch(function(e){$('est').textContent='✗ No se pudo conectar: '+e.message;});
   $('bLeer').onclick=function(){
     ver('sLeer','Leyendo…');
@@ -83,6 +95,29 @@ code{background:#f1f5f9;border-radius:4px;padding:0 4px}
     ver('sEnv','Enviando…');
     fetch(ep,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({accion:'dot_enviar',dot:k,ops:ops})})
       .then(function(r){return r.json();}).then(function(j){ver('sEnv',j);if(j.lote)$('lote').value=j.lote;}).catch(function(e){ver('sEnv','Error: '+e.message);});
+  };
+  // Las fotos se achican antes de subir; si el navegador no puede abrir el formato, va tal cual
+  function aB64(blob){return new Promise(function(ok,no){var r=new FileReader();r.onload=function(){ok(String(r.result).split(',')[1]);};r.onerror=function(){no(r.error);};r.readAsDataURL(blob);});}
+  function preparar(a){
+    return createImageBitmap(a).then(function(b){
+      var e=Math.min(1,1800/Math.max(b.width,b.height)),c=document.createElement('canvas');
+      c.width=Math.round(b.width*e);c.height=Math.round(b.height*e);
+      c.getContext('2d').drawImage(b,0,0,c.width,c.height);
+      return {b64:c.toDataURL('image/jpeg',0.82).split(',')[1],mime:'image/jpeg',nombre:a.name.replace(/\.[^.]+$/,'')+'.jpg'};
+    }).catch(function(){return aB64(a).then(function(b64){return {b64:b64,mime:a.type||'image/jpeg',nombre:a.name};});});
+  }
+  $('bFoto').onclick=async function(){
+    var as=Array.prototype.slice.call($('fArch').files||[]),id=$('fId').value.trim(),salida=[];
+    if(!id||!as.length){ver('sFoto','Falta el id del registro o la imagen.');return;}
+    for(var i=0;i<as.length;i++){
+      ver('sFoto','Subiendo '+(i+1)+' de '+as.length+'…');
+      try{
+        var f=await preparar(as[i]);
+        var r=await fetch(ep,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({accion:'dot_enviar',dot:k,ops:[{op:'foto',tabla:$('fTabla').value,id:id,nombre:f.nombre,mime:f.mime,b64:f.b64,caption:$('fPie').value,reemplazar:$('fRee').checked}]})});
+        salida.push(Object.assign({archivo:as[i].name},await r.json()));
+      }catch(e){salida.push({archivo:as[i].name,ok:false,error:e.message});}
+    }
+    ver('sFoto',salida);
   };
   $('bEst').onclick=function(){
     ver('sEst','Consultando…');

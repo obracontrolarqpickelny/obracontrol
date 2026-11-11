@@ -18218,11 +18218,9 @@ setTimeout(function(){
 });
 (function(){var f=window._masaLista;if(typeof f!=='function')return;window._masaLista=function(){var r=f.apply(this,arguments);try{_resaltarEn(document.getElementById('masa_lista'),window._masaQ);}catch(_){}return r;};})();
 // ═══════ PERMISO PARA DOT ═══════
-// DOT trabaja desde dot.html, sin cuenta de Google. Sus pedidos llegan por el
-// script y se aplican acá, con el guardado y la sincronización de siempre.
+// DOT trabaja desde dot.html, sin cuenta de Google. Lo aplica el script en el
+// archivo de datos aunque la app esté cerrada; acá llega como de otro equipo.
 // El permiso es un archivo en SISTEMA_GESTION_OBRAS que sólo escribe esta app.
-var _DOT_TABLAS=['notas','economia','materiales','matIngresos','visitas','checklists','comentarios','alertas','documentos','enlaces'];
-var _DOT_FIJOS=['id','projectId','tombstones','_revs'];
 var _dotOcupado=false,_dotUlt=0;
 function _dotEp(){var c=_apiCfg();return c?c.url:'';}
 function _dotHay(){return !!(D.dotCfg&&D.dotCfg.activo&&D.dotCfg.clave);}
@@ -18267,7 +18265,7 @@ function _dotTexto(){
     +'Reglas:\n'
     +'1. Entrás sólo cuando yo te lo pida puntualmente, y hacés sólo lo que te pedí.\n'
     +'2. Antes de modificar o eliminar, leé el registro y usá su id. Para cargar algo nuevo, mirá un registro parecido y usá los mismos campos.\n'
-    +'3. Después de enviar, tocá "Ver resultado". Mientras diga pendiente, todavía no entró: se aplica cuando la app esté abierta en algún equipo. Avisame qué quedó aplicado y qué no.\n'
+    +'3. Después de enviar, mirá el resultado: dice qué quedó aplicado y qué no, y avisame. Si dice pendiente, ya quedó guardado y se aplica solo: no lo reenvíes. Las fotos van en "Adjuntar foto".\n'
     +'4. No me pidas ni guardes contraseñas de Google. Olvidá cualquier contraseña mía de Google que tengas guardada, cerrá la sesión de Google en tu navegador y no vuelvas a entrar con mi cuenta.\n'
     +'5. Este link es privado: no lo muestres ni lo compartas con nadie.';
 }
@@ -18294,61 +18292,12 @@ function _dotCardHtml(){
   if(log.length){
     var obraN=function(id){var p=(D.projects||[]).find(function(x){return x.id===id;});return p?p.name:'';};
     h+='<button onclick="S.dotHist=!S.dotHist;saveUIState();render()" style="display:flex;width:100%;justify-content:space-between;align-items:center;margin-top:10px;padding:8px 10px;border:1px solid var(--brd);border-radius:9px;background:var(--gray-ll);color:var(--text2);font-size:13px;font-weight:700;cursor:pointer"><span>🕒 Lo que hizo DOT ('+(D.dotLog||[]).length+')</span><span>'+(S.dotHist?'▲':'▼')+'</span></button>'+(!S.dotHist?'':log.map(function(l){
-      var v={crear:'➕ Cargó',modificar:'✏️ Modificó',eliminar:'🗑 Eliminó'}[l.op]||l.op;
+      var v={crear:'➕ Cargó',modificar:'✏️ Modificó',eliminar:'🗑 Eliminó',foto:'📷 Adjuntó foto en'}[l.op]||l.op;
       return '<div class="flex items-center gap-6" style="padding:5px 0;border-top:1px solid var(--gray-ll)"><div style="flex:1;min-width:0"><div class="txs" style="'+(l.deshecho?'text-decoration:line-through;color:var(--text3)':'')+'">'+v+' · '+esc(l.titulo||l.tabla)+'</div><div class="txxs tc3">'+esc(fmts(l.ts)||'')+' · '+esc(obraN(l.obra))+' · '+esc(l.tabla)+'</div></div>'
         +(l.ok&&!l.deshecho?'<button class="btn btn-sec btn-s" style="flex:0 0 auto" onclick="dotDeshacer(\''+l.id+'\')">↩ Deshacer</button>':(l.ok?'<span class="txxs tc3">deshecho</span>':'<span class="txxs" style="color:var(--red)">'+esc(l.error||'error')+'</span>'))+'</div>';
     }).join(''));
   }
   return h+'</div>';
-}
-function _dotTitulo(r){return String((r&&(r.titulo||r.concepto||r.matNombre||r.name||r.title||r.text||r.texto||r.message))||'').slice(0,70);}
-function _dotTieneBase64(o){if(typeof o==='string')return o.indexOf('data:')===0;if(o&&typeof o==='object')return Object.keys(o).some(function(k){return _dotTieneBase64(o[k]);});return false;}
-function _dotValidar(t,d){
-  if(t==='economia'){if(!(parseFloat(d.monto)>0))return 'falta el monto';if(['ingreso','egreso'].indexOf(d.tipo)<0)return 'tipo debe ser ingreso o egreso';}
-  if(t==='notas'&&!d.texto&&!d.titulo)return 'falta el texto';
-  if(t==='matIngresos'&&!d.matNombre)return 'falta matNombre';
-  if(t==='materiales'&&!d.name)return 'falta name';
-  return '';
-}
-function _dotAplicarOp(o,lote,i){
-  var opId=lote+'_'+i;
-  if(!D.dotLog)D.dotLog=[];
-  var ya=D.dotLog.find(function(x){return x.id===opId;});
-  if(ya)return {n:i+1,ok:ya.ok,id:ya.regId,error:ya.error||undefined};
-  var t=o.tabla,l={id:opId,ts:nw(),updatedAt:nw(),op:o.op,tabla:t,lote:lote,obra:o.obra||'',ok:false};
-  var falla=function(m){l.error=m;l.titulo=_dotTitulo(o.datos)||String(o.id||'');D.dotLog.push(l);return {n:i+1,ok:false,error:m};};
-  if(_DOT_TABLAS.indexOf(t)<0)return falla('tabla no permitida');
-  if(!D[t])D[t]=[];
-  var d=(o.datos&&typeof o.datos==='object')?o.datos:{};
-  if(_dotTieneBase64(d))return falla('no se aceptan imágenes en base64');
-  var limpios={};Object.keys(d).forEach(function(k){if(_DOT_FIJOS.indexOf(k)<0)limpios[k]=d[k];});
-  var rec;
-  if(o.op==='crear'){
-    if(!(D.projects||[]).some(function(p){return p.id===o.obra;}))return falla('la obra no existe');
-    var m=_dotValidar(t,d);if(m)return falla(m);
-    rec=Object.assign({},limpios,{id:'dot_'+opId,projectId:o.obra,cargadoPor:'dot',date:d.date||nw(),updatedAt:nw()});
-    if(t==='notas'){if(!rec.fecha)rec.fecha=td();if(!rec.tipo)rec.tipo='registro';if(!rec.cuaderno)rec.cuaderno=NOTA_CUADERNO_DEF;}
-    if(t==='economia'&&!rec.fecha)rec.fecha=td();
-    if(t==='economia')rec.monto=parseFloat(rec.monto);
-    D[t].push(rec);
-  }else{
-    rec=D[t].find(function(x){return x.id===o.id;});
-    if(!rec)return falla('no encuentro ese registro');
-    if(o.obra&&rec.projectId!==o.obra)return falla('el registro es de otra obra');
-    l.obra=rec.projectId;l.antes=JSON.parse(JSON.stringify(rec));
-    if(o.op==='modificar'){
-      if(!Object.keys(limpios).length)return falla('no hay nada para modificar');
-      Object.assign(rec,limpios);rec.updatedAt=nw();rec.modificadoPor='dot';
-    }else if(o.op==='eliminar'){
-      addTombstone(t,rec.id);
-      D[t]=D[t].filter(function(x){return x.id!==rec.id;});
-    }else return falla('operación inválida');
-  }
-  l.ok=true;l.regId=rec.id;l.titulo=_dotTitulo(rec);
-  D.dotLog.push(l);
-  if(D.dotLog.length>400)D.dotLog=D.dotLog.slice(-400);
-  try{audit(t,o.op,'DOT: '+l.titulo);}catch(_){}
-  return {n:i+1,ok:true,id:rec.id};
 }
 function _dotApi(accion,extra,cuerpo){
   var ep=_dotEp(),k=D.dotCfg.clave;
@@ -18356,23 +18305,14 @@ function _dotApi(accion,extra,cuerpo){
     :fetch(ep+'?action='+accion+'&dot='+encodeURIComponent(k)+(extra||''));
   return r.then(function(x){return x.json();});
 }
+// Con la app abierta se empuja lo que haya quedado pendiente en el buzón
 async function _dotRevisar(){
-  if(!_dotHay()||GD._cedida||_dotOcupado||!GD.accessToken||!GD.online||document.hidden||!_dotEp())return;
+  if(!_dotHay()||GD._cedida||_dotOcupado||!GD.online||document.hidden||!_dotEp())return;
   if(Date.now()-_dotUlt<40000)return;
   _dotOcupado=true;_dotUlt=Date.now();
   try{
     var j=await _dotApi('dot_cola');
-    if(!j||!j.ok||!(j.lotes||[]).length)return;
-    var hechos=0,malos=0;
-    for(var i=0;i<j.lotes.length;i++){
-      var lo=j.lotes[i],res=(lo.ops||[]).map(function(o,n){return _dotAplicarOp(o,lo.id,n);});
-      res.forEach(function(r){if(r.ok)hechos++;else malos++;});
-      sv(); // primero queda guardado, recién ahí se avisa que se aplicó
-      await _dotApi('dot_resultado','',{lote:lo.id,resultados:res});
-    }
-    toast('🤖 DOT: '+hechos+' cambio'+(hechos===1?'':'s')+' aplicado'+(hechos===1?'':'s')+(malos?' · '+malos+' con error':''),malos?'var(--orange)':'var(--green)',4000);
-    var ae=document.activeElement;
-    if(!document.querySelector('.mo.open')&&!(ae&&/INPUT|TEXTAREA|SELECT/.test(ae.tagName)))render();
+    if(j&&j.ok&&j.aplicados>0&&GD.accessToken)loadFromDriveAndMerge(true).catch(function(){});
   }catch(e){console.warn('DOT',e);}
   finally{_dotOcupado=false;}
 }
@@ -18382,7 +18322,7 @@ function dotDeshacer(id){
   var arr=D[l.tabla]||(D[l.tabla]=[]),i=arr.findIndex(function(x){return x.id===l.regId;});
   if(l.op==='crear'){
     if(i>=0){addTombstone(l.tabla,l.regId);D[l.tabla]=arr.filter(function(x){return x.id!==l.regId;});}
-  }else if(l.op==='modificar'){
+  }else if(l.op==='modificar'||l.op==='foto'){
     if(i<0){toast('Ese registro ya no existe','var(--orange)',3000);return;}
     arr[i]=Object.assign(JSON.parse(JSON.stringify(l.antes)),{updatedAt:nw()});
   }else if(l.op==='eliminar'){
