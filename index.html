@@ -208,6 +208,9 @@ a{color:var(--blue);text-decoration:none}
 .fila-igual>.btn{width:100%;min-width:0;justify-content:center;white-space:nowrap;padding-left:2px;padding-right:2px}
 .nota-fila{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
 .nota-fila>span,.nota-fila>button{font-size:10px!important;margin-left:0}
+.nota-herr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-bottom:12px}
+.nota-herr>.btn{min-height:44px;font-size:14.5px;font-weight:700;justify-content:center;padding:8px 6px;margin:0}
+@media(min-width:520px){.nota-herr{grid-template-columns:repeat(4,minmax(0,1fr))}}
 .nota-acc{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:3px;margin-top:8px}
 .nota-fila>span,.nota-fila>button{display:inline-flex!important;align-items:center;min-height:18px;line-height:1.2}
 .nota-filtros{display:flex;gap:6px;overflow-x:auto;margin-bottom:10px;align-items:center;-webkit-overflow-scrolling:touch;padding-bottom:2px}
@@ -678,6 +681,10 @@ async function ensureAuth(forcePrompt = false) {
     return false;
   }
 
+  // Nunca se abre la ventana de Google por su cuenta (al guardar, al entrar a una
+  // pestaña o al tocar cualquier cosa): eso era el pestañeo y las salidas a otra
+  // ventana. Solo cuando la persona toca Conectar o el indicador.
+  if (!forcePrompt && !GD._popupOk) return false;
   return new Promise((resolve) => {
     const onToken = (resp) => {
       if (resp.error) {
@@ -1091,6 +1098,8 @@ async function _rescueBase64BeforeSync(){
 }
 
 function showDriveReconnectBanner(){
+  // Como mucho un aviso cada 10 minutos (antes salía en cada guardado)
+  if(Date.now()-(GD._bannerT||0)<600000)return;GD._bannerT=Date.now();
   document.getElementById('driveReconnectBanner')?.remove();
   var el=document.createElement('div');el.id='driveReconnectBanner';
   el.style.cssText='position:fixed;bottom:70px;left:0;right:0;z-index:1500;display:flex;justify-content:center;pointer-events:none;animation:toastIn .3s ease';
@@ -1102,8 +1111,14 @@ function showDriveReconnectBanner(){
   setTimeout(function(){document.getElementById('driveReconnectBanner')?.remove();},30000);
 }
 async function _reconnectDrive(){
-  toast('Reconectando con Google...','var(--orange)',3000);
-  const ok=await ensureAuth(true);
+  if(GD._reconectando)return;
+  GD._reconectando=true;
+  updateSyncIndicator('conectando');
+  var ok=false;
+  try{GD._popupOk=true;GD._forzarRenovar=false;ok=await ensureAuth(false);}
+  catch(_){ok=false;}
+  finally{GD._popupOk=false;GD._reconectando=false;}
+  if(!ok)updateSyncIndicator(GD.accessToken?'ok':'noauth');
   if(ok){
     toast('Reconectado ✓ — sincronizando...','var(--green)',2500);
     updateSyncIndicator('ok');
@@ -2447,29 +2462,15 @@ function _syncDotInner(st){
 // Permiso vencido (también el que venía guardado de antes): se muestra enseguida
 setInterval(function(){if(GD.accessToken&&GD.tokenExpiry&&Date.now()>=GD.tokenExpiry){GD.accessToken=null;updateSyncIndicator('noauth');}},60000);
 function _tuvoDrive(){try{return SYNC.method==='oauth'||!!localStorage.getItem('obracontrol-gaccount');}catch(_){return false;}}
-document.addEventListener('click',function(ev){
-  try{
-    if(!GD.online||!_tuvoDrive()||!_accesoAutorizado()||_isPinLocked()||GD._renovando)return;
-    var resta=(GD.accessToken&&GD.tokenExpiry)?GD.tokenExpiry-Date.now():0;
-    if(resta>1200000||Date.now()-(GD._renovIntento||0)<60000)return;
-    if(ev.target&&ev.target.closest&&ev.target.closest('#driveReconnectBanner'))return;
-    if(!(window.google&&window.google.accounts&&window.google.accounts.oauth2)){initGoogleAuth();return;}
-    var conToken=resta>60000;
-    GD._renovando=true;GD._renovIntento=Date.now();
-    if(conToken)GD._forzarRenovar=true;else updateSyncIndicator('conectando');
-    var fin=function(ok){
-      if(!GD._renovando)return;
-      GD._renovando=false;
-      if(ok&&!conToken&&window._drivePost)window._drivePost();
-      else if(!GD.accessToken)updateSyncIndicator('noauth');
-    };
-    ensureAuth(false).then(fin).catch(function(){fin(false);});
-    setTimeout(function(){fin(false);},45000);
-  }catch(_){}
-},true);
+// Tocar el indicador cuando Drive está en pausa reconecta ahí mismo
+function _tocarIndicador(){
+  var st=GD._syncEst;
+  if((st==='noauth'||st==='error'||st==='conectando')&&_tuvoDrive()&&GD.online){_reconnectDrive();return;}
+  showDrivePanel();
+}
 function _syncDotHTML(){
   var st=GD._syncEst||(_tuvoDrive()&&navigator.onLine?'conectando':'noauth'),c=_SYNC_EST[st]||_SYNC_EST.noauth;
-  return '<span id="syncIndicator" class="sync-dot" data-status="'+st+'" onclick="showDrivePanel()" title="'+c.title+'" style="color:'+c.color+'">'+_syncDotInner(st)+'</span>';
+  return '<span id="syncIndicator" class="sync-dot" data-status="'+st+'" onclick="_tocarIndicador()" title="'+c.title+'" style="color:'+c.color+'">'+_syncDotInner(st)+'</span>';
 }
 function updateSyncIndicator(status,fase) {
   status=_syncEstadoReal(status);
@@ -9071,7 +9072,29 @@ function dCI(ci,ii){const c=D.checklists.find(x=>x.id===ci);if(c){c.items=c.item
 
 /* ===== MÓDULO: DOCUMENTOS ===== */
 function toggleDocStar(tbl,id){var item=(D[tbl]||[]).find(function(x){return x.id===id;});if(!item)return;item.starred=!item.starred;item.updatedAt=nw();sv();render();}
-function openEnlace(id){var e=(D.enlaces||[]).find(function(x){return x.id===id;});if(e&&e.url)window.open(e.url,'_blank');}
+function openEnlace(id){var e=(D.enlaces||[]).find(function(x){return x.id===id;});if(e&&e.url)_abrirEnlaceUrl(e.url);}
+function _abrirEnlaceUrl(u){
+  u=String(u||'').trim();
+  if(!/^https?:\/\//i.test(u)){toast('Este enlace no tiene un link válido: tocá ✏️ y pegá el link','var(--orange)',4500);return;}
+  window.open(u,'_blank');
+}
+// Identidad del archivo: en Drive, el mismo archivo puede tener links distintos (?usp=…)
+function _claveEnlace(u){u=String(u||'').trim();var m=u.match(/\/d\/([\w-]{15,})/)||u.match(/[?&]id=([\w-]{15,})/);return m?'drive:'+m[1]:u.replace(/[?#].*$/,'').toLowerCase();}
+// Revisa el link antes de guardar. Devuelve el link listo o null si hay que corregirlo.
+function _validarEnlace(u,idPropio){
+  u=String(u||'').trim();
+  if(!u){toast('Pegá el link en URL','var(--red)');return null;}
+  if(!/^https?:\/\//i.test(u)){
+    if(/^[\w-]+(\.[\w-]+)+(\/|$)/.test(u))u='https://'+u;
+    else{toast('Eso no es un link: copiá el enlace del archivo y pegalo en URL (el nombre va en Título)','var(--red)',5500);return null;}
+  }
+  var k=_claveEnlace(u),otro=(D.enlaces||[]).find(function(x){return x.id!==idPropio&&x.url&&_claveEnlace(x.url)===k;});
+  if(otro){
+    var ob=(D.projects||[]).find(function(p){return p.id===otro.projectId;});
+    if(!confirm('Ese link ya está guardado como «'+(otro.title||otro.url)+'»'+(ob?' en '+ob.name:'')+'.\n\nSuele pasar cuando se copia el vínculo de otro archivo. ¿Es el archivo que querés guardar?'))return null;
+  }
+  return u;
+}
 
 function rDocs(mc){
   var _dsort=S.docSort||'';
@@ -9097,10 +9120,10 @@ function rDocs(mc){
   mc.innerHTML=`${modHeader('documentos','Documentos',`<div class="flex gap-4"><button class="btn btn-s bt" style="--c:#2563eb" onclick="openM('newDocM')">${I.file} Archivo</button><button class="btn btn-s bt" style="--c:${c}" onclick="openM('newEnlM')">${I.link} Enlace</button></div>`)}
   <div class="card mb-8" style="padding:8px 12px"><div class="txxs tc3 mb-4">Ordenar:</div><div class="fila-igual"><button class="btn btn-s ${S.docSort===''?'btn-p':'btn-sec'}" onclick="S.docSort='';render()">Reciente</button><button class="btn btn-s ${S.docSort==='az'?'btn-p':'btn-sec'}" onclick="S.docSort='az';render()">A-Z</button><button class="btn btn-s ${S.docSort==='za'?'btn-p':'btn-sec'}" onclick="S.docSort='za';render()">Z-A</button><button class="btn btn-s ${S.docSort==='asc'?'btn-p':'btn-sec'}" onclick="S.docSort='asc';render()">Antigua</button></div></div>
   ${docs.length?`<div class="mb-12"><div class="ts fw7 mb-8">Archivos (${docs.length})</div>${_sortArr(docs).map(d=>{const vN=d.visitaId?D.visitas.find(v=>v.id===d.visitaId)?.title:null;const docURL=_docHref(d);const _du=encodeURIComponent(docURL||'');const _dn=encodeURIComponent(d.name||'documento');return `<div class="card" style="padding:12px"><div class="flex items-center gap-10"><span style="color:${c}">${I.file}</span><div class="flex-1" style="min-width:0"><div class="ts fw6 trun">${d.name}</div><div class="txxs tc3">${d.category?colBadge(d.category,c,true):''} ${fmts(d.date)}${d.fileName?' — '+d.fileName:''}${vN?` <span class="link-tag">${I.link} ${vN}</span>`:''}</div>${d.notes?`<div class="txxs tc3 mt-4">${d.notes}</div>`:''}</div>${docURL?`<button class="btn btn-sec btn-s" data-href="${_du}" data-name="${_dn}" onclick="event.stopPropagation();var _h=this.getAttribute('data-href'),_n=decodeURIComponent(this.getAttribute('data-name')||'doc');if(_h)openFileData(decodeURIComponent(_h),_n);" title="Ver archivo">${I.eye} Ver</button>`:''}<button class="btn btn-sec btn-s" onclick="event.stopPropagation();editDoc('${d.id}')" title="Editar nombre">${I.edit}</button><button class="tbtn" onclick="event.stopPropagation();if(confirmDel())delI('documentos','${d.id}')">${I.trash}</button><button class="btn btn-g btn-s" style="color:${d.starred?'#f59e0b':'#cbd5e1'}" onclick="toggleDocStar('documentos','${d.id}')" title="Favorito">&#x2605;</button></div></div>`;}).join('')}</div>`:''}
-  ${enl.length?`<div class="mb-12"><div class="ts fw7 mb-8">Enlaces (${enl.length})</div>${_sortArr(enl).map(e=>{const _eu=encodeURIComponent(e.url||'');return `<div class="card" style="padding:12px"><div class="flex items-center gap-10"><span style="color:var(--blue)">${I.globe}</span><div class="flex-1 card-click" style="min-width:0" data-href="${_eu}" onclick="event.stopPropagation();var _h=this.getAttribute('data-href');if(_h)window.open(decodeURIComponent(_h),'_blank')"><div class="ts fw6 trun">${e.title||e.url} <span style="font-size:9px;color:var(--blue)">⧉</span></div>${e.description?`<div class="txxs tc3">${e.description}</div>`:''}<div class="txxs tc3">${fmts(e.date)}${e.url&&e.url.includes('drive.google')?` ${colBadge('Google Drive','var(--green)',true)}`:''}</div></div><button class="btn btn-sec btn-s" onclick="event.stopPropagation();editEnl('${e.id}')" title="Editar enlace">${I.edit}</button><button class="tbtn" onclick="event.stopPropagation();if(confirmDel())delI('enlaces','${e.id}')">${I.trash}</button><button class="btn btn-g btn-s" style="color:${e.starred?'#f59e0b':'#cbd5e1'}" onclick="event.stopPropagation();toggleDocStar('enlaces','${e.id}')" title="Favorito">&#x2605;</button></div></div>`;}).join('')}</div>`:''}
+  ${enl.length?`<div class="mb-12"><div class="ts fw7 mb-8">Enlaces (${enl.length})</div>${_sortArr(enl).map(e=>{const _eu=encodeURIComponent(e.url||'');return `<div class="card" style="padding:12px"><div class="flex items-center gap-10"><span style="color:var(--blue)">${I.globe}</span><div class="flex-1 card-click" style="min-width:0" data-href="${_eu}" onclick="event.stopPropagation();var _h=this.getAttribute('data-href');_abrirEnlaceUrl(decodeURIComponent(_h||''))"><div class="ts fw6 trun">${e.title||e.url} <span style="font-size:9px;color:var(--blue)">⧉</span></div>${e.description?`<div class="txxs tc3">${e.description}</div>`:''}<div class="txxs tc3">${fmts(e.date)}${e.url&&e.url.includes('drive.google')?` ${colBadge('Google Drive','var(--green)',true)}`:''}</div></div><button class="btn btn-sec btn-s" onclick="event.stopPropagation();editEnl('${e.id}')" title="Editar enlace">${I.edit}</button><button class="tbtn" onclick="event.stopPropagation();if(confirmDel())delI('enlaces','${e.id}')">${I.trash}</button><button class="btn btn-g btn-s" style="color:${e.starred?'#f59e0b':'#cbd5e1'}" onclick="event.stopPropagation();toggleDocStar('enlaces','${e.id}')" title="Favorito">&#x2605;</button></div></div>`;}).join('')}</div>`:''}
   ${!docs.length&&!enl.length?`<div class="empty"><span style="color:${c}">${I.file}</span><div class="ts mt-8">Sin documentos ni enlaces</div></div>`:''}
-  <div class="mo" id="newDocM"><div class="mo-c"><div class="mo-h"><h3 style="color:${c}">Agregar Archivo</h3><button class="tbtn" onclick="closeM('newDocM')">${I.x}</button></div><div class="fg"><label class="fl">Nombre *</label><input class="fi" id="nd_n"></div><div class="fg"><label class="fl">Categoria</label><select class="fs" id="nd_c"><option value="">-</option>${DCT.map(c=>`<option>${c}</option>`).join('')}</select></div><div class="fg"><label class="fl">Archivo (PDF recomendado)</label><input type="file" id="nd_f" class="fi" style="padding:6px" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.png"></div><div class="fg"><label class="fl">URL alternativa</label><input class="fi" id="nd_u" placeholder="https://..."></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="nd_no"></textarea></div><button class="btn btn-w mt-8" style="background:${c};color:#fff" onclick="saveDocF()">Guardar</button></div></div>
-  <div class="mo" id="newEnlM"><div class="mo-c"><div class="mo-h"><h3 style="color:var(--blue)">Agregar Enlace</h3><button class="tbtn" onclick="closeM('newEnlM')">${I.x}</button></div><div class="fg"><label class="fl">URL *</label><input class="fi" id="ne_u" placeholder="https://drive.google.com/..."></div><div class="fg"><label class="fl">Titulo</label><input class="fi" id="ne_t"></div><div class="fg"><label class="fl">Descripcion</label><textarea class="ft" id="ne_de"></textarea></div><button class="btn btn-w mt-8" style="background:var(--blue);color:#fff" onclick="saveEnl()">Guardar</button></div></div>`;
+  <div class="mo" id="newDocM"><div class="mo-c"><div class="mo-h"><h3 style="color:${c}">Agregar Archivo</h3><button class="tbtn" onclick="closeM('newDocM')">${I.x}</button></div><div class="fg"><label class="fl">Nombre *</label><input class="fi" id="nd_n"></div><div class="fg"><label class="fl">Categoria</label><select class="fs" id="nd_c"><option value="">-</option>${DCT.map(c=>`<option>${c}</option>`).join('')}</select></div><div class="fg"><label class="fl">Archivo (PDF recomendado)</label><input type="file" id="nd_f" class="fi" style="padding:6px" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.png"></div><div class="fg"><label class="fl">URL alternativa</label><input class="fi" id="nd_u" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://..."></div><div class="fg"><label class="fl">Notas</label><textarea class="ft" id="nd_no"></textarea></div><button class="btn btn-w mt-8" style="background:${c};color:#fff" onclick="saveDocF()">Guardar</button></div></div>
+  <div class="mo" id="newEnlM"><div class="mo-c"><div class="mo-h"><h3 style="color:var(--blue)">Agregar Enlace</h3><button class="tbtn" onclick="closeM('newEnlM')">${I.x}</button></div><div class="fg"><label class="fl">URL *</label><input class="fi" id="ne_u" type="url" inputmode="url" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="https://drive.google.com/..."></div><div class="fg"><label class="fl">Titulo</label><input class="fi" id="ne_t" autocomplete="off"></div><div class="fg"><label class="fl">Descripcion</label><textarea class="ft" id="ne_de"></textarea></div><button class="btn btn-w mt-8" style="background:var(--blue);color:#fff" onclick="saveEnl()">Guardar</button></div></div>`;
 }
 async function saveDocF(){
   const n=$('nd_n').value.trim();if(!n){toast('Nombre obligatorio','var(--red)');return;}
@@ -9142,7 +9165,7 @@ async function saveDocF(){
   D.documentos.push(doc);audit('documentos','create',n);sv();closeM('newDocM');render();
   toast('Documento guardado'+(doc.driveId?' en Drive ✓':doc.fileData?' localmente':' (sin archivo)'),'var(--green)');
 }
-function saveEnl(){const u=$('ne_u').value.trim();if(!u){toast('URL obligatoria','var(--red)');return;}D.enlaces.push({id:uid(),projectId:S.proj,url:u,title:$('ne_t').value,description:$('ne_de').value,date:td(),updatedAt:nw()});audit('enlaces','create',u.slice(0,30));sv();closeM('newEnlM');render();toast('Enlace guardado');}
+function saveEnl(){const u=_validarEnlace($('ne_u').value,null);if(!u)return;D.enlaces.push({id:uid(),projectId:S.proj,url:u,title:$('ne_t').value,description:$('ne_de').value,date:td(),updatedAt:nw()});audit('enlaces','create',u.slice(0,30));sv();closeM('newEnlM');render();toast('Enlace guardado');}
 
 function editDoc(id){
   var doc=(D.documentos||[]).find(function(x){return x.id===id;});
@@ -9178,7 +9201,7 @@ function editEnl(id){
   var d=document.createElement('div');d.className='mo open';d.id='editEnlModal';
   d.innerHTML='<div class="mo-c"><div class="mo-h"><h3 style="color:var(--blue)">'+I.edit+' Editar Enlace</h3><button class="tbtn" onclick="this.closest(\'.mo\').remove()">'+(I.x||'✕')+'</button></div>'
     +'<div class="fg"><label class="fl">Título *</label><input class="fi" id="eenl_t" value="'+((enl.title||'').replace(/"/g,'&quot;'))+'"></div>'
-    +'<div class="fg"><label class="fl">URL</label><input class="fi" id="eenl_u" value="'+((enl.url||'').replace(/"/g,'&quot;'))+'"></div>'
+    +'<div class="fg"><label class="fl">URL</label><input class="fi" id="eenl_u" type="url" inputmode="url" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" value="'+((enl.url||'').replace(/"/g,'&quot;'))+'"></div>'
     +'<div class="fg"><label class="fl">Descripción</label><textarea class="ft" id="eenl_de">'+((enl.description||''))+'</textarea></div>'
     +'<button class="btn btn-w mt-8" style="background:var(--blue);color:#fff" onclick="saveEditEnl(\''+id+'\')">Guardar cambios</button></div>';
   document.body.appendChild(d);
@@ -9186,8 +9209,9 @@ function editEnl(id){
 function saveEditEnl(id){
   var enl=(D.enlaces||[]).find(function(x){return x.id===id;});if(!enl)return;
   var t=($('eenl_t')?.value||'').trim();if(!t){toast('Título obligatorio','var(--red)');return;}
+  var _u=_validarEnlace($('eenl_u')?.value||enl.url,id);if(!_u)return;
   enl.title=t;
-  enl.url=$('eenl_u')?.value||enl.url;
+  enl.url=_u;
   enl.description=$('eenl_de')?.value||'';
   enl.updatedAt=nw();
   audit('enlaces','update',t.slice(0,30));sv();
@@ -9564,7 +9588,7 @@ function rNotas(mc){
     +'<div class="flex gap-4 mt-8 items-center" style="flex-wrap:nowrap">'
     +'<button class="btn btn-sec btn-s" id="nota_mic" title="Dictar" style="flex:1;height:38px;font-size:17px;padding:6px 4px;justify-content:center" onclick="dictarNota(\'nota_q\',this)">🎤</button>'
     +'<label class="btn btn-sec btn-s" title="Foto de la galería" style="flex:1;height:38px;font-size:17px;padding:6px 4px;justify-content:center;cursor:pointer">🖼️<input type="file" accept="image/*" multiple style="display:none" onchange="fotosNotaRapida(this)"></label>'
-    +'<label class="btn btn-sec btn-s" title="Sacar una foto con la cámara" style="flex:1;height:38px;font-size:17px;padding:6px 4px;justify-content:center;cursor:pointer">📷<input type="file" accept="image/*" capture="environment" style="display:none" onchange="_aGaleria(this);fotosNotaRapida(this)"></label>'
+    +'<label class="btn btn-sec btn-s" title="Sacar fotos con la cámara (una atrás de la otra)" onclick="if(_camRafagaOk()){event.preventDefault();_camRafaga(\'adj\');}" style="flex:1;height:38px;font-size:17px;padding:6px 4px;justify-content:center;cursor:pointer">📷<input type="file" accept="image/*" capture="environment" style="display:none" onchange="_aGaleria(this);fotosNotaRapida(this)"></label>'
     +'<button class="btn btn-sec btn-s" title="Dibujar" style="flex:1;height:38px;font-size:17px;padding:6px 4px;justify-content:center" onclick="abrirDibujoNota(null)">✏️</button>'
     +'<button class="btn btn-s" title="Asentar la nota" style="flex:1;height:38px;font-size:17px;padding:6px 4px;justify-content:center;background:'+c+';color:#fff" onclick="guardarNotaRapida()">'+I.save.replace('width="14" height="14"','width="22" height="22"')+'</button>'
     +'</div>'
@@ -9812,11 +9836,11 @@ function abrirNota(id){
         +'</select>'+(cks.length?'':'<div class="txxs tc3 mt-4">Esta obra todavía no tiene checklists.</div>')+'</div>';})()
     +'<div class="fg"><label class="fl">Nota</label><textarea class="ft" id="nm_tx" rows="6">'+esc(n?(n.texto||''):'')+'</textarea></div>'
     +'<div id="nm_ph"></div>'
-    +'<div class="flex gap-6 mb-10" style="flex-wrap:wrap">'
-    +'<button class="btn btn-sec btn-s" onclick="dictarNota(\'nm_tx\',this)">🎤 Dictar</button>'
-    +'<label class="btn btn-sec btn-s" style="cursor:pointer">🖼️ Galería<input type="file" accept="image/*" multiple style="display:none" onchange="fotosNotaEdit(this)"></label>'
-    +'<label class="btn btn-sec btn-s" style="cursor:pointer">📷 Cámara<input type="file" accept="image/*" capture="environment" style="display:none" onchange="_aGaleria(this);fotosNotaEdit(this)"></label>'
-    +'<button class="btn btn-sec btn-s" onclick="abrirDibujoNota(\'edit\')">✏️ Dibujar</button>'
+    +'<div class="nota-herr mb-10">'
+    +'<button class="btn btn-sec" onclick="dictarNota(\'nm_tx\',this)">🎤 Dictar</button>'
+    +'<label class="btn btn-sec" style="cursor:pointer">🖼️ Galería<input type="file" accept="image/*" multiple style="display:none" onchange="fotosNotaEdit(this)"></label>'
+    +'<label class="btn btn-sec" style="cursor:pointer" onclick="if(_camRafagaOk()){event.preventDefault();_camRafaga(\'edit\');}">📷 Cámara<input type="file" accept="image/*" capture="environment" style="display:none" onchange="_aGaleria(this);fotosNotaEdit(this)"></label>'
+    +'<button class="btn btn-sec" onclick="abrirDibujoNota(\'edit\')">✏️ Dibujar</button>'
     +'</div>'
     +'<button class="btn btn-w" style="background:'+MC.notas+';color:#fff" onclick="guardarNota()">'+I.save+' Guardar</button>'
     +'</div>';
@@ -9831,6 +9855,79 @@ function _notaEditFotos(){
     var _nc=((p.comments||[]).length)+(String(p.caption||'').trim()&&p.caption!=='✏️ Dibujo'?1:0);
     return '<div style="position:relative">'+_circuloCmts(_nc)+'<img src="'+esc(_resolveImg(p.url))+'" onclick="_editarFotoBorrador(\'edit\','+i+')" title="Tocá para marcar o comentar" style="width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid var(--brd);cursor:pointer"><button title="Marcar o comentar" onclick="_editarFotoBorrador(\'edit\','+i+')" style="position:absolute;bottom:-6px;left:-6px;border:none;background:#ca8a04;color:#fff;border-radius:50%;width:22px;height:22px;font-size:11px;cursor:pointer">✏️</button><button onclick="window._notaEdit.photos.splice('+i+',1);_notaEditFotos()" style="position:absolute;top:-6px;right:-6px;border:none;background:var(--red);color:#fff;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer">✕</button></div>';
   }).join('')+'</div>':'';
+}
+// ── Cámara en ráfaga: se sacan varias fotos seguidas sin salir de la nota ──
+function _camRafagaOk(){return !!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia&&window.isSecureContext);}
+var _camR=null;
+async function _camRafaga(destino){
+  if(_camR)return;
+  var d=document.createElement('div');d.id='camRafaga';
+  d.style.cssText='position:fixed;inset:0;z-index:4000;background:#000;display:flex;flex-direction:column';
+  d.innerHTML='<div id="camTiras" style="display:flex;gap:6px;padding:10px;overflow-x:auto;min-height:64px;background:rgba(0,0,0,.6)"></div>'
+    +'<video id="camVideo" autoplay playsinline muted style="flex:1;min-height:0;width:100%;object-fit:contain;background:#000"></video>'
+    +'<div id="camAviso" style="display:none;color:#fff;text-align:center;padding:16px"></div>'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px 26px;background:rgba(0,0,0,.6)">'
+    +'<button id="camCancelar" style="border:none;background:none;color:#fff;font-size:16px;font-weight:700;cursor:pointer;min-width:84px;text-align:left">✕ Cancelar</button>'
+    +'<button id="camDisparo" aria-label="Sacar foto" style="width:74px;height:74px;border-radius:50%;border:5px solid #fff;background:rgba(255,255,255,.25);cursor:pointer"></button>'
+    +'<button id="camListo" style="border:none;background:#16a34a;color:#fff;font-size:15px;font-weight:800;border-radius:10px;padding:10px 14px;cursor:pointer;min-width:84px">✓ Listo</button>'
+    +'</div>';
+  document.body.appendChild(d);
+  var fotos=[],stream=null,ocupado=false;
+  _camR={fotos:fotos};
+  var cerrar=function(){
+    try{if(stream)stream.getTracks().forEach(function(t){t.stop();});}catch(_){}
+    d.remove();_camR=null;
+  };
+  var listo=function(){
+    var l=fotos.slice();cerrar();
+    if(!l.length)return;
+    if(destino==='adj'){var ta=$('nota_q');if(ta){S.notaBorrador=ta.value;saveUIState();}}
+    _camGuardarEnGaleria(l);
+    _abrirFotoNueva(l,destino,0);
+  };
+  d.querySelector('#camCancelar').onclick=function(){
+    if(fotos.length&&!confirm('¿Descartar las '+fotos.length+' foto'+(fotos.length>1?'s':'')+' sacadas?'))return;
+    cerrar();
+  };
+  d.querySelector('#camListo').onclick=listo;
+  var v=d.querySelector('#camVideo');
+  d.querySelector('#camDisparo').onclick=async function(){
+    if(ocupado||!v.videoWidth)return;ocupado=true;
+    try{
+      var c=document.createElement('canvas');c.width=v.videoWidth;c.height=v.videoHeight;
+      c.getContext('2d').drawImage(v,0,0);
+      d.style.background='#fff';setTimeout(function(){d.style.background='#000';},90);
+      var du=c.toDataURL('image/jpeg',0.9);
+      try{du=await compressImage(du,1600,0.8);}catch(_){}
+      fotos.push(du);
+      var im=document.createElement('img');im.src=du;im.style.cssText='width:52px;height:52px;object-fit:cover;border-radius:6px;border:2px solid #fff;flex-shrink:0';
+      d.querySelector('#camTiras').appendChild(im);
+      d.querySelector('#camListo').textContent='✓ Listo ('+fotos.length+')';
+    }finally{ocupado=false;}
+  };
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}},audio:false});
+    if(!_camR){stream.getTracks().forEach(function(t){t.stop();});return;}
+    v.srcObject=stream;
+  }catch(e){
+    // Sin permiso de cámara: queda la cámara del teléfono, de a una foto
+    v.style.display='none';d.querySelector('#camDisparo').style.visibility='hidden';
+    var av=d.querySelector('#camAviso');av.style.display='block';
+    av.innerHTML='<div style="font-size:15px;font-weight:700;margin-bottom:12px">No se pudo abrir la cámara acá</div><div style="font-size:13px;opacity:.8;margin-bottom:16px">Puede faltar el permiso de cámara del navegador. Mientras tanto podés usar la cámara del teléfono, de a una foto.</div>'
+      +'<label style="display:inline-block;background:#fff;color:#000;border-radius:10px;padding:10px 16px;font-weight:700;cursor:pointer">📷 Usar la cámara del teléfono<input type="file" accept="image/*" capture="environment" style="display:none"></label>';
+    av.querySelector('input').onchange=function(){var inp=this;_camR=null;d.remove();_aGaleria(inp);if(destino==='adj')fotosNotaRapida(inp);else fotosNotaEdit(inp);};
+  }
+}
+// Igual que con la cámara del teléfono: cada foto queda también en la galería
+function _camGuardarEnGaleria(lista){
+  try{
+    lista.forEach(function(du,i){
+      var dt=new Date(),z=function(n){return String(n).padStart(2,'0');};
+      var a=document.createElement('a');a.href=du;a.style.display='none';
+      a.download='ObraControl_'+dt.getFullYear()+z(dt.getMonth()+1)+z(dt.getDate())+'_'+z(dt.getHours())+z(dt.getMinutes())+z(dt.getSeconds())+'_'+(i+1)+'.jpg';
+      document.body.appendChild(a);a.click();a.remove();
+    });
+  }catch(_){}
 }
 async function fotosNotaEdit(input){
   var dus=await _leerDataUrlsNota(input);
