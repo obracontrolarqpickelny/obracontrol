@@ -10391,37 +10391,16 @@ function rNotas(mc){
     +'</div>'
     +'<div style="text-align:right;margin-top:2px"><button class="link-tag" title="Ayuda" style="font-size:12px;padding:0 6px" onclick="toast(\'Se asienta con la fecha y hora de ahora. Para otra fecha o más datos usá + Nota.\',\'#334155\',5000)">ⓘ</button></div>'
     +'</div>';
-  // Solapas: lo que pasó (Registro) y lo que hay que hacer (Tareas)
-  var _todasN=pf('notas'),_nPend=_todasN.filter(function(n){return n.tipo==='pendiente'&&!_notaHecha(n);}).length,_nReg=_todasN.filter(function(n){return n.tipo!=='pendiente';}).length;
-  var solapa=function(v,txt){var on=(S.notasVista||'')===v;return '<button onclick="_notasVer(\''+v+'\')" style="flex:1;border:none;background:'+(on?'var(--white)':'transparent')+';color:'+(on?'var(--text)':'var(--text3)')+';font-weight:'+(on?'600':'500')+';border-radius:9px;padding:8px 4px;font-size:13px;cursor:pointer;box-shadow:'+(on?'0 1px 3px rgba(16,24,40,.12)':'none')+'">'+txt+'</button>';};
-  h+='<div style="display:flex;gap:4px;background:var(--gray-ll);border-radius:12px;padding:4px;margin-bottom:10px">'
-    +solapa('','Todo')+solapa('registro','📝 Registro <span style="color:var(--text3);font-weight:500">'+_nReg+'</span>')+solapa('tareas','☑️ Tareas'+(_nPend?' <span style="background:#ca8a04;color:#fff;border-radius:9px;padding:0 7px;font-size:11px">'+_nPend+'</span>':''))
-    +'</div>';
-  // Filtros
-  h+='<div class="flex gap-6 mb-8" style="flex-wrap:wrap">'
-    +chip(!S.notasCuaderno,'📚 Todos',"_notaFiltrarCuad('')")
-    +cuads.map(function(k){return '<button class="btn btn-s" data-c="'+esc(k)+'" style="white-space:nowrap;'+(S.notasCuaderno===k?'background:'+c+';color:#fff':'background:var(--gray-ll);color:var(--text2)')+'" onclick="_notaFiltrarCuad(this.dataset.c)">📒 '+esc(k)+'</button>';}).join('')
-    +'<button class="btn btn-sec btn-s" style="white-space:nowrap" title="Crear, renombrar o borrar cuadernos" onclick="abrirCuadernos()">⚙ Cuadernos</button>'
-    +'</div>'
-    +'<div class="flex gap-6 mb-6" style="flex-wrap:nowrap">'
+  // Buscador + "⚙ Filtros". Todo lo que filtra (Registro/Tareas, cuaderno,
+  // tipo, estado…) vive adentro del panel, en listas una debajo de otra; afuera
+  // sólo queda un renglón con lo elegido (o "Sin filtro"), así se ven más notas.
+  h+='<div class="flex gap-6 mb-6" style="flex-wrap:nowrap">'
     +'<div style="position:relative;flex:1;min-width:0"><input class="fi" style="margin:0;width:100%;padding-right:34px" placeholder="🔎 Buscar en las notas…" value="'+esc(S.notasBuscar||'')+'" id="notas_q" enterkeyhint="search" oninput="this.nextElementSibling.style.display=this.value?\'flex\':\'none\';_notasBuscarVivo(this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}" onchange="S.notasBuscar=this.value;saveUIState()">'
     +'<button title="Borrar la búsqueda" onmousedown="event.preventDefault()" onclick="var i=this.previousElementSibling;i.value=\'\';this.style.display=\'none\';S.notasBuscar=\'\';saveUIState();render()" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);display:'+(S.notasBuscar?'flex':'none')+';align-items:center;justify-content:center;width:24px;height:24px;border:none;border-radius:50%;background:var(--gray-ll);color:var(--text2);font-size:13px;font-weight:700;cursor:pointer">✕</button></div>'
     +_fBoton(_notasFiltrosN(),!!S.notasFiltros,'S.notasFiltros=!S.notasFiltros;saveUIState();render()')
     +'</div>'
-    +(S.notasFiltros?(function(){
-      var rs=_responsablesObra();if(S.notasResp&&S.notasResp!=='__sin'&&rs.indexOf(S.notasResp)<0)rs.push(S.notasResp);
-      var _pendResp=pf('notas').filter(function(n){return n.tipo==='pendiente'&&!_notaHecha(n);});
-      var est='flex:0 0 auto;width:auto;max-width:158px;margin:0;font-size:13px';
-      return '<div class="nota-filtros">'
-      +'<select class="fs" style="'+est+'" onchange="S.notasOrden=this.value;saveUIState();render()"><option value="desc"'+(['asc','pri','venc'].indexOf(S.notasOrden)<0?' selected':'')+'>📅 Más recientes</option><option value="asc"'+(S.notasOrden==='asc'?' selected':'')+'>📅 Más antiguas</option><option value="pri"'+(S.notasOrden==='pri'?' selected':'')+'>🚦 Por prioridad</option><option value="venc"'+(S.notasOrden==='venc'?' selected':'')+'>⏰ Por vencimiento</option></select>'
-      +'<select class="fs" style="'+est+'" onchange="S.notasTipo=this.value;saveUIState();render()"><option value="">🏷️ Tipo: todos</option>'+Object.keys(NOTA_TIPOS).filter(function(k){return S.notasVista==='registro'?k!=='pendiente':S.notasVista==='tareas'?k==='pendiente':true;}).map(function(k){return '<option value="'+k+'"'+(S.notasTipo===k?' selected':'')+'>'+NOTA_TIPOS[k]+'</option>';}).join('')+'</select>'
-      +'<select class="fs" style="'+est+'" onchange="S.notasEstado=this.value;saveUIState();render()"><option value=""'+(!S.notasEstado?' selected':'')+'>📋 Vigentes y hechas</option><option value="vig"'+(S.notasEstado==='vig'?' selected':'')+'>⏳ Vigentes</option><option value="hechas"'+(S.notasEstado==='hechas'?' selected':'')+'>✅ Realizadas</option></select>'
-      +'<select class="fs" style="'+est+'" onchange="S.notasResp=this.value;saveUIState();render()"><option value="">👤 Responsable: todos</option>'+rs.map(function(r){var k=_pendResp.filter(function(n){return _mismoResp(n.responsable,r);}).length;return '<option value="'+esc(r)+'"'+(_mismoResp(S.notasResp,r)?' selected':'')+'>👤 '+esc(r)+' ('+k+')</option>';}).join('')+'<option value="__sin"'+(S.notasResp==='__sin'?' selected':'')+'>🚫 Sin responsable ('+_pendResp.filter(function(n){return !String(n.responsable||'').trim();}).length+')</option></select>'
-      +'<button title="Sólo las que tienen alerta" onclick="S.notasAlerta=!S.notasAlerta;saveUIState();render()" style="flex:0 0 auto;width:40px;height:38px;border-radius:10px;font-size:16px;cursor:pointer;'+(S.notasAlerta?'background:#fef2f2;border:2px solid #dc2626':'background:var(--white);border:1px solid var(--brd)')+'">🚨</button>'
-      +'<button title="Sólo las que tienen conversación" onclick="S.notasChat=!S.notasChat;saveUIState();render()" style="flex:0 0 auto;width:40px;height:38px;border-radius:10px;font-size:16px;cursor:pointer;'+(S.notasChat?'background:#dbeafe;border:2px solid #1d4ed8':'background:var(--white);border:1px solid var(--brd)')+'">🗨️</button>'
-      +(_notasFiltrosN()?'<button class="btn btn-g btn-s" style="flex:0 0 auto;white-space:nowrap" onclick="S.notasOrden=\'desc\';S.notasTipo=\'\';S.notasEstado=\'\';S.notasResp=\'\';S.notasAlerta=false;S.notasChat=false;saveUIState();render()">✕ Limpiar</button>':'')
-      +'</div>';
-    })():'');
+    +_notasResumenFiltros()
+    +(S.notasFiltros?_notasPanelFiltros(cuads):'');
   if(S.notasSelMode){var _ns=Object.keys(S.notasSel||{}).filter(function(k){return lista.some(function(x){return x.id===k;});}).length;
     h+='<div class="flex items-center gap-6 mb-10" style="position:sticky;top:0;z-index:5;padding:8px 10px;border-radius:10px;background:#fefce8;border:2px solid #ca8a04">'
       +'<span class="txs fw7" style="flex:1;color:#a16207">☑️ '+_ns+' elegida'+(_ns===1?'':'s')+'</span>'
@@ -10452,8 +10431,45 @@ function rNotas(mc){
   }
   mc.innerHTML=h;
 }
+// Renglón con los filtros puestos: cada uno se saca con su ✕
+function _notasResumenFiltros(){
+  var it=[],ord={asc:'📅 Más antiguas',pri:'🚦 Por prioridad',venc:'⏰ Por vencimiento'};
+  if(S.notasVista)it.push([S.notasVista==='tareas'?'☑️ Tareas':'📝 Registro',"_notasVer('')"]);
+  if(S.notasCuaderno)it.push(['📒 '+S.notasCuaderno,"_notaFiltrarCuad('')"]);
+  if(S.notasTipo)it.push([_notaTipoLabel(S.notasTipo),"S.notasTipo='';saveUIState();render()"]);
+  if(S.notasEstado)it.push([S.notasEstado==='vig'?'⏳ Vigentes':'✅ Realizadas',"S.notasEstado='';saveUIState();render()"]);
+  if(S.notasResp)it.push([S.notasResp==='__sin'?'🚫 Sin responsable':'👤 '+S.notasResp,"S.notasResp='';saveUIState();render()"]);
+  if(S.notasAlerta)it.push(['🚨 Con alerta',"S.notasAlerta=false;saveUIState();render()"]);
+  if(S.notasChat)it.push(['🗨️ Con conversación',"S.notasChat=false;saveUIState();render()"]);
+  if(ord[S.notasOrden])it.push([ord[S.notasOrden],"S.notasOrden='desc';saveUIState();render()"]);
+  if(!it.length)return '<div class="txxs tc3" style="margin:0 2px 10px">Sin filtro</div>';
+  return '<div style="display:flex;flex-wrap:wrap;gap:5px;margin:0 0 10px">'+it.map(function(x){
+    return '<span style="display:inline-flex;align-items:center;gap:4px;background:#FEF3C7;color:#92400E;border-radius:999px;padding:3px 4px 3px 10px;font-size:12px;font-weight:550">'+esc(x[0])
+      +'<button title="Sacar este filtro" onclick="'+x[1]+'" style="border:none;background:#fde68a;color:#92400E;border-radius:50%;width:18px;height:18px;font-size:10px;line-height:1;cursor:pointer;padding:0">✕</button></span>';
+  }).join('')+'</div>';
+}
+function _notasPanelFiltros(cuads){
+  var todas=pf('notas'),nPend=todas.filter(function(n){return n.tipo==='pendiente'&&!_notaHecha(n);}).length,nReg=todas.filter(function(n){return n.tipo!=='pendiente';}).length;
+  var rs=_responsablesObra();if(S.notasResp&&S.notasResp!=='__sin'&&rs.indexOf(S.notasResp)<0)rs.push(S.notasResp);
+  var pendResp=todas.filter(function(n){return n.tipo==='pendiente'&&!_notaHecha(n);});
+  var sel=function(on,opts){return '<select class="fs" style="width:100%;margin:0;font-size:14px" onchange="'+on+'">'+opts+'</select>';};
+  var op=function(v,t,act){return '<option value="'+esc(v)+'"'+(act?' selected':'')+'>'+t+'</option>';};
+  var tilde=function(act,txt,js){return '<label class="flex items-center gap-8 ts" style="padding:6px 0;cursor:pointer"><input type="checkbox"'+(act?' checked':'')+' onchange="'+js+'" style="width:18px;height:18px">'+txt+'</label>';};
+  return _fPanel(
+    _fSec('Mostrar',sel("_notasVer(this.value)",op('','📚 Todo',!S.notasVista)+op('registro','📝 Registro ('+nReg+')',S.notasVista==='registro')+op('tareas','☑️ Tareas ('+nPend+' pendientes)',S.notasVista==='tareas')))
+    +_fSec('Cuaderno','<div class="flex gap-6 items-center">'+'<div style="flex:1;min-width:0">'+sel("_notaFiltrarCuad(this.value)",op('','📚 Todos los cuadernos',!S.notasCuaderno)+cuads.map(function(k){return op(k,'📒 '+esc(k),S.notasCuaderno===k);}).join(''))+'</div>'
+      +'<button class="btn btn-sec btn-s" style="flex:none;min-height:38px" title="Crear, renombrar o borrar cuadernos" onclick="abrirCuadernos()">⚙</button></div>')
+    +_fSec('Tipo',sel("S.notasTipo=this.value;saveUIState();render()",op('','🏷️ Todos los tipos',!S.notasTipo)+Object.keys(NOTA_TIPOS).filter(function(k){return S.notasVista==='registro'?k!=='pendiente':S.notasVista==='tareas'?k==='pendiente':true;}).map(function(k){return op(k,NOTA_TIPOS[k],S.notasTipo===k);}).join('')))
+    +_fSec('Estado',sel("S.notasEstado=this.value;saveUIState();render()",op('','📋 Vigentes y hechas',!S.notasEstado)+op('vig','⏳ Vigentes',S.notasEstado==='vig')+op('hechas','✅ Realizadas',S.notasEstado==='hechas')))
+    +_fSec('Responsable',sel("S.notasResp=this.value;saveUIState();render()",op('','👤 Todos',!S.notasResp)+rs.map(function(r){var k=pendResp.filter(function(n){return _mismoResp(n.responsable,r);}).length;return op(r,'👤 '+esc(r)+' ('+k+')',_mismoResp(S.notasResp,r));}).join('')+op('__sin','🚫 Sin responsable ('+pendResp.filter(function(n){return !String(n.responsable||'').trim();}).length+')',S.notasResp==='__sin')))
+    +_fSec('Orden',sel("S.notasOrden=this.value;saveUIState();render()",op('desc','📅 Más recientes',['asc','pri','venc'].indexOf(_notasOrdenEf())<0)+op('asc','📅 Más antiguas',_notasOrdenEf()==='asc')+op('pri','🚦 Por prioridad',_notasOrdenEf()==='pri')+op('venc','⏰ Por vencimiento',_notasOrdenEf()==='venc')))
+    +_fSec('Solo las que tienen',tilde(S.notasAlerta,'🚨 Alerta',"S.notasAlerta=this.checked;saveUIState();render()")+tilde(S.notasChat,'🗨️ Conversación',"S.notasChat=this.checked;saveUIState();render()"))
+    +'<div class="flex gap-6 mt-4">'+(_notasFiltrosN()?_fLimpiar("S.notasVista='';S.notasCuaderno='';S.notasOrden='desc';S.notasTipo='';S.notasEstado='';S.notasResp='';S.notasAlerta=false;S.notasChat=false;saveUIState();render()"):'')
+    +'<button class="btn btn-sec btn-s" style="margin-left:auto" onclick="S.notasFiltros=false;saveUIState();render()">Listo</button></div>'
+  );
+}
 function _notasOrdenEf(){return (S.notasVista==='tareas'&&['pri','venc','asc'].indexOf(S.notasOrden)<0)?'venc':S.notasOrden;}
-function _notasFiltrosN(){return (['asc','pri','venc'].indexOf(S.notasOrden)>=0?1:0)+(S.notasTipo?1:0)+(S.notasEstado?1:0)+(S.notasResp?1:0)+(S.notasAlerta?1:0)+(S.notasChat?1:0);}
+function _notasFiltrosN(){return (S.notasVista?1:0)+(S.notasCuaderno?1:0)+(['asc','pri','venc'].indexOf(S.notasOrden)>=0?1:0)+(S.notasTipo?1:0)+(S.notasEstado?1:0)+(S.notasResp?1:0)+(S.notasAlerta?1:0)+(S.notasChat?1:0);}
 function _notasVer(v){
   S.notasVista=v;
   if(v==='tareas'){S.notaTipoNueva='pendiente';if(S.notasTipo&&S.notasTipo!=='pendiente')S.notasTipo='';}
