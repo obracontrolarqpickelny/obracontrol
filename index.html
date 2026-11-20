@@ -2868,7 +2868,7 @@ const _UI_KEYS=[
   'ecoFilter','ecoTipoFilter','ecoSort','ecoMetrosOpen',
   'ecoVerPrivados','ecoSoloPriv','ecoPresOpen','ecoDistribOpen',
   // Pantalla Hoy
-  'hoyOculto','hoyMio','hoyAb_urgentes','hoyAb_proximos','hoyTodo_vencido','hoyTodo_hoy','hoyTodo_alertas','hoyTodo_bandeja','hoyTodo_urgentes','hoyTodo_proximos','hoyTodo_pres','avOpen','infPara','infSecc','infDesde','infHasta','infFotos','notasVista','notasVerHechas','matFiltrosOpen','docBuscar','docFiltrosOpen','visBuscar','visEstado','visOrden','visFiltrosOpen','ecoMesesOpen','ecoFiltrosOpen','ecoRubroFilter','ecoItemFilter','ecoFechaDesde','ecoFechaHasta',
+  'hoyOculto','hoyMio','hoyAb_urgentes','hoyAb_proximos','hoyTodo_vencido','hoyTodo_hoy','hoyTodo_alertas','hoyTodo_bandeja','hoyTodo_urgentes','hoyTodo_proximos','hoyTodo_pres','avOpen','infPara','infSecc','infDesde','infHasta','infFotos','notasVista','notasVerHechas','compFotos','matFiltrosOpen','docBuscar','docFiltrosOpen','visBuscar','visEstado','visOrden','visFiltrosOpen','ecoMesesOpen','ecoFiltrosOpen','ecoRubroFilter','ecoItemFilter','ecoFechaDesde','ecoFechaHasta',
   // Grupos de materiales plegados, alertas resueltas, obras cerradas del inicio
   'matGrupoCollapsed','alertResOpen','verCerradas','matPdfSinComp','matPdfHist',
   // Bandeja y carpeta de colaboradores
@@ -10215,6 +10215,172 @@ function _setResponsableNota(id,nombre){
   sv();render();toast(n.responsable?'👤 '+n.responsable+' ✓':'Sin responsable','var(--green)',1800);
 }
 // ⇄ Enviar la nota a un colaborador (si es tarea, le llega como tarea)
+// ═══════ COMPARTIR NOTAS COMO IMAGEN (WhatsApp, mail…) ═══════
+// Se dibujan en un lienzo en alta resolución (PNG, 1440 px de ancho) y se
+// comparten con el menú del teléfono, donde se elige WhatsApp, Gmail, etc.
+// Las imágenes se preparan al abrir la ventana: el teléfono sólo deja abrir
+// ese menú en el mismo toque, sin esperas.
+var _IMG_W=720,_IMG_E=2;
+function _imgEnvolver(ctx,txt,ancho){
+  var out=[];
+  String(txt||'').split('\n').forEach(function(par){
+    if(!par.trim()){out.push('');return;}
+    var pal=par.split(/(\s+)/),lin='';
+    pal.forEach(function(w){
+      var prueba=lin+w;
+      if(ctx.measureText(prueba).width<=ancho||!lin.trim()){
+        // Palabra sola más larga que el renglón: se corta
+        while(ctx.measureText(prueba).width>ancho&&prueba.length>1){var k=prueba.length-1;while(k>1&&ctx.measureText(prueba.slice(0,k)).width>ancho)k--;out.push(prueba.slice(0,k));prueba=prueba.slice(k);}
+        lin=prueba;
+      }else{out.push(lin.replace(/\s+$/,''));lin=w.replace(/^\s+/,'');}
+    });
+    out.push(lin.replace(/\s+$/,''));
+  });
+  return out;
+}
+function _imgCargar(src){return new Promise(function(ok){var im=new Image();im.onload=function(){ok(im);};im.onerror=function(){ok(null);};im.src=src;});}
+async function _imgFotosNota(n,max){
+  var fs=(n.photos||[]).filter(function(x){return x&&!x.deletedAt;}),out=[];
+  for(var i=0;i<fs.length&&out.length<max;i++){
+    try{var du=await _fotoComoDataUrl(fs[i]);if(du){var im=await _imgCargar(du);if(im)out.push(im);}}catch(_){}
+  }
+  return {imgs:out,total:fs.length};
+}
+// Dibuja (o sólo mide, si ctx es null) una lista de notas; devuelve el alto
+function _imgDibujar(ctx,notas,fotos,obra){
+  var med=document.createElement('canvas').getContext('2d'),c=ctx||med,W=_IMG_W,P=28,y=P,cw=W-2*P,F="'Inter','Roboto',system-ui,sans-serif";
+  var txt=function(t,x,yy,font,col,alin){c.font=font;if(ctx){c.fillStyle=col||'#1c2433';c.textAlign=alin||'left';c.fillText(t,x,yy);}return c.measureText(t).width;};
+  var rect=function(x,yy,w,h,r,col,borde){if(!ctx)return;c.beginPath();if(c.roundRect)c.roundRect(x,yy,w,h,r);else c.rect(x,yy,w,h);c.fillStyle=col;c.fill();if(borde){c.strokeStyle=borde;c.lineWidth=1;c.stroke();}};
+  // Encabezado
+  txt((obra||'').toUpperCase(),P,y+12,"600 11px "+F,'#b45309');y+=22;
+  txt(notas.length>1?notas.length+' notas':_notaTipoLabel(notas[0].tipo||'registro').replace(/^\S+\s/,''),P,y+18,"650 20px "+F,'#1c2433');
+  txt(new Date().toLocaleDateString('es-AR',{day:'numeric',month:'long',year:'numeric'}),W-P,y+18,"400 12px "+F,'#6b7586','right');
+  y+=36;
+  notas.forEach(function(n,k){
+    var hecha=_notaHecha(n),alerta=!!n.alerta,col=alerta?'#dc2626':(n.tipo==='pendiente'?'#ca8a04':'#0f766e');
+    var x0=P+18,iw=cw-36,y0=y,yy=y+18;
+    // medir el contenido primero
+    var lineas=function(t,font,w){c.font=font;return _imgEnvolver(c,t,w);};
+    var tit=n.titulo||String(n.texto||'').split('\n')[0];
+    var cuerpo=n.titulo?String(n.texto||''):String(n.texto||'').split('\n').slice(1).join('\n');
+    var lT=lineas(tit,"650 17px "+F,iw),lC=cuerpo.trim()?lineas(cuerpo,"400 14.5px "+F,iw):[];
+    var chips=[];
+    if(n.tipo==='pendiente'){
+      if(n.prioridad&&NOTA_PRI[n.prioridad])chips.push([NOTA_PRI[n.prioridad][0],NOTA_PRI[n.prioridad][1],NOTA_PRI[n.prioridad][2]]);
+      if(n.vence)chips.push(['⏰ Vence '+fmt(n.vence),'#9a3412','#ffedd5']);
+      if(n.responsable)chips.push(['👤 '+n.responsable,'#1d4ed8','#dbeafe']);
+      chips.push(hecha?['✓ Hecha','#15803d','#dcfce7']:['Pendiente','#6b7586','#f1f5f9']);
+    }
+    if(alerta)chips.unshift(['🚨 Alerta','#b91c1c','#fee2e2']);
+    var fo=fotos[n.id]||{imgs:[],total:0},nf=fo.imgs.length,colsF=nf===1?1:nf===2?2:3,gap=8,fw=(iw-(colsF-1)*gap)/colsF,fh=nf===1?Math.min(iw*0.66,380):fw*0.75;
+    var hF=nf?Math.ceil(nf/colsF)*(fh+gap)+4:0;
+    var h=18+18+(chips.length?30:0)+lT.length*23+(lC.length?8+lC.length*21.5:0)+(nf?12+hF:0)+(fo.total>nf?20:0)+16;
+    rect(P,y0,cw,h,14,'#ffffff','#e5e8ee');
+    if(ctx){c.fillStyle=col;c.beginPath();if(c.roundRect)c.roundRect(P,y0,5,h,[14,0,0,14]);else c.rect(P,y0,5,h);c.fill();}
+    txt(_notaTipoLabel(n.tipo||'registro'),x0,yy+4,"600 12px "+F,col);
+    txt(fmt(n.fecha)+(n.hora?' · '+n.hora:''),P+cw-18,yy+4,"400 12px "+F,'#6b7586','right');
+    yy+=18;
+    if(chips.length){
+      var cx=x0;yy+=4;
+      chips.forEach(function(ch){c.font="600 12px "+F;var w=c.measureText(ch[0]).width+18;if(cx+w>x0+iw){return;}rect(cx,yy-2,w,22,11,ch[2]);txt(ch[0],cx+9,yy+13,"600 12px "+F,ch[1]);cx+=w+6;});
+      yy+=26;
+    }
+    lT.forEach(function(l){yy+=23;txt(l,x0,yy-5,"650 17px "+F,hecha?'#6b7586':'#1c2433');});
+    if(lC.length){yy+=8;lC.forEach(function(l){yy+=21.5;txt(l,x0,yy-5,"400 14.5px "+F,'#3e4858');});}
+    if(nf){
+      yy+=12;
+      fo.imgs.forEach(function(im,i){
+        var cx=x0+(i%colsF)*(fw+gap),cy=yy+Math.floor(i/colsF)*(fh+gap);
+        if(ctx){
+          var r=Math.max(fw/im.width,fh/im.height),sw=fw/r,sh=fh/r;
+          c.save();c.beginPath();if(c.roundRect)c.roundRect(cx,cy,fw,fh,8);else c.rect(cx,cy,fw,fh);c.clip();
+          c.drawImage(im,(im.width-sw)/2,(im.height-sh)/2,sw,sh,cx,cy,fw,fh);c.restore();
+        }
+      });
+      yy+=hF;
+    }
+    if(fo.total>nf){yy+=20;txt('📷 '+(fo.total-nf)+' foto'+(fo.total-nf>1?'s':'')+' más en la app',x0,yy-4,"400 12px "+F,'#6b7586');}
+    y=y0+h+12;
+  });
+  y+=6;
+  txt('FEDERICO PICKELNY · ARQUITECTO',P,y+10,"600 10.5px "+F,'#b45309');
+  txt('ObraControl',W-P,y+10,"400 10.5px "+F,'#94a3b8','right');
+  return y+26;
+}
+async function _imgDeNotas(notas,conFotos,obra){
+  var fotos={};
+  if(conFotos)for(var i=0;i<notas.length;i++)fotos[notas[i].id]=await _imgFotosNota(notas[i],9);
+  try{await document.fonts.ready;}catch(_){}
+  var alto=_imgDibujar(null,notas,fotos,obra);
+  var cv=document.createElement('canvas');cv.width=_IMG_W*_IMG_E;cv.height=Math.ceil(alto*_IMG_E);
+  var ctx=cv.getContext('2d');ctx.scale(_IMG_E,_IMG_E);
+  ctx.fillStyle='#f6f7f9';ctx.fillRect(0,0,_IMG_W,alto);
+  _imgDibujar(ctx,notas,fotos,obra);
+  return await new Promise(function(ok){cv.toBlob(function(b){ok(b);},'image/png');});
+}
+function _imgNombre(n){return (String(n.titulo||n.texto||'Nota').split('\n')[0].replace(/[\\\/:*?"<>|]+/g,' ').replace(/\s+/g,' ').slice(0,40).trim()||'Nota')+' - '+(n.fecha||td())+'.png';}
+async function _compPreparar(){
+  var st=window._compSt;if(!st)return;
+  var gen=(st.gen||0)+1;st.gen=gen;st.files=null;
+  var est=document.getElementById('comp_est');if(est)est.textContent='Preparando la imagen…';
+  _compBotones(false);
+  var obra=((D.projects||[]).find(function(x){return x.id===S.proj;})||{}).name||'';
+  var notas=st.ids.map(function(id){return (D.notas||[]).find(function(x){return x.id===id;});}).filter(Boolean);
+  var files=[];
+  try{
+    if(st.juntas||notas.length===1){
+      var b=await _imgDeNotas(notas,st.fotos,obra);
+      files.push(new File([b],notas.length===1?_imgNombre(notas[0]):(notas.length+' notas - '+obra.replace(/[\\\/:*?"<>|]+/g,' ')+' - '+td()+'.png'),{type:'image/png'}));
+    }else{
+      for(var i=0;i<notas.length;i++){var bb=await _imgDeNotas([notas[i]],st.fotos,obra);files.push(new File([bb],_imgNombre(notas[i]),{type:'image/png'}));}
+    }
+  }catch(e){if(est)est.textContent='No se pudo armar la imagen: '+((e&&e.message)||e);return;}
+  if(st.gen!==gen||!document.getElementById('compM'))return;
+  st.files=files;
+  var pv=document.getElementById('comp_prev');
+  if(pv){if(st.url)URL.revokeObjectURL(st.url);st.url=URL.createObjectURL(files[0]);pv.innerHTML='<img src="'+st.url+'" style="width:100%;display:block;border-radius:8px;border:1px solid var(--brd)">';}
+  if(est)est.textContent=files.length>1?files.length+' imágenes listas (se muestra la primera)':'Imagen lista · '+Math.round(files[0].size/1024)+' KB';
+  _compBotones(true);
+}
+function _compBotones(on){document.querySelectorAll('#compM .comp-acc').forEach(function(b){b.disabled=!on;b.style.opacity=on?'1':'.5';});}
+function abrirCompartirNotas(ids){
+  ids=(ids||[]).filter(function(id){return (D.notas||[]).some(function(x){return x.id===id;});});
+  if(!ids.length){toast('Elegí al menos una nota','var(--orange)',2500);return;}
+  window._compSt={ids:ids,juntas:ids.length<=4,fotos:S.compFotos!==false};
+  var st=window._compSt;
+  document.getElementById('compM')?.remove();
+  var d=document.createElement('div');d.className='mo open';d.id='compM';
+  var puede=!!(navigator.canShare&&navigator.canShare({files:[new File(['x'],'x.png',{type:'image/png'})]}));
+  d.innerHTML='<div class="mo-c" style="max-width:460px"><div class="mo-h"><h3>'+_nodos(18)+' Compartir '+(ids.length>1?ids.length+' notas':'la nota')+'</h3><button class="tbtn" onclick="document.getElementById(\'compM\').remove()">'+I.x+'</button></div>'
+    +(ids.length>1?'<div class="flex gap-6 mb-8"><button class="btn btn-s '+(st.juntas?'btn-p':'btn-sec')+'" style="flex:1" onclick="window._compSt.juntas=true;this.className=\'btn btn-s btn-p\';this.nextElementSibling.className=\'btn btn-s btn-sec\';_compPreparar()">Todas en una imagen</button><button class="btn btn-s '+(!st.juntas?'btn-p':'btn-sec')+'" style="flex:1" onclick="window._compSt.juntas=false;this.className=\'btn btn-s btn-p\';this.previousElementSibling.className=\'btn btn-s btn-sec\';_compPreparar()">Una imagen por nota</button></div>':'')
+    +'<label class="flex items-center gap-8 ts mb-8" style="cursor:pointer"><input type="checkbox" '+(st.fotos?'checked':'')+' onchange="window._compSt.fotos=this.checked;S.compFotos=this.checked;saveUIState();_compPreparar()" style="width:18px;height:18px">📷 Incluir las fotos</label>'
+    +'<div id="comp_prev" style="max-height:42vh;overflow-y:auto;background:var(--gray-ll);border-radius:10px;padding:6px;margin-bottom:6px;min-height:80px"></div>'
+    +'<div id="comp_est" class="txxs tc3 mb-10">Preparando la imagen…</div>'
+    +(puede?'<button class="btn btn-w comp-acc mb-6" style="background:#16a34a;color:#fff;justify-content:center;min-height:46px;font-size:15px" onclick="_compCompartir()">📤 Enviar por WhatsApp, mail…</button>'
+      :'<div class="txxs mb-6" style="color:#b45309">Este navegador no abre el menú para compartir: descargá la imagen y adjuntala en WhatsApp o en el mail.</div>')
+    +'<button class="btn btn-sec btn-w comp-acc mb-6" style="justify-content:center" onclick="_compDescargar()">'+(ids.length>1?'⬇️ Descargar imágenes':'⬇️ Descargar imagen')+'</button>'
+    +(ids.length===1?'<button class="btn btn-sec btn-w" style="justify-content:center" onclick="document.getElementById(\'compM\').remove();compartirNotaColab(\''+ids[0]+'\')">👥 Mandar a un colaborador (como antes)</button>':'')
+    +'</div>';
+  document.body.appendChild(d);
+  _compPreparar();
+}
+async function _compCompartir(){
+  var st=window._compSt;if(!st||!st.files)return;
+  var n1=(D.notas||[]).find(function(x){return x.id===st.ids[0];});
+  try{
+    await navigator.share({files:st.files,title:st.ids.length>1?st.ids.length+' notas':_notaTituloCorto(n1)});
+  }catch(e){
+    if(e&&e.name==='AbortError')return;
+    toast('No se pudo abrir el menú para compartir: se descarga la imagen','var(--orange)',4000);_compDescargar();
+  }
+}
+function _compDescargar(){
+  var st=window._compSt;if(!st||!st.files)return;
+  st.files.forEach(function(f,i){setTimeout(function(){var a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=f.name;document.body.appendChild(a);a.click();a.remove();},i*350);});
+  toast(st.files.length>1?'Se descargan '+st.files.length+' imágenes':'Imagen descargada ✓','var(--green)',2500);
+}
+
+function _avisoElegirNotas(){toast('Tildá las notas y tocá 🖼️ Imagen','var(--pri)',3000);}
 function compartirNotaColab(id){
   var n=(D.notas||[]).find(function(x){return x.id===id;});if(!n)return;
   shareToInbox(n.tipo==='pendiente'?'tarea':'nota',id,'');
@@ -10245,7 +10411,7 @@ function rNotas(mc){
   var lista=_notasFiltradas();
   var chip=function(act,txt,fn,col){return '<button class="btn btn-s" style="white-space:nowrap;'+(act?'background:'+(col||c)+';color:#fff':'background:var(--gray-ll);color:var(--text2)')+'" onclick="'+fn+'">'+txt+'</button>';};
   var h=modHeader('notas','Notas',
-    '<div class="flex gap-4"><button class="btn btn-s bt" style="--c:#dc2626" onclick="_menuPdfNotas()">'+I.pdf+' PDF</button>'
+    '<div class="flex gap-4"><button class="btn btn-s bt" style="--c:#16a34a" title="Compartir varias notas como imagen" onclick="S.notasSelMode=true;S.notasSel={};saveUIState();render();_avisoElegirNotas()">'+_nodos(14)+'</button><button class="btn btn-s bt" style="--c:#dc2626" onclick="_menuPdfNotas()">'+I.pdf+' PDF</button>'
     +'<button class="btn btn-s bt" style="--c:'+c+'" onclick="abrirNota()">'+I.plus+' Nota</button></div>');
   // Asiento rápido
   h+='<div class="card mb-12" style="border-left:3px solid '+c+'">'
@@ -10300,6 +10466,7 @@ function rNotas(mc){
     h+='<div class="flex items-center gap-6 mb-10" style="position:sticky;top:0;z-index:5;padding:8px 10px;border-radius:10px;background:#fefce8;border:2px solid #ca8a04">'
       +'<span class="txs fw7" style="flex:1;color:#a16207">☑️ '+_ns+' elegida'+(_ns===1?'':'s')+'</span>'
       +'<button class="btn btn-sec btn-s" onclick="S.notasSel={};_notasFiltradas().forEach(function(x){S.notasSel[x.id]=1;});saveUIState();render()">Todas</button>'
+      +'<button class="btn btn-s bt" style="--c:#16a34a" onclick="abrirCompartirNotas(Object.keys(S.notasSel||{}).filter(function(k){return S.notasSel[k];}))">🖼️ Imagen</button>'
       +'<button class="btn btn-s bt" style="--c:#dc2626" onclick="exportNotasPDF(true)">'+I.pdf+' PDF</button>'
       +'<button class="btn btn-sec btn-s" onclick="_notasSelSalir()">✕</button></div>';}
   if(S.notasVencF){var _nv=_notasVenc(),_nvv=_nv.filter(function(x){return x.d<0;}).length;
@@ -10384,7 +10551,7 @@ function _notaCard(n,conFecha){
     +'<button class="btn btn-g btn-s" title="Responsable" onclick="asignarResponsableNota(\''+n.id+'\')" style="'+(n.responsable?'color:var(--cyan)':'')+'">👤</button>'
     +'<button class="btn btn-sec btn-s" style="color:var(--blue)" title="Vincular con una visita" onclick="vincularVisitaItem(\'notas\',\''+n.id+'\')">&#x1F4CB;</button>'
     +'<button class="btn btn-g btn-s" title="Agregar al calendario" onclick="exportTareaGCal(\''+n.id+'\')">&#128197;</button>'
-    +'<button class="btn btn-sec btn-s" title="Enviar a colaborador" onclick="compartirNotaColab(\''+n.id+'\')">'+_nodos(15)+'</button>'
+    +'<button class="btn btn-sec btn-s" title="Compartir: imagen por WhatsApp o mail, o a un colaborador" onclick="abrirCompartirNotas([\''+n.id+'\'])">'+_nodos(15)+'</button>'
     +'<button class="btn btn-g btn-s" style="color:var(--red);margin-left:auto" title="Eliminar" onclick="borrarNota(\''+n.id+'\')">'+I.trash+'</button>'
     +'</div></div>';
 }
