@@ -2848,9 +2848,9 @@ const _UI_KEYS=[
   'cmtFilter','cmtSearch','cmtTipoFilter','cmtSort','cmtState',
   // Economía
   'ecoFilter','ecoTipoFilter','ecoSort','ecoMetrosOpen',
-  'ecoVerPrivados','ecoSoloPriv','ecoDistribOpen',
+  'ecoVerPrivados','ecoSoloPriv','ecoPresOpen','ecoDistribOpen',
   // Pantalla Hoy
-  'hoyOculto','hoyMio','hoyAb_urgentes','hoyAb_proximos','hoyTodo_vencido','hoyTodo_hoy','hoyTodo_alertas','hoyTodo_bandeja','hoyTodo_urgentes','hoyTodo_proximos','ecoMesesOpen','ecoFiltrosOpen','ecoRubroFilter','ecoItemFilter','ecoFechaDesde','ecoFechaHasta',
+  'hoyOculto','hoyMio','hoyAb_urgentes','hoyAb_proximos','hoyTodo_vencido','hoyTodo_hoy','hoyTodo_alertas','hoyTodo_bandeja','hoyTodo_urgentes','hoyTodo_proximos','hoyTodo_pres','ecoMesesOpen','ecoFiltrosOpen','ecoRubroFilter','ecoItemFilter','ecoFechaDesde','ecoFechaHasta',
   // Grupos de materiales plegados, alertas resueltas, obras cerradas del inicio
   'matGrupoCollapsed','alertResOpen','verCerradas','matPdfSinComp','matPdfHist',
   // Bandeja y carpeta de colaboradores
@@ -5289,10 +5289,10 @@ function _hoyDatos(){
   var hoy=td(),_f7=new Date(Date.now()+7*864e5),en7=_f7.getFullYear()+'-'+String(_f7.getMonth()+1).padStart(2,'0')+'-'+String(_f7.getDate()).padStart(2,'0');
   var obras=(D.projects||[]).filter(function(p){return !p.cerrada;}),nom={};
   obras.forEach(function(p){nom[p.id]=p.name;});
-  var g={vencido:[],hoy:[],alertas:[],bandeja:[],urgentes:[],proximos:[]},resto=0;
+  var g={vencido:[],hoy:[],alertas:[],pres:[],bandeja:[],urgentes:[],proximos:[]},resto=0,ajenas={};
   (D.notas||[]).forEach(function(n){
     if(!n||n.tipo!=='pendiente'||!nom[n.projectId]||_notaHecha(n))return;
-    if(S.hoyMio&&!_hoyEsMio(n))return;
+    if(S.hoyMio&&!_hoyEsMio(n)){ajenas['nota:'+n.id]=1;return;}
     var v=String(n.vence||'').slice(0,10),it={k:'nota',n:n,pid:n.projectId};
     if(v&&v<hoy)g.vencido.push(it);
     else if(v===hoy)g.hoy.push(it);
@@ -5309,12 +5309,14 @@ function _hoyDatos(){
       S.proj=p.id;
       _alertaGrupos().forEach(function(a){g.alertas.push({k:'alerta',a:a,pid:p.id});});
       var b=_bandejaNovedades();if(b.total)g.bandeja.push({k:'bandeja',b:b,pid:p.id});
+      _presFilas(p).forEach(function(f){if(f.pct!=null&&f.pct>100)g.pres.push({k:'pres',f:f,pid:p.id});});
     }catch(_){}
     finally{S.proj=prev;}
   });
   // Una tarea que ya figura arriba no se repite en Alertas: lleva su 🚨 en la fila
   var yaEsta={};['vencido','hoy','urgentes','proximos'].forEach(function(k){g[k].forEach(function(it){if(it.n)yaEsta['nota:'+it.n.id]=1;});});
-  g.alertas=g.alertas.filter(function(it){return !yaEsta[it.a.k];});
+  // Con "Solo lo mío", tampoco la alerta de una tarea que es de otro
+  g.alertas=g.alertas.filter(function(it){return !yaEsta[it.a.k]&&!ajenas[it.a.k];});
   var orden=function(a,b){
     var pa=a.n?(_HOY_PRI[a.n.prioridad]!=null?_HOY_PRI[a.n.prioridad]:2):2,pb=b.n?(_HOY_PRI[b.n.prioridad]!=null?_HOY_PRI[b.n.prioridad]:2):2;
     var va=a.n?String(a.n.vence||''):'',vb=b.n?String(b.n.vence||''):'';
@@ -5342,6 +5344,7 @@ function _hoyFila(it,nom){
       esc(_tituloReg(n)),sub.join(' · '),"S.proj='"+it.pid+"';irANota('"+n.id+"')");
   }
   if(it.k==='visita')return fila(ico('📋'),'Visita: '+esc(_tituloReg(it.v)),esc(it.v.estado||''),"S.proj='"+it.pid+"';S.mod='visitas';S.visitaDetail='"+it.v.id+"';render()");
+  if(it.k==='pres'){var f=it.f;return fila(ico('💸'),'Te pasaste en '+esc(f.item),_presMoneda(f.gasto)+' de '+_presMoneda(f.pres)+' · '+Math.round(f.pct)+'%',"S.proj='"+it.pid+"';S.mod='economia';S.ecoPresOpen=true;render()");}
   if(it.k==='alerta')return fila(ico('🚨'),esc(_tituloReg(it.a.prin.item)),'alerta','abrirBandejaObra(\''+it.pid+'\',\'alertas\')');
   var b=it.b,partes=[];
   if(b.informes)partes.push(b.informes+' informe'+(b.informes>1?'s':''));
@@ -5353,31 +5356,34 @@ function _hoyFila(it,nom){
 function _hoyHtml(){
   if(!(D.projects||[]).some(function(p){return !p.cerrada;}))return '';
   var r=_hoyDatos(),g=r.g;
-  var urg=g.vencido.length+g.hoy.length+g.alertas.length+g.bandeja.length+g.urgentes.length;
+  var urg=g.vencido.length+g.hoy.length+g.alertas.length+g.pres.length+g.bandeja.length+g.urgentes.length;
   var fecha=new Date().toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long'});fecha=fecha.charAt(0).toUpperCase()+fecha.slice(1);
   var h='<div class="card mb-16" style="padding:12px 14px;border-left:4px solid var(--pri)">'
     +'<div class="flex justify-between items-center gap-8">'
     +'<div onclick="S.hoyOculto=!S.hoyOculto;saveUIState();render()" style="cursor:pointer;flex:1;min-width:0"><div style="font-size:17px;font-weight:800">☀️ Hoy '+(urg?'<span style="font-size:12px;background:var(--pri);color:#fff;border-radius:9px;padding:1px 8px;vertical-align:middle">'+urg+'</span>':'')+'</div>'
     +'<div class="txxs tc3">'+fecha+'</div></div>'
-    +'<button class="btn btn-s '+(S.hoyMio?'btn-p':'btn-sec')+'" onclick="S.hoyMio=!S.hoyMio;saveUIState();render()" title="Solo lo tuyo: sin responsable, Arquitecto o tu nombre">👤 Solo lo mío</button>'
+    +'<button class="btn btn-s '+(S.hoyMio?'btn-p':'btn-sec')+'" onclick="S.hoyMio=!S.hoyMio;saveUIState();render()" title="Solo lo tuyo: sin responsable, Arquitecto o tu nombre">'+(S.hoyMio?'✓ ':'')+'👤 Solo lo mío</button>'
     +'<button class="tbtn" onclick="S.hoyOculto=!S.hoyOculto;saveUIState();render()" title="'+(S.hoyOculto?'Desplegar':'Plegar')+'" style="font-size:14px">'+(S.hoyOculto?'▾':'▴')+'</button>'
     +'</div>';
   if(S.hoyOculto)return h+'</div>';
+  if(S.hoyMio)h+='<div class="txxs" style="margin-top:6px;color:var(--pri);font-weight:700">Mostrando solo lo tuyo: sin responsable, "Arquitecto" o a tu nombre.</div>';
   var MAX=6;
   var grupo=function(clave,titulo,color,lista,plegado){
     if(!lista.length)return '';
     var abierto=!plegado||S['hoyAb_'+clave],todo=S['hoyTodo_'+clave],ver=abierto?(todo?lista:lista.slice(0,MAX)):[];
-    var out='<div style="margin-top:10px"><div onclick="'+(plegado?"S['hoyAb_"+clave+"']=!S['hoyAb_"+clave+"'];saveUIState();render()":'')+'" style="display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:800;color:'+color+';'+(plegado?'cursor:pointer;':'')+'padding-bottom:4px"><span>'+titulo+'</span><span>'+lista.length+(plegado?(abierto?' ▴':' ▾'):'')+'</span></div>';
+    // Título como franja de color suave: se distingue de un vistazo
+    var out='<div style="margin-top:12px"><div onclick="'+(plegado?"S['hoyAb_"+clave+"']=!S['hoyAb_"+clave+"'];saveUIState();render()":'')+'" style="display:flex;justify-content:space-between;align-items:center;font-size:13.5px;font-weight:800;color:'+color+';background:'+color+'14;border-radius:8px;padding:7px 10px;margin-bottom:2px;'+(plegado?'cursor:pointer;':'')+'"><span>'+titulo+'</span><span style="background:'+color+';color:#fff;border-radius:9px;padding:0 8px;font-size:11px">'+lista.length+(plegado?(abierto?' ▴':' ▾'):'')+'</span></div>';
     out+=ver.map(function(it){return _hoyFila(it,r.nom);}).join('');
     if(abierto&&lista.length>MAX)out+='<button class="link-tag" style="font-size:11px;margin-top:4px" onclick="S[\'hoyTodo_'+clave+'\']='+(todo?'false':'true')+';saveUIState();render()">'+(todo?'Ver menos':'Ver las '+lista.length)+'</button>';
     return out+'</div>';
   };
-  var cuerpo=grupo('vencido','🔴 Vencido','var(--red)',g.vencido)
+  var cuerpo=grupo('vencido','🔴 Vencido','#dc2626',g.vencido)
     +grupo('hoy','🟠 Para hoy','#c2410c',g.hoy)
-    +grupo('alertas','🚨 Alertas','var(--red)',g.alertas)
+    +grupo('alertas','🚨 Alertas','#dc2626',g.alertas)
+    +grupo('pres','💸 Presupuesto excedido','#9f1239',g.pres)
     +grupo('bandeja','📥 Sin revisar','#0d9488',g.bandeja)
     +grupo('urgentes','🔥 Urgentes y prioridad alta, sin fecha','#b45309',g.urgentes,true)
-    +grupo('proximos','📅 Próximos 7 días','var(--text2)',g.proximos,true);
+    +grupo('proximos','📅 Próximos 7 días','#475569',g.proximos,true);
   if(!urg)cuerpo='<div class="ts fw7" style="color:var(--green);margin-top:10px">✓ Nada urgente hoy</div>'+cuerpo;
   if(r.resto)cuerpo+='<div class="txxs tc3" style="margin-top:10px">Y '+r.resto+' tarea'+(r.resto>1?'s':'')+' más sin fecha ni urgencia, en Notas de cada obra.</div>';
   return h+cuerpo+'</div>';
@@ -12900,6 +12906,176 @@ function _ecoSaldoHtml(saldo,tIng,tEgr,nMov,hasFilter,totalObra,all){
     +'<div class="ts fw7" style="color:var(--red)">↓ $'+tEgr.toLocaleString('es-AR')+'</div>'
     +'</div>';
 }
+// ═══════ PRESUPUESTO CONTRA GASTO (por ítem, cargado a mano) ═══════
+// El presupuesto vive en la obra (p.presupuesto = {ítem: monto}); el gasto sale
+// de los egresos de la obra, incluidos los privados y los repartidos entre
+// varios ítems. No va a ningún PDF.
+function _presMoneda(n){return '$'+Math.round(n||0).toLocaleString('es-AR');}
+function _presGasto(pid){
+  var g={};
+  (D.economia||[]).forEach(function(e){
+    if(!e||e.projectId!==pid||e.tipo!=='egreso')return;
+    var partes=_ecoPartesItem(e);
+    if(!partes.length){g['Sin ítem']=(g['Sin ítem']||0)+(parseFloat(e.monto)||0);return;}
+    partes.forEach(function(x){g[x.item]=(g[x.item]||0)+x.monto;});
+  });
+  return g;
+}
+function _presFilas(p){
+  var pres=(p&&p.presupuesto)||{},g=_presGasto(p.id),k={};
+  Object.keys(pres).forEach(function(x){if(parseFloat(pres[x])>0)k[x]=1;});
+  Object.keys(g).forEach(function(x){k[x]=1;});
+  return Object.keys(k).map(function(x){var pr=parseFloat(pres[x])||0,ga=g[x]||0;return {item:x,pres:pr,gasto:ga,pct:pr?ga/pr*100:null};})
+    .sort(function(a,b){
+      if((a.pct==null)!==(b.pct==null))return a.pct==null?1:-1;
+      return a.pct!=null?b.pct-a.pct:b.gasto-a.gasto;
+    });
+}
+function _presColor(pct){return pct>100?'#dc2626':pct>=80?'#d97706':'#16a34a';}
+function _presChip(p){
+  var f=_presFilas(p).filter(function(x){return x.pct!=null;});
+  if(!f.length)return '';
+  var exc=f.filter(function(x){return x.pct>100;}).length;
+  return exc?'<span style="font-size:10px;background:#fef2f2;color:#b91c1c;border-radius:9px;padding:1px 7px;margin-left:4px">'+exc+' excedido'+(exc>1?'s':'')+'</span>'
+    :'<span style="font-size:10px;background:#f0fdf4;color:#15803d;border-radius:9px;padding:1px 7px;margin-left:4px">en orden</span>';
+}
+function _presHtml(p){
+  var filas=_presFilas(p),conPres=filas.filter(function(x){return x.pres>0;});
+  var btns='<div class="flex gap-6 wrap" style="margin-top:10px"><button class="btn btn-s btn-p" onclick="presEditar(\''+p.id+'\')">✏️ '+(conPres.length?'Editar presupuesto':'Cargar presupuesto')+'</button>'
+    +'<button class="btn btn-s btn-sec" onclick="ecoUnificarItems()">🔀 Unificar nombres de ítems</button></div>';
+  if(!conPres.length)return '<div class="ts tc3" style="line-height:1.5">Todavía no cargaste el presupuesto de esta obra. Cargalo por ítem y acá vas a ver cuánto llevás gastado de cada uno.</div>'+btns;
+  // Se compara solo lo presupuestado; lo gastado en ítems sin presupuesto va aparte
+  var totP=conPres.reduce(function(s,x){return s+x.pres;},0),totG=conPres.reduce(function(s,x){return s+x.gasto;},0),disp=totP-totG;
+  var fuera=filas.filter(function(x){return !x.pres;}).reduce(function(s,x){return s+x.gasto;},0);
+  var caja=function(t,v,c){return '<div style="background:var(--gray-ll);border-radius:8px;padding:7px 9px;min-width:0"><div class="txxs tc3">'+t+'</div><div class="fw8" style="font-size:14px;'+(c?'color:'+c:'')+'">'+v+'</div></div>';};
+  var h='<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-bottom:8px">'
+    +caja('Presupuesto',_presMoneda(totP))+caja('Gastado',_presMoneda(totG))+caja(disp>=0?'Disponible':'Excedido',_presMoneda(Math.abs(disp)),disp>=0?'#15803d':'#b91c1c')+'</div>'
+    +(fuera?'<div class="txxs mb-4" style="color:#b45309">Además: '+_presMoneda(fuera)+' gastados en ítems sin presupuesto.</div>':'')
+    +'<div class="txxs tc3 mb-6">Incluye los movimientos privados. No sale en ningún PDF.</div>';
+  filas.forEach(function(f){
+    if(f.pct==null){
+      h+='<div style="padding:7px 0;border-top:1px solid var(--gray-ll)"><div class="flex justify-between ts"><span>'+esc(f.item)+'</span><span class="txxs tc3">sin presupuesto</span></div><div class="txxs tc3">'+_presMoneda(f.gasto)+' gastados</div></div>';
+      return;
+    }
+    var c=_presColor(f.pct),dif=f.pres-f.gasto;
+    h+='<div style="padding:7px 0;border-top:1px solid var(--gray-ll)">'
+      +'<div class="flex justify-between ts"><span class="fw6">'+esc(f.item)+'</span><span class="fw8" style="color:'+c+'">'+Math.round(f.pct)+'%</span></div>'
+      +'<div style="height:8px;border-radius:4px;background:var(--gray-ll);margin:4px 0 3px;overflow:hidden"><div style="height:100%;width:'+Math.min(100,f.pct)+'%;background:'+c+';border-radius:4px"></div></div>'
+      +'<div class="txxs" style="color:'+(dif<0?'#b91c1c':'var(--text3)')+'">'+_presMoneda(f.gasto)+' de '+_presMoneda(f.pres)+' · '+(dif<0?'te pasaste '+_presMoneda(-dif):'quedan '+_presMoneda(dif))+'</div></div>';
+  });
+  return h+btns;
+}
+function presEditar(pid){
+  var p=(D.projects||[]).find(function(x){return x.id===pid;});if(!p)return;
+  var pres=p.presupuesto||{},g=_presGasto(pid),k={};
+  Object.keys(pres).forEach(function(x){k[x]=1;});Object.keys(g).forEach(function(x){if(x!=='Sin ítem')k[x]=1;});
+  window._presEd={pid:pid,items:Object.keys(k).sort(function(a,b){return a.localeCompare(b,'es');})};
+  var todos=Object.keys(_itemsGlobal()).sort(function(a,b){return a.localeCompare(b,'es');});
+  document.getElementById('presM')?.remove();
+  var d=document.createElement('div');d.className='mo open';d.id='presM';
+  d.innerHTML='<div class="mo-c" style="max-width:480px"><div class="mo-h"><h3>🎯 Presupuesto por ítem</h3><button class="tbtn" onclick="document.getElementById(\'presM\').remove()">'+I.x+'</button></div>'
+    +'<div class="txxs tc3 mb-8">'+esc(p.name)+' · dejá vacío lo que no quieras presupuestar.</div>'
+    +'<div id="presFilas">'+window._presEd.items.map(function(it,i){
+      return '<div class="flex items-center gap-8" style="padding:5px 0;border-top:1px solid var(--gray-ll)"><div class="ts" style="flex:1;min-width:0">'+esc(it)+(g[it]?'<div class="txxs tc3">gastado '+_presMoneda(g[it])+'</div>':'')+'</div>'
+        +'<input class="fi" id="pres_'+i+'" type="number" inputmode="decimal" min="0" step="any" placeholder="$" value="'+(parseFloat(pres[it])>0?parseFloat(pres[it]):'')+'" style="width:140px;margin:0;text-align:right"></div>';
+    }).join('')+'</div>'
+    +'<div class="flex items-center gap-8" style="padding:8px 0;border-top:1px solid var(--gray-ll)"><input class="fi" id="pres_nuevo_it" list="pres_dl" placeholder="Otro ítem…" style="flex:1;margin:0" autocomplete="off"><input class="fi" id="pres_nuevo_m" type="number" inputmode="decimal" min="0" step="any" placeholder="$" style="width:140px;margin:0;text-align:right"></div>'
+    +'<datalist id="pres_dl">'+todos.map(function(x){return '<option value="'+esc(x)+'">';}).join('')+'</datalist>'
+    +'<button class="btn btn-p btn-w mt-8" onclick="presGuardar()">Guardar presupuesto</button></div>';
+  document.body.appendChild(d);
+}
+function presGuardar(){
+  var ed=window._presEd;if(!ed)return;
+  var p=(D.projects||[]).find(function(x){return x.id===ed.pid;});if(!p)return;
+  var nuevo={};
+  ed.items.forEach(function(it,i){var v=parseFloat(($('pres_'+i)||{}).value);if(v>0)nuevo[it]=v;});
+  var ni=String(($('pres_nuevo_it')||{}).value||'').trim(),nm=parseFloat(($('pres_nuevo_m')||{}).value);
+  if(ni&&nm>0)nuevo[ni]=(nuevo[ni]||0)+nm;
+  else if(ni&&!(nm>0)){toast('Falta el monto de "'+ni+'"','var(--orange)',3000);return;}
+  p.presupuesto=nuevo;p.updatedAt=nw();
+  audit('projects','editar','Presupuesto por ítem: '+Object.keys(nuevo).length+' ítem(s)');
+  document.getElementById('presM')?.remove();
+  S.ecoPresOpen=true;sv();render();
+  toast('Presupuesto guardado ✓','var(--green)',2200);
+}
+// ── Unificar nombres de ítems (en todas las obras) ──
+function _presNorm(x){return String(x||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'');}
+function _itemsGlobal(){
+  var c={};
+  (D.economia||[]).forEach(function(e){_ecoPartesItem(e).forEach(function(x){c[x.item]=(c[x.item]||0)+1;});});
+  (D.projects||[]).forEach(function(p){Object.keys(p.presupuesto||{}).forEach(function(k){if(!(k in c))c[k]=0;});});
+  return c;
+}
+function _unificarItems(desde,hacia,soloContar){
+  var set={};desde.forEach(function(x){if(x!==hacia)set[x]=1;});
+  var n=0;
+  (D.economia||[]).forEach(function(e){
+    var ch=false;
+    if(e.item&&set[String(e.item).trim()]){ch=true;if(!soloContar)e.item=hacia;}
+    if(Array.isArray(e.reparto)&&e.reparto.some(function(r){return set[String(r.item||'').trim()];})){
+      ch=true;
+      if(!soloContar){
+        var m={},orden=[];
+        e.reparto.forEach(function(r){
+          var it=String(r.item||'').trim();if(set[it])it=hacia;
+          if(!m[it]){m[it]=Object.assign({},r,{item:it,pct:0});orden.push(it);}
+          m[it].pct=Math.round(((parseFloat(m[it].pct)||0)+(parseFloat(r.pct)||0))*100)/100;
+        });
+        e.reparto=orden.map(function(k){return m[k];});
+      }
+    }
+    if(ch){n++;if(!soloContar)e.updatedAt=nw();}
+  });
+  if(!soloContar)(D.projects||[]).forEach(function(p){
+    if(!p.presupuesto)return;var ch=false;
+    Object.keys(p.presupuesto).forEach(function(k){if(set[k]){p.presupuesto[hacia]=(parseFloat(p.presupuesto[hacia])||0)+(parseFloat(p.presupuesto[k])||0);delete p.presupuesto[k];ch=true;}});
+    if(ch)p.updatedAt=nw();
+  });
+  return n;
+}
+function _unificarHacer(desde,hacia){
+  hacia=String(hacia||'').trim();
+  if(!hacia){toast('Elegí o escribí el nombre que queda','var(--orange)',3000);return;}
+  if(desde.filter(function(x){return x!==hacia;}).length<1){toast('Marcá al menos dos nombres distintos','var(--orange)',3000);return;}
+  var n=_unificarItems(desde,hacia,true);
+  if(!confirm('Se van a pasar a "'+hacia+'":\n\n'+desde.filter(function(x){return x!==hacia;}).join('\n')+'\n\nSon '+n+' movimiento(s), de todas las obras. ¿Seguir?'))return;
+  _unificarItems(desde,hacia,false);
+  audit('economia','editar','Unificó ítems: '+desde.join(', ')+' → '+hacia);
+  sv();toast('Listo: '+n+' movimiento(s) pasaron a "'+hacia+'"','var(--green)',3500);
+  ecoUnificarItems();render();
+}
+function ecoUnificarItems(){
+  var c=_itemsGlobal(),nombres=Object.keys(c).sort(function(a,b){return a.localeCompare(b,'es');}),grupos={};
+  nombres.forEach(function(x){var k=_presNorm(x);(grupos[k]=grupos[k]||[]).push(x);});
+  var sug=Object.keys(grupos).map(function(k){return grupos[k];}).filter(function(g){return g.length>1;});
+  window._unif={sug:sug,nombres:nombres};
+  document.getElementById('unifM')?.remove();
+  var d=document.createElement('div');d.className='mo open';d.id='unifM';
+  var h='<div class="mo-c" style="max-width:520px"><div class="mo-h"><h3>🔀 Unificar nombres de ítems</h3><button class="tbtn" onclick="document.getElementById(\'unifM\').remove()">'+I.x+'</button></div>'
+    +'<div class="txxs tc3 mb-8">Cambia el nombre en los movimientos de todas las obras y en los presupuestos. Entre paréntesis, cuántos movimientos lo usan.</div>';
+  if(sug.length){
+    h+='<div class="ts fw8 mb-6">Parecen el mismo</div>';
+    sug.forEach(function(g,i){
+      var mas=g.slice().sort(function(a,b){return (c[b]||0)-(c[a]||0);})[0];
+      h+='<div style="border:1px solid var(--brd);border-radius:10px;padding:8px 10px;margin-bottom:8px"><div class="ts mb-6">'+g.map(function(x){return esc(x)+' <span class="tc3">('+c[x]+')</span>';}).join(' · ')+'</div>'
+        +'<div class="flex gap-6 items-center"><span class="txxs tc3">Queda:</span><select class="fs" id="unif_s'+i+'" style="flex:1;margin:0;font-size:12px">'+g.map(function(x){return '<option'+(x===mas?' selected':'')+'>'+esc(x)+'</option>';}).join('')+'</select>'
+        +'<button class="btn btn-s btn-p" onclick="_unificarHacer(window._unif.sug['+i+'],$(\'unif_s'+i+'\').value)">Unificar</button></div></div>';
+    });
+  }else h+='<div class="ts mb-8" style="color:var(--green)">✓ No hay nombres repetidos por acentos o mayúsculas.</div>';
+  h+='<div class="ts fw8 mt-8 mb-6">Juntar a mano</div><div class="txxs tc3 mb-6">Para los que se llaman distinto (por ejemplo "Electricidad" e "Instalación eléctrica"): marcalos y escribí cómo queda.</div>'
+    +'<div style="max-height:38vh;overflow-y:auto;border:1px solid var(--brd);border-radius:10px;padding:4px 10px">'
+    +nombres.map(function(x,i){return '<label class="flex items-center gap-8 ts" style="padding:5px 0;border-bottom:1px solid var(--gray-ll);cursor:pointer"><input type="checkbox" id="unif_c'+i+'" style="width:18px;height:18px;flex:none" onchange="_unifSugerir()"><span style="flex:1">'+esc(x)+'</span><span class="txxs tc3">'+c[x]+'</span></label>';}).join('')
+    +'</div><div class="flex gap-6 mt-8"><input class="fi" id="unif_final" list="unif_dl" oninput="this.dataset.tocado=1" placeholder="Nombre que queda" style="flex:1;margin:0" autocomplete="off"><button class="btn btn-s btn-p" onclick="_unifManual()">Unificar marcados</button></div>'
+    +'<datalist id="unif_dl">'+nombres.map(function(x){return '<option value="'+esc(x)+'">';}).join('')+'</datalist></div>';
+  d.innerHTML=h;document.body.appendChild(d);
+}
+function _unifMarcados(){var u=window._unif;return u?u.nombres.filter(function(x,i){var el=$('unif_c'+i);return el&&el.checked;}):[];}
+function _unifSugerir(){
+  var m=_unifMarcados(),f=$('unif_final');if(!f||f.dataset.tocado)return;
+  var c=_itemsGlobal();f.value=m.slice().sort(function(a,b){return (c[b]||0)-(c[a]||0);})[0]||'';
+}
+function _unifManual(){var m=_unifMarcados();_unificarHacer(m,($('unif_final')||{}).value);}
+
 function rEconomia(mc,p){
   if(!D.economia)D.economia=[];
   const all=pf('economia');
@@ -12978,6 +13154,14 @@ function rEconomia(mc,p){
   <!-- SALDO (filtrado) -->
   <div class="card mb-12" id="eco_saldo_card" style="padding:10px 16px;border-left:5px solid ${saldo>=0?'var(--green)':'var(--red)'};background:${saldo>=0?'var(--green-bg)':'var(--red-bg)'}">
     ${_ecoSaldoHtml(saldo,totalIng,totalEgr,items.length,hasFilter,allIng-allEgr,all)}
+  </div>
+  <!-- PRESUPUESTO CONTRA GASTO -->
+  <div class="card eco-plegable" id="eco_pres_card">
+    <div class="flex justify-between items-center" onclick="S.ecoPresOpen=!S.ecoPresOpen;saveUIState();render()" style="cursor:pointer;user-select:none">
+      <span class="ts fw7" style="color:var(--pri)">🎯 Presupuesto contra gasto${_presChip(p)}</span>
+      <span class="txxs tc3">${S.ecoPresOpen?'▲':'▼'}</span>
+    </div>
+    ${S.ecoPresOpen?'<div style="margin-top:12px">'+_presHtml(p)+'</div>':''}
   </div>
   <!-- DISTRIBUCIÓN DE EGRESOS POR RUBRO -->
   <div class="card eco-plegable" id="eco_distrib_card">
