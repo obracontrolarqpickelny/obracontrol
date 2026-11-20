@@ -2868,7 +2868,7 @@ const _UI_KEYS=[
   'ecoFilter','ecoTipoFilter','ecoSort','ecoMetrosOpen',
   'ecoVerPrivados','ecoSoloPriv','ecoPresOpen','ecoDistribOpen',
   // Pantalla Hoy
-  'hoyOculto','hoyMio','hoyAb_urgentes','hoyAb_proximos','hoyTodo_vencido','hoyTodo_hoy','hoyTodo_alertas','hoyTodo_bandeja','hoyTodo_urgentes','hoyTodo_proximos','hoyTodo_pres','avOpen','ecoMesesOpen','ecoFiltrosOpen','ecoRubroFilter','ecoItemFilter','ecoFechaDesde','ecoFechaHasta',
+  'hoyOculto','hoyMio','hoyAb_urgentes','hoyAb_proximos','hoyTodo_vencido','hoyTodo_hoy','hoyTodo_alertas','hoyTodo_bandeja','hoyTodo_urgentes','hoyTodo_proximos','hoyTodo_pres','avOpen','matFiltrosOpen','docBuscar','docFiltrosOpen','visBuscar','visEstado','visOrden','visFiltrosOpen','ecoMesesOpen','ecoFiltrosOpen','ecoRubroFilter','ecoItemFilter','ecoFechaDesde','ecoFechaHasta',
   // Grupos de materiales plegados, alertas resueltas, obras cerradas del inicio
   'matGrupoCollapsed','alertResOpen','verCerradas','matPdfSinComp','matPdfHist',
   // Bandeja y carpeta de colaboradores
@@ -5208,6 +5208,13 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.querySelec
 // ═══════════════════════════════════════
 // RENDER
 // ═══════════════════════════════════════
+// Un campo de texto con otro id es OTRO campo: si se reaprovecha, se queda con
+// lo escrito en el anterior (el buscador de Visitas aparecía en Economía).
+function _mismoNodo(a,b){
+  if(a.nodeType!==b.nodeType||a.nodeName!==b.nodeName)return false;
+  if(a.nodeType===1&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.nodeName)&&(a.id||'')!==(b.getAttribute('id')||''))return false;
+  return true;
+}
 function _morphEl(a,b){
   if(a.nodeType===3){if(a.nodeValue!==b.nodeValue)a.nodeValue=b.nodeValue;return;}
   if(a.nodeType!==1)return;
@@ -5218,7 +5225,7 @@ function _morphEl(a,b){
   var ac=a.firstChild,bc=b.firstChild;
   while(bc){
     if(!ac){a.appendChild(bc.cloneNode(true));bc=bc.nextSibling;continue;}
-    if(ac.nodeType!==bc.nodeType||ac.nodeName!==bc.nodeName){a.insertBefore(bc.cloneNode(true),ac);}
+    if(!_mismoNodo(ac,bc)){a.insertBefore(bc.cloneNode(true),ac);}
     else{_morphEl(ac,bc);ac=ac.nextSibling;}
     bc=bc.nextSibling;
   }
@@ -5230,7 +5237,7 @@ function patchHTML(el,html){
   var ac=el.firstChild,bc=t.firstChild;
   while(bc){
     if(!ac){el.appendChild(bc.cloneNode(true));bc=bc.nextSibling;continue;}
-    if(ac.nodeType!==bc.nodeType||ac.nodeName!==bc.nodeName){el.insertBefore(bc.cloneNode(true),ac);}
+    if(!_mismoNodo(ac,bc)){el.insertBefore(bc.cloneNode(true),ac);}
     else{_morphEl(ac,bc);ac=ac.nextSibling;}
     bc=bc.nextSibling;
   }
@@ -6194,10 +6201,43 @@ async function saveVisita(){
 }
 
 /* ===== MÓDULO: VISITAS DE OBRA ===== */
+// ═══ Barra de filtros común a todas las pestañas ═══
+// Mismo esquema en Notas, Economía, Materiales, Visitas y Documentos: buscador
+// con ✕ adentro, botón "⚙ Filtros (n)" que dice cuántos hay puestos, y un panel
+// con secciones (Período, Tipo, Orden…) y "✕ Limpiar filtros" al final.
+function _fBuscar(id,valor,ph,alEscribir,alBorrar){
+  return '<div style="position:relative;flex:1;min-width:0"><input class="fi" id="'+id+'" style="margin:0;width:100%;padding-right:34px" placeholder="'+esc(ph)+'" value="'+esc(valor||'')+'" enterkeyhint="search" autocomplete="off" oninput="this.nextElementSibling.style.display=this.value?\'flex\':\'none\';'+alEscribir+'" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}">'
+    +'<button title="Borrar la búsqueda" onmousedown="event.preventDefault()" onclick="var i=this.previousElementSibling;i.value=\'\';this.style.display=\'none\';'+alBorrar+'" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);display:'+(valor?'flex':'none')+';align-items:center;justify-content:center;width:24px;height:24px;border:none;border-radius:50%;background:var(--gray-ll);color:var(--text3);font-size:12px;cursor:pointer">✕</button></div>';
+}
+function _fBoton(n,abierto,alTocar){
+  var on=n||abierto;
+  return '<button class="btn btn-s" onclick="'+alTocar+'" style="flex:0 0 auto;padding:0 12px;min-height:38px;background:'+(on?'#FEF3C7':'var(--gray-ll)')+';color:'+(on?'#92400E':'var(--text2)')+';border:1px solid '+(n?'#D97706':'transparent')+'">⚙ Filtros'+(n?' ('+n+')':'')+' '+(abierto?'▴':'▾')+'</button>';
+}
+function _fBarra(buscar,boton){return '<div class="flex gap-6 mb-8 items-center" style="flex-wrap:nowrap">'+buscar+(boton||'')+'</div>';}
+function _fPanel(html){return '<div style="border:1px solid var(--brd);border-radius:12px;padding:10px 12px 8px;margin-bottom:10px;background:var(--white)">'+html+'</div>';}
+function _fSec(titulo,html){return '<div style="margin-bottom:10px"><div class="txxs tc3 fw6" style="margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em">'+titulo+'</div>'+html+'</div>';}
+function _fLimpiar(js){return '<button class="btn btn-g btn-s" style="color:var(--red)" onclick="'+js+'">✕ Limpiar filtros</button>';}
+function _fChip(activo,texto,js,extra){return '<button class="btn btn-s '+(activo?'btn-p':'btn-sec')+'" style="'+(extra||'')+'" onclick="'+js+'">'+texto+'</button>';}
+// Búsqueda que redibuja la pestaña sin perder lo que se está escribiendo
+function _fBuscarVivo(clave,el){
+  var v=el.value;clearTimeout(window._fbT);
+  window._fbT=setTimeout(function(){S[clave]=v;saveUIState();render();var i=document.getElementById(el.id);if(i&&document.activeElement!==i){i.focus();try{i.setSelectionRange(v.length,v.length);}catch(_){}}},300);
+}
+
 function rVisitas(mc){
-  const items=[...pf('visitas')].sort((a,b)=>(b.date||'').localeCompare(a.date||''));const c=MC.visitas;
+  const todas=pf('visitas');
+  const items=todas.filter(function(v){
+    if(S.visEstado&&(v.estado||'borrador')!==S.visEstado)return false;
+    return !S.visBuscar||_busqOk([v.title,v.description,v.observations].filter(Boolean).join(' '),S.visBuscar);
+  }).sort((a,b)=>S.visOrden==='asc'?(a.date||'').localeCompare(b.date||''):(b.date||'').localeCompare(a.date||''));const c=MC.visitas;
+  const _vn=(S.visEstado?1:0)+(S.visOrden==='asc'?1:0),_vab=!!S.visFiltrosOpen;
+  const _vBarra=todas.length?_fBarra(_fBuscar('vis_q',S.visBuscar,'🔎 Buscar en las visitas…','_fBuscarVivo(\'visBuscar\',this)','S.visBuscar=\'\';saveUIState();render()'),_fBoton(_vn,_vab,'S.visFiltrosOpen=!S.visFiltrosOpen;saveUIState();render()'))
+    +(_vab?_fPanel(_fSec('📌 Estado','<div class="flex gap-6 wrap">'+_fChip(!S.visEstado,'Todas',"S.visEstado='';render()")+_fChip(S.visEstado==='borrador','Borrador',"S.visEstado='borrador';render()")+_fChip(S.visEstado==='finalizada','Finalizadas',"S.visEstado='finalizada';render()")+'</div>')
+      +_fSec('↕️ Orden','<div class="fila-igual">'+_fChip(S.visOrden!=='asc','Más recientes',"S.visOrden='';render()")+_fChip(S.visOrden==='asc','Más antiguas',"S.visOrden='asc';render()")+'</div>')
+      +(_vn?_fLimpiar("S.visEstado='';S.visOrden='';render()"):'')):''):'';
   mc.innerHTML=`${modHeader('visitas','Visitas de Obra',`<button class="btn btn-s bt" style="--c:${c}" onclick="openM('newVisitaM')">${I.plus} Nueva</button>`)}
-  ${!items.length?`<div class="empty"><span style="color:${c}">${I.clip}</span><div class="ts mt-8 mb-12">Sin visitas</div></div>`:items.map(v=>{
+  ${_vBarra}
+  ${!items.length?`<div class="empty"><span style="color:${c}">${I.clip}</span><div class="ts mt-8 mb-12">${todas.length?'Ninguna visita coincide':'Sin visitas'}</div></div>`:items.map(v=>{
     const lT=_tareasDeVisita(v.id).length;const lM=D.materiales.filter(m=>m.visitaId===v.id).length+(D.matIngresos||[]).filter(i=>i.visitaId===v.id).length;const lA=D.alertas.filter(a=>a.visitaId===v.id).length;const pc=(v.photos||[]).length;
     return `<div class="card card-click" style="border-left:3px solid ${c}" onclick="_escudoToque();S.visitaDetail='${v.id}';render();"><div class="flex justify-between mb-4"><span class="txxs tc3">${I.cal} ${fmts(v.date)}</span>${colBadge(v.estado||'borrador',v.estado==='finalizada'?'var(--green)':'var(--blue)',true)}</div><div class="fw7 mb-4">${v.title}</div>${v.description?`<div class="ts tc3 mb-6" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${v.description}</div>`:''}<div class="flex gap-4 wrap txxs">${pc?`<span class="link-tag">${I.cam} ${pc}</span>`:''}${lT?`<span class="link-tag" title="Notas vinculadas">${I.nota} ${lT}</span>`:''}${lM?`<span class="link-tag">${I.pkg} ${lM}</span>`:''}${lA?`<span class="link-tag">${I.bell} ${lA}</span>`:''}</div></div>`;
   }).join('')}${renderNewVisitaModal()}`;
@@ -7597,18 +7637,17 @@ function rMat(mc){
   });
   mc.innerHTML=`${modHeader('materiales','Materiales',`<div class="mod-acc"><button class="btn btn-s bt" style="--c:#8b5cf6" onclick="openM('newAPedirM')">${IB.aPedir} A pedir</button><button class="btn btn-s bt" style="--c:var(--orange)" onclick="openM('newPedidoM')">${IB.pedido} Pedido</button><button class="btn btn-s bt" style="--c:#2563eb" onclick="openM('newIngM')">${I.truck} Ingreso</button><button class="btn btn-s bt" style="--c:#0891b2" onclick="abrirIngresoMultiple()">${IB.caja} Remito</button><button class="btn btn-s bt" style="--c:var(--green)" onclick="openM('newExistenteM')">${IB.tilde} Existente</button><button class="btn btn-s bt" style="--c:#db2777" onclick="openM('newMatM')">${I.plus} Material</button><button class="btn btn-s bt" style="--c:#dc2626" onclick="abrirPdfMateriales()">${I.pdf} PDF</button><button class="btn btn-s bt" style="--c:#ca8a04" id="mat_mic_btn" onclick="startMatVoice()">${IB.mic} Voz</button><button class="btn btn-s bt" style="--c:#4f46e5" onclick="abrirFusionMat()">${IB.fusion} Fusionar</button></div>`)}
   <!-- FILTROS MATERIALES -->
-  <div class="card mb-12" style="padding:12px">
-    <div class="flex gap-6 mb-8 items-center">
-      <input class="fi" id="mat_search" placeholder="Buscar en materiales, notas, proveedores..." value="${S.matFilter||''}" oninput="S.matFilter=this.value;renderMatItems()" style="flex:1">
-      ${S.matFilter?`<button class="btn btn-sec btn-s" onclick="S.matFilter='';if($('mat_search'))$('mat_search').value='';renderMatItems()">✕</button>`:''}
-    </div>
-    ${cats_all.length>1?`<div class="flex gap-4 wrap mb-8">
-      <button data-matcat="" class="btn btn-s ${!S.matCatFilter?'btn-p':'btn-sec'}" style="${!S.matCatFilter?'background:var(--orange);color:#fff;border-color:var(--orange)':''}" onclick="setMatCat('')">Todas</button>
-      ${cats_all.map(cat=>`<button data-matcat="${cat.replace(/"/g,'&quot;')}" class="btn btn-s ${S.matCatFilter===cat?'btn-p':'btn-sec'}" style="font-size:11px;${S.matCatFilter===cat?'background:var(--orange);color:#fff;border-color:var(--orange)':''}" onclick="setMatCat(this.dataset.matcat)">${cat}</button>`).join('')}
-    </div>`:''}
-    <div style="border-top:1px solid var(--gray-ll);padding-top:8px;padding-bottom:4px"><div class="txxs tc3 mb-4">Ordenar:</div><div class="fila-igual"><button data-matsort="" class="btn btn-s ${!S.matSort?'btn-p':'btn-sec'}" style="${!S.matSort?'background:var(--orange);color:#fff':''}" onclick="setMatSort('')">Defecto</button><button data-matsort="az" class="btn btn-s ${S.matSort==='az'?'btn-p':'btn-sec'}" style="${S.matSort==='az'?'background:var(--orange);color:#fff':''}" onclick="setMatSort('az')">A → Z</button><button data-matsort="za" class="btn btn-s ${S.matSort==='za'?'btn-p':'btn-sec'}" style="${S.matSort==='za'?'background:var(--orange);color:#fff':''}" onclick="setMatSort('za')">Z → A</button><button data-matsort="pct_desc" class="btn btn-s ${S.matSort==='pct_desc'?'btn-p':'btn-sec'}" style="${S.matSort==='pct_desc'?'background:var(--orange);color:#fff':''}" title="Mayor porcentaje primero" onclick="setMatSort('pct_desc')">% mayor</button><button data-matsort="pct_asc" class="btn btn-s ${S.matSort==='pct_asc'?'btn-p':'btn-sec'}" style="${S.matSort==='pct_asc'?'background:var(--orange);color:#fff':''}" title="Menor porcentaje primero" onclick="setMatSort('pct_asc')">% menor</button></div></div>
-    <button class="btn btn-sec btn-s btn-w mt-8" style="justify-content:center" onclick="abrirEdicionMasiva()">${I.edit} Editar varios juntos</button>
-  </div>
+  ${(function(){
+    var n=(S.matCatFilter?1:0)+(S.matSort?1:0),ab=!!S.matFiltrosOpen;
+    var ord=[['','Defecto'],['az','A → Z'],['za','Z → A'],['pct_desc','% mayor'],['pct_asc','% menor']];
+    return _fBarra(_fBuscar('mat_search',S.matFilter,'🔎 Buscar: material, notas, proveedor…','S.matFilter=this.value;renderMatItems()','S.matFilter=\'\';renderMatItems()'),_fBoton(n,ab,'S.matFiltrosOpen=!S.matFiltrosOpen;saveUIState();render()'))
+      +(ab?_fPanel(
+        (cats_all.length>1?_fSec('🗂️ Categoría','<div class="flex gap-4 wrap">'+_fChip(!S.matCatFilter,'Todas',"S.matCatFilter='';render()")+cats_all.map(function(cat){return '<button data-matcat="'+esc(cat)+'" class="btn btn-s '+(S.matCatFilter===cat?'btn-p':'btn-sec')+'" onclick="S.matCatFilter=S.matCatFilter===this.dataset.matcat?\'\':this.dataset.matcat;render()">'+esc(cat)+'</button>';}).join('')+'</div>'):'')
+        +_fSec('↕️ Orden','<div class="fila-igual">'+ord.map(function(o){return _fChip((S.matSort||'')===o[0],o[1],"S.matSort='"+o[0]+"';render()");}).join('')+'</div>')
+        +(n?_fLimpiar("S.matCatFilter='';S.matSort='';render()"):'')
+      ):'');
+  })()}
+  <button class="btn btn-sec btn-s btn-w mb-12" style="justify-content:center" onclick="abrirEdicionMasiva()">${I.edit} Editar varios juntos</button>
   <!-- RESUMEN -->
   <div id="mat_items_list"><div class="txxs tc3 tac" style="padding:16px">Cargando...</div></div>
   
@@ -9592,9 +9631,16 @@ function rDocs(mc){
     });
   }
 
-  const docs=pf('documentos');const enl=pf('enlaces');const c=MC.documentos;
+  var _dq=S.docBuscar||'';
+  var _dOk=function(x){return !_dq||_busqOk([x.name,x.title,x.fileName,x.notes,x.url,x.category,x.description].filter(Boolean).join(' '),_dq);};
+  const docs=pf('documentos').filter(_dOk);const enl=pf('enlaces').filter(_dOk);const c=MC.documentos;
   mc.innerHTML=`${modHeader('documentos','Documentos',`<div class="flex gap-4"><button class="btn btn-s bt" style="--c:#2563eb" onclick="openM('newDocM')">${I.file} Archivo</button><button class="btn btn-s bt" style="--c:${c}" onclick="openM('newEnlM')">${I.link} Enlace</button></div>`)}
-  <div class="card mb-8" style="padding:8px 12px"><div class="txxs tc3 mb-4">Ordenar:</div><div class="fila-igual"><button class="btn btn-s ${S.docSort===''?'btn-p':'btn-sec'}" onclick="S.docSort='';render()">Reciente</button><button class="btn btn-s ${S.docSort==='az'?'btn-p':'btn-sec'}" onclick="S.docSort='az';render()">A-Z</button><button class="btn btn-s ${S.docSort==='za'?'btn-p':'btn-sec'}" onclick="S.docSort='za';render()">Z-A</button><button class="btn btn-s ${S.docSort==='asc'?'btn-p':'btn-sec'}" onclick="S.docSort='asc';render()">Antigua</button></div></div>
+  ${(function(){
+    var n=S.docSort?1:0,ab=!!S.docFiltrosOpen,ord=[['','Reciente'],['az','A-Z'],['za','Z-A'],['asc','Antigua']];
+    return _fBarra(_fBuscar('doc_q',S.docBuscar,'🔎 Buscar documentos y enlaces…','_fBuscarVivo(\'docBuscar\',this)','S.docBuscar=\'\';saveUIState();render()'),_fBoton(n,ab,'S.docFiltrosOpen=!S.docFiltrosOpen;saveUIState();render()'))
+      +(ab?_fPanel(_fSec('↕️ Orden','<div class="fila-igual">'+ord.map(function(o){return _fChip((S.docSort||'')===o[0],o[1],"S.docSort='"+o[0]+"';render()");}).join('')+'</div>')+(n?_fLimpiar("S.docSort='';render()"):'')):'')
+      +((S.docBuscar&&!docs.length&&!enl.length)?'<div class="ts tc3" style="padding:16px 4px">Nada coincide con "'+esc(S.docBuscar)+'".</div>':'');
+  })()}
   ${docs.length?`<div class="mb-12"><div class="ts fw7 mb-8">Archivos (${docs.length})</div>${_sortArr(docs).map(d=>{const vN=d.visitaId?D.visitas.find(v=>v.id===d.visitaId)?.title:null;const docURL=_docHref(d);const _du=encodeURIComponent(docURL||'');const _dn=encodeURIComponent(d.name||'documento');return `<div class="card" style="padding:12px"><div class="flex items-center gap-10"><span style="color:${c}">${I.file}</span><div class="flex-1" style="min-width:0"><div class="ts fw6 trun">${d.name}</div><div class="txxs tc3">${d.category?colBadge(d.category,c,true):''} ${fmts(d.date)}${d.fileName?' — '+d.fileName:''}${vN?` <span class="link-tag">${I.link} ${vN}</span>`:''}</div>${d.notes?`<div class="txxs tc3 mt-4">${d.notes}</div>`:''}</div>${docURL?`<button class="btn btn-sec btn-s" data-href="${_du}" data-name="${_dn}" onclick="event.stopPropagation();var _h=this.getAttribute('data-href'),_n=decodeURIComponent(this.getAttribute('data-name')||'doc');if(_h)openFileData(decodeURIComponent(_h),_n);" title="Ver archivo">${I.eye} Ver</button>`:''}<button class="btn btn-sec btn-s" onclick="event.stopPropagation();editDoc('${d.id}')" title="Editar nombre">${I.edit}</button><button class="tbtn" onclick="event.stopPropagation();if(confirmDel())delI('documentos','${d.id}')">${I.trash}</button><button class="btn btn-g btn-s" style="color:${d.starred?'#f59e0b':'#cbd5e1'}" onclick="toggleDocStar('documentos','${d.id}')" title="Favorito">&#x2605;</button></div></div>`;}).join('')}</div>`:''}
   ${enl.length?`<div class="mb-12"><div class="ts fw7 mb-8">Enlaces (${enl.length})</div>${_sortArr(enl).map(e=>{const _eu=encodeURIComponent(e.url||'');return `<div class="card" style="padding:12px"><div class="flex items-center gap-10"><span style="color:var(--blue)">${I.globe}</span><div class="flex-1 card-click" style="min-width:0" data-href="${_eu}" onclick="event.stopPropagation();var _h=this.getAttribute('data-href');_abrirEnlaceUrl(decodeURIComponent(_h||''))"><div class="ts fw6 trun">${e.title||e.url} <span style="font-size:9px;color:var(--blue)">⧉</span></div>${e.description?`<div class="txxs tc3">${e.description}</div>`:''}<div class="txxs tc3">${fmts(e.date)}${e.url&&e.url.includes('drive.google')?` ${colBadge('Google Drive','var(--green)',true)}`:''}</div></div><button class="btn btn-sec btn-s" onclick="event.stopPropagation();editEnl('${e.id}')" title="Editar enlace">${I.edit}</button><button class="tbtn" onclick="event.stopPropagation();if(confirmDel())delI('enlaces','${e.id}')">${I.trash}</button><button class="btn btn-g btn-s" style="color:${e.starred?'#f59e0b':'#cbd5e1'}" onclick="event.stopPropagation();toggleDocStar('enlaces','${e.id}')" title="Favorito">&#x2605;</button></div></div>`;}).join('')}</div>`:''}
   ${!docs.length&&!enl.length?`<div class="empty"><span style="color:${c}">${I.file}</span><div class="ts mt-8">Sin documentos ni enlaces</div></div>`:''}
@@ -10079,7 +10125,7 @@ function rNotas(mc){
     +'<div class="flex gap-6 mb-6" style="flex-wrap:nowrap">'
     +'<div style="position:relative;flex:1;min-width:0"><input class="fi" style="margin:0;width:100%;padding-right:34px" placeholder="🔎 Buscar en las notas…" value="'+esc(S.notasBuscar||'')+'" id="notas_q" enterkeyhint="search" oninput="this.nextElementSibling.style.display=this.value?\'flex\':\'none\';_notasBuscarVivo(this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}" onchange="S.notasBuscar=this.value;saveUIState()">'
     +'<button title="Borrar la búsqueda" onmousedown="event.preventDefault()" onclick="var i=this.previousElementSibling;i.value=\'\';this.style.display=\'none\';S.notasBuscar=\'\';saveUIState();render()" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);display:'+(S.notasBuscar?'flex':'none')+';align-items:center;justify-content:center;width:24px;height:24px;border:none;border-radius:50%;background:var(--gray-ll);color:var(--text2);font-size:13px;font-weight:700;cursor:pointer">✕</button></div>'
-    +(function(){var n=_notasFiltrosN();return '<button class="btn btn-s" onclick="S.notasFiltros=!S.notasFiltros;saveUIState();render()" style="flex:0 0 auto;font-weight:700;padding:0 12px;background:'+(n||S.notasFiltros?'#FEF3C7':'var(--gray-ll)')+';color:'+(n||S.notasFiltros?'#92400E':'var(--text2)')+';border:1px solid '+(n?'#D97706':'transparent')+'">⚙ Filtros'+(n?' ('+n+')':'')+' '+(S.notasFiltros?'▴':'▾')+'</button>';})()
+    +_fBoton(_notasFiltrosN(),!!S.notasFiltros,'S.notasFiltros=!S.notasFiltros;saveUIState();render()')
     +'</div>'
     +(S.notasFiltros?(function(){
       var rs=_responsablesObra();if(S.notasResp&&S.notasResp!=='__sin'&&rs.indexOf(S.notasResp)<0)rs.push(S.notasResp);
@@ -13277,33 +13323,22 @@ function rEconomia(mc,p){
     :S.ecoResalt?'<div style="background:#e0f2fe;border-left:3px solid var(--cyan);border-radius:6px;padding:8px 12px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center"><span class="txxs fw7" style="color:var(--cyan)">&#x1F4CC; Movimiento vinculado desde Materiales</span><button class="btn btn-sec btn-s" onclick="S.mod=\'materiales\';S.ecoResalt=null;render()">&larr; Volver a Materiales</button></div>':'';
   mc.innerHTML=`${ecoCtxBanner}${modHeader('economia','Economía',`<div class="mod-acc"><button class="btn btn-s bt" style="--c:#dc2626" onclick="openEcoPDFDialog()">${I.pdf} PDF</button><button class="btn btn-s bt" style="--c:var(--green)" onclick="exportEcoCSV()">${IB.hoja} Excel</button><button class="btn btn-s bt" style="--c:${c}" onclick="openNEM()">${I.plus} Movimiento</button></div>`)}
   <!-- FILTROS -->
-  <div class="card mb-12" style="padding:10px 12px">
-    <div class="flex gap-6 items-center mb-8">
-      <input class="fi" id="eco_search" placeholder="🔍 Buscar en todo: concepto, notas, proveedor..." value="${S.ecoFilter||''}" oninput="S.ecoFilter=this.value;renderEcoItems()" style="flex:1;margin:0">
-      ${S.ecoFilter?`<button class="btn btn-sec btn-s" onclick="S.ecoFilter='';if($('eco_search'))$('eco_search').value='';renderEcoItems()">✕</button>`:''}
-      <button class="btn btn-sec btn-s" onclick="var p=$('eco_filtros_extra');S.ecoFiltrosOpen=!(p&&p.style.display!=='none');if(p)p.style.display=S.ecoFiltrosOpen?'flex':'none'" style="white-space:nowrap">⚙ Filtros${(S.ecoTipoFilter||S.ecoSort||S.ecoSoloPriv)?'<span style="background:var(--cyan);color:#fff;border-radius:8px;padding:0 5px;font-size:10px;margin-left:4px">!</span>':''}</button>
-    </div>
-    <!-- PERÍODO -->
-    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;border-top:1px solid var(--gray-ll);padding-top:8px;margin-bottom:${(S.ecoTipoFilter||S.ecoSort)?'8px':'0'}">
-      <div style="grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:6px"><span class="txxs fw6 tc3" style="white-space:nowrap">📅 Período</span><button class="btn btn-sec btn-s" style="color:${(S.ecoFechaDesde||S.ecoFechaHasta)?'var(--red)':'var(--gray-l)'}" onclick="S.ecoFechaDesde='';S.ecoFechaHasta='';var d=$('eco_fecha_desde');if(d)d.value='';var h=$('eco_fecha_hasta');if(h)h.value='';renderEcoItems()">✕ Período</button></div>
-      <div style="min-width:0"><input class="fi" id="eco_fecha_desde" type="date" value="${S.ecoFechaDesde||''}" onchange="S.ecoFechaDesde=this.value;renderEcoItems()" style="margin:0;font-size:12px;padding:5px 8px"></div>
-      <div style="min-width:0"><input class="fi" id="eco_fecha_hasta" type="date" value="${S.ecoFechaHasta||''}" onchange="S.ecoFechaHasta=this.value;renderEcoItems()" style="margin:0;font-size:12px;padding:5px 8px"></div>
-    </div>
-    <div id="eco_filtros_extra" class="flex gap-6 wrap" style="display:${(S.ecoFiltrosOpen!==undefined?S.ecoFiltrosOpen:(S.ecoTipoFilter||S.ecoSort||S.ecoSoloPriv))?'flex':'none'};border-top:1px solid var(--gray-ll);padding-top:8px;margin-top:8px">
-      <button id="eco_btn_all" class="btn btn-s ${!S.ecoTipoFilter?'btn-p':'btn-sec'}" onclick="S.ecoTipoFilter='';renderEcoItems()">Todos</button>
-      <button id="eco_btn_ing" class="btn btn-s ${S.ecoTipoFilter==='ingreso'?'btn-ok':'btn-sec'}" onclick="S.ecoTipoFilter=S.ecoTipoFilter==='ingreso'?'':'ingreso';renderEcoItems()">↑ Ingresos</button>
-      <button id="eco_btn_egr" class="btn btn-s ${S.ecoTipoFilter==='egreso'?'btn-x':'btn-sec'}" onclick="S.ecoTipoFilter=S.ecoTipoFilter==='egreso'?'':'egreso';renderEcoItems()">↓ Egresos</button>
-      ${(_nPriv||S.ecoSoloPriv)?`<button id="eco_btn_priv" class="btn btn-s ${S.ecoSoloPriv?'btn-p':'btn-sec'}" style="${S.ecoSoloPriv?'background:#475569;border-color:#475569;color:#fff':''}" onclick="S.ecoSoloPriv=!S.ecoSoloPriv;saveUIState();render()" title="Ver sólo los movimientos privados">🔒 Sólo privados (${_nPriv})</button>`:''}
-      <select class="fs" style="font-size:12px;padding:4px 8px" onchange="S.ecoSort=this.value;renderEcoItems()">
-        <option value="" ${!S.ecoSort?'selected':''}>📅 Más reciente</option>
-        <option value="fecha_asc" ${S.ecoSort==='fecha_asc'?'selected':''}>📅 Más antiguo</option>
-        <option value="monto_asc" ${S.ecoSort==='monto_asc'?'selected':''}>💲 Menor monto</option>
-        <option value="monto_desc" ${S.ecoSort==='monto_desc'?'selected':''}>💲 Mayor monto</option>
-        <option value="modif" ${S.ecoSort==='modif'?'selected':''}>🕒 Última modificación</option>
-      </select>
-      ${S.ecoTipoFilter||S.ecoSort||S.ecoSoloPriv?`<button class="btn btn-sec btn-s" style="color:var(--red)" onclick="S.ecoTipoFilter='';S.ecoSort='';S.ecoSoloPriv=false;render()">✕ Limpiar</button>`:''}
-    </div>
-  </div>
+  ${(function(){
+    var n=(S.ecoTipoFilter?1:0)+(S.ecoSort?1:0)+(S.ecoSoloPriv?1:0)+((S.ecoFechaDesde||S.ecoFechaHasta)?1:0),ab=!!S.ecoFiltrosOpen;
+    var orden=[['','📅 Más reciente'],['fecha_asc','📅 Más antiguo'],['monto_desc','💲 Mayor monto'],['monto_asc','💲 Menor monto'],['modif','🕒 Última modificación']];
+    return _fBarra(_fBuscar('eco_search',S.ecoFilter,'🔎 Buscar: concepto, notas, proveedor…','S.ecoFilter=this.value;renderEcoItems()','S.ecoFilter=\'\';renderEcoItems()'),_fBoton(n,ab,'S.ecoFiltrosOpen=!S.ecoFiltrosOpen;saveUIState();render()'))
+      +(ab?_fPanel(
+        _fSec('📅 Período','<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px"><input class="fi" id="eco_fecha_desde" type="date" value="'+(S.ecoFechaDesde||'')+'" onchange="S.ecoFechaDesde=this.value;render()" style="margin:0;font-size:12px;padding:5px 8px"><input class="fi" id="eco_fecha_hasta" type="date" value="'+(S.ecoFechaHasta||'')+'" onchange="S.ecoFechaHasta=this.value;render()" style="margin:0;font-size:12px;padding:5px 8px"></div>')
+        +_fSec('🏷️ Tipo','<div class="flex gap-6 wrap">'
+          +'<button id="eco_btn_all" class="btn btn-s '+(!S.ecoTipoFilter?'btn-p':'btn-sec')+'" onclick="S.ecoTipoFilter=\'\';render()">Todos</button>'
+          +'<button id="eco_btn_ing" class="btn btn-s '+(S.ecoTipoFilter==='ingreso'?'btn-ok':'btn-sec')+'" onclick="S.ecoTipoFilter=S.ecoTipoFilter===\'ingreso\'?\'\':\'ingreso\';render()">↑ Ingresos</button>'
+          +'<button id="eco_btn_egr" class="btn btn-s '+(S.ecoTipoFilter==='egreso'?'btn-x':'btn-sec')+'" onclick="S.ecoTipoFilter=S.ecoTipoFilter===\'egreso\'?\'\':\'egreso\';render()">↓ Egresos</button>'
+          +((_nPriv||S.ecoSoloPriv)?'<button id="eco_btn_priv" class="btn btn-s '+(S.ecoSoloPriv?'btn-p':'btn-sec')+'" style="'+(S.ecoSoloPriv?'background:#475569;border-color:#475569;color:#fff':'')+'" onclick="S.ecoSoloPriv=!S.ecoSoloPriv;saveUIState();render()">🔒 Sólo privados ('+_nPriv+')</button>':'')
+          +'</div>')
+        +_fSec('↕️ Orden','<select class="fs" style="font-size:12px;padding:5px 8px;margin:0;width:100%" onchange="S.ecoSort=this.value;render()">'+orden.map(function(o){return '<option value="'+o[0]+'"'+((S.ecoSort||'')===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join('')+'</select>')
+        +(n?_fLimpiar("S.ecoTipoFilter='';S.ecoSort='';S.ecoSoloPriv=false;S.ecoFechaDesde='';S.ecoFechaHasta='';render()"):'')
+      ):'');
+  })()}
   <!-- SALDO (filtrado) -->
   <div class="card mb-12" id="eco_saldo_card" style="padding:10px 16px;border-left:5px solid ${saldo>=0?'var(--green)':'var(--red)'};background:${saldo>=0?'var(--green-bg)':'var(--red-bg)'}">
     ${_ecoSaldoHtml(saldo,totalIng,totalEgr,items.length,hasFilter,allIng-allEgr,all)}
