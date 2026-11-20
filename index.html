@@ -2624,7 +2624,7 @@ const _UI_KEYS=[
   'cmtFilter','cmtSearch','cmtTipoFilter','cmtSort','cmtState',
   // Economía
   'ecoFilter','ecoTipoFilter','ecoSort','ecoMetrosOpen',
-  'ecoVerPrivados','ecoDistribOpen','ecoMesesOpen','ecoFiltrosOpen','ecoRubroFilter','ecoItemFilter','ecoFechaDesde','ecoFechaHasta',
+  'ecoVerPrivados','ecoSoloPriv','ecoDistribOpen','ecoMesesOpen','ecoFiltrosOpen','ecoRubroFilter','ecoItemFilter','ecoFechaDesde','ecoFechaHasta',
   // Grupos de materiales plegados, alertas resueltas, obras cerradas del inicio
   'matGrupoCollapsed','alertResOpen','verCerradas','matPdfSinComp','matPdfHist',
   // Bandeja y carpeta de colaboradores
@@ -12570,7 +12570,7 @@ function rEconomia(mc,p){
   // mostraba, así que la misma lista cambiaba según se filtrara o no.
   // Quienes siguen sin verlos: el PDF y el Excel, el informe al cliente y el log.
   // Por defecto se ven; el interruptor 🔒 permite mirar el saldo sin ellos.
-  const allVisible=(S.ecoVerPrivados!==false)?all:all.filter(function(e){return !e.interno;});
+  const allVisible=S.ecoSoloPriv?all.filter(function(e){return e.interno;}):(S.ecoVerPrivados!==false)?all:all.filter(function(e){return !e.interno;});
   const c=MC.economia;
   // MEDIOS: global constant
   // Build concept list for filter
@@ -12601,7 +12601,8 @@ function rEconomia(mc,p){
   const saldo=totalIng-totalEgr;
   const allIng=all.filter(i=>i.tipo==='ingreso').reduce((s,i)=>s+(parseFloat(i.monto)||0),0);
   const allEgr=all.filter(i=>i.tipo==='egreso').reduce((s,i)=>s+(parseFloat(i.monto)||0),0);
-  const hasFilter=S.ecoFilter||S.ecoTipoFilter||S.ecoSingleId||S.ecoFechaDesde||S.ecoFechaHasta||S.ecoRubroFilter;
+  const hasFilter=S.ecoFilter||S.ecoTipoFilter||S.ecoSingleId||S.ecoFechaDesde||S.ecoFechaHasta||S.ecoRubroFilter||S.ecoSoloPriv;
+  const _nPriv=all.filter(function(e){return e.interno;}).length;
   const _singleItem=S.ecoSingleId?items[0]:null;
   const ecoCtxBanner=S.ecoSingleId
     ?`<div style="background:#e0f2fe;border-left:3px solid var(--cyan);border-radius:6px;padding:8px 12px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center"><span class="txxs fw7" style="color:var(--cyan)">&#x1F4CC; Movimiento vinculado: <strong>${_singleItem?(_singleItem.concepto||''):'?'}</strong></span><button class="btn btn-sec btn-s" onclick="S.ecoSingleId=null;S.ecoResalt=null;S.mod='materiales';render()">&larr; Volver a Materiales</button></div>`
@@ -12612,7 +12613,7 @@ function rEconomia(mc,p){
     <div class="flex gap-6 items-center mb-8">
       <input class="fi" id="eco_search" placeholder="🔍 Buscar en todo: concepto, notas, proveedor..." value="${S.ecoFilter||''}" oninput="S.ecoFilter=this.value;renderEcoItems()" style="flex:1;margin:0">
       ${S.ecoFilter?`<button class="btn btn-sec btn-s" onclick="S.ecoFilter='';if($('eco_search'))$('eco_search').value='';renderEcoItems()">✕</button>`:''}
-      <button class="btn btn-sec btn-s" onclick="var p=$('eco_filtros_extra');S.ecoFiltrosOpen=!(p&&p.style.display!=='none');if(p)p.style.display=S.ecoFiltrosOpen?'flex':'none'" style="white-space:nowrap">⚙ Filtros${(S.ecoTipoFilter||S.ecoSort)?'<span style="background:var(--cyan);color:#fff;border-radius:8px;padding:0 5px;font-size:10px;margin-left:4px">!</span>':''}</button>
+      <button class="btn btn-sec btn-s" onclick="var p=$('eco_filtros_extra');S.ecoFiltrosOpen=!(p&&p.style.display!=='none');if(p)p.style.display=S.ecoFiltrosOpen?'flex':'none'" style="white-space:nowrap">⚙ Filtros${(S.ecoTipoFilter||S.ecoSort||S.ecoSoloPriv)?'<span style="background:var(--cyan);color:#fff;border-radius:8px;padding:0 5px;font-size:10px;margin-left:4px">!</span>':''}</button>
     </div>
     <!-- PERÍODO -->
     <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;border-top:1px solid var(--gray-ll);padding-top:8px;margin-bottom:${(S.ecoTipoFilter||S.ecoSort)?'8px':'0'}">
@@ -12620,10 +12621,11 @@ function rEconomia(mc,p){
       <div style="min-width:0"><input class="fi" id="eco_fecha_desde" type="date" value="${S.ecoFechaDesde||''}" onchange="S.ecoFechaDesde=this.value;renderEcoItems()" style="margin:0;font-size:12px;padding:5px 8px"></div>
       <div style="min-width:0"><input class="fi" id="eco_fecha_hasta" type="date" value="${S.ecoFechaHasta||''}" onchange="S.ecoFechaHasta=this.value;renderEcoItems()" style="margin:0;font-size:12px;padding:5px 8px"></div>
     </div>
-    <div id="eco_filtros_extra" class="flex gap-6 wrap" style="display:${(S.ecoFiltrosOpen!==undefined?S.ecoFiltrosOpen:(S.ecoTipoFilter||S.ecoSort))?'flex':'none'};border-top:1px solid var(--gray-ll);padding-top:8px;margin-top:8px">
+    <div id="eco_filtros_extra" class="flex gap-6 wrap" style="display:${(S.ecoFiltrosOpen!==undefined?S.ecoFiltrosOpen:(S.ecoTipoFilter||S.ecoSort||S.ecoSoloPriv))?'flex':'none'};border-top:1px solid var(--gray-ll);padding-top:8px;margin-top:8px">
       <button id="eco_btn_all" class="btn btn-s ${!S.ecoTipoFilter?'btn-p':'btn-sec'}" onclick="S.ecoTipoFilter='';renderEcoItems()">Todos</button>
       <button id="eco_btn_ing" class="btn btn-s ${S.ecoTipoFilter==='ingreso'?'btn-ok':'btn-sec'}" onclick="S.ecoTipoFilter=S.ecoTipoFilter==='ingreso'?'':'ingreso';renderEcoItems()">↑ Ingresos</button>
       <button id="eco_btn_egr" class="btn btn-s ${S.ecoTipoFilter==='egreso'?'btn-x':'btn-sec'}" onclick="S.ecoTipoFilter=S.ecoTipoFilter==='egreso'?'':'egreso';renderEcoItems()">↓ Egresos</button>
+      ${(_nPriv||S.ecoSoloPriv)?`<button id="eco_btn_priv" class="btn btn-s ${S.ecoSoloPriv?'btn-p':'btn-sec'}" style="${S.ecoSoloPriv?'background:#475569;border-color:#475569;color:#fff':''}" onclick="S.ecoSoloPriv=!S.ecoSoloPriv;saveUIState();render()" title="Ver sólo los movimientos privados">🔒 Sólo privados (${_nPriv})</button>`:''}
       <select class="fs" style="font-size:12px;padding:4px 8px" onchange="S.ecoSort=this.value;renderEcoItems()">
         <option value="" ${!S.ecoSort?'selected':''}>📅 Más reciente</option>
         <option value="fecha_asc" ${S.ecoSort==='fecha_asc'?'selected':''}>📅 Más antiguo</option>
@@ -12631,7 +12633,7 @@ function rEconomia(mc,p){
         <option value="monto_desc" ${S.ecoSort==='monto_desc'?'selected':''}>💲 Mayor monto</option>
         <option value="modif" ${S.ecoSort==='modif'?'selected':''}>🕒 Última modificación</option>
       </select>
-      ${S.ecoTipoFilter||S.ecoSort?`<button class="btn btn-sec btn-s" style="color:var(--red)" onclick="S.ecoTipoFilter='';S.ecoSort='';renderEcoItems()">✕ Limpiar</button>`:''}
+      ${S.ecoTipoFilter||S.ecoSort||S.ecoSoloPriv?`<button class="btn btn-sec btn-s" style="color:var(--red)" onclick="S.ecoTipoFilter='';S.ecoSort='';S.ecoSoloPriv=false;render()">✕ Limpiar</button>`:''}
     </div>
   </div>
   <!-- SALDO (filtrado) -->
@@ -12663,7 +12665,7 @@ function rEconomia(mc,p){
     <div id="eco_metros_body" style="${S.ecoMetrosOpen?'margin-top:12px':'display:none'}"></div>
   </div>
   ${_reintegroResumen()}
-  <div id="eco_items_list">${!items.length?`<div class="empty" style="padding:24px 0"><span style="color:${c}">${I.eco}</span><div class="ts mt-8">${hasFilter?'Sin resultados para este filtro':'Sin movimientos'}</div>${hasFilter?`<button class="btn btn-sec btn-s mt-8" onclick="S.ecoFilter='';S.ecoTipoFilter='';if($('eco_search'))$('eco_search').value='';renderEcoItems()">Limpiar filtro</button>`:''}</div>`:items.map(item=>{
+  <div id="eco_items_list">${!items.length?`<div class="empty" style="padding:24px 0"><span style="color:${c}">${I.eco}</span><div class="ts mt-8">${hasFilter?'Sin resultados para este filtro':'Sin movimientos'}</div>${hasFilter?`<button class="btn btn-sec btn-s mt-8" onclick="S.ecoFilter='';S.ecoTipoFilter='';var _sp=S.ecoSoloPriv;S.ecoSoloPriv=false;if($('eco_search'))$('eco_search').value='';if(_sp)render();else renderEcoItems()">Limpiar filtro</button>`:''}</div>`:items.map(item=>{
     const _esDot=/^dot$/i.test(String(item.cargadoPor||item.sourceName||'').trim());
     const esIng=item.tipo==='ingreso';
     const col=esIng?'var(--green)':'var(--red)';
@@ -12847,7 +12849,7 @@ function renderEcoItems(){
   })();
   // Re-render only the items list, keeping the filter input focused
   const all=pf('economia');
-  let items=(S.ecoVerPrivados!==false)?all:all.filter(function(e){return !e.interno;});
+  let items=S.ecoSoloPriv?all.filter(function(e){return e.interno;}):(S.ecoVerPrivados!==false)?all:all.filter(function(e){return !e.interno;});
   if(S.ecoSingleId){items=items.filter(e=>e.id===S.ecoSingleId);}
   else{
     if(S.ecoTipoFilter)items=items.filter(e=>e.tipo===S.ecoTipoFilter);
@@ -12872,7 +12874,7 @@ function renderEcoItems(){
   const saldo=tIng-tEgr;
   const allIng=all.filter(i=>i.tipo==='ingreso').reduce((s,i)=>s+(parseFloat(i.monto)||0),0);
   const allEgr=all.filter(i=>i.tipo==='egreso').reduce((s,i)=>s+(parseFloat(i.monto)||0),0);
-  const hasFilter=S.ecoFilter||S.ecoTipoFilter||S.ecoFechaDesde||S.ecoFechaHasta||S.ecoRubroFilter;
+  const hasFilter=S.ecoFilter||S.ecoTipoFilter||S.ecoFechaDesde||S.ecoFechaHasta||S.ecoRubroFilter||S.ecoSoloPriv;
   // Update saldo card
   const sc=$('eco_saldo_card');
   if(sc){
@@ -12930,7 +12932,7 @@ function renderEcoItems(){
 function limpiarFiltroEco(){
   S.ecoFilter='';S.ecoTipoFilter='';S.ecoSingleId=null;S.ecoResalt=null;
   S.ecoFechaDesde='';S.ecoFechaHasta='';
-  S.ecoRubroFilter='';S.ecoItemFilter='';
+  S.ecoRubroFilter='';S.ecoItemFilter='';S.ecoSoloPriv=false;
   const inp=$('eco_search');if(inp)inp.value='';
   const fd=$('eco_fecha_desde');if(fd)fd.value='';
   const fh=$('eco_fecha_hasta');if(fh)fh.value='';
@@ -14887,7 +14889,7 @@ function openEcoPDFDialog(){
   <div class="fg"><label class="fl">&#x1F512; Movimientos privados</label><select class="fs" id="pdf_priv">
     <option value="sin">No incluirlos — PDF para el cliente</option>
     <option value="con">Incluirlos — uso interno</option>
-    <option value="solo">S&#xF3;lo los privados</option>
+    <option value="solo" ${S.ecoSoloPriv?'selected':''}>S&#xF3;lo los privados</option>
   </select><div class="txxs tc3 mt-2">Si los incluye, el PDF sale marcado como uso interno.</div></div>
   <button class="btn btn-w mt-8" style="background:#dc2626;color:#fff" onclick="exportEcoPDF($('pdf_incl_distrib')?.checked,$('pdf_incl_rubro_col')?.checked,$('pdf_incl_metros')?.checked,$('pdf_priv')?.value,$('pdf_incl_meses')?.checked,$('pdf_incl_fotos')?.checked);this.closest('.mo').remove()">Generar PDF</button></div>`;
   document.body.appendChild(d);
