@@ -94,6 +94,8 @@ function doPost(e) {
 
     // Buzón de DOT: tiene su propio permiso (no usa la clave de los colaboradores)
     if (String(body.accion || '').indexOf('dot_') === 0) return _dotPost(body);
+    // Equipos vinculados: tienen su propio permiso (SYNC_EQUIPOS.json)
+    if (String(body.accion || '').indexOf('sync_') === 0) return _syncPost(body);
 
     if (String(body.secreto || '') !== SECRETO) {
       return _json({ ok: false, error: 'Clave incorrecta.' });
@@ -253,6 +255,7 @@ function doGet(e) {
     var accion = p.action || 'ping';
 
     if (String(accion).indexOf('dot_') === 0) return _dotGet(p);
+    if (String(accion).indexOf('sync_') === 0) return _syncGet(p);
 
     if (accion === 'ping') {
       // Chequeo de conexión: no expone nada si la clave está mal.
@@ -390,6 +393,7 @@ function instalarRespaldoAutomatico() {
 
 function completarZips() {
   try { _dotDrenarConLock(); } catch (err) {}
+  try { _syncRespaldoDiario(); } catch (err) { console.warn('respaldo diario: ' + err); }
   var raices = DriveApp.getFoldersByName(CARPETA_SISTEMA);
   if (!raices.hasNext()) return;
   var obras = raices.next().getFolders(), props = PropertiesService.getScriptProperties(), inicio = Date.now();
@@ -685,4 +689,122 @@ function _dotDrenarConLock() {
     try { _dotAplicarLote(lista[i], _dotLeerJSON(lista[i])); n++; } catch (err) { break; }
   }
   return n;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SINCRONIZACIÓN SIN GOOGLE EN EL EQUIPO
+//  Cada equipo vinculado (celular, notebook, PC) lee y guarda los datos por
+//  acá, sin la ventana de Google y sin el corte de cada hora. El permiso es el
+//  archivo SYNC_EQUIPOS.json que escribe la app en SISTEMA_GESTION_OBRAS: ahí
+//  solo queda la "huella" de la clave de cada equipo, nunca la clave.
+//  Desvincular un equipo en la app le corta el acceso en menos de un minuto.
+// ═══════════════════════════════════════════════════════════════
+var SYNC_MODULOS = {
+  visitas: '📋 Visitas', tareas: '✅ Tareas', materiales: '🧱 Materiales', alertas: '🔔 Alertas',
+  checklist: '☑️ Checklist', documentos: '📁 Documentos', comentarios: '💬 Comentarios',
+  colaboradores: '👥 Colaboradores', economia: '💰 Economia', imagenes: '🖼️ Imagenes',
+  notas: '📝 Notas', fotos: '📷 Fotos WhatsApp'
+};
+
+function _syncHuella(k) {
+  return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(k))
+    .map(function (b) { return ('0' + (b & 255).toString(16)).slice(-2); }).join('');
+}
+/** Devuelve el equipo si la clave es de un equipo vinculado y activo; si no, null. */
+function _syncEquipo(k) {
+  k = String(k || '');
+  if (k.length < 32) return null;
+  var c = CacheService.getScriptCache(), v = c.get('sync_equipos');
+  if (v === null) {
+    var s = _dotSistema(), f = s ? _archivoPorNombre(s, 'SYNC_EQUIPOS.json') : null, lista = [];
+    try { lista = (f ? _dotLeerJSON(f).equipos : []) || []; } catch (err) {}
+    v = JSON.stringify(lista.filter(function (e) { return e && e.activo && e.huella; })
+      .map(function (e) { return { id: e.id, nombre: e.nombre, huella: e.huella }; }));
+    c.put('sync_equipos', v, 30);
+  }
+  var h = _syncHuella(k);
+  return JSON.parse(v).filter(function (e) { return e.huella === h; })[0] || null;
+}
+function _syncVersion(f) { return f.getLastUpdated().getTime(); }
+
+function _syncGet(p) {
+  var eq = _syncEquipo(p.eq);
+  if (!eq) return _json({ ok: false, sinPermiso: true, error: 'Este equipo no está vinculado.' });
+  var a = p.action;
+  if (a === 'sync_ping') return _json({ ok: true, equipo: eq.nombre });
+  var f = _dotArchivoDatos();
+  if (a === 'sync_version') return _json({ ok: true, version: _syncVersion(f) });
+  if (a === 'sync_leer') {
+    // Se arma a mano para no leer y reescribir un archivo grande dos veces
+    var ver = _syncVersion(f), txt = f.getBlob().getDataAsString().replace(/^﻿/, '');
+    return ContentService.createTextOutput('{"ok":true,"version":' + ver + ',"datos":' + txt + '}')
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  return _json({ ok: false, error: 'Acción desconocida.' });
+}
+
+/** Llega con el LockService ya tomado (lo toma doPost). */
+function _syncPost(b) {
+  var eq = _syncEquipo(b.eq);
+  if (!eq) return _json({ ok: false, sinPermiso: true, error: 'Este equipo no está vinculado.' });
+  if (b.accion === 'sync_escribir') return _syncEscribir(b, eq);
+  if (b.accion === 'sync_foto') return _syncFoto(b);
+  return _json({ ok: false, error: 'Acción desconocida.' });
+}
+
+function _syncEscribir(b, eq) {
+  var f = _dotArchivoDatos(), ver = _syncVersion(f);
+  // Si otro equipo (o DOT) guardó después de que este leyó, no se pisa: la app
+  // vuelve a leer, mezcla y reintenta.
+  if (String(b.base) !== String(ver)) return _json({ ok: false, conflicto: true, version: ver });
+  var nuevo;
+  try { nuevo = JSON.parse(String(b.datos || '')); } catch (err) { return _json({ ok: false, error: 'Los datos llegaron incompletos.' }); }
+  if (!nuevo || typeof nuevo !== 'object' || !Array.isArray(nuevo.projects)) return _json({ ok: false, error: 'Los datos llegaron incompletos.' });
+  var revs = Array.isArray(nuevo._revs) ? nuevo._revs : [];
+  if (!b.rev || revs.indexOf(String(b.rev)) < 0) return _json({ ok: false, error: 'Falta la marca de guardado.' });
+  // Freno de seguridad: nunca se reemplazan obras existentes por una lista vacía
+  if (!nuevo.projects.length) {
+    var actual = null;
+    try { actual = _dotLeerJSON(f); } catch (err) {}
+    if (actual && Array.isArray(actual.projects) && actual.projects.length) return _json({ ok: false, error: 'Se frenó un guardado sin obras.' });
+  }
+  // Drive no acepta reemplazar de una vez más de 10 MB: la app sigue por Google
+  if (String(b.datos).length > 9.5 * 1024 * 1024) return _json({ ok: false, grande: true, error: 'Los datos superan lo que acepta el script.' });
+  f.setContent(String(b.datos));
+  return _json({ ok: true, version: _syncVersion(f) });
+}
+
+function _syncFoto(b) {
+  if (!b.b64 || !/^(image|video|audio|application|text)\//.test(String(b.mime || ''))) return _json({ ok: false, error: 'Falta el archivo.' });
+  var d = _dotDatos(), p = (d.projects || []).filter(function (x) { return x.id === b.pid; })[0];
+  if (!p || !p.driveFolderId) return _json({ ok: false, error: 'La obra todavía no tiene carpeta en Drive.' });
+  var obra = DriveApp.getFolderById(p.driveFolderId), destino = null;
+  // La carpeta que pide la app sirve solo si está dentro de esa obra
+  if (b.carpetaId) {
+    try {
+      var c = DriveApp.getFolderById(String(b.carpetaId)), padres = c.getParents();
+      if (c.getId() === obra.getId()) destino = c;
+      while (!destino && padres.hasNext()) if (padres.next().getId() === obra.getId()) destino = c;
+    } catch (err) {}
+  }
+  if (!destino) destino = _carpeta(obra, SYNC_MODULOS[b.modulo] || SYNC_MODULOS.imagenes);
+  var nombre = String(b.nombre || ('img_' + Date.now() + '.jpg')).replace(/[\/\\:*?"<>|]/g, '_');
+  var f = destino.createFile(Utilities.newBlob(Utilities.base64Decode(String(b.b64).replace(/^data:[^,]*,/, '')), b.mime, nombre));
+  // Igual que las fotos que sube la app: la miniatura tiene que verse siempre
+  var permisoOk = true;
+  try { f.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (err) { permisoOk = false; }
+  var id = f.getId();
+  return _json({ ok: true, driveId: id, url: 'https://drive.google.com/thumbnail?id=' + id + '&sz=w800', viewUrl: 'https://drive.google.com/file/d/' + id + '/view', permisoOk: permisoOk });
+}
+
+/** Copia del día, aunque ningún equipo tenga Google abierto. Corre cada hora. */
+function _syncRespaldoDiario() {
+  var s = _dotSistema();
+  if (!s) return;
+  var hoy = _dotHoy(), carp = _carpeta(s, '💾 Backups');
+  if (carp.searchFiles('title contains "ObraControl_datos_' + hoy + '"').hasNext()) return; // ya hay una de hoy
+  var f = _dotArchivoDatos();
+  var hora = Utilities.formatDate(new Date(), 'America/Argentina/Buenos_Aires', 'HH-mm');
+  var txt = '{"version":"9.0","tipo":"respaldo_version","backupDate":"' + _dotAhora() + '","reason":"diario","data":' + f.getBlob().getDataAsString().replace(/^﻿/, '') + '}';
+  carp.createFile(Utilities.newBlob(txt, 'application/json', 'ObraControl_datos_' + hoy + '_' + hora + '_diario.json'));
 }
