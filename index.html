@@ -2868,7 +2868,7 @@ const _UI_KEYS=[
   'ecoFilter','ecoTipoFilter','ecoSort','ecoMetrosOpen',
   'ecoVerPrivados','ecoSoloPriv','ecoPresOpen','ecoDistribOpen',
   // Pantalla Hoy
-  'hoyOculto','hoyMio','hoyAb_urgentes','hoyAb_proximos','hoyTodo_vencido','hoyTodo_hoy','hoyTodo_alertas','hoyTodo_bandeja','hoyTodo_urgentes','hoyTodo_proximos','hoyTodo_pres','avOpen','matFiltrosOpen','docBuscar','docFiltrosOpen','visBuscar','visEstado','visOrden','visFiltrosOpen','ecoMesesOpen','ecoFiltrosOpen','ecoRubroFilter','ecoItemFilter','ecoFechaDesde','ecoFechaHasta',
+  'hoyOculto','hoyMio','hoyAb_urgentes','hoyAb_proximos','hoyTodo_vencido','hoyTodo_hoy','hoyTodo_alertas','hoyTodo_bandeja','hoyTodo_urgentes','hoyTodo_proximos','hoyTodo_pres','avOpen','infPara','infSecc','infDesde','infHasta','infFotos','matFiltrosOpen','docBuscar','docFiltrosOpen','visBuscar','visEstado','visOrden','visFiltrosOpen','ecoMesesOpen','ecoFiltrosOpen','ecoRubroFilter','ecoItemFilter','ecoFechaDesde','ecoFechaHasta',
   // Grupos de materiales plegados, alertas resueltas, obras cerradas del inicio
   'matGrupoCollapsed','alertResOpen','verCerradas','matPdfSinComp','matPdfHist',
   // Bandeja y carpeta de colaboradores
@@ -6129,6 +6129,7 @@ function rDash(mc,p){
     <div class="card stat card-click" onclick="S.mod='informes';render()"><div class="stico" style="background:var(--pri-bg);color:var(--pri)">${I.dl}</div><div><div class="stval" style="color:var(--pri)">${pf('auditLog').length}</div><div class="stlbl">Acciones</div></div></div>
     <div class="card stat card-click" onclick="S.mod='colaboradores';render()"><div class="stico" style="background:#f0fdf4;color:var(--green)">${I.share}</div><div><div class="stval" style="color:var(--green)">${pf('colaboradores').length}</div><div class="stlbl">Colaboradores</div></div></div>
   </div>
+  <button class="btn btn-s btn-w bt mb-8" style="--c:#D97706;justify-content:center" onclick="abrirInformeObra()">📄 Informe de obra (PDF)</button>
   <div class="g2 mb-12" style="gap:8px"><button class="btn btn-s btn-w bt" style="--c:var(--blue)" onclick="openM('newVisitaM')">${I.clip} + Visita</button><button class="btn btn-s btn-w bt" style="--c:#ca8a04" onclick="S.mod='notas';render();setTimeout(()=>abrirNota(),100)">${I.nota} + Nota</button></div>
   ${over>0?`<div class="alrt alrt-r mb-12 pointer" onclick="abrirTareaVencida()">${I.warn}<div class="flex-1"><div class="fw7 ts">${over} tarea${over>1?'s':''} vencida${over>1?'s':''}</div></div>${I.chev}</div>`:''}
   ${lastV?`<div class="card mb-12 card-click" onclick="_escudoToque();S.visitaDetail='${lastV.id}';S.mod='visitas';render();" style="border-left:3px solid var(--blue)"><div class="txxs tc3 mb-4">Ultima visita</div><div class="ts fw7">${lastV.title||'Sin titulo'}</div><div class="txxs tc3">${fmts(lastV.date)}</div></div>`:''}
@@ -11687,6 +11688,7 @@ function rInformes(mc,p){
       </div>
     </div>
   </div>
+  <div class="card card-click mb-12" style="border-left:3px solid #D97706;background:#FFFBEB" onclick="abrirInformeObra()"><div class="flex items-center gap-12"><div class="stico" style="background:#fff;color:#D97706;font-size:20px">📄</div><div class="flex-1"><div class="ts fw7">Informe de obra</div><div class="txxs tc3">Un solo PDF: elegís secciones, período y si es para el cliente o de uso interno</div></div>${I.chev}</div></div>
   <div class="card card-click mb-12" style="border-left:3px solid #D97706" onclick="openInformeMixto()"><div class="flex items-center gap-12"><div class="stico" style="background:#FFFBEB;color:#D97706;font-size:20px">📄</div><div class="flex-1"><div class="ts fw7" style="color:#D97706">Informe Mixto (PDF)</div><div class="txxs tc3">Seleccioná tareas, comentarios, checklists, materiales y más en un solo PDF</div></div>${I.chev}</div></div>
   <div class="card card-click mb-12" onclick="dlReport()"><div class="flex items-center gap-12"><div class="stico" style="background:var(--pri-bg);color:var(--pri)">${I.dl}</div><div class="flex-1"><div class="ts fw7">Informe completo (TXT)</div><div class="txxs tc3">Visitas, tareas, materiales, comentarios</div></div>${I.chev}</div></div>
   <div class="card mb-12" style="background:var(--gray-ll)"><div class="ts fw7 mb-8">Backup JSON</div><div class="flex gap-8 wrap"><button class="btn btn-sec btn-s" onclick="dlBackup()">${I.save} Descargar</button><button class="btn btn-sec btn-s" onclick="$('restF').click()">${I.up} Restaurar</button><button class="btn btn-s" style="background:var(--purple);color:#fff" onclick="$('importHistF').click()">📥 Importar Historial JSON</button></div><input type="file" id="restF" accept=".json" style="display:none" onchange="restoreB(this)"><input type="file" id="importHistF" accept=".json" style="display:none" onchange="importHistorial(this)"><div class="txxs tc3 mt-8">Exporta/importa todos los datos — El botón Importar también distribuye los datos en Google Drive</div></div>
@@ -12543,6 +12545,7 @@ function _cierreInformeHtml(pid,opt,fotos){
   var S_=opt.secciones||{portada:1,ecoCliente:1,ecoInterno:opt.privados,materiales:1,visitas:1,tareas:1,checklists:1,comentarios:1,alertas:1,docs:1};
   var src=function(ph){var u=_cUrlFoto(ph);return fotos[u]||(u&&/^https?:/.test(u)?u:'');};
   var galeria=function(arr){
+    if(opt.sinFotos)return '';
     var v=(arr||[]).filter(function(ph){return src(ph);});
     if(!v.length)return '';
     return '<div class="gal">'+v.map(function(ph){
@@ -12562,10 +12565,11 @@ function _cierreInformeHtml(pid,opt,fotos){
   if(S_.portada){
     h+='<section class="port"><div class="kick">'+esc(opt.kicker||'Informe de cierre de obra')+'</div><h1>'+esc(p.name||'')+'</h1>'
       +'<table class="ficha">'
-      +[['Cliente',p.client],['Ubicación',p.location],['Director',p.director],['Capataz',p.capataz],['Inicio',p.startDate?fmt(p.startDate):''],['Fin previsto',p.endDate?fmt(p.endDate):''],['Fecha de cierre',fmt(td())],['Estado','Finalizada']]
+      +[['Cliente',p.client],['Ubicación',p.location],['Director',p.director],['Capataz',p.capataz],['Inicio',p.startDate?fmt(p.startDate):''],['Fin previsto',p.endDate?fmt(p.endDate):''],[opt.informe?'Fecha del informe':'Fecha de cierre',fmt(td())],['Estado',opt.informe?(p.status||''):'Finalizada'],['Período',opt.informe&&(opt.desde||opt.hasta)?(opt.desde?fmt(opt.desde):'inicio')+' — '+(opt.hasta?fmt(opt.hasta):'hoy'):'']]
         .filter(function(r){return r[1];}).map(function(r){return '<tr><th>'+r[0]+'</th><td>'+esc(r[1])+'</td></tr>';}).join('')
       +'</table><div class="kpis">'
-      +[['Visitas',V.length],['Tareas',tDone+' / '+T.length+' completadas'],['Comentarios',C.length],['Materiales',mat.filas.length],['Movimientos',ecC.items.length],['Fotos',nFotos]]
+      +(opt.informe?[['Visitas',V.length],['Notas',_cTbl('notas',pid).length],['Materiales',mat.filas.length],['Movimientos',(opt.privados?ecI:ecC).items.length]].concat(_avGeneral(p)?[['Avance',Math.round(_avGeneral(p).pct)+'%']]:[])
+        :[['Visitas',V.length],['Tareas',tDone+' / '+T.length+' completadas'],['Comentarios',C.length],['Materiales',mat.filas.length],['Movimientos',ecC.items.length],['Fotos',nFotos]])
         .map(function(k){return '<div><b>'+k[1]+'</b><span>'+k[0]+'</span></div>';}).join('')
       +'</div>'
       +(opt.privados?'<div class="interno">⚠ USO INTERNO — incluye '+ecI.privados+' movimiento(s) privado(s). No entregar al cliente.</div>':'')
@@ -12594,6 +12598,17 @@ function _cierreInformeHtml(pid,opt,fotos){
     if(opt.facturas&&fac.length&&(marcaPriv||!S_.ecoInterno))r+='<h3>Comprobantes</h3>'+'<div class="gal">'+fac.map(function(e){return '<figure><img src="'+src(e.imagen)+'"><figcaption>'+fmt(e.fecha||e.date)+' · '+esc(e.concepto||'')+'</figcaption></figure>';}).join('')+'</div>';
     return r+'</section>';
   };
+  // Avance de obra (sin montos: sirve también para el cliente)
+  if(S_.avance){
+    var _ag=_avGeneral(p),_av=p.avance||{},_ai=_avItems(p).filter(function(x){return _av[x]&&_av[x].pct!=null;});
+    if(_ag&&_ai.length){
+      h+='<section><h2>Avance de obra — '+Math.round(_ag.pct)+'%</h2><table><tr><th>Ítem</th><th class="n">Avance</th><th>Actualizado</th></tr>'
+        +_ai.map(function(x){return '<tr><td>'+esc(x)+'</td><td class="n">'+_av[x].pct+'%</td><td>'+(_av[x].fecha?fmt(_av[x].fecha):'')+'</td></tr>';}).join('')+'</table>';
+      _ai.forEach(function(x){var a=_av[x],fs=[a.antes&&{url:a.antes,caption:'Antes'},a.ahora&&{url:a.ahora,caption:'Ahora'}].filter(Boolean);
+        var g=galeria(fs);if(g)h+='<div class="it"><div class="ith"><b>'+esc(x)+'</b><span class="fe">'+_av[x].pct+'%</span></div>'+g+'</div>';});
+      h+='</section>';
+    }
+  }
   if(S_.ecoCliente)h+=ecoHtml(ecC,'Balance económico del cliente',false);
   if(S_.ecoInterno)h+=ecoHtml(ecI,'Balance económico interno (con privados)',true);
   if(S_.materiales){
@@ -12637,6 +12652,23 @@ function _cierreInformeHtml(pid,opt,fotos){
     });
     h+='</section>';
   }
+  if(S_.notas){
+    var N=_cTbl('notas',pid).slice().sort(_cOrdenFecha);
+    if(N.length){
+      h+='<section><h2>Notas ('+N.length+')</h2>';
+      Object.keys(NOTA_TIPOS).forEach(function(tp){
+        var g=N.filter(function(n){return (n.tipo||'registro')===tp;});if(!g.length)return;
+        h+='<h3>'+esc(NOTA_TIPOS[tp])+' ('+g.length+')</h3>';
+        g.forEach(function(n){
+          var t1=n.titulo||String(n.texto||'').split('\n')[0].slice(0,90),resto=n.titulo?n.texto:(String(n.texto||'').length>t1.length?n.texto:'');
+          h+='<div class="it"><div class="ith"><b>'+(_notaHecha(n)?'✓ ':'')+esc(t1)+'</b><span class="fe">'+fmt(n.fecha)+(n.hora?' '+esc(n.hora):'')+'</span></div>'
+            +(n.tipo==='pendiente'?'<div class="mut">'+[n.prioridad?'Prioridad: '+esc(n.prioridad):'',n.vence?'Vence: '+fmt(n.vence):'',n.responsable?'Responsable: '+esc(n.responsable):'',_notaHecha(n)?'Hecha':'Pendiente'].filter(Boolean).join(' · ')+'</div>':'')
+            +txt(resto)+galeria((n.photos||[]).filter(function(ph){return !(ph&&ph.deletedAt);}))+'</div>';
+        });
+      });
+      h+='</section>';
+    }
+  }
   if(S_.tareas&&T.length){
     h+='<section><h2>Tareas ('+tDone+' de '+T.length+' completadas)</h2>';
     ['pendiente','en curso','completada','cancelada'].forEach(function(st){
@@ -12667,6 +12699,11 @@ function _cierreInformeHtml(pid,opt,fotos){
         +txt(c.text)+galeria(c.photos)+'</div>';
     });
     h+='</section>';
+  }
+  // Las alertas de hoy son una marca en cada registro (nota, material, movimiento…)
+  if(S_.alertas&&opt.informe){
+    var AF=[];ALERT_TBLS.forEach(function(t){_cTbl(t,pid).forEach(function(it){if(it&&it.alerta)AF.push(it);});});
+    if(AF.length)h+='<section><h2>Alertas activas ('+AF.length+')</h2>'+AF.map(function(it){return '<div class="it"><div class="ith"><b>⚠ '+esc(_tituloReg(it))+'</b><span class="fe">'+(it.alertaAt?fmt(it.alertaAt):'')+'</span></div>'+(it.texto&&it.titulo?txt(it.texto):'')+'</div>';}).join('')+'</section>';
   }
   if(S_.alertas&&A.length){
     h+='<section><h2>Alertas ('+A.filter(function(a){return !a.resolved;}).length+' activas de '+A.length+')</h2>';
@@ -12708,6 +12745,71 @@ function _cierreInformeHtml(pid,opt,fotos){
     +'</body></html>';
   return opt.privados?out:_pdfSinEncabezado(out);
 }
+// ═══════ INFORME DE OBRA: un solo PDF, eligiendo qué va ═══════
+// Usa el mismo generador que el informe de cierre. "Para el cliente" nunca
+// lleva movimientos privados; "Uso interno" sí, y sale marcado como tal.
+function _conPeriodo(desde,hasta,fn){
+  if(!desde&&!hasta)return fn();
+  var tbls=['visitas','notas','economia','matIngresos','comentarios','alertas','tareas','checklists'],bak={};
+  tbls.forEach(function(t){bak[t]=D[t];D[t]=(D[t]||[]).filter(function(r){
+    var f=String((r&&(r.fecha||r.date))||'').slice(0,10);
+    return !f||((!desde||f>=desde)&&(!hasta||f<=hasta));
+  });});
+  try{return fn();}finally{tbls.forEach(function(t){D[t]=bak[t];});}
+}
+var _INF_SECC=[['portada','📘 Portada con la ficha de la obra'],['avance','📈 Avance de obra'],['economia','💰 Economía'],['notas','📝 Notas'],['visitas','📋 Visitas'],['materiales','🧱 Materiales'],['checklists','☑️ Checklists'],['alertas','🚨 Alertas'],['docs','📁 Documentos y enlaces'],['comentarios','💬 Comentarios (anteriores)'],['tareas','✅ Tareas (anteriores)']];
+function abrirInformeObra(){
+  var p=(D.projects||[]).find(function(x){return x.id===S.proj;});if(!p)return;
+  var hay={comentarios:pf('comentarios').length,tareas:pf('tareas').length};
+  var sel=S.infSecc||{portada:1,avance:1,economia:1,notas:1,visitas:1,materiales:1,checklists:1,alertas:1,docs:1};
+  var interno=S.infPara==='interno';
+  document.getElementById('infM')?.remove();
+  var d=document.createElement('div');d.className='mo open';d.id='infM';
+  var radio=function(v,t,sub){return '<label style="flex:1;display:flex;gap:8px;align-items:flex-start;border:1px solid '+((v==='interno')===interno?'var(--pri)':'var(--brd)')+';border-radius:10px;padding:9px 10px;cursor:pointer;background:'+((v==='interno')===interno?'var(--pri-bg)':'var(--white)')+'"><input type="radio" name="inf_para" value="'+v+'"'+((v==='interno')===interno?' checked':'')+' onchange="_infPara(this.value)" style="margin-top:3px"><span><span class="ts fw7">'+t+'</span><br><span class="txxs tc3">'+sub+'</span></span></label>';};
+  d.innerHTML='<div class="mo-c" style="max-width:480px"><div class="mo-h"><h3>📄 Informe de obra</h3><button class="tbtn" onclick="document.getElementById(\'infM\').remove()">'+I.x+'</button></div>'
+    +'<div class="txxs tc3 mb-8">'+esc(p.name)+'</div>'
+    +'<div class="txxs tc3 fw6 mb-4" style="text-transform:uppercase;letter-spacing:.05em">Para quién</div>'
+    +'<div class="flex gap-8 mb-12">'+radio('cliente','👤 Para el cliente','Sin movimientos privados')+radio('interno','🔒 Uso interno','Con privados y comprobantes')+'</div>'
+    +'<div class="txxs tc3 fw6 mb-4" style="text-transform:uppercase;letter-spacing:.05em">Período</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-bottom:4px"><input class="fi" type="date" id="inf_desde" value="'+esc(S.infDesde||'')+'" style="margin:0;font-size:12px"><input class="fi" type="date" id="inf_hasta" value="'+esc(S.infHasta||'')+'" style="margin:0;font-size:12px"></div>'
+    +'<div class="txxs tc3 mb-12">Vacío = toda la obra.</div>'
+    +'<div class="txxs tc3 fw6 mb-4" style="text-transform:uppercase;letter-spacing:.05em">Qué incluye</div>'
+    +'<div style="border:1px solid var(--brd);border-radius:10px;padding:2px 10px;margin-bottom:10px">'
+    +_INF_SECC.filter(function(x){return (x[0]!=='comentarios'&&x[0]!=='tareas')||hay[x[0]];}).map(function(x){
+      return '<label class="flex items-center gap-8 ts" style="padding:7px 0;border-bottom:1px solid var(--gray-ll);cursor:pointer"><input type="checkbox" class="inf-sec" value="'+x[0]+'"'+(sel[x[0]]?' checked':'')+' style="width:18px;height:18px;flex:none">'+x[1]+'</label>';
+    }).join('')
+    +'<label class="flex items-center gap-8 ts" style="padding:7px 0;cursor:pointer"><input type="checkbox" id="inf_fotos"'+(S.infFotos===false?'':' checked')+' style="width:18px;height:18px;flex:none">📷 Incluir fotos</label></div>'
+    +'<div id="inf_aviso" class="txxs mb-8" style="color:#b45309">'+(interno?'':'Antes de mandarlo, fijate que las notas no tengan nada interno.')+'</div>'
+    +'<button class="btn btn-p btn-w" onclick="generarInformeObra()">📄 Generar PDF</button></div>';
+  document.body.appendChild(d);
+}
+function _infPara(v){
+  S.infPara=v;saveUIState();
+  // Al pasar a "Para el cliente" se sacan las secciones más internas (se pueden volver a marcar)
+  if(v==='cliente')document.querySelectorAll('#infM .inf-sec').forEach(function(c){if(c.value==='alertas')c.checked=false;});
+  var s={};document.querySelectorAll('#infM .inf-sec').forEach(function(c){if(c.checked)s[c.value]=1;});S.infSecc=s;
+  S.infDesde=($('inf_desde')||{}).value||'';S.infHasta=($('inf_hasta')||{}).value||'';S.infFotos=!!($('inf_fotos')||{}).checked;
+  abrirInformeObra();
+}
+function generarInformeObra(){
+  var pid=S.proj,interno=S.infPara==='interno',s={};
+  document.querySelectorAll('#infM .inf-sec').forEach(function(c){if(c.checked)s[c.value]=1;});
+  if(!Object.keys(s).length){toast('Marcá al menos una sección','var(--orange)',2500);return;}
+  var desde=($('inf_desde')||{}).value||'',hasta=($('inf_hasta')||{}).value||'',fotos=!!($('inf_fotos')||{}).checked;
+  if(desde&&hasta&&desde>hasta){toast('El período está al revés','var(--orange)',2500);return;}
+  S.infSecc=s;S.infDesde=desde;S.infHasta=hasta;S.infFotos=fotos;saveUIState();
+  var secc={portada:s.portada,avance:s.avance,ecoCliente:s.economia&&!interno,ecoInterno:s.economia&&interno,notas:s.notas,visitas:s.visitas,materiales:s.materiales,checklists:s.checklists,alertas:s.alertas,docs:s.docs,comentarios:s.comentarios,tareas:s.tareas};
+  var fm={};try{Object.keys(IMG_CACHE).forEach(function(k){fm['[foto:'+k+']']=IMG_CACHE[k];});}catch(_){}
+  var opt={informe:true,titulo:'Informe de obra'+(interno?' — uso interno':''),kicker:'Informe de obra'+(interno?' · USO INTERNO':''),privados:interno,facturas:interno&&fotos,sinFotos:!fotos,desde:desde,hasta:hasta,secciones:secc};
+  var html=_conPeriodo(desde,hasta,function(){return _cierreInformeHtml(pid,opt,fm);});
+  var w=window.open('','_blank');
+  if(!w){toast('Activá las ventanas emergentes para ver el PDF','var(--orange)',4000);return;}
+  w.document.write(html);w.document.close();
+  document.getElementById('infM')?.remove();
+  if(fotos)_imprimirConFotos(w).then(function(){try{w.print();}catch(_){}});
+  else setTimeout(function(){try{w.print();}catch(_){}},400);
+}
+
 function _cCsv(filas){return '﻿'+filas.map(function(r){return r.map(function(c){return '"'+String(c==null?'':c).replace(/"/g,'""')+'"';}).join(';');}).join('\r\n');}
 function _cierreCsvs(pid){
   var eco=function(conPriv){
