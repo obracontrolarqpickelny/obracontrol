@@ -1097,7 +1097,210 @@ async function _rescueBase64BeforeSync(){
   }
 }
 
+// ═══════════════════════════════════════════════════════════════
+// EQUIPOS VINCULADOS: sincronizar por el script, sin la ventana de Google
+// Cada equipo se vincula una vez (con Google, desde el panel de Drive). Queda
+// con una clave propia guardada solo en ese equipo; en Drive (SYNC_EQUIPOS.json)
+// va únicamente su huella. Con eso lee y guarda los datos por el script aunque
+// el permiso de Google de 1 hora haya vencido: no hay más "Tocá y conecta".
+// Si el script falla, todo queda guardado en el equipo y se reintenta solo.
+// ═══════════════════════════════════════════════════════════════
+var EQ_KEY='oc_equipo';
+function _eqDatos(){try{return JSON.parse(localStorage.getItem(EQ_KEY)||'null');}catch(_){return null;}}
+function _eqOk(){var e=_eqDatos();return !!(e&&e.clave&&!GD._eqSinPermiso&&_apiCfg());}
+function _hayNube(){return !!GD.accessToken||_eqOk();}
+async function _huellaClave(k){
+  var b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(String(k)));
+  return Array.prototype.map.call(new Uint8Array(b),function(x){return x.toString(16).padStart(2,'0');}).join('');
+}
+async function _eqApi(accion,cuerpo,ms){
+  var c=_apiCfg(),e=_eqDatos();
+  if(!c||!e||!e.clave)throw new Error('equipo sin vincular');
+  var r=cuerpo
+    ?await fetchWithTimeout(c.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(Object.assign({accion:accion,eq:e.clave},cuerpo))},ms||90000)
+    :await fetchWithTimeout(c.url+'?action='+accion+'&eq='+encodeURIComponent(e.clave),{},ms||60000);
+  if(!r.ok)throw new Error('script '+r.status);
+  var j=await r.json();
+  if(j&&j.sinPermiso){
+    // Recién vinculado: el script tarda hasta medio minuto en enterarse
+    if(Date.now()-(e.altaMs||0)>90000){GD._eqSinPermiso=true;updateSyncIndicator('noauth');}
+    throw new Error('este equipo no está vinculado');
+  }
+  return j;
+}
+// Igual que _saveToDriveImpl, pero por el script. Si nadie guardó desde la
+// última lectura (misma versión), no se vuelve a bajar todo el archivo.
+async function _saveViaScript(){
+  try{
+    updateSyncIndicator('syncing','Subiendo…');
+    await _rescueBase64BeforeSync();
+    await _cargarBase();
+    var rev='r'+Date.now().toString(36)+uid(),limpio=null,gen=0,res=null;
+    for(var intento=1;intento<=4&&!(res&&res.ok);intento++){
+      var ult=GD._eqUlt,revs;
+      var v=ult?await _eqApi('sync_version'):null;
+      if(ult&&v&&v.ok&&String(v.version)===String(ult.version)){revs=ult.revs||[];}
+      else{
+        updateSyncIndicator('syncing','Bajando…');
+        var L=await _eqApi('sync_leer');
+        if(!L||!L.ok)throw new Error((L&&L.error)||'no se pudieron leer los datos');
+        ult={version:L.version,revs:Array.isArray(L.datos&&L.datos._revs)?L.datos._revs:[]};
+        GD._eqUlt=ult;revs=ult.revs;
+        if(_silentMerge(L.datos)){
+          await saveToIDB();_lsSave();
+          if(!_isPinLocked()&&!document.querySelector('.mo.open')&&!_isUserTyping())render();
+        }
+        _avisarConflictos(false);
+        updateSyncIndicator('syncing','Subiendo…');
+      }
+      gen=GD._genCambio||0;
+      limpio=buildCleanData();limpio._revs=revs.concat([rev]).slice(-100);
+      res=await _eqApi('sync_escribir',{base:ult.version,rev:rev,datos:JSON.stringify(limpio,null,2)});
+      if(res&&res.conflicto){GD._eqUlt=null;continue;}
+      if(!res||!res.ok)throw new Error((res&&res.error)||'no se pudo guardar');
+    }
+    if(!res||!res.ok)throw new Error('los datos estaban ocupados, se reintenta');
+    GD._eqUlt={version:res.version,revs:limpio._revs};
+    D.lastSync=nw();
+    if(_baseCargada){GD._basePrevia=_BASE;GD._revPend=rev;_fijarBaseTrasEscribir(limpio);}
+    // A los segundos se relee para confirmar que nadie escribió encima
+    clearTimeout(GD._verifT);GD._verifT=setTimeout(function(){if(GD._revPend&&GD.online)loadFromDriveAndMerge(true).catch(function(){});},8000);
+    GD._ultimoError=null;
+    await saveToIDB();_lsSave();
+    GD.pendingSync=false;
+    if((GD._genCambio||0)===gen){GD._cambiosSinSubir=false;try{localStorage.removeItem('oc_pend_desde');}catch(_){}}
+    updateSyncIndicator('ok');
+    setTimeout(function(){processPendingImages().catch(function(){});},1500);
+  }catch(e){
+    console.warn('Guardado por el script:',e);
+    GD._ultimoError={ts:nw(),msg:(e&&e.message)||String(e)};
+    await saveToIDB().catch(function(){});
+    updateSyncIndicator(GD._eqSinPermiso?'noauth':'error');
+    if(!GD._eqSinPermiso&&!GD._retrying){
+      GD._retrying=true;
+      setTimeout(function(){GD._retrying=false;if(GD.online&&_hayNube())saveToDrive().catch(function(){});},20000);
+    }
+  }
+}
+// Cada 30 segundos: ¿alguien guardó? (pregunta liviana, sin bajar los datos)
+async function _eqRevisarCambios(){
+  if(GD._eqMirando||GD._guardandoP)return;
+  GD._eqMirando=true;
+  try{
+    if(GD._cambiosSinSubir&&!GD._retrying&&!GD.syncTimer){await saveToDrive();return;}
+    var v=await _eqApi('sync_version',null,30000);
+    if(v&&v.ok&&(!GD._eqUlt||String(v.version)!==String(GD._eqUlt.version)))await loadFromDriveAndMerge(true);
+    else if(GD._syncEst==='error'||GD._syncEst==='noauth')updateSyncIndicator('ok');
+  }catch(e){console.warn('Revisión por el script:',e);}
+  finally{GD._eqMirando=false;}
+}
+async function _subirFotoScript(base64Data,fileName,folderId,pid,modulo){
+  if(!pid||!base64Data)return null;
+  var m=String(base64Data).match(/^data:([^;,]+)/);
+  var j=await _eqApi('sync_foto',{pid:pid,carpetaId:folderId||'',modulo:modulo||'imagenes',nombre:fileName||('img_'+uid()+'.jpg'),mime:m?m[1]:'image/jpeg',b64:String(base64Data).replace(/^data:[^,]*,/,'')},120000);
+  if(!j||!j.ok||!j.driveId){console.warn('Foto por el script:',j&&j.error);return null;}
+  return {driveId:j.driveId,url:j.url,viewUrl:j.viewUrl,permisoOk:j.permisoOk!==false};
+}
+// Archivos sueltos en la raíz de SISTEMA_GESTION_OBRAS (necesitan Google)
+async function _archivoRaizId(nombre,crear){
+  await ensureFolders('');
+  if(!GD.rootId)throw new Error('no encuentro la carpeta del sistema');
+  var q="name='"+nombre+"' and '"+GD.rootId+"' in parents and trashed=false";
+  var r=await fetchWithTimeout('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(q)+'&fields=files(id)',{headers:driveHeaders()});
+  if(!r.ok)throw new Error('Drive '+r.status);
+  var fs=(await r.json()).files||[];
+  if(fs[0])return fs[0].id;
+  if(!crear)return null;
+  var c=await fetchWithTimeout('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:driveHeaders(),body:JSON.stringify({name:nombre,mimeType:'application/json',parents:[GD.rootId]})});
+  if(!c.ok)throw new Error('Drive '+c.status);
+  return (await c.json()).id;
+}
+async function _eqLeerLista(){
+  var id=await _archivoRaizId('SYNC_EQUIPOS.json',false);
+  if(!id)return [];
+  var r=await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/'+id+'?alt=media',{headers:driveHeaders()});
+  if(!r.ok)throw new Error('Drive '+r.status);
+  try{return ((await r.json()).equipos)||[];}catch(_){return [];}
+}
+async function _eqEscribirLista(lista){
+  var id=await _archivoRaizId('SYNC_EQUIPOS.json',true);
+  var u=await fetchWithTimeout('https://www.googleapis.com/upload/drive/v3/files/'+id+'?uploadType=media',{method:'PATCH',headers:driveHeaders(),body:JSON.stringify({equipos:lista,actualizado:nw()},null,1)});
+  if(!u.ok)throw new Error('Drive '+u.status);
+}
+// Para vincular o desvincular hace falta Google una vez (se abre su ventana)
+async function _eqConGoogle(){
+  if(GD.accessToken&&((GD.tokenExpiry||0)-Date.now())>60000)return true;
+  GD._popupOk=true;
+  try{return await ensureAuth(false);}finally{GD._popupOk=false;}
+}
+async function eqVincular(){
+  if(!_apiCfg()){toast('Primero configurá el servidor en Informes de campo','var(--orange)',4500);return;}
+  var sug={celular:'Celular',tablet:'Tablet',computadora:'Computadora'}[_nombreEquipo()]||'Equipo';
+  var nombre=prompt('Nombre de este equipo (para reconocerlo después):',sug);
+  if(nombre===null)return;
+  nombre=String(nombre).trim().slice(0,40)||sug;
+  try{
+    if(!await _eqConGoogle()){toast('Hace falta entrar a Google una vez para vincular','var(--orange)',4500);return;}
+    var b=new Uint8Array(32);crypto.getRandomValues(b);
+    var clave=Array.prototype.map.call(b,function(x){return x.toString(16).padStart(2,'0');}).join('');
+    var id='eq_'+uid(),lista=await _eqLeerLista();
+    var viejo=_eqDatos();
+    lista=lista.filter(function(e){return !(viejo&&e.id===viejo.id);}); // si se vuelve a vincular, reemplaza al anterior
+    lista.push({id:id,nombre:nombre,huella:await _huellaClave(clave),activo:true,alta:nw()});
+    await _eqEscribirLista(lista);
+    localStorage.setItem(EQ_KEY,JSON.stringify({id:id,clave:clave,nombre:nombre,altaMs:Date.now()}));
+    GD._eqSinPermiso=false;GD._eqUlt=null;
+    document.getElementById('drvPanel')?.remove();
+    updateSyncIndicator('ok');
+    toast('Equipo vinculado ✓ Desde ahora se sincroniza solo, sin Google','var(--green)',4500);
+  }catch(e){toast('No se pudo vincular: '+((e&&e.message)||e),'var(--red)',5000);}
+}
+async function eqDesvincular(id,nombre){
+  var mio=_eqDatos(),esEste=!!(mio&&mio.id===id);
+  if(!confirm('¿Desvincular '+(esEste?'este equipo':'"'+nombre+'"')+'? Deja de sincronizarse solo hasta que lo vuelvas a vincular.'))return;
+  try{
+    if(!await _eqConGoogle())throw new Error('hace falta entrar a Google');
+    var lista=(await _eqLeerLista()).map(function(e){if(e.id===id){e.activo=false;e.baja=nw();}return e;});
+    await _eqEscribirLista(lista);
+    if(esEste){localStorage.removeItem(EQ_KEY);GD._eqUlt=null;}
+    document.getElementById('drvPanel')?.remove();
+    toast('Equipo desvinculado','var(--orange)',3000);
+  }catch(e){
+    if(esEste&&confirm('No se pudo avisar a Drive ('+((e&&e.message)||e)+'). ¿Lo desvinculo solo en este equipo?')){localStorage.removeItem(EQ_KEY);GD._eqUlt=null;document.getElementById('drvPanel')?.remove();updateSyncIndicator(GD.accessToken?'ok':'noauth');}
+    else if(!esEste)toast('No se pudo desvincular: '+((e&&e.message)||e),'var(--red)',5000);
+  }
+}
+function _eqTarjetaHtml(){
+  var e=_eqDatos(),txt,btn;
+  if(!_apiCfg())return '';
+  if(e&&e.clave&&!GD._eqSinPermiso){
+    txt='<b style="color:var(--green)">✓ Este equipo está vinculado</b> ('+esc(e.nombre||'')+'): se sincroniza solo, sin la ventana de Google.';
+    btn='<button class="btn btn-s btn-sec" style="width:100%;font-size:11px;color:var(--red)" onclick="eqDesvincular(\''+esc(e.id)+'\',\''+esc(e.nombre||'')+'\')">Desvincular este equipo</button>';
+  }else{
+    txt=(GD._eqSinPermiso?'<b style="color:var(--red)">Este equipo fue desvinculado.</b> ':'')+'Vinculalo una vez y se sincroniza siempre solo, sin "Tocá y conecta" ni la ventana de Google.';
+    btn='<button class="btn btn-s" style="width:100%;font-size:12px;font-weight:800;background:var(--pri);color:#fff" onclick="eqVincular()">📱 Vincular este equipo</button>';
+  }
+  return '<div style="border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin-bottom:8px">'
+    +'<div style="font-size:12px;font-weight:700;margin-bottom:4px">📱 Equipos vinculados</div>'
+    +'<div style="font-size:11px;color:var(--text2);margin-bottom:8px;line-height:1.4">'+txt+'</div>'+btn
+    +(GD.accessToken?'<div id="eqLista" style="margin-top:8px;font-size:11px;color:var(--text3)">Buscando equipos…</div>':'')
+    +'</div>';
+}
+async function _eqLlenarLista(){
+  var el=document.getElementById('eqLista');if(!el)return;
+  try{
+    var mio=_eqDatos(),act=(await _eqLeerLista()).filter(function(x){return x.activo;});
+    el=document.getElementById('eqLista');if(!el)return;
+    el.innerHTML=act.length?act.map(function(x){
+      var este=mio&&mio.id===x.id;
+      return '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;padding:3px 0;border-top:1px solid #f1f5f9"><span>'+(este?'<b>':'')+esc(x.nombre)+(este?' (este)</b>':'')+'</span>'
+        +(este?'':'<button class="link-tag" style="font-size:10px;color:var(--red)" onclick="eqDesvincular(\''+esc(x.id)+'\',\''+esc(x.nombre)+'\')">quitar</button>')+'</div>';
+    }).join(''):'Todavía no hay equipos vinculados.';
+  }catch(e){el.textContent='No pude leer la lista de equipos.';}
+}
+
 function showDriveReconnectBanner(){
+  if(_eqOk())return; // el equipo vinculado sigue sincronizando por el script
   // Como mucho un aviso cada 10 minutos (antes salía en cada guardado)
   if(Date.now()-(GD._bannerT||0)<600000)return;GD._bannerT=Date.now();
   document.getElementById('driveReconnectBanner')?.remove();
@@ -1161,7 +1364,10 @@ async function _saveToDriveImpl() {
     return;
   }
   const ok = await ensureAuth();
-  if (!ok) { await saveToIDB(); showDriveReconnectBanner(); return; }
+  if (!ok) {
+    if (_eqOk()) return _saveViaScript();
+    await saveToIDB(); showDriveReconnectBanner(); return;
+  }
 
   try {
     await ensureFolders(S.proj);
@@ -1859,7 +2065,15 @@ async function saveLogToDrive(){
 
 async function loadFromDrive() {
   const ok = await ensureAuth();
-  if (!ok) return null;
+  if (!ok) {
+    if (!_eqOk()) return null;
+    try {
+      const L = await _eqApi('sync_leer');
+      if (!L || !L.ok || !L.datos) return null;
+      GD._eqUlt = { version: L.version, revs: Array.isArray(L.datos._revs) ? L.datos._revs : [] };
+      return L.datos;
+    } catch (e) { console.warn('Lectura por el script:', e); return null; }
+  }
   try {
     await ensureFolders();
     const fileId = await findMainFile();
@@ -2054,9 +2268,13 @@ function _fotoUsada(id){
     return D[k].some(function(r){return r&&typeof r==='object'&&JSON.stringify(r).indexOf(marca)>=0;});
   })||(S.notaAdj||[]).some(function(u){return String((u&&u.url)||u)===marca;});
 }
-async function uploadImageToDrive(base64Data, fileName, folderId, pid) {
+async function uploadImageToDrive(base64Data, fileName, folderId, pid, modulo) {
   const ok = await ensureAuth();
-  if (!ok) return null;
+  if (!ok) {
+    if (!_eqOk()) return null;
+    try { return await _subirFotoScript(base64Data, fileName, folderId, pid, modulo); }
+    catch (e) { console.warn('Foto por el script:', e); return null; }
+  }
   try {
     let targetFolder = folderId || null;
     if (pid) {
@@ -2139,13 +2357,16 @@ async function _processPendingImagesImpl() {
         try{await ensureFolders('');imgRec.folderId=await findOrCreateFolder('🗑️ Eliminado en la app',GD.rootId);}catch(_){}
         if(!imgRec.folderId){_sinObra++;continue;}
       } else if(!_pidImg){_sinObra++;continue;}
-      else if(!_usada){try{imgRec.folderId=await carpetaObra(_pidImg,'eliminados');}catch(_){}}
+      else if(!_usada){if(GD.accessToken)try{imgRec.folderId=await carpetaObra(_pidImg,'eliminados');}catch(_){}}
       else if(!imgRec.folderId){
         // Cada foto a la carpeta de su módulo (las de Notas iban a Imagenes)
         var _tb=_tblDeFoto(item.imageId),_md={notas:'notas',visitas:'visitas',economia:'economia',materiales:'materiales',matIngresos:'materiales',checklists:'checklist',documentos:'documentos',mensajesColab:'colaboradores'}[_tb];
-        if(_md){try{imgRec.folderId=await carpetaObra(_pidImg,_md);}catch(_){}}
+        if(_md&&GD.accessToken){try{imgRec.folderId=await carpetaObra(_pidImg,_md);}catch(_){}}
       }
-      var result=await uploadImageToDrive(imgRec.data,imgRec.fileName,imgRec.folderId||null,_pidImg||null);
+      // Sin Google, la que ya nadie usa espera: va a "Eliminado en la app", que necesita Google
+      if(!_usada&&!GD.accessToken)continue;
+      var _modFoto={notas:'notas',visitas:'visitas',economia:'economia',materiales:'materiales',matIngresos:'materiales',checklists:'checklist',documentos:'documentos',mensajesColab:'colaboradores'}[_tblDeFoto(item.imageId)]||'imagenes';
+      var result=await uploadImageToDrive(imgRec.data,imgRec.fileName,imgRec.folderId||null,_pidImg||null,_modFoto);
       if(result){
         // Un PDF u otro documento se guarda con el link al archivo (antes quedaba
         // el de la miniatura, y al descargar bajaba una imagen en vez del archivo)
@@ -2359,13 +2580,13 @@ function scheduleSync(delay = 3000) {
   GD._cambiosSinSubir = true; // hay cambios que todavía no llegaron a Drive
   GD._genCambio = (GD._genCambio || 0) + 1;
   try { if (!localStorage.getItem('oc_pend_desde')) localStorage.setItem('oc_pend_desde', nw()); } catch(_) {}
-  if (GD._syncEst !== 'syncing' && GD._syncEst !== 'conectando') updateSyncIndicator(!GD.online ? 'offline' : (GD.accessToken ? 'pendiente' : 'noauth'));
+  if (GD._syncEst !== 'syncing' && GD._syncEst !== 'conectando') updateSyncIndicator(!GD.online ? 'offline' : (_hayNube() ? 'pendiente' : 'noauth'));
   if (GD._retrying) return;
   if (GD.syncTimer) clearTimeout(GD.syncTimer);
   GD.syncTimer = setTimeout(async () => {
     await saveToIDB(); // Always save locally first
     _lsSave();
-    if (GD.online && GD.accessToken) {
+    if (GD.online && _hayNube()) {
       await saveToDrive();
     } else if (GD.online && !GD.accessToken) {
       // Sin permiso de Google: queda en el equipo y el indicador pide un toque
@@ -2383,7 +2604,7 @@ function scheduleSync(delay = 3000) {
 function _subirPendienteAlSalir(){
   _lsSave();
   if(GD.idbReady)saveToIDB().catch(function(){});
-  if(GD._cambiosSinSubir&&GD.online&&GD.accessToken&&((GD.tokenExpiry||0)-Date.now())>60000){
+  if(GD._cambiosSinSubir&&GD.online&&((GD.accessToken&&((GD.tokenExpiry||0)-Date.now())>60000)||_eqOk())){
     if(GD.syncTimer){clearTimeout(GD.syncTimer);GD.syncTimer=null;}
     saveToDrive().catch(function(){});
   }
@@ -2395,9 +2616,10 @@ window.addEventListener('pagehide',_subirPendienteAlSalir);
 window.addEventListener('online', async () => {
   GD.online = true;
   updateSyncIndicator('syncing');
-  if (GD.accessToken) {
+  if (GD.accessToken || _eqOk()) {
     await processPendingImages();
     await saveToDrive();
+    if (!GD.accessToken) loadFromDriveAndMerge(true).catch(function(){});
   } else if (SYNC.method === 'oauth' || localStorage.getItem('obracontrol-gaccount')) {
     // Ya había conectado antes: se reconecta solo al volver la red
     ensureAuth(false).then(function(ok){
@@ -2444,6 +2666,7 @@ var _SYNC_EST={
 };
 try{if(localStorage.getItem('oc_pend_desde'))GD._cambiosSinSubir=true;}catch(_){}
 function _syncEstadoReal(st){
+  if(st==='noauth'&&GD.online&&_eqOk())st='ok';
   if(!GD.online&&(st==='ok'||st==='pendiente'||st==='syncing'||st==='conectando'))return 'offline';
   if(st==='ok'&&GD._cambiosSinSubir)return 'pendiente';
   if(st==='ok'&&(GD._fotosPend||0)>0)return 'fotos';
@@ -2465,6 +2688,7 @@ function _tuvoDrive(){try{return SYNC.method==='oauth'||!!localStorage.getItem('
 // Tocar el indicador cuando Drive está en pausa reconecta ahí mismo
 function _tocarIndicador(){
   var st=GD._syncEst;
+  if(st==='error'&&_eqOk()&&GD.online&&!GD.accessToken){toast('Reintentando…','var(--pri)',1500);saveToDrive().then(function(){return loadFromDriveAndMerge(true);}).catch(function(){});return;}
   if((st==='noauth'||st==='error'||st==='conectando')&&_tuvoDrive()&&GD.online){_reconnectDrive();return;}
   showDrivePanel();
 }
@@ -3218,7 +3442,7 @@ async function loadFromDriveAndMerge(silent){
   try{
     if(!silent)updateSyncIndicator('syncing','Bajando…');
     const driveData = await loadFromDrive();
-    if(!driveData){updateSyncIndicator('noauth');return;}
+    if(!driveData){updateSyncIndicator(_eqOk()?'error':'noauth');return;}
     await _cargarBase();
     var _cambio=_silentMerge(driveData);
     _avisarConflictos(true);
@@ -5272,6 +5496,13 @@ async function cloudSave() {
       updateSyncIndicator('ok');
       toast('Guardado en Dropbox \u2713', 'var(--green)');
 
+    } else if (!GD.accessToken && _eqOk()) {
+      // Equipo vinculado: guarda por el script, sin pedir Google
+      GD._ultimoError = null;
+      await saveToDrive();
+      if (GD._ultimoError) throw new Error(GD._ultimoError.msg);
+      toast('Guardado en Drive ✓', 'var(--green)');
+
     } else if (SYNC.method === 'oauth') {
       const ok = await ensureAuth();
       if (!ok) { updateSyncIndicator('noauth'); toast('Autenticaci\u00f3n cancelada', 'var(--orange)'); return; }
@@ -5441,7 +5672,7 @@ function showDrivePanel() {
   const d = document.createElement('div'); d.id = 'drvPanel';
   d.style.cssText = 'position:fixed;bottom:80px;right:12px;background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;width:284px;box-shadow:0 8px 32px rgba(0,0,0,.14);z-index:500;animation:modalIn .2s;max-height:86vh;overflow-y:auto';
 
-  const saveBtn = SYNC.method ? '<button class="btn btn-ok btn-s" style="width:100%;margin-bottom:6px" id="drvSaveNowBtn">\u2191 Guardar ahora</button><button class="btn btn-sec btn-s" style="width:100%;margin-bottom:10px;color:var(--pri)" id="drvLoadNowBtn">\u2193 Cargar desde Drive</button>' : '';
+  const saveBtn = (SYNC.method || _eqOk()) ? '<button class="btn btn-ok btn-s" style="width:100%;margin-bottom:6px" id="drvSaveNowBtn">\u2191 Guardar ahora</button><button class="btn btn-sec btn-s" style="width:100%;margin-bottom:10px;color:var(--pri)" id="drvLoadNowBtn">\u2193 Cargar desde Drive</button>' : '';
   const discBtn = SYNC.method ? '<button class="btn btn-sec btn-s" style="color:var(--orange);width:100%;" id="drvDisconnectBtn">\u2296 Desconectar</button>' : '';
 
   d.innerHTML =
@@ -5452,7 +5683,7 @@ function showDrivePanel() {
     '<div style="font-size:12px;color:'+stColor+';font-weight:600;margin-bottom:3px">'+stLabel+'</div>' +
     '<div style="font-size:10px;color:var(--text3);margin-bottom:4px">'+ts+'</div>' +
     '<div style="font-size:10px;background:var(--gray-ll);padding:4px 8px;border-radius:6px;margin-bottom:12px">M\u00e9todo: '+curMethod+'</div>' +
-    _cfBtn + (GD.accessToken ? '<button class="btn btn-s" style="width:100%;margin-bottom:6px;background:#ecfdf5;color:#047857;border:1px solid #a7f3d0" onclick="verificarSincronizacion()">🔍 Verificar que todo esté en Drive</button>' : '') + saveBtn +
+    _cfBtn + _eqTarjetaHtml() + (GD.accessToken ? '<button class="btn btn-s" style="width:100%;margin-bottom:6px;background:#ecfdf5;color:#047857;border:1px solid #a7f3d0" onclick="verificarSincronizacion()">🔍 Verificar que todo esté en Drive</button>' : '') + saveBtn +
 
     // ── Google Drive OAuth
     '<div style="border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin-bottom:8px">' +
@@ -5514,6 +5745,7 @@ function showDrivePanel() {
     '</details>';
 
   document.body.appendChild(d);
+  _eqLlenarLista();
 
   d.querySelector('#drvCloseBtn').onclick = () => d.remove();
   if (d.querySelector('#drvSaveNowBtn')) d.querySelector('#drvSaveNowBtn').onclick = () => { d.remove(); cloudSave(); };
@@ -15696,6 +15928,8 @@ else{_pantallaAcceso();setTimeout(_autoAutorizarSilencioso,300);}
   // pantalla del PIN; corriéndola para después, la reconexión automática
   // vuelve a estar sin que se vea nada raro.
   window._arranqueDrive=function(){
+    // Equipo vinculado y sin permiso de Google vigente: arranca por el script, sin ventana
+    if(_eqOk()&&!(window.google?.accounts?.oauth2&&loadGToken())){_drivePost();return;}
     if (window.location.protocol !== 'https:' || !window.google?.accounts?.oauth2) {
       updateSyncIndicator('noauth');return;
     }
@@ -15737,6 +15971,8 @@ else{_pantallaAcceso();setTimeout(_autoAutorizarSilencioso,300);}
   setInterval(function(){
     if(GD.accessToken&&navigator.onLine&&SYNC.method){
       loadFromDriveAndMerge(true).catch(function(){});
+    } else if(!GD.accessToken&&navigator.onLine&&!document.hidden&&!GD._cedida&&!_isPinLocked()&&_eqOk()){
+      _eqRevisarCambios();
     }
   },30000);
 })().catch(console.warn);
@@ -18390,7 +18626,7 @@ async function _dotRevisar(){
   _dotOcupado=true;_dotUlt=Date.now();
   try{
     var j=await _dotApi('dot_cola');
-    if(j&&j.ok&&j.aplicados>0&&GD.accessToken)loadFromDriveAndMerge(true).catch(function(){});
+    if(j&&j.ok&&j.aplicados>0&&_hayNube())loadFromDriveAndMerge(true).catch(function(){});
   }catch(e){console.warn('DOT',e);}
   finally{_dotOcupado=false;}
 }
