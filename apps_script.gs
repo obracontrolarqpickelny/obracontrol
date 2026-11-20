@@ -732,6 +732,10 @@ function _syncGet(p) {
   if (!eq) return _json({ ok: false, sinPermiso: true, error: 'Este equipo no está vinculado.' });
   var a = p.action;
   if (a === 'sync_ping') return _json({ ok: true, equipo: eq.nombre });
+  if (a === 'sync_respaldos') return _json({ ok: true, lista: _syncRespaldos() });
+  if (a === 'sync_respaldo') {
+    return ContentService.createTextOutput('{"ok":true,"respaldo":' + _syncRespaldoLeer(p.id) + '}').setMimeType(ContentService.MimeType.JSON);
+  }
   var f = _dotArchivoDatos();
   if (a === 'sync_version') return _json({ ok: true, version: _syncVersion(f) });
   if (a === 'sync_leer') {
@@ -749,6 +753,7 @@ function _syncPost(b) {
   if (!eq) return _json({ ok: false, sinPermiso: true, error: 'Este equipo no está vinculado.' });
   if (b.accion === 'sync_escribir') return _syncEscribir(b, eq);
   if (b.accion === 'sync_foto') return _syncFoto(b);
+  if (b.accion === 'sync_respaldar') return _json({ ok: true, respaldo: _syncRespaldarAhora(b.motivo) });
   return _json({ ok: false, error: 'Acción desconocida.' });
 }
 
@@ -807,4 +812,46 @@ function _syncRespaldoDiario() {
   var hora = Utilities.formatDate(new Date(), 'America/Argentina/Buenos_Aires', 'HH-mm');
   var txt = '{"version":"9.0","tipo":"respaldo_version","backupDate":"' + _dotAhora() + '","reason":"diario","data":' + f.getBlob().getDataAsString().replace(/^﻿/, '') + '}';
   carp.createFile(Utilities.newBlob(txt, 'application/json', 'ObraControl_datos_' + hoy + '_' + hora + '_diario.json'));
+}
+
+// ─── Respaldos visibles desde la app ──────────────────────────────
+// Lista las copias de 💾 Backups (y de su subcarpeta Históricos), entrega una
+// para verla o volver a ella, y hace una copia en el momento (antes de volver).
+function _syncCarpetasRespaldo() {
+  var s = _dotSistema();
+  if (!s) return [];
+  var bk = _carpeta(s, '💾 Backups'), out = [bk], it = bk.getFoldersByName('Históricos');
+  if (it.hasNext()) out.push(it.next());
+  return out;
+}
+function _syncRespaldos() {
+  var lista = [];
+  _syncCarpetasRespaldo().forEach(function (c, i) {
+    var fs = c.getFiles();
+    while (fs.hasNext()) {
+      var f = fs.next(), n = f.getName();
+      if (!/^ObraControl.*\.json$/i.test(n)) continue;
+      lista.push({ id: f.getId(), nombre: n, fecha: f.getDateCreated().toISOString(), tam: f.getSize(), historico: i > 0 });
+    }
+  });
+  lista.sort(function (a, b) { return a.fecha < b.fecha ? 1 : -1; });
+  return lista.slice(0, 120);
+}
+function _syncRespaldoLeer(id) {
+  var f = DriveApp.getFileById(String(id || '')), ok = false, ps = f.getParents(), ids = {};
+  _syncCarpetasRespaldo().forEach(function (c) { ids[c.getId()] = 1; });
+  while (ps.hasNext()) if (ids[ps.next().getId()]) ok = true;
+  if (!ok) throw new Error('Ese archivo no es un respaldo.');
+  return f.getBlob().getDataAsString().replace(/^﻿/, '');
+}
+function _syncRespaldarAhora(motivo) {
+  var s = _dotSistema();
+  if (!s) throw new Error('No encuentro la carpeta del sistema.');
+  var carp = _carpeta(s, '💾 Backups'), f = _dotArchivoDatos();
+  var hora = Utilities.formatDate(new Date(), 'America/Argentina/Buenos_Aires', 'HH-mm');
+  var m = String(motivo || 'manual').replace(/[^\w-]+/g, '_').slice(0, 30);
+  var nombre = 'ObraControl_datos_' + _dotHoy() + '_' + hora + '_' + m + '.json';
+  var txt = '{"version":"9.0","tipo":"respaldo_version","backupDate":"' + _dotAhora() + '","reason":"' + m + '","data":' + f.getBlob().getDataAsString().replace(/^﻿/, '') + '}';
+  var nuevo = carp.createFile(Utilities.newBlob(txt, 'application/json', nombre));
+  return { id: nuevo.getId(), nombre: nombre, fecha: nuevo.getDateCreated().toISOString(), tam: nuevo.getSize() };
 }

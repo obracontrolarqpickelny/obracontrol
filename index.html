@@ -5791,6 +5791,138 @@ async function verificarSincronizacion(){
   updateSyncIndicator(GD._syncEst||'ok');
   return {ok:ok,total:res.total,fotos:fotos,otroEquipo:otroEquipo,error:res.error,faltanDrive:res.faltanDrive.length,distintos:res.distintos.length,soloDrive:res.soloDrive.length};
 }
+// ═══════ RESPALDOS VISIBLES ═══════
+// Las copias están en SISTEMA_GESTION_OBRAS/💾 Backups (una por día la hace el
+// script; otras, la app). Se leen por el script, así se ven también las que no
+// creó esta app. "Volver a esta versión" deja antes una copia del estado actual.
+var _RESP_MOT={diario:'Copia diaria',manual:'Copia manual',session_end:'Al cerrar la app',auto:'Automática',antes_de_volver:'Antes de volver a una versión'};
+function _respInfo(r){
+  var m=/_(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})_([^.]+)\.json$/i.exec(r.nombre||'');
+  var mot=m?m[4]:'';
+  return {dia:m?m[1]:String(r.fecha||'').slice(0,10),hora:m?m[2]+':'+m[3]:'',motivo:_RESP_MOT[mot]||mot.replace(/_/g,' ')||'Copia'};
+}
+function _respDiaTxt(dia){
+  if(dia===td())return 'Hoy';
+  var a=new Date(Date.now()-864e5),ay=a.getFullYear()+'-'+String(a.getMonth()+1).padStart(2,'0')+'-'+String(a.getDate()).padStart(2,'0');
+  if(dia===ay)return 'Ayer';
+  var d=_parseLocal(dia);return isNaN(d)?dia:d.toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long'});
+}
+async function _respLlenarUltima(){
+  var el=document.getElementById('respUlt');if(!el)return;
+  if(!_eqOk()){el.innerHTML='💾 Vinculá este equipo (abajo) para ver las copias de seguridad.';return;}
+  try{
+    var j=await _eqApi('sync_respaldos',null,40000);
+    window._respLista=(j&&j.lista)||[];
+    el=document.getElementById('respUlt');if(!el)return;
+    var u=window._respLista[0];
+    el.innerHTML=u?'💾 Última copia segura: <b>'+_respDiaTxt(_respInfo(u).dia)+(_respInfo(u).hora?' '+_respInfo(u).hora:'')+'</b> · '+window._respLista.length+' guardadas':'💾 Todavía no hay copias de seguridad.';
+  }catch(e){el=document.getElementById('respUlt');if(el)el.textContent='💾 No se pudieron leer las copias ahora.';}
+}
+async function abrirRespaldos(){
+  document.getElementById('drvPanel')?.remove();
+  if(!_eqOk()){toast('Primero vinculá este equipo en el panel de Drive','var(--orange)',4000);return;}
+  document.getElementById('respM')?.remove();
+  var d=document.createElement('div');d.className='mo open';d.id='respM';
+  d.innerHTML='<div class="mo-c" style="max-width:520px"><div class="mo-h"><h3>💾 Copias de seguridad</h3><button class="tbtn" onclick="document.getElementById(\'respM\').remove()">'+I.x+'</button></div><div id="respCuerpo" class="ts tc3">Buscando las copias…</div></div>';
+  document.body.appendChild(d);
+  try{
+    var j=await _eqApi('sync_respaldos',null,40000);
+    window._respLista=(j&&j.lista)||[];
+    _respPintar();
+  }catch(e){var c=document.getElementById('respCuerpo');if(c)c.textContent='No se pudieron leer las copias: '+((e&&e.message)||e);}
+}
+function _respPintar(){
+  var c=document.getElementById('respCuerpo');if(!c)return;
+  var l=window._respLista||[],h='<div class="txxs tc3 mb-8">Cada día se guarda una copia completa de todas las obras. Tocá una para ver qué tiene o volver a ella.</div>'
+    +'<button class="btn btn-sec btn-w mb-10" style="justify-content:center" onclick="respHacerCopia()">＋ Hacer una copia ahora</button>';
+  if(!l.length)h+='<div class="ts tc3">Todavía no hay copias.</div>';
+  var dia='';
+  l.forEach(function(r,i){
+    var f=_respInfo(r);
+    if(f.dia!==dia){dia=f.dia;h+='<div class="txxs fw6 tc3" style="margin:12px 0 4px;text-transform:uppercase;letter-spacing:.05em">'+esc(_respDiaTxt(dia))+'</div>';}
+    h+='<div onclick="respVer('+i+')" style="display:flex;align-items:center;gap:10px;padding:9px 10px;border:1px solid var(--brd);border-radius:10px;margin-bottom:6px;cursor:pointer;background:var(--white)">'
+      +'<span style="font-size:16px">'+(/Antes de volver/.test(f.motivo)?'↩️':'💾')+'</span><div style="flex:1;min-width:0"><div class="ts fw6">'+esc(f.hora||'')+' · '+esc(f.motivo)+'</div>'
+      +'<div class="txxs tc3">'+Math.max(1,Math.round((r.tam||0)/1024))+' KB'+(r.historico?' · en Históricos':'')+'</div></div><span class="txxs" style="color:var(--pri)">Ver ›</span></div>';
+  });
+  c.innerHTML=h;
+}
+async function respHacerCopia(){
+  try{
+    toast('Guardando una copia…','var(--pri)',1500);
+    if(GD._cambiosSinSubir)await saveToDrive();
+    var j=await _eqApi('sync_respaldar',{motivo:'manual'});
+    if(!j||!j.ok)throw new Error((j&&j.error)||'no se pudo');
+    toast('Copia guardada ✓','var(--green)',2000);
+    abrirRespaldos();
+  }catch(e){toast('No se pudo hacer la copia: '+((e&&e.message)||e),'var(--red)',5000);}
+}
+var _RESP_TBL=['visitas','tareas','materiales','matIngresos','alertas','checklists','documentos','enlaces','comentarios','colaboradores','economia','notas','mensajesColab','carpetas'];
+async function respVer(i){
+  var r=(window._respLista||[])[i];if(!r)return;
+  var c=document.getElementById('respCuerpo');if(c)c.innerHTML='<div class="ts tc3">Abriendo la copia…</div>';
+  try{
+    var j=await _eqApi('sync_respaldo'+'&id='+encodeURIComponent(r.id),null,90000);
+    var data=j&&j.respaldo&&(j.respaldo.data||j.respaldo);
+    if(!data||!Array.isArray(data.projects))throw new Error('la copia no tiene datos');
+    window._respAbierto={r:r,data:data};
+    var f=_respInfo(r),cnt=function(src,t,pid){return (src[t]||[]).filter(function(x){return x&&_obraDeReg(x)===pid;}).length;};
+    var h='<button class="link-tag mb-8" onclick="_respPintar()">‹ Volver a la lista</button>'
+      +'<div class="ts fw7">'+esc(_respDiaTxt(f.dia))+(f.hora?' · '+esc(f.hora):'')+'</div><div class="txxs tc3 mb-10">'+esc(f.motivo)+' · '+data.projects.length+' obra(s). Entre paréntesis, lo que hay hoy.</div>';
+    data.projects.forEach(function(p){
+      var fila=function(t,lbl){var a=cnt(data,t,p.id),b=cnt(D,t,p.id);return '<span style="white-space:nowrap">'+lbl+' '+a+(a!==b?' <span style="color:'+(a>b?'#15803d':'#b45309')+'">('+b+')</span>':'')+'</span>';};
+      h+='<div style="border:1px solid var(--brd);border-radius:10px;padding:9px 10px;margin-bottom:6px"><div class="ts fw6 mb-4">'+esc(p.name||p.id)+(D.projects.some(function(x){return x.id===p.id;})?'':' <span class="txxs" style="color:#b45309">(hoy no está)</span>')+'</div>'
+        +'<div class="txxs tc3 flex gap-10 wrap">'+fila('notas','📝')+fila('economia','💰')+fila('visitas','📋')+fila('materiales','🧱')+fila('matIngresos','📦')+'</div></div>';
+    });
+    h+='<div class="txxs tc3 fw6 mt-12 mb-4" style="text-transform:uppercase;letter-spacing:.05em">Volver a esta versión</div>'
+      +'<select class="fs" id="resp_obra" style="width:100%;margin:0 0 8px">'+data.projects.map(function(p){return '<option value="'+esc(p.id)+'"'+(p.id===S.proj?' selected':'')+'>'+esc(p.name||p.id)+'</option>';}).join('')+'<option value="__todas">Todas las obras de la copia</option></select>'
+      +'<div class="txxs mb-8" style="color:#b45309;line-height:1.45">La obra elegida queda exactamente como estaba en esta copia: vuelve lo que se borró, se deshacen los cambios y se quita lo cargado después. Antes se guarda una copia de cómo está ahora, así lo podés recuperar.</div>'
+      +'<button class="btn btn-w" style="background:#b45309;color:#fff;justify-content:center" onclick="respVolver()">↩️ Volver a esta versión</button>';
+    if(c)c.innerHTML=h;
+  }catch(e){if(c)c.innerHTML='<button class="link-tag mb-8" onclick="_respPintar()">‹ Volver a la lista</button><div class="ts" style="color:var(--red)">No se pudo abrir la copia: '+esc((e&&e.message)||String(e))+'</div>';}
+}
+function _volverAVersion(data,pids){
+  var ahora=nw(),rev=[],n={vuelven:0,cambian:0,salen:0};
+  pids.forEach(function(pid){
+    var bp=(data.projects||[]).find(function(x){return x.id===pid;});if(!bp)return;
+    var cp=D.projects.find(function(x){return x.id===pid;}),copia=JSON.parse(JSON.stringify(bp));
+    if(cp){var dfid=cp.driveFolderId;Object.keys(cp).forEach(function(k){delete cp[k];});Object.assign(cp,copia,{updatedAt:ahora});if(dfid&&!cp.driveFolderId)cp.driveFolderId=dfid;}
+    else{D.projects.push(Object.assign(copia,{updatedAt:ahora}));rev.push(pid);}
+    _RESP_TBL.forEach(function(t){
+      if(!Array.isArray(D[t]))D[t]=[];
+      var bk=(data[t]||[]).filter(function(x){return x&&_obraDeReg(x)===pid;}),ids={};
+      bk.forEach(function(b){
+        if(!b.id)return;ids[b.id]=1;
+        var i=D[t].findIndex(function(x){return x&&x.id===b.id;}),c=Object.assign(JSON.parse(JSON.stringify(b)),{updatedAt:ahora});
+        if(i<0){D[t].push(c);rev.push(b.id);n.vuelven++;}
+        else if(JSON.stringify(D[t][i])!==JSON.stringify(b)){D[t][i]=c;n.cambian++;}
+      });
+      var fuera={};
+      D[t].forEach(function(x){if(x&&x.id&&_obraDeReg(x)===pid&&!ids[x.id]){fuera[x.id]=1;(D.tombstones=D.tombstones||[]).push({id:x.id,tbl:t,ts:ahora});n.salen++;}});
+      if(Object.keys(fuera).length)D[t]=D[t].filter(function(x){return !(x&&fuera[x.id]);});
+    });
+  });
+  _revivir(rev);
+  return n;
+}
+async function respVolver(){
+  var a=window._respAbierto;if(!a)return;
+  var v=($('resp_obra')||{}).value||'',pids=v==='__todas'?a.data.projects.map(function(p){return p.id;}):[v];
+  var nom=v==='__todas'?'todas las obras de la copia':'"'+((a.data.projects.find(function(p){return p.id===v;})||{}).name||v)+'"';
+  var f=_respInfo(a.r);
+  if(!confirm('¿Volver '+nom+' a como estaba el '+_respDiaTxt(f.dia).toLowerCase()+(f.hora?' a las '+f.hora:'')+'?\n\nAntes se guarda una copia de cómo está ahora.'))return;
+  try{
+    toast('Guardando una copia de cómo está ahora…','var(--pri)',2500);
+    if(GD._cambiosSinSubir)await saveToDrive();
+    var j=await _eqApi('sync_respaldar',{motivo:'antes de volver'});
+    if(!j||!j.ok)throw new Error((j&&j.error)||'no se pudo guardar la copia previa');
+  }catch(e){toast('No volví a la versión: no se pudo guardar antes una copia ('+((e&&e.message)||e)+')','var(--red)',6000);return;}
+  var n=_volverAVersion(a.data,pids);
+  audit('projects','editar','Volvió a la versión del '+f.dia+' '+f.hora+' ('+nom+'): '+n.vuelven+' vuelven, '+n.cambian+' cambian, '+n.salen+' salen');
+  sv();render();
+  document.getElementById('respM')?.remove();
+  toast('Listo ✓ '+n.vuelven+' volvieron, '+n.cambian+' se restauraron y '+n.salen+' se quitaron. Lo de antes quedó en la copia "Antes de volver".','var(--green)',7000);
+}
+
 function showDrivePanel() {
   const ex = document.getElementById('drvPanel'); if (ex) { ex.remove(); return; }
   const status = document.getElementById('syncIndicator')?.dataset.status || 'noauth';
@@ -5821,6 +5953,7 @@ function showDrivePanel() {
     '</div>' +
     '<div style="font-size:12px;color:'+stColor+';font-weight:600;margin-bottom:3px">'+stLabel+'</div>' +
     '<div style="font-size:10px;color:var(--text3);margin-bottom:4px">'+ts+'</div>' +
+    '<div onclick="abrirRespaldos()" style="cursor:pointer;font-size:11px;background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;border-radius:8px;padding:7px 9px;margin:6px 0 10px;display:flex;align-items:center;gap:6px"><span id="respUlt" style="flex:1">💾 Buscando la última copia…</span><span style="font-weight:600">Ver ›</span></div>' +
     '<div style="font-size:10px;background:var(--gray-ll);padding:4px 8px;border-radius:6px;margin-bottom:12px">M\u00e9todo: '+curMethod+'</div>' +
     _cfBtn + _eqTarjetaHtml() + (GD.accessToken ? '<button class="btn btn-s" style="width:100%;margin-bottom:6px;background:#ecfdf5;color:#047857;border:1px solid #a7f3d0" onclick="verificarSincronizacion()">🔍 Verificar que todo esté en Drive</button>' : '') + saveBtn +
 
@@ -5885,6 +6018,7 @@ function showDrivePanel() {
 
   document.body.appendChild(d);
   _eqLlenarLista();
+  _respLlenarUltima();
 
   d.querySelector('#drvCloseBtn').onclick = () => d.remove();
   if (d.querySelector('#drvSaveNowBtn')) d.querySelector('#drvSaveNowBtn').onclick = () => { d.remove(); cloudSave(); };
